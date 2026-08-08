@@ -97,6 +97,7 @@ export function FolderSwitcher() {
                       onChange={(e) => setDraft(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return; // IME 変換確定の Enter を無視
                         if (e.key === "Enter") void commitRename(f.id);
                         else if (e.key === "Escape") setEditingId(null);
                       }}
