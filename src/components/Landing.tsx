@@ -1,6 +1,7 @@
 import { useAtomValue } from "jotai";
 import { foldersAtom } from "../state/atoms";
 import { pickDirectory } from "../lib/fsAccess";
+import { folderDisplayName } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { Icon } from "./Icon";
 
@@ -79,8 +80,11 @@ export function Landing() {
                     className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
                   >
                     <Icon name="folder" size={17} className="shrink-0 text-[var(--mg-muted)]" />
-                    <span className="truncate text-[13.5px] font-medium text-[var(--mg-fg-dim)]">
-                      {f.name}
+                    <span
+                      className="truncate text-[13.5px] font-medium text-[var(--mg-fg-dim)]"
+                      title={f.path}
+                    >
+                      {folderDisplayName(f)}
                     </span>
                     <span className="ml-auto shrink-0 text-[11px] text-[var(--mg-muted)]">
                       {timeAgo(f.lastOpened)}

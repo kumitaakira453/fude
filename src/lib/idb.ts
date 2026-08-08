@@ -6,6 +6,13 @@ export interface FolderEntry {
   name: string; // ベース名
   path: string; // 絶対パス
   lastOpened: number;
+  alias?: string; // ユーザー任意の表示名
+}
+
+// 表示名: エイリアスがあればそれ、無ければベース名。
+export function folderDisplayName(f: FolderEntry): string {
+  const a = f.alias?.trim();
+  return a || f.name;
 }
 
 const KEY = "mdglow:folders";
@@ -37,6 +44,17 @@ export async function registerFolder(path: string, now: number): Promise<FolderE
   const next = [entry, ...list];
   await saveFolders(next);
   return next;
+}
+
+export async function renameFolder(id: string, alias: string): Promise<FolderEntry[]> {
+  const list = await loadFolders();
+  const e = list.find((f) => f.id === id);
+  if (e) {
+    const a = alias.trim();
+    e.alias = a || undefined;
+    await saveFolders(list);
+  }
+  return list.sort((a, b) => b.lastOpened - a.lastOpened);
 }
 
 export async function removeFolder(id: string): Promise<FolderEntry[]> {

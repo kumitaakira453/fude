@@ -33,10 +33,49 @@ npm run tauri:dev      # Vite(5273) + ネイティブウィンドウを起動
 
 初回はフォルダ選択ダイアログから Markdown フォルダを開く（同梱の `sample/` で試せる）。
 
-## ビルド（配布物の作成）
+## ローカルにインストール（アプリとして常用する）
+
+### 前提: Rust ツールチェーン（未導入の場合）
 
 ```bash
-npm run tauri:build    # .app / .dmg（macOS）等をバンドル
+# rustup 経由で Rust を導入（既に rustc/cargo があれば不要）
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# macOS はビルドに Xcode Command Line Tools が必要
+xcode-select --install   # 未導入なら
+```
+
+### ビルドしてインストール
+
+```bash
+npm install
+npm run tauri:build
+```
+
+生成物（macOS）:
+
+- アプリ本体: `src-tauri/target/release/bundle/macos/mdglow.app`
+- インストーラ: `src-tauri/target/release/bundle/dmg/mdglow_0.1.0_aarch64.dmg`
+
+インストール:
+
+```bash
+# .app を Applications にコピー（= インストール）
+cp -R "src-tauri/target/release/bundle/macos/mdglow.app" /Applications/
+# 以降は Launchpad / Spotlight から "mdglow" で起動
+open -a mdglow
+```
+
+- **署名について**: 未署名のため初回は Gatekeeper に止められることがある。その場合は
+  「システム設定 → プライバシーとセキュリティ」で許可するか、`xattr -dr com.apple.quarantine /Applications/mdglow.app` を実行。
+- **Windows**: `src-tauri/target/release/bundle/` に `.msi` / `.exe`（NSIS）。
+- **Linux**: 同ディレクトリに `.deb` / `.AppImage`。
+
+> 注意: `npm run tauri:build` は初回、release プロファイルの Rust コンパイルに数分かかります。
+
+### 開発中のみ試す（インストール不要）
+
+```bash
+npm run tauri:dev      # 一時ウィンドウで起動（ビルド生成物は作らない）
 ```
 
 ## ショートカット

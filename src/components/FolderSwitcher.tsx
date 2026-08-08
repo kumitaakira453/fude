@@ -1,21 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { activeFolderIdAtom, foldersAtom } from "../state/atoms";
 import { pickDirectory } from "../lib/fsAccess";
-import { removeFolder } from "../lib/idb";
+import { folderDisplayName, removeFolder, renameFolder } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { Icon } from "./Icon";
 
 export function FolderSwitcher() {
   const folders = useAtomValue(foldersAtom);
+  const setFolders = useSetAtom(foldersAtom);
   const [activeId, setActiveId] = useAtom(activeFolderIdAtom);
   const { openFolder, refreshFolders } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setEditingId(null);
+      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -43,6 +49,18 @@ export function FolderSwitcher() {
     await refreshFolders();
   };
 
+  const startRename = (e: React.MouseEvent, id: string, current: string) => {
+    e.stopPropagation();
+    setEditingId(id);
+    setDraft(current);
+  };
+
+  const commitRename = async (id: string) => {
+    const next = await renameFolder(id, draft);
+    setFolders(next);
+    setEditingId(null);
+  };
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -51,35 +69,67 @@ export function FolderSwitcher() {
       >
         <Icon name="folder" size={18} fill className="text-[var(--mg-accent2)]" />
         <span className="truncate text-[13px] font-semibold text-[var(--mg-fg)]">
-          {active?.name ?? "フォルダ"}
+          {active ? folderDisplayName(active) : "フォルダ"}
         </span>
         <Icon name="unfold_more" size={17} className="ml-auto text-[var(--mg-muted)]" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-64 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
+        <div className="absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
           <div className="mb-1 px-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
             登録フォルダ
           </div>
-          <div className="max-h-64 overflow-y-auto">
-            {folders.map((f) => (
-              <div
-                key={f.id}
-                onClick={() => switchTo(f.id)}
-                className={`group flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 transition ${
-                  f.id === activeId ? "bg-[var(--mg-accent-soft)]" : "hover:bg-[var(--mg-hover)]"
-                }`}
-              >
-                <Icon name="folder" size={16} className="shrink-0 text-[var(--mg-muted)]" />
-                <span className="truncate text-[13px]">{f.name}</span>
-                <button
-                  onClick={(e) => remove(e, f.id)}
-                  title="履歴から削除"
-                  className="ml-auto grid h-5 w-5 shrink-0 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-danger)]"
+          <div className="max-h-72 overflow-y-auto">
+            {folders.map((f) => {
+              const editing = editingId === f.id;
+              return (
+                <div
+                  key={f.id}
+                  onClick={() => !editing && switchTo(f.id)}
+                  className={`group flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition ${
+                    editing ? "" : "cursor-pointer"
+                  } ${f.id === activeId ? "bg-[var(--mg-accent-soft)]" : "hover:bg-[var(--mg-hover)]"}`}
                 >
-                  <Icon name="close" size={15} />
-                </button>
-              </div>
-            ))}
+                  <Icon name="folder" size={16} className="shrink-0 text-[var(--mg-muted)]" />
+                  {editing ? (
+                    <input
+                      autoFocus
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void commitRename(f.id);
+                        else if (e.key === "Escape") setEditingId(null);
+                      }}
+                      onBlur={() => void commitRename(f.id)}
+                      placeholder={f.name}
+                      className="min-w-0 flex-1 rounded border border-[var(--mg-accent)] bg-[var(--mg-input-bg)] px-1 py-0.5 text-[13px] outline-none"
+                    />
+                  ) : (
+                    <>
+                      <span className="truncate text-[13px]" title={f.path}>
+                        {folderDisplayName(f)}
+                      </span>
+                      <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={(e) => startRename(e, f.id, folderDisplayName(f))}
+                          title="表示名を変更"
+                          className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-accent)]"
+                        >
+                          <Icon name="edit" size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => remove(e, f.id)}
+                          title="履歴から削除"
+                          className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-danger)]"
+                        >
+                          <Icon name="close" size={15} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="my-1 h-px bg-[var(--mg-border)]" />
           <button
