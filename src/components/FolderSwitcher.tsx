@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { activeFolderIdAtom, foldersAtom } from "../state/atoms";
-import { pickDirectory, verifyPermission } from "../lib/fsAccess";
+import { pickDirectory } from "../lib/fsAccess";
 import { removeFolder } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { Icon } from "./Icon";
@@ -27,16 +27,14 @@ export function FolderSwitcher() {
     const entry = folders.find((f) => f.id === id);
     if (!entry) return;
     setOpen(false);
-    if (await verifyPermission(entry.handle, true)) {
-      setActiveId(id);
-      await openFolder(entry.handle);
-    }
+    setActiveId(id);
+    await openFolder(entry.path);
   };
 
   const addFolder = async () => {
     setOpen(false);
-    const handle = await pickDirectory();
-    if (handle) await openFolder(handle);
+    const path = await pickDirectory();
+    if (path) await openFolder(path);
   };
 
   const remove = async (e: React.MouseEvent, id: string) => {

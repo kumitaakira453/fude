@@ -1,18 +1,17 @@
-// File System Access API まわりのユーティリティ。
-// サーバを持たず、ブラウザだけでローカルフォルダを走査・読込する。
+// Tauri ネイティブ FS 経由でローカルフォルダを走査・読込する。
+// ブラウザの File System Access API は使わない（許可プロンプト不要・絶対パス取得可）。
+import { readDir, readTextFile, stat } from "@tauri-apps/plugin-fs";
+import { open } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 export const MD_EXTENSIONS = [".md", ".markdown", ".mdx", ".mdown", ".mkd"];
 
 export interface TreeNode {
   name: string;
   path: string; // ルートからの相対パス（/ 区切り）
+  abs: string; // 絶対パス
   kind: "file" | "dir";
-  handle: FileSystemFileHandle | FileSystemDirectoryHandle;
   children?: TreeNode[];
-}
-
-export function isFsAccessSupported(): boolean {
-  return typeof window !== "undefined" && "showDirectoryPicker" in window;
 }
 
 export function isMarkdown(name: string): boolean {
@@ -20,34 +19,12 @@ export function isMarkdown(name: string): boolean {
   return MD_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
-export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null> {
-  try {
-    // @ts-expect-error showDirectoryPicker は一部 TS lib に未収録
-    const handle: FileSystemDirectoryHandle = await window.showDirectoryPicker({
-      mode: "read",
-    });
-    return handle;
-  } catch (e) {
-    // ユーザーがキャンセルした場合など
-    if (e instanceof DOMException && e.name === "AbortError") return null;
-    throw e;
-  }
+// フォルダ選択ダイアログ（ネイティブ）。選択した絶対パスを返す。
+export async function pickDirectory(): Promise<string | null> {
+  const sel = await open({ directory: true, multiple: false, title: "Markdown フォルダを選択" });
+  return typeof sel === "string" ? sel : null;
 }
 
-export async function verifyPermission(
-  handle: FileSystemDirectoryHandle,
-  request: boolean,
-): Promise<boolean> {
-  const opts = { mode: "read" as const };
-  // @ts-expect-error queryPermission は一部 TS lib に未収録
-  if ((await handle.queryPermission(opts)) === "granted") return true;
-  if (!request) return false;
-  // @ts-expect-error requestPermission は一部 TS lib に未収録
-  return (await handle.requestPermission(opts)) === "granted";
-}
-
-// ディレクトリを再帰走査して md ファイルのツリーを構築する。
-// md を1つも含まないディレクトリは省く。隠しディレクトリ・node_modules 等はスキップ。
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -59,25 +36,27 @@ const SKIP_DIRS = new Set([
   "build",
 ]);
 
-export async function buildTree(
-  dir: FileSystemDirectoryHandle,
-  parentPath = "",
-): Promise<TreeNode[]> {
+// ディレクトリを再帰走査して md ファイルのツリーを構築する。
+export async function buildTree(rootAbs: string, parentRel = ""): Promise<TreeNode[]> {
+  const dirAbs = parentRel ? `${rootAbs}/${parentRel}` : rootAbs;
+  let entries: Awaited<ReturnType<typeof readDir>>;
+  try {
+    entries = await readDir(dirAbs);
+  } catch {
+    return [];
+  }
   const nodes: TreeNode[] = [];
-  // @ts-expect-error entries() の型が lib に無い場合がある
-  for await (const [name, handle] of dir.entries()) {
-    const path = parentPath ? `${parentPath}/${name}` : name;
-    if (handle.kind === "directory") {
-      if (SKIP_DIRS.has(name) || name.startsWith(".")) continue;
-      const children = await buildTree(handle as FileSystemDirectoryHandle, path);
-      if (children.length > 0) {
-        nodes.push({ name, path, kind: "dir", handle, children });
-      }
-    } else if (isMarkdown(name)) {
-      nodes.push({ name, path, kind: "file", handle: handle as FileSystemFileHandle });
+  for (const e of entries) {
+    const rel = parentRel ? `${parentRel}/${e.name}` : e.name;
+    const abs = `${rootAbs}/${rel}`;
+    if (e.isDirectory) {
+      if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
+      const children = await buildTree(rootAbs, rel);
+      if (children.length > 0) nodes.push({ name: e.name, path: rel, abs, kind: "dir", children });
+    } else if (e.isFile && isMarkdown(e.name)) {
+      nodes.push({ name: e.name, path: rel, abs, kind: "file" });
     }
   }
-  // ディレクトリ優先 → 名前順（数値を考慮した自然順）
   nodes.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name, "ja", { numeric: true });
@@ -85,7 +64,6 @@ export async function buildTree(
   return nodes;
 }
 
-// ツリーを平坦化してファイルだけの配列にする（検索・クイックオープン用）。
 export function flattenFiles(nodes: TreeNode[]): TreeNode[] {
   const out: TreeNode[] = [];
   const walk = (list: TreeNode[]) => {
@@ -103,7 +81,19 @@ export interface FileData {
   lastModified: number;
 }
 
-export async function readFile(handle: FileSystemFileHandle): Promise<FileData> {
-  const file = await handle.getFile();
-  return { text: await file.text(), lastModified: file.lastModified };
+export async function readFile(abs: string): Promise<FileData> {
+  const text = await readTextFile(abs);
+  let lastModified = 0;
+  try {
+    const s = await stat(abs);
+    lastModified = s.mtime ? new Date(s.mtime).getTime() : 0;
+  } catch {
+    /* mtime 取得失敗は無視 */
+  }
+  return { text, lastModified };
+}
+
+// 画像などローカル資産を webview で表示可能な URL（asset://）に変換する。
+export function assetUrl(abs: string): string {
+  return convertFileSrc(abs);
 }

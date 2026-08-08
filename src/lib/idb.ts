@@ -1,14 +1,19 @@
 import { get, set, del } from "idb-keyval";
 
-// 登録フォルダ（履歴）。ディレクトリハンドルは構造化クローンで IndexedDB に保存できる。
+// 登録フォルダ（履歴）。Tauri では絶対パス文字列で管理する。
 export interface FolderEntry {
-  id: string;
-  name: string;
-  handle: FileSystemDirectoryHandle;
+  id: string; // = 絶対パス（安定）
+  name: string; // ベース名
+  path: string; // 絶対パス
   lastOpened: number;
 }
 
 const KEY = "mdglow:folders";
+
+function basename(p: string): string {
+  const parts = p.replace(/[/\\]+$/, "").split(/[/\\]/);
+  return parts[parts.length - 1] || p;
+}
 
 export async function loadFolders(): Promise<FolderEntry[]> {
   const list = (await get<FolderEntry[]>(KEY)) ?? [];
@@ -19,26 +24,16 @@ export async function saveFolders(list: FolderEntry[]): Promise<void> {
   await set(KEY, list);
 }
 
-// 同一ハンドルは isSameEntry で重複判定し、既存なら lastOpened だけ更新する。
-export async function registerFolder(
-  handle: FileSystemDirectoryHandle,
-  now: number,
-): Promise<FolderEntry[]> {
+export async function registerFolder(path: string, now: number): Promise<FolderEntry[]> {
   const list = await loadFolders();
-  for (const entry of list) {
-    if (await entry.handle.isSameEntry(handle)) {
-      entry.lastOpened = now;
-      entry.name = handle.name;
-      await saveFolders(list);
-      return list.sort((a, b) => b.lastOpened - a.lastOpened);
-    }
+  const existing = list.find((f) => f.path === path);
+  if (existing) {
+    existing.lastOpened = now;
+    existing.name = basename(path);
+    await saveFolders(list);
+    return list.sort((a, b) => b.lastOpened - a.lastOpened);
   }
-  const entry: FolderEntry = {
-    id: `${handle.name}-${now}`,
-    name: handle.name,
-    handle,
-    lastOpened: now,
-  };
+  const entry: FolderEntry = { id: path, name: basename(path), path, lastOpened: now };
   const next = [entry, ...list];
   await saveFolders(next);
   return next;

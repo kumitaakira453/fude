@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { useAtomValue, useStore } from "jotai";
 import * as A from "../state/atoms";
 import { buildHash, parseHash } from "../lib/url";
-import { verifyPermission } from "../lib/fsAccess";
 import { useWorkspace } from "./useWorkspace";
 
 // URL(hash) と「開いているフォルダ・ファイル」を双方向同期する。
@@ -26,19 +25,13 @@ export function useUrlSync() {
         store.set(A.activeFolderIdAtom, null);
         return;
       }
-      const folders = store.get(A.foldersAtom);
-      const entry = folders.find((f) => f.id === folderId);
+      const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
       if (!entry) {
         store.set(A.activeFolderIdAtom, null);
         return;
       }
       if (store.get(A.activeFolderIdAtom) !== folderId) {
-        if (!(await verifyPermission(entry.handle, false))) {
-          // 権限が無ければ自動復元できない → スタート画面へ
-          store.set(A.activeFolderIdAtom, null);
-          return;
-        }
-        await openFolder(entry.handle);
+        await openFolder(entry.path);
       }
       // 保存レイアウトで既にファイルが復元されている場合は URL で上書きしない
       if (file && !store.get(A.activePaneAtom)?.path) openFile(file);

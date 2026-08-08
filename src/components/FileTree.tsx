@@ -141,10 +141,10 @@ function TreeItem({
 
 function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () => void }) {
   const store = useStore();
-  const { openFile, getRootHandle } = useWorkspace();
+  const { openFile, getRootPath } = useWorkspace();
   const { node } = menu;
-  const rootName = getRootHandle()?.name ?? "";
-  const absPath = rootName ? `${rootName}/${node.path}` : node.path;
+  const root = getRootPath();
+  const absPath = root ? `${root}/${node.path}` : node.path;
 
   useEffect(() => {
     const close = () => onClose();
