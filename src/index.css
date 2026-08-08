@@ -1,0 +1,700 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* ============================================================
+   フォント
+   ============================================================ */
+:root {
+  --mg-font-sans: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  --mg-font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", Georgia, "Times New Roman",
+    serif;
+  --mg-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* Material Symbols: 揃えとレンダリング */
+.material-symbols-rounded {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+body {
+  font-family: var(--mg-font-sans);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   テーマ（[data-theme] で切替）
+   ============================================================ */
+:root,
+[data-theme="aurora"] {
+  color-scheme: dark;
+  --mg-bg: #0e1116;
+  --mg-panel: #151a21;
+  --mg-fg: #e6edf3;
+  --mg-fg-dim: #c2ccd6;
+  --mg-muted: #7d8894;
+  --mg-border: #232b35;
+  --mg-hover: rgba(255, 255, 255, 0.06);
+  --mg-accent: #4fd1c5;
+  --mg-accent2: #a78bfa;
+  --mg-accent-soft: rgba(79, 209, 197, 0.14);
+  --mg-code-bg: #0b0f14;
+  --mg-code-head: #12171e;
+  --mg-code-fg: #d7e0ea;
+  --mg-input-bg: #0b0f14;
+  --mg-mark: #f6e05e;
+  --mg-mark-fg: #1a1a1a;
+  --mg-danger: #f87171;
+}
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --mg-bg: #0b1020;
+  --mg-panel: #121933;
+  --mg-fg: #e5e9f5;
+  --mg-fg-dim: #c3cae0;
+  --mg-muted: #7a83a3;
+  --mg-border: #1f2747;
+  --mg-hover: rgba(255, 255, 255, 0.05);
+  --mg-accent: #6ea8fe;
+  --mg-accent2: #c08cff;
+  --mg-accent-soft: rgba(110, 168, 254, 0.15);
+  --mg-code-bg: #0a0e1c;
+  --mg-code-head: #10162c;
+  --mg-code-fg: #d5dcf0;
+  --mg-input-bg: #0a0e1c;
+  --mg-mark: #ffd166;
+  --mg-mark-fg: #10162c;
+  --mg-danger: #ff6b6b;
+}
+[data-theme="nord"] {
+  color-scheme: dark;
+  --mg-bg: #2e3440;
+  --mg-panel: #3b4252;
+  --mg-fg: #eceff4;
+  --mg-fg-dim: #d8dee9;
+  --mg-muted: #8b93a3;
+  --mg-border: #434c5e;
+  --mg-hover: rgba(255, 255, 255, 0.06);
+  --mg-accent: #88c0d0;
+  --mg-accent2: #b48ead;
+  --mg-accent-soft: rgba(136, 192, 208, 0.16);
+  --mg-code-bg: #292e39;
+  --mg-code-head: #333b4a;
+  --mg-code-fg: #e5e9f0;
+  --mg-input-bg: #292e39;
+  --mg-mark: #ebcb8b;
+  --mg-mark-fg: #2e3440;
+  --mg-danger: #bf616a;
+}
+[data-theme="forest"] {
+  color-scheme: dark;
+  --mg-bg: #0f1a14;
+  --mg-panel: #16241c;
+  --mg-fg: #e4efe7;
+  --mg-fg-dim: #c4d6c9;
+  --mg-muted: #7d9384;
+  --mg-border: #223528;
+  --mg-hover: rgba(255, 255, 255, 0.05);
+  --mg-accent: #6ee7a8;
+  --mg-accent2: #eab308;
+  --mg-accent-soft: rgba(110, 231, 168, 0.14);
+  --mg-code-bg: #0b1410;
+  --mg-code-head: #122019;
+  --mg-code-fg: #d5e6da;
+  --mg-input-bg: #0b1410;
+  --mg-mark: #fde047;
+  --mg-mark-fg: #0b1410;
+  --mg-danger: #f87171;
+}
+[data-theme="dracula"] {
+  color-scheme: dark;
+  --mg-bg: #282a36;
+  --mg-panel: #21222c;
+  --mg-fg: #f8f8f2;
+  --mg-fg-dim: #d5d6e0;
+  --mg-muted: #8a8ea3;
+  --mg-border: #3a3d4d;
+  --mg-hover: rgba(255, 255, 255, 0.06);
+  --mg-accent: #bd93f9;
+  --mg-accent2: #ff79c6;
+  --mg-accent-soft: rgba(189, 147, 249, 0.16);
+  --mg-code-bg: #1e1f29;
+  --mg-code-head: #282a36;
+  --mg-code-fg: #f8f8f2;
+  --mg-input-bg: #1e1f29;
+  --mg-mark: #f1fa8c;
+  --mg-mark-fg: #282a36;
+  --mg-danger: #ff5555;
+}
+[data-theme="tokyonight"] {
+  color-scheme: dark;
+  --mg-bg: #1a1b26;
+  --mg-panel: #1f2233;
+  --mg-fg: #c0caf5;
+  --mg-fg-dim: #a9b1d6;
+  --mg-muted: #565f89;
+  --mg-border: #2a2e42;
+  --mg-hover: rgba(255, 255, 255, 0.05);
+  --mg-accent: #7aa2f7;
+  --mg-accent2: #bb9af7;
+  --mg-accent-soft: rgba(122, 162, 247, 0.15);
+  --mg-code-bg: #16161e;
+  --mg-code-head: #1f2233;
+  --mg-code-fg: #c0caf5;
+  --mg-input-bg: #16161e;
+  --mg-mark: #e0af68;
+  --mg-mark-fg: #16161e;
+  --mg-danger: #f7768e;
+}
+[data-theme="catppuccin"] {
+  color-scheme: dark;
+  --mg-bg: #1e1e2e;
+  --mg-panel: #181825;
+  --mg-fg: #cdd6f4;
+  --mg-fg-dim: #bac2de;
+  --mg-muted: #7f849c;
+  --mg-border: #313244;
+  --mg-hover: rgba(255, 255, 255, 0.05);
+  --mg-accent: #89b4fa;
+  --mg-accent2: #cba6f7;
+  --mg-accent-soft: rgba(137, 180, 250, 0.16);
+  --mg-code-bg: #181825;
+  --mg-code-head: #1e1e2e;
+  --mg-code-fg: #cdd6f4;
+  --mg-input-bg: #181825;
+  --mg-mark: #f9e2af;
+  --mg-mark-fg: #1e1e2e;
+  --mg-danger: #f38ba8;
+}
+[data-theme="rosepine"] {
+  color-scheme: dark;
+  --mg-bg: #191724;
+  --mg-panel: #1f1d2e;
+  --mg-fg: #e0def4;
+  --mg-fg-dim: #cbc9e8;
+  --mg-muted: #6e6a86;
+  --mg-border: #2a2837;
+  --mg-hover: rgba(255, 255, 255, 0.05);
+  --mg-accent: #9ccfd8;
+  --mg-accent2: #c4a7e7;
+  --mg-accent-soft: rgba(156, 207, 216, 0.15);
+  --mg-code-bg: #16141f;
+  --mg-code-head: #1f1d2e;
+  --mg-code-fg: #e0def4;
+  --mg-input-bg: #16141f;
+  --mg-mark: #f6c177;
+  --mg-mark-fg: #191724;
+  --mg-danger: #eb6f92;
+}
+[data-theme="paper"] {
+  color-scheme: light;
+  --mg-bg: #faf7f0;
+  --mg-panel: #fffdf8;
+  --mg-fg: #2b2a26;
+  --mg-fg-dim: #44423c;
+  --mg-muted: #9a948a;
+  --mg-border: #e7e0d3;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #b45309;
+  --mg-accent2: #9333ea;
+  --mg-accent-soft: rgba(180, 83, 9, 0.1);
+  --mg-code-bg: #f4efe4;
+  --mg-code-head: #ece5d6;
+  --mg-code-fg: #33322e;
+  --mg-input-bg: #fffdf8;
+  --mg-mark: #fde68a;
+  --mg-mark-fg: #3a3a2a;
+  --mg-danger: #dc2626;
+}
+[data-theme="sunset"] {
+  color-scheme: light;
+  --mg-bg: #fff7f2;
+  --mg-panel: #fffdfb;
+  --mg-fg: #3a2b28;
+  --mg-fg-dim: #55413c;
+  --mg-muted: #a68b82;
+  --mg-border: #f2e0d6;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #f97316;
+  --mg-accent2: #db2777;
+  --mg-accent-soft: rgba(249, 115, 22, 0.12);
+  --mg-code-bg: #fdeee5;
+  --mg-code-head: #fbe3d5;
+  --mg-code-fg: #3a2b28;
+  --mg-input-bg: #fffdfb;
+  --mg-mark: #fed7aa;
+  --mg-mark-fg: #3a2b28;
+  --mg-danger: #dc2626;
+}
+[data-theme="rose"] {
+  color-scheme: light;
+  --mg-bg: #fdf5f8;
+  --mg-panel: #fffdfe;
+  --mg-fg: #322229;
+  --mg-fg-dim: #4d3742;
+  --mg-muted: #a98a97;
+  --mg-border: #f3dde8;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #db2777;
+  --mg-accent2: #7c3aed;
+  --mg-accent-soft: rgba(219, 39, 119, 0.1);
+  --mg-code-bg: #fbeaf1;
+  --mg-code-head: #f8dbe8;
+  --mg-code-fg: #322229;
+  --mg-input-bg: #fffdfe;
+  --mg-mark: #fbcfe8;
+  --mg-mark-fg: #322229;
+  --mg-danger: #dc2626;
+}
+[data-theme="solarized"] {
+  color-scheme: light;
+  --mg-bg: #fdf6e3;
+  --mg-panel: #fbf1d9;
+  --mg-fg: #4a5b61;
+  --mg-fg-dim: #56676d;
+  --mg-muted: #93a1a1;
+  --mg-border: #eee8d5;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #268bd2;
+  --mg-accent2: #d33682;
+  --mg-accent-soft: rgba(38, 139, 210, 0.12);
+  --mg-code-bg: #f5efdc;
+  --mg-code-head: #eee8d5;
+  --mg-code-fg: #586e75;
+  --mg-input-bg: #fbf1d9;
+  --mg-mark: #eee3b8;
+  --mg-mark-fg: #586e75;
+  --mg-danger: #dc322f;
+}
+
+/* ============================================================
+   シンタックスハイライト（highlight.js トークン → CSS 変数）
+   dark / light の 2 系統だけ定義してテーマで共有
+   ============================================================ */
+:root,
+[data-theme="aurora"],
+[data-theme="midnight"],
+[data-theme="nord"],
+[data-theme="forest"],
+[data-theme="dracula"],
+[data-theme="tokyonight"],
+[data-theme="catppuccin"],
+[data-theme="rosepine"] {
+  --sx-comment: #6b7787;
+  --sx-key: #c08cff;
+  --sx-str: #7ee787;
+  --sx-num: #f0a878;
+  --sx-fn: #79c0ff;
+  --sx-var: #ffa198;
+  --sx-type: #56d4c2;
+}
+[data-theme="paper"],
+[data-theme="sunset"],
+[data-theme="rose"],
+[data-theme="solarized"] {
+  --sx-comment: #9a948a;
+  --sx-key: #9333ea;
+  --sx-str: #15803d;
+  --sx-num: #b45309;
+  --sx-fn: #1d4ed8;
+  --sx-var: #be123c;
+  --sx-type: #0f766e;
+}
+
+.hljs {
+  color: var(--mg-code-fg);
+  background: transparent;
+  font-family: var(--mg-font-mono);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--sx-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag {
+  color: var(--sx-key);
+}
+.hljs-string,
+.hljs-addition,
+.hljs-template-string,
+.hljs-regexp {
+  color: var(--sx-str);
+}
+.hljs-number,
+.hljs-meta,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--sx-num);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-function .hljs-title,
+.hljs-attr,
+.hljs-attribute {
+  color: var(--sx-fn);
+}
+.hljs-variable,
+.hljs-template-variable,
+.hljs-name,
+.hljs-tag,
+.hljs-deletion {
+  color: var(--sx-var);
+}
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-type,
+.hljs-params {
+  color: var(--sx-type);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}
+
+/* ============================================================
+   本文（prose）— typography プラグインの色をテーマ変数で上書き
+   ============================================================ */
+.mg-prose {
+  --tw-prose-body: var(--mg-fg-dim);
+  --tw-prose-headings: var(--mg-fg);
+  --tw-prose-lead: var(--mg-fg-dim);
+  --tw-prose-links: var(--mg-accent);
+  --tw-prose-bold: var(--mg-fg);
+  --tw-prose-counters: var(--mg-muted);
+  --tw-prose-bullets: var(--mg-accent);
+  --tw-prose-hr: var(--mg-border);
+  --tw-prose-quotes: var(--mg-fg-dim);
+  --tw-prose-quote-borders: var(--mg-accent);
+  --tw-prose-captions: var(--mg-muted);
+  --tw-prose-code: var(--mg-accent2);
+  --tw-prose-pre-code: var(--mg-code-fg);
+  --tw-prose-pre-bg: var(--mg-code-bg);
+  --tw-prose-th-borders: var(--mg-border);
+  --tw-prose-td-borders: var(--mg-border);
+  line-height: 1.75;
+  font-size: 16px;
+}
+.mg-sans {
+  font-family: var(--mg-font-sans);
+}
+.mg-serif {
+  font-family: var(--mg-font-serif);
+}
+
+/* コードブロックは独自コンポーネント (.mg-codeblock) で装飾するため
+   prose 既定の pre スタイルを無効化する */
+.mg-prose pre {
+  background: transparent !important;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+}
+/* ただしコードブロック内の pre 余白は独自コンポーネント側を優先させる
+   （prose の .mg-prose pre より高い特異度で指定） */
+.mg-prose .mg-codeblock pre {
+  padding: 0.85rem 1.1rem;
+  margin: 0;
+}
+.mg-prose .mg-codeblock {
+  margin-block: 1.25rem;
+}
+.mg-prose .mg-codeblock code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.65;
+}
+.mg-prose :not(pre) > code {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent2);
+  font-family: var(--mg-font-mono);
+  font-weight: 500;
+  font-size: 0.86em;
+  padding: 0.15em 0.4em;
+  border-radius: 0.35rem;
+}
+/* prose がインラインコードに付けるバッククォートを消す */
+.mg-prose :not(pre) > code::before,
+.mg-prose :not(pre) > code::after {
+  content: "" !important;
+}
+.mg-prose a {
+  text-decoration: none;
+  border-bottom: 1px solid var(--mg-accent-soft);
+  transition: border-color 0.15s;
+}
+.mg-prose a:hover {
+  border-bottom-color: var(--mg-accent);
+}
+.mg-prose blockquote {
+  font-style: normal;
+  border-left-width: 3px;
+  background: var(--mg-accent-soft);
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0.25rem 1rem;
+}
+.mg-prose blockquote p::before,
+.mg-prose blockquote p::after {
+  content: "";
+}
+.mg-prose h1,
+.mg-prose h2 {
+  letter-spacing: -0.01em;
+}
+.mg-prose h2 {
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--mg-border);
+}
+.mg-prose table {
+  font-size: 0.9em;
+}
+.mg-prose thead th {
+  color: var(--mg-fg);
+}
+.mg-prose input[type="checkbox"] {
+  accent-color: var(--mg-accent);
+}
+/* タスクリストは箇条書きの点を出さない（チェックボックスと二重にしない） */
+.mg-prose li.task-list-item,
+.mg-prose li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+.mg-prose ul.contains-task-list {
+  padding-left: 0.5rem;
+}
+.mg-prose li.task-list-item > input[type="checkbox"],
+.mg-prose li:has(> input[type="checkbox"]) > input[type="checkbox"] {
+  margin-right: 0.5em;
+  transform: translateY(1px);
+}
+.mg-prose img {
+  margin-inline: auto;
+}
+
+/* 長い URL や識別子は本文内で折り返す（はみ出し防止） */
+.mg-prose {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* 横に長い要素は各自スクロールさせ、ページ本体を横スクロールさせない */
+.mg-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  /* スクロールバーは隠す（スクロール自体は可能） */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.mg-table-wrap::-webkit-scrollbar {
+  display: none;
+}
+.mg-table-wrap > table {
+  margin: 0;
+}
+/* テーブルのセルは折り返さない（意図しない改行を防ぐ） */
+.mg-prose table th,
+.mg-prose table td {
+  white-space: nowrap;
+}
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.3rem 0;
+  scrollbar-width: none;
+}
+.katex-display::-webkit-scrollbar {
+  display: none;
+}
+
+/* mermaid: 生成 SVG のサイズを正規化し、巨大化・スクロール不能を防ぐ */
+.mg-mermaid {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mg-mermaid::-webkit-scrollbar {
+  display: none;
+}
+.mg-mermaid svg {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+  margin-inline: auto;
+}
+
+/* 検索ハイライト（CSS Custom Highlight API）の配色は index.html の
+   インライン <style> で定義している（Lightning CSS が ::highlight() を
+   未知の疑似要素として警告するのを避けるため） */
+
+/* ============================================================
+   スクロールバー
+   ============================================================ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mg-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--mg-border);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--mg-muted);
+  background-clip: padding-box;
+}
+
+/* ============================================================
+   ランディング
+   ============================================================ */
+.mg-landing {
+  background:
+    radial-gradient(70rem 34rem at 50% -10%, var(--mg-accent-soft), transparent 60%),
+    var(--mg-bg);
+}
+.mg-blob {
+  position: absolute;
+  width: 32rem;
+  height: 32rem;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.28;
+  pointer-events: none;
+}
+.mg-blob-a {
+  top: -12rem;
+  left: -8rem;
+  background: var(--mg-accent);
+  animation: mg-drift 14s ease-in-out infinite;
+}
+.mg-blob-b {
+  bottom: -14rem;
+  right: -8rem;
+  background: var(--mg-accent2);
+  animation: mg-drift 18s ease-in-out infinite reverse;
+}
+@keyframes mg-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(3rem, 2rem) scale(1.12);
+  }
+}
+@keyframes mg-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.mg-float {
+  animation: mg-float 4.5s ease-in-out infinite;
+}
+@keyframes mg-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mg-fade-up {
+  animation: mg-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* CTA ボタン */
+.mg-cta {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1.1rem;
+  padding: 1.15rem 1.5rem;
+  color: #fff;
+  background: linear-gradient(120deg, var(--mg-accent), var(--mg-accent2));
+  box-shadow: 0 14px 40px -12px var(--mg-accent);
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s,
+    filter 0.2s;
+}
+.mg-cta:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow: 0 20px 52px -12px var(--mg-accent);
+}
+.mg-cta:active {
+  transform: translateY(0);
+}
+.mg-cta-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.7s ease;
+}
+.mg-cta:hover .mg-cta-sheen {
+  transform: translateX(120%);
+}
+
+/* 履歴カード */
+.mg-recent {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid var(--mg-border);
+  background: color-mix(in srgb, var(--mg-panel) 70%, transparent);
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  backdrop-filter: blur(6px);
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.mg-recent:hover {
+  transform: translateX(3px);
+  border-color: color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  background: var(--mg-panel);
+}

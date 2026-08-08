@@ -1,0 +1,82 @@
+import { useEffect, useRef } from "react";
+import { useAtomValue, useStore } from "jotai";
+import * as A from "../state/atoms";
+import { buildHash, parseHash } from "../lib/url";
+import { verifyPermission } from "../lib/fsAccess";
+import { useWorkspace } from "./useWorkspace";
+
+// URL(hash) と「開いているフォルダ・ファイル」を双方向同期する。
+// - マウント時: 履歴読込後、URL のフォルダを権限 granted なら無確認で復元
+// - 状態変化時: pushState で履歴を積む（ブラウザバック対応）
+// - popstate: URL を解釈して状態へ反映（権限が無ければスタート画面へ）
+export function useUrlSync() {
+  const store = useStore();
+  const { refreshFolders, openFolder, openFile } = useWorkspace();
+  const activeFolderId = useAtomValue(A.activeFolderIdAtom);
+  const activePane = useAtomValue(A.activePaneAtom);
+  const applyingRef = useRef(false);
+  // 初期復元が完了するまで URL 書き込みを止める（マウント時のハッシュ上書き=クロバー防止）
+  const readyRef = useRef(false);
+
+  const applyUrl = useRef(async (state: { folderId?: string; file?: string }) => {
+    applyingRef.current = true;
+    try {
+      const { folderId, file } = state;
+      if (!folderId) {
+        store.set(A.activeFolderIdAtom, null);
+        return;
+      }
+      const folders = store.get(A.foldersAtom);
+      const entry = folders.find((f) => f.id === folderId);
+      if (!entry) {
+        store.set(A.activeFolderIdAtom, null);
+        return;
+      }
+      if (store.get(A.activeFolderIdAtom) !== folderId) {
+        if (!(await verifyPermission(entry.handle, false))) {
+          // 権限が無ければ自動復元できない → スタート画面へ
+          store.set(A.activeFolderIdAtom, null);
+          return;
+        }
+        await openFolder(entry.handle);
+      }
+      // 保存レイアウトで既にファイルが復元されている場合は URL で上書きしない
+      if (file && !store.get(A.activePaneAtom)?.path) openFile(file);
+    } finally {
+      applyingRef.current = false;
+    }
+  });
+
+  // 初期復元（この完了までは URL 書き込みを行わない）
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // 復元対象のハッシュを、書き込み effect に潰される前に確定させておく
+      const state = parseHash();
+      await refreshFolders();
+      if (cancelled) return;
+      if (state.folderId) await applyUrl.current(state);
+      readyRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // popstate（ブラウザの戻る/進む）
+  useEffect(() => {
+    const onPop = () => void applyUrl.current(parseHash());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // 状態変化を URL へ反映
+  useEffect(() => {
+    if (!readyRef.current || applyingRef.current) return;
+    const desired = buildHash(activeFolderId, activePane?.path);
+    if (location.hash !== desired && !(location.hash === "" && desired === "#")) {
+      history.pushState(null, "", desired);
+    }
+  }, [activeFolderId, activePane?.path]);
+}
