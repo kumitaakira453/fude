@@ -1,8 +1,5 @@
 node_modules
 dist
-.wrangler
-.dev.vars
-worker-configuration.d.ts
 *.local
 .DS_Store
 tmp-*.png
@@ -10,3 +7,5 @@ tmp-*.png
 # Tauri
 src-tauri/target
 src-tauri/gen/schemas
+logo-src.png
+logo-clean.png

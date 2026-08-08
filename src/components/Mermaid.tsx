@@ -38,14 +38,14 @@ export function Mermaid({ code }: { code: string }) {
   const rawId = useId();
   const id = `mmd-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
   const [svg, setSvg] = useState<string>("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     const trimmed = code.trim();
     if (!trimmed) {
       setSvg("");
-      setError(false);
+      setError(null);
       return;
     }
     const dark = DARK_THEME_IDS.has(theme);
@@ -54,12 +54,23 @@ export function Mermaid({ code }: { code: string }) {
       .then(({ svg }) => {
         if (alive) {
           setSvg(svg);
-          setError(false);
+          setError(null);
         }
         cleanupOrphans(id);
       })
-      .catch(() => {
-        if (alive) setError(true);
+      .catch((e) => {
+        // WebKit(WKWebView) では draw 成功後の addA11yInfo で例外が出ることがあるが、
+        // その時点で描画済み SVG は DOM(#<id>) に残っているので回収して使う。
+        const drawn = document.getElementById(id);
+        if (drawn && drawn.tagName.toLowerCase() === "svg") {
+          if (alive) {
+            setSvg(drawn.outerHTML);
+            setError(null);
+          }
+        } else {
+          console.error("[mdglow mermaid]", e);
+          if (alive) setError(String(e?.message || e));
+        }
         cleanupOrphans(id);
       });
     return () => {
@@ -68,11 +79,14 @@ export function Mermaid({ code }: { code: string }) {
     };
   }, [code, theme, id]);
 
-  // 失敗時（記述途中含む）はコードをそのまま表示して UI を壊さない。
+  // 失敗時（記述途中含む）はコードとエラー内容を表示して UI を壊さない。
   if (error) {
     return (
-      <div className="my-4 overflow-x-auto rounded-lg border border-[var(--mg-border)] bg-[var(--mg-code-bg)] p-3">
-        <div className="mb-2 text-xs font-medium text-[var(--mg-muted)]">mermaid（描画待ち）</div>
+      <div className="my-4 overflow-x-auto rounded-lg border border-[var(--mg-danger)]/40 bg-[var(--mg-code-bg)] p-3">
+        <div className="mb-2 text-xs font-medium text-[var(--mg-danger)]">mermaid エラー</div>
+        <pre className="mb-2 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--mg-danger)]">
+          {error}
+        </pre>
         <pre className="text-xs leading-relaxed text-[var(--mg-muted)]">
           <code>{code}</code>
         </pre>
