@@ -517,6 +517,9 @@ button.mg-task-check:hover {
 .mg-table-wrap {
   max-width: 100%;
   overflow-x: auto;
+  /* overflow で BFC 化し中の table マージンが外に出ないため、上下余白は
+     ラッパー側で確保する（テーブル前後の余白崩れを防ぐ） */
+  margin-block: 1.5rem;
   /* スクロールバーは隠す（スクロール自体は可能） */
   scrollbar-width: none;
   -ms-overflow-style: none;

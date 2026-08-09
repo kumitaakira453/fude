@@ -26,11 +26,30 @@ export function MermaidModal({
 
   const clamp = (v: number, a: number, b: number) =>
     Math.min(b, Math.max(a, v));
-  const zoom = (f: number) => setScale((s) => clamp(s * f, 0.3, 8));
+
+  // 図が画面外へ出ないようパン量を制限する。ズーム時は要素サイズに合わせて
+  // 端を超えない範囲だけ許可（小さい時は中央固定）。
+  const clampPos = (x: number, y: number, s: number) => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = 0.92 * vw * s;
+    const h = 0.88 * vh * s;
+    const mx = Math.max(0, (w - vw) / 2);
+    const my = Math.max(0, (h - vh) / 2);
+    return { x: clamp(x, -mx, mx), y: clamp(y, -my, my) };
+  };
+
+  const zoom = (f: number) => setScale((s) => clamp(s * f, 0.4, 6));
   const reset = () => {
     setScale(1);
     setPos({ x: 0, y: 0 });
   };
+
+  // スケール変更後、はみ出した分を画面内へ引き戻す
+  useEffect(() => {
+    setPos((p) => clampPos(p.x, p.y, scale));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale]);
 
   return createPortal(
     <div
@@ -62,7 +81,9 @@ export function MermaidModal({
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
-          setPos({ x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y) });
+          setPos(
+            clampPos(d.ox + (e.clientX - d.x), d.oy + (e.clientY - d.y), scale),
+          );
         }}
         onPointerUp={() => {
           drag.current = null;
