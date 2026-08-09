@@ -132,12 +132,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         <span
           title={
             watchMode === "observer"
-              ? "リアルタイム監視中 (FileSystemObserver)"
+              ? "ファイルの変更をリアルタイム監視中（外部エディタでの保存も自動反映）"
               : watchMode === "polling"
-                ? "監視中 (ポーリング)"
-                : "監視停止"
+                ? "ファイルの変更を監視中（ポーリング）"
+                : "ファイル監視は停止中"
           }
-          className={`h-2 w-2 shrink-0 rounded-full ${
+          className={`h-2 w-2 shrink-0 cursor-help rounded-full ${
             watchMode === "observer"
               ? "bg-emerald-400"
               : watchMode === "polling"
