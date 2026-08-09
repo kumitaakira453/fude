@@ -106,12 +106,17 @@ export function Mermaid({ code }: { code: string }) {
 
   if (!svg) return null;
 
+  // 図の背景カード色。透明 SVG が暗いスクリムやテーマ地に沈むのを防ぐ。
+  // mermaid のテーマ(暗/明)に合わせ、暗テーマ=暗カード(明線)、明テーマ=白カード(暗線)。
+  const bg = DARK_THEME_IDS.has(theme) ? "#151a21" : "#ffffff";
+
   return (
     <>
       <div
         className="mg-mermaid my-4"
         role="button"
         title="クリックで拡大"
+        style={{ background: bg }}
         onClick={(e) => {
           e.stopPropagation();
           setZoomed(true);
@@ -128,7 +133,9 @@ export function Mermaid({ code }: { code: string }) {
           <Icon name="zoom_out_map" size={15} />
         </span>
       </div>
-      {zoomed && <MermaidModal svg={svg} onClose={() => setZoomed(false)} />}
+      {zoomed && (
+        <MermaidModal svg={svg} bg={bg} onClose={() => setZoomed(false)} />
+      )}
     </>
   );
 }

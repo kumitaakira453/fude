@@ -5,9 +5,11 @@ import { Icon } from "./Icon";
 // Mermaid 図を全画面のライトボックスで拡大表示。ホイールでズーム、ドラッグでパン。
 export function MermaidModal({
   svg,
+  bg,
   onClose,
 }: {
   svg: string;
+  bg: string;
   onClose: () => void;
 }) {
   const [scale, setScale] = useState(1);
@@ -142,6 +144,7 @@ export function MermaidModal({
           className="mg-mmd-svg"
           onClick={(e) => e.stopPropagation()}
           style={{
+            background: bg,
             // ズームは要素サイズで行う（SVG をベクターのまま再描画＝ボケない）
             width: `calc(92vw * ${scale})`,
             height: `calc(88vh * ${scale})`,

@@ -768,9 +768,11 @@ button.mg-task-check:hover {
   padding: 0.5rem 0.9rem;
 }
 .mg-prose.mg-editorial thead th {
-  background: var(--mg-panel);
-  font-weight: 700;
+  background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
   color: var(--mg-fg);
+  font-weight: 650;
+  /* 平坦な地だけだと「禿げ」に見えるため、アクセントの下線で見出しを締める */
+  border-bottom: 2px solid color-mix(in srgb, var(--mg-accent) 50%, var(--mg-border));
 }
 .mg-prose.mg-editorial tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
@@ -899,6 +901,7 @@ button.mg-task-check:hover {
   overflow: hidden;
   cursor: zoom-in;
   border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
 }
 .mg-mermaid svg {
   display: block;
@@ -978,6 +981,9 @@ button.mg-task-check:hover {
   position: absolute;
   top: 50%;
   left: 50%;
+  box-sizing: border-box;
+  padding: 1.5rem;
+  border-radius: 12px;
 }
 .mg-mmd-svg svg {
   width: 100% !important;

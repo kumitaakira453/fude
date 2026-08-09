@@ -21,6 +21,9 @@ export function ThemeSwitcher() {
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
   const [version, setVersion] = useState("");
+  // メニューから「更新を確認」を押したか。起動時の自動チェック結果は出さず、
+  // 押したときだけ結果（確認中/最新/更新あり）を表示する。
+  const [manualChecked, setManualChecked] = useState(false);
   const isTauri = "__TAURI_INTERNALS__" in window;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -31,6 +34,11 @@ export function ThemeSwitcher() {
       .then(setVersion)
       .catch(() => {});
   }, [isTauri]);
+
+  // パネルを閉じたら手動チェック表示をリセット（次回開いた時はバージョン表示）
+  useEffect(() => {
+    if (!open) setManualChecked(false);
+  }, [open]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -161,7 +169,10 @@ export function ThemeSwitcher() {
             <>
               <div className="my-2 h-px bg-[var(--mg-border)]" />
               <button
-                onClick={() => setUpdateNonce((n) => n + 1)}
+                onClick={() => {
+                  setManualChecked(true);
+                  setUpdateNonce((n) => n + 1);
+                }}
                 disabled={updateStatus === "checking"}
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)] disabled:opacity-60"
               >
@@ -174,17 +185,22 @@ export function ThemeSwitcher() {
                   更新を確認
                 </span>
                 <span className="text-[11px] text-[var(--mg-muted)]">
-                  {updateStatus === "checking"
-                    ? "確認中…"
-                    : updateStatus === "uptodate"
-                      ? "最新です"
-                      : updateStatus === "available"
-                        ? "更新あり"
-                        : updateStatus === "error"
-                          ? "確認できず"
-                          : version
-                            ? `v${version}`
-                            : ""}
+                  {/* 押す前は現在バージョン、押したら結果を表示 */}
+                  {!manualChecked
+                    ? version
+                      ? `v${version}`
+                      : ""
+                    : updateStatus === "checking"
+                      ? "確認中…"
+                      : updateStatus === "uptodate"
+                        ? "最新です"
+                        : updateStatus === "available"
+                          ? "更新あり"
+                          : updateStatus === "error"
+                            ? "確認できず"
+                            : version
+                              ? `v${version}`
+                              : ""}
                 </span>
               </button>
             </>
