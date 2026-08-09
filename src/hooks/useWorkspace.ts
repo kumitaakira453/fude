@@ -145,6 +145,32 @@ export function useWorkspace() {
     [store],
   );
 
+  // rename/move のパス付け替え。キャッシュとレイアウトの不整合による
+  // 一瞬の空表示(白フラッシュ)を避けるため、
+  //   1) 新キーを「加算」(旧キーは残す) → キー欠落の瞬間を作らない
+  //   2) レイアウトのパスを更新
+  //   3) ツリー再構築
+  //   4) 実在ファイルに無い旧キーを掃除
+  // の順で行う。
+  const applyPathRemap = useCallback(
+    async (remap: (p: string | null) => string | null) => {
+      const cur = new Map(store.get(A.contentCacheAtom));
+      for (const [k, v] of [...cur]) {
+        const nk = remap(k);
+        if (nk && nk !== k) cur.set(nk, v);
+      }
+      store.set(A.contentCacheAtom, cur);
+      remapLeafPaths(store, remap);
+      await refreshTreeStructure();
+      const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
+      store.set(
+        A.contentCacheAtom,
+        new Map([...store.get(A.contentCacheAtom)].filter(([k]) => valid.has(k))),
+      );
+    },
+    [store, refreshTreeStructure],
+  );
+
   const refreshFolders = useCallback(async () => {
     store.set(A.foldersAtom, await loadFolders());
   }, [store]);
@@ -324,11 +350,9 @@ export function useWorkspace() {
         if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
         return p;
       };
-      remapLeafPaths(store, remap);
-      remapCache((p) => remap(p) ?? null);
-      await refreshTreeStructure();
+      await applyPathRemap(remap);
     },
-    [absOf, store, refreshTreeStructure, remapCache],
+    [absOf, applyPathRemap],
   );
 
   const deleteEntry = useCallback(
@@ -363,11 +387,9 @@ export function useWorkspace() {
         if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
         return p;
       };
-      remapLeafPaths(store, remap);
-      remapCache((p) => remap(p) ?? null);
-      await refreshTreeStructure();
+      await applyPathRemap(remap);
     },
-    [absOf, uniqueRel, store, refreshTreeStructure, remapCache],
+    [absOf, uniqueRel, applyPathRemap],
   );
 
   const saveFile = useCallback(
