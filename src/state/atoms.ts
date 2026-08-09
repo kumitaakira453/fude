@@ -77,6 +77,16 @@ export const tocOpenAtom = atomWithStorage<boolean>("mdglow:toc", true);
 // エディトリアル組版（ベータ）: 構造を読み取って組版を強化する描画モード
 export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
 
+// 更新チェック: nonce をインクリメントで手動トリガ、状態を UI で共有する
+export const updateCheckNonceAtom = atom(0);
+export type UpdateStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "uptodate"
+  | "error";
+export const updateStatusAtom = atom<UpdateStatus>("idle");
+
 // ---- ファイルツリー開閉状態（フォルダ ID ごとに永続化） ----
 export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(
   "mdglow:expanded",

@@ -1,4 +1,5 @@
-import { useAtom } from "jotai";
+import { getVersion } from "@tauri-apps/api/app";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { FONTS } from "../lib/fonts";
 import { THEMES } from "../lib/themes";
@@ -7,6 +8,8 @@ import {
   fontAtom,
   readingWidthAtom,
   themeAtom,
+  updateCheckNonceAtom,
+  updateStatusAtom,
 } from "../state/atoms";
 import { Icon } from "./Icon";
 
@@ -15,8 +18,19 @@ export function ThemeSwitcher() {
   const [font, setFont] = useAtom(fontAtom);
   const [width, setWidth] = useAtom(readingWidthAtom);
   const [editorial, setEditorial] = useAtom(editorialAtom);
+  const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
+  const updateStatus = useAtomValue(updateStatusAtom);
+  const [version, setVersion] = useState("");
+  const isTauri = "__TAURI_INTERNALS__" in window;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    void getVersion()
+      .then(setVersion)
+      .catch(() => {});
+  }, [isTauri]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -142,6 +156,39 @@ export function ThemeSwitcher() {
               />
             </span>
           </button>
+
+          {isTauri && (
+            <>
+              <div className="my-2 h-px bg-[var(--mg-border)]" />
+              <button
+                onClick={() => setUpdateNonce((n) => n + 1)}
+                disabled={updateStatus === "checking"}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)] disabled:opacity-60"
+              >
+                <Icon
+                  name="system_update_alt"
+                  size={17}
+                  className="text-[var(--mg-muted)]"
+                />
+                <span className="flex-1 text-[13px] text-[var(--mg-fg-dim)]">
+                  更新を確認
+                </span>
+                <span className="text-[11px] text-[var(--mg-muted)]">
+                  {updateStatus === "checking"
+                    ? "確認中…"
+                    : updateStatus === "uptodate"
+                      ? "最新です"
+                      : updateStatus === "available"
+                        ? "更新あり"
+                        : updateStatus === "error"
+                          ? "確認できず"
+                          : version
+                            ? `v${version}`
+                            : ""}
+                </span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

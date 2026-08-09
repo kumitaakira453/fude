@@ -1,6 +1,8 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { useEffect, useRef, useState } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useEffect, useState } from "react";
+import { updateCheckNonceAtom, updateStatusAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 type Phase = "hidden" | "available" | "downloading" | "error";
@@ -12,29 +14,34 @@ export function UpdateBanner() {
   const [update, setUpdate] = useState<Update | null>(null);
   const [pct, setPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const startedRef = useRef(false);
+  // 起動時 + 「更新を確認」メニュー（nonce インクリメント）で実行
+  const nonce = useAtomValue(updateCheckNonceAtom);
+  const setStatus = useSetAtom(updateStatusAtom);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     // Tauri 環境以外（dev のブラウザ等）では静かに無効化
     if (!("__TAURI_INTERNALS__" in window)) return;
     let cancelled = false;
     void (async () => {
+      setStatus("checking");
       try {
         const u = await check();
-        if (!cancelled && u) {
+        if (cancelled) return;
+        if (u) {
           setUpdate(u);
           setPhase("available");
+          setStatus("available");
+        } else {
+          setStatus("uptodate");
         }
       } catch {
-        // 更新チェック失敗は致命ではないので黙って無視
+        if (!cancelled) setStatus("error");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [nonce, setStatus]);
 
   const runUpdate = async () => {
     if (!update) return;
