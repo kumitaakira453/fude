@@ -23,6 +23,18 @@ import {
 } from "../lib/ui";
 import * as A from "../state/atoms";
 
+// ファイル単位のドキュメント Undo/Redo 履歴（保存＝1ステップ）。
+const contentHistory = new Map<string, { undo: string[]; redo: string[] }>();
+const HISTORY_LIMIT = 80;
+function histFor(rel: string) {
+  let h = contentHistory.get(rel);
+  if (!h) {
+    h = { undo: [], redo: [] };
+    contentHistory.set(rel, h);
+  }
+  return h;
+}
+
 // path 正規化（. / .. を解決）。
 function resolvePath(baseDir: string, rel: string): string {
   const cleanRel = rel.split("#")[0].split("?")[0];
@@ -392,7 +404,8 @@ export function useWorkspace() {
     [absOf, uniqueRel, applyPathRemap],
   );
 
-  const saveFile = useCallback(
+  // 履歴を積まずにキャッシュ＋ディスクへ書く（undo/redo の実体）。
+  const writeContent = useCallback(
     async (rel: string, text: string) => {
       const abs = absOf(rel);
       if (!abs) return;
@@ -404,6 +417,48 @@ export function useWorkspace() {
       await writeFile(abs, text);
     },
     [absOf, store],
+  );
+
+  const saveFile = useCallback(
+    async (rel: string, text: string) => {
+      // 直前の内容を undo スタックへ（redo はクリア）
+      const prev = store.get(A.contentCacheAtom).get(rel);
+      if (prev !== undefined && prev !== text) {
+        const h = histFor(rel);
+        h.undo.push(prev);
+        if (h.undo.length > HISTORY_LIMIT) h.undo.shift();
+        h.redo = [];
+      }
+      await writeContent(rel, text);
+    },
+    [store, writeContent],
+  );
+
+  // ドキュメント全体の Undo/Redo（編集確定後に 1 ステップ単位で巻き戻す）。
+  const undoFile = useCallback(
+    async (rel: string) => {
+      const h = contentHistory.get(rel);
+      if (!h || h.undo.length === 0) return false;
+      const cur = store.get(A.contentCacheAtom).get(rel) ?? "";
+      const prev = h.undo.pop() as string;
+      h.redo.push(cur);
+      await writeContent(rel, prev);
+      return true;
+    },
+    [store, writeContent],
+  );
+
+  const redoFile = useCallback(
+    async (rel: string) => {
+      const h = contentHistory.get(rel);
+      if (!h || h.redo.length === 0) return false;
+      const cur = store.get(A.contentCacheAtom).get(rel) ?? "";
+      const next = h.redo.pop() as string;
+      h.undo.push(cur);
+      await writeContent(rel, next);
+      return true;
+    },
+    [store, writeContent],
   );
 
   return {
@@ -423,5 +478,7 @@ export function useWorkspace() {
     deleteEntry,
     moveEntry,
     saveFile,
+    undoFile,
+    redoFile,
   };
 }

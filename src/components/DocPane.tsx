@@ -39,8 +39,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   const store = useStore();
-  const { navigate, resolveAsset, peekAsset, reloadFile, saveFile } =
-    useWorkspace();
+  const {
+    navigate,
+    resolveAsset,
+    peekAsset,
+    reloadFile,
+    saveFile,
+    undoFile,
+    redoFile,
+  } = useWorkspace();
 
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
@@ -85,6 +92,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setEditing(false);
     setEditingFm(null);
   }, [path]);
+
+  // ドキュメント全体の Undo/Redo（アクティブペインのみ、CM 編集中は CM に任せる）
+  useEffect(() => {
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== "z" && e.key !== "Z")) return;
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae?.closest?.(".cm-editor")) return; // 編集中はエディタのアンドゥ
+      if (!path) return;
+      e.preventDefault();
+      if (e.shiftKey) void redoFile(path);
+      else void undoFile(path);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, path, undoFile, redoFile]);
 
   // ⌘E で編集/プレビュー切替（アクティブペインのみ）
   useEffect(() => {
