@@ -3,6 +3,8 @@ import {
   history,
   historyKeymap,
   indentWithTab,
+  redo,
+  undo,
 } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import {
@@ -83,6 +85,10 @@ export function BlockSourceEditor({
               },
             },
             { key: "Enter", run: continueList },
+            // Undo/Redo を明示（WKWebView でネイティブに取られても効かせる）
+            { key: "Mod-z", preventDefault: true, run: undo },
+            { key: "Mod-Shift-z", preventDefault: true, run: redo },
+            { key: "Mod-y", preventDefault: true, run: redo },
             indentWithTab,
             ...defaultKeymap,
             ...historyKeymap,
