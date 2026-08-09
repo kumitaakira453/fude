@@ -61,7 +61,8 @@ export async function buildTree(rootAbs: string, parentRel = ""): Promise<TreeNo
     if (e.isDirectory) {
       if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
       const children = await buildTree(rootAbs, rel);
-      if (children.length > 0) nodes.push({ name: e.name, path: rel, abs, kind: "dir", children });
+      // 空フォルダも表示する（新規作成フォルダや構成用フォルダのため）
+      nodes.push({ name: e.name, path: rel, abs, kind: "dir", children });
     } else if (e.isFile && isMarkdown(e.name)) {
       nodes.push({ name: e.name, path: rel, abs, kind: "file" });
     }

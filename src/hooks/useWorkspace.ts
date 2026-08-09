@@ -97,6 +97,29 @@ export function useWorkspace() {
     await indexContents(files);
   }, [store, getRootPath, indexContents]);
 
+  // ツリー構造だけ更新（全文再インデックスしない）。ファイル操作用。
+  const refreshTreeStructure = useCallback(async () => {
+    const root = getRootPath();
+    if (!root) return;
+    const tree = await buildTree(root);
+    store.set(A.treeAtom, tree);
+    store.set(A.filesAtom, flattenFiles(tree));
+  }, [store, getRootPath]);
+
+  // contentCache のキーを写像で更新（rename/move/delete 用）。
+  const remapCache = useCallback(
+    (mapper: (path: string) => string | null) => {
+      const src = store.get(A.contentCacheAtom);
+      const next = new Map<string, string>();
+      for (const [k, v] of src) {
+        const nk = mapper(k);
+        if (nk) next.set(nk, v);
+      }
+      store.set(A.contentCacheAtom, next);
+    },
+    [store],
+  );
+
   const refreshFolders = useCallback(async () => {
     store.set(A.foldersAtom, await loadFolders());
   }, [store]);
@@ -221,11 +244,15 @@ export function useWorkspace() {
       const abs = absOf(rel);
       if (!abs) return;
       const stem = baseOf(rel).replace(/\.[^.]+$/, "");
-      await writeFile(abs, isMarkdown(rel) ? `# ${stem}\n\n` : "");
-      await refreshTree();
+      const initial = isMarkdown(rel) ? `# ${stem}\n\n` : "";
+      await writeFile(abs, initial);
+      const content = new Map(store.get(A.contentCacheAtom));
+      content.set(rel, initial);
+      store.set(A.contentCacheAtom, content);
+      await refreshTreeStructure();
       openFile(rel);
     },
-    [absOf, uniqueRel, refreshTree, openFile],
+    [absOf, uniqueRel, refreshTreeStructure, openFile, store],
   );
 
   const createFolder = useCallback(
@@ -236,9 +263,9 @@ export function useWorkspace() {
       const abs = absOf(rel);
       if (!abs) return;
       await createDir(abs);
-      await refreshTree();
+      await refreshTreeStructure();
     },
-    [absOf, uniqueRel, refreshTree],
+    [absOf, uniqueRel, refreshTreeStructure],
   );
 
   const renameEntry = useCallback(
@@ -253,14 +280,16 @@ export function useWorkspace() {
       const newAbs = absOf(newRel);
       if (!oldAbs || !newAbs) return;
       await renamePath(oldAbs, newAbs);
-      remapLeafPaths(store, (p) => {
+      const remap = (p: string | null) => {
         if (p === rel) return newRel;
         if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
         return p;
-      });
-      await refreshTree();
+      };
+      remapLeafPaths(store, remap);
+      remapCache((p) => remap(p) ?? null);
+      await refreshTreeStructure();
     },
-    [absOf, store, refreshTree],
+    [absOf, store, refreshTreeStructure, remapCache],
   );
 
   const deleteEntry = useCallback(
@@ -268,10 +297,12 @@ export function useWorkspace() {
       const abs = absOf(rel);
       if (!abs) return;
       await removePath(abs, isDir);
-      remapLeafPaths(store, (p) => (p === rel || (p && p.startsWith(rel + "/")) ? null : p));
-      await refreshTree();
+      const gone = (p: string | null) => (p === rel || (p && p.startsWith(rel + "/")) ? null : p);
+      remapLeafPaths(store, gone);
+      remapCache((p) => gone(p) ?? null);
+      await refreshTreeStructure();
     },
-    [absOf, store, refreshTree],
+    [absOf, store, refreshTreeStructure, remapCache],
   );
 
   const moveEntry = useCallback(
@@ -282,14 +313,16 @@ export function useWorkspace() {
       const newAbs = absOf(newRel);
       if (!oldAbs || !newAbs) return;
       await renamePath(oldAbs, newAbs);
-      remapLeafPaths(store, (p) => {
+      const remap = (p: string | null) => {
         if (p === rel) return newRel;
         if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
         return p;
-      });
-      await refreshTree();
+      };
+      remapLeafPaths(store, remap);
+      remapCache((p) => remap(p) ?? null);
+      await refreshTreeStructure();
     },
-    [absOf, uniqueRel, store, refreshTree],
+    [absOf, uniqueRel, store, refreshTreeStructure, remapCache],
   );
 
   const saveFile = useCallback(
@@ -309,6 +342,7 @@ export function useWorkspace() {
     refreshFolders,
     openFolder,
     refreshTree,
+    refreshTreeStructure,
     reloadFile,
     openFile,
     navigate,

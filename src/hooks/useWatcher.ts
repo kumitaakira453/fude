@@ -9,7 +9,7 @@ import { useWorkspace } from "./useWorkspace";
 export function useWatcher() {
   const store = useStore();
   const activeFolderId = useAtomValue(A.activeFolderIdAtom);
-  const { getRootPath, reloadFile, refreshTree } = useWorkspace();
+  const { getRootPath, reloadFile, refreshTreeStructure } = useWorkspace();
 
   useEffect(() => {
     const root = getRootPath();
@@ -21,7 +21,7 @@ export function useWatcher() {
     const scheduleTreeRefresh = () => {
       window.clearTimeout(treeTimer);
       treeTimer = window.setTimeout(() => {
-        if (!disposed) void refreshTree();
+        if (!disposed) void refreshTreeStructure();
       }, 400);
     };
 
