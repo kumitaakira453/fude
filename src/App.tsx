@@ -34,6 +34,19 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  // ドラッグ&ドロップの取りこぼしで WebView が既定動作（ドロップされたパスへ
+  // ナビゲーション→リロード＝画面全体が真っ白）になるのを全域で抑止する。
+  // 個別のドロップ処理は要素側で先に実行されるため影響しない。
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
+
   // 分割レイアウトをフォルダごとに永続化
   useEffect(() => {
     if (!activeFolderId) return;
