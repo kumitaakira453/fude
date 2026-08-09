@@ -15,6 +15,7 @@ import {
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
+import { BlockSourceEditor } from "./BlockSourceEditor";
 import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
@@ -57,6 +58,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  // フロントマター（先頭の --- ブロック）をその場編集中か
+  const [editingFm, setEditingFm] = useState(false);
 
   const isActive = activeId === pane.id;
   const path = pane.path;
@@ -78,6 +81,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // ファイル切替で編集モード解除
   useEffect(() => {
     setEditing(false);
+    setEditingFm(false);
   }, [path]);
 
   // ⌘E で編集/プレビュー切替（アクティブペインのみ）
@@ -103,6 +107,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const full = raw ?? "";
     const prefix = full.slice(0, full.length - body.length);
     void saveFile(path, prefix + newBody);
+  };
+
+  // フロントマター（本文の前にある --- ブロック）の生ソース
+  const fmPrefix = (raw ?? "").slice(0, (raw ?? "").length - body.length);
+  const saveFm = (newFm: string) => {
+    if (!path || newFm === fmPrefix) return;
+    void saveFile(path, newFm + body);
   };
 
   // path はあるが未読込なら読み込む
@@ -256,7 +267,24 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     editorial ? "mg-editorial" : ""
                   } ${WIDTH_CLASS[width]} mx-auto`}
                 >
-                  {data && <Frontmatter data={data} />}
+                  {data &&
+                    (editingFm ? (
+                      <BlockSourceEditor
+                        src={fmPrefix}
+                        onCommit={(s) => {
+                          setEditingFm(false);
+                          saveFm(s);
+                        }}
+                        onCancel={() => setEditingFm(false)}
+                      />
+                    ) : (
+                      <div
+                        className="mg-block"
+                        onDoubleClick={() => setEditingFm(true)}
+                      >
+                        <Frontmatter data={data} />
+                      </div>
+                    ))}
                   <markdownContext.Provider value={ctx}>
                     {/* ダブルクリックしたブロックだけをその場で生ソース編集 */}
                     <EditableBody
