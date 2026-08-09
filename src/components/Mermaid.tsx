@@ -114,7 +114,7 @@ export function Mermaid({ code }: { code: string }) {
         title="クリックで拡大"
         onClick={() => setZoomed(true)}
       >
-        {/* mermaid が生成する SVG を挿入（securityLevel: strict でサニタイズ済み） */}
+        {/* mermaid が生成する SVG（securityLevel: strict でサニタイズ済み） */}
         <div
           className="mg-mermaid-inner"
           dangerouslySetInnerHTML={{ __html: svg }}

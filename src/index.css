@@ -902,12 +902,11 @@ button.mg-task-check:hover {
   border-radius: 0.5rem;
 }
 .mg-mermaid svg {
-  max-width: 100% !important;
-  max-height: 440px !important;
-  height: auto !important;
-  width: auto !important;
   display: block;
   margin-inline: auto;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: 440px !important;
 }
 /* 拡大の手がかり（常時表示・控えめ） */
 .mg-mermaid-zoom {
@@ -945,23 +944,26 @@ button.mg-task-check:hover {
   display: flex;
   gap: 6px;
 }
+/* テーマ変数に依存せず、暗いスクリム上で常に綺麗に見えるガラス調ボタン。
+   白余白・ホバー白が出ないよう配色は明示する。 */
 .mg-mmd-toolbar button {
   display: grid;
   place-items: center;
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  /* ポータル(body 直下)でも確実に見えるようフォールバック色を指定 */
-  color: var(--mg-fg-dim, #c2ccd6);
-  background: var(--mg-panel, #151a21);
-  border: 1px solid var(--mg-border, #2a2f3a);
+  color: #e8ebf0;
+  background: rgba(28, 32, 40, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  outline: none;
+  backdrop-filter: blur(6px);
   transition:
     background 0.15s,
     color 0.15s;
 }
 .mg-mmd-toolbar button:hover {
-  background: var(--mg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--mg-fg, #e6edf3);
+  background: rgba(60, 66, 78, 0.92);
+  color: #fff;
 }
 .mg-mmd-stage {
   width: 100vw;
@@ -970,17 +972,19 @@ button.mg-task-check:hover {
   place-items: center;
   touch-action: none;
 }
+/* 確定サイズのコンテナに SVG を width/height:100% で収める（WebKit で確実に描画）。
+   拡大/パンは transform で行う。 */
 .mg-mmd-svg {
+  width: 92vw;
+  height: 88vh;
   transform-origin: center center;
   will-change: transform;
 }
-/* mermaid の SVG は width="100%" を持つことがあり、中央寄せの縮小コンテナ内では
-   0 に潰れて表示されない。intrinsic サイズを !important で強制して確実に描画する。 */
 .mg-mmd-svg svg {
-  width: auto !important;
-  height: auto !important;
-  max-width: 92vw !important;
-  max-height: 88vh !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
   display: block;
 }
 
