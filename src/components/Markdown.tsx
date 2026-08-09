@@ -217,6 +217,17 @@ export const Markdown = memo(function Markdown({
             <ol className={editorial ? "mg-steps" : undefined}>{children}</ol>
           );
         },
+        hr() {
+          // WebKit は hr::before を描画しないため、editorial の「· · ·」区切りは
+          // ドットを実テキストで持つ div にする（確実に表示される）。
+          return editorial ? (
+            <div className="mg-hr" aria-hidden>
+              · · ·
+            </div>
+          ) : (
+            <hr />
+          );
+        },
         input({ type, checked }) {
           if (type !== "checkbox") {
             return <input type={type} checked={checked} readOnly />;

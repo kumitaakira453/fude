@@ -841,20 +841,16 @@ button.mg-task-check:hover {
     transition: none;
   }
 }
-/* 区切り線: ただの罫線ではなく「· · ·」の上品なディバイダ */
-.mg-prose.mg-editorial hr {
-  border: 0;
-  height: auto;
-  margin: 2.4em 0;
+/* 区切り線: ただの罫線ではなく「· · ·」の上品なディバイダ（div で実描画） */
+.mg-prose.mg-editorial .mg-hr {
+  margin: 2em 0;
   text-align: center;
-  overflow: visible;
-}
-.mg-prose.mg-editorial hr::before {
-  content: "· · ·";
   color: var(--mg-accent);
-  opacity: 0.6;
+  opacity: 0.55;
   letter-spacing: 0.5em;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  user-select: none;
 }
 /* 箇条書きのマーカーをアクセント色で少し際立たせる */
 .mg-prose.mg-editorial ul > li::marker {
