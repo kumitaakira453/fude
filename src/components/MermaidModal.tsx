@@ -37,8 +37,11 @@ export function MermaidModal({
     const vh = window.innerHeight;
     const w = 0.92 * vw * s;
     const h = 0.88 * vh * s;
-    const mx = Math.max(0, (w - vw) / 2);
-    const my = Math.max(0, (h - vh) / 2);
+    // 端で止まらず、外側にビューポートの 15% ぶん余白を送れるようにする
+    const padX = vw * 0.15;
+    const padY = vh * 0.15;
+    const mx = Math.max(0, (w - vw) / 2) + padX;
+    const my = Math.max(0, (h - vh) / 2) + padY;
     return { x: clamp(x, -mx, mx), y: clamp(y, -my, my) };
   };
 
