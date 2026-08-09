@@ -42,10 +42,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
   const [progress, setProgress] = useState(0);
-  // プレビューのスクロール位置（編集↔プレビュー切替で復元）
-  const scrollPosRef = useRef<{ path: string | null; top: number }>({
+  // スクロール割合(0〜1)をプレビューと編集で共有し、切替で位置を引き継ぐ。
+  // 同一内容なら frac×max は元の top と一致するため、ファイル復帰時の復元にも使える。
+  const scrollFracRef = useRef<{ path: string | null; frac: number }>({
     path: null,
-    top: 0,
+    frac: 0,
   });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -98,19 +99,25 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!scroller) return;
     const onScroll = () => {
       const max = scroller.scrollHeight - scroller.clientHeight;
-      setProgress(max > 0 ? Math.min(1, scroller.scrollTop / max) : 0);
-      scrollPosRef.current = { path, top: scroller.scrollTop };
+      const frac = max > 0 ? Math.min(1, scroller.scrollTop / max) : 0;
+      setProgress(frac);
+      scrollFracRef.current = { path, frac };
     };
     onScroll();
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => scroller.removeEventListener("scroll", onScroll);
   }, [scroller, raw, path]);
 
-  // scroller マウント時: 同じファイルなら保存位置を復元、別ファイルなら先頭へ
+  // scroller マウント時: 同じファイルなら保存割合へ、別ファイルなら先頭へ。
+  // 画像/KaTeX で高さが後から変わるため rAF でレイアウト確定後に適用。
   useEffect(() => {
     if (!scroller) return;
-    const saved = scrollPosRef.current;
-    scroller.scrollTop = saved.path === path ? saved.top : 0;
+    const saved = scrollFracRef.current;
+    const frac = saved.path === path ? saved.frac : 0;
+    requestAnimationFrame(() => {
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      scroller.scrollTop = max > 0 ? frac * max : 0;
+    });
   }, [path, scroller]);
 
   useSearchHighlight(content, isActive);
@@ -205,6 +212,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             initialDoc={draft}
             onChange={setDraft}
             onSave={save}
+            initialScrollFraction={
+              scrollFracRef.current.path === path
+                ? scrollFracRef.current.frac
+                : 0
+            }
+            onScrollFraction={(frac) => {
+              scrollFracRef.current = { path, frac };
+            }}
           />
         ) : (
           <div

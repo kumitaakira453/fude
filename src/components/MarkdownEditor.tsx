@@ -80,16 +80,25 @@ export function MarkdownEditor({
   initialDoc,
   onChange,
   onSave,
+  initialScrollFraction = 0,
+  onScrollFraction,
 }: {
   initialDoc: string;
   onChange: (text: string) => void;
   onSave: () => void;
+  // プレビューから引き継ぐ初期スクロール割合（0〜1）
+  initialScrollFraction?: number;
+  // 編集中のスクロール割合を親へ報告（プレビュー復帰時の復元用）
+  onScrollFraction?: (frac: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  const onScrollFractionRef = useRef(onScrollFraction);
+  const initialFractionRef = useRef(initialScrollFraction);
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
+  onScrollFractionRef.current = onScrollFraction;
 
   useEffect(() => {
     if (!ref.current) return;
@@ -125,8 +134,27 @@ export function MarkdownEditor({
         ],
       }),
     });
+
+    // プレビューで読んでいた位置(割合)へ復元
+    const s = view.scrollDOM;
+    const restore = () => {
+      const max = s.scrollHeight - s.clientHeight;
+      if (max > 0) s.scrollTop = initialFractionRef.current * max;
+    };
+    requestAnimationFrame(restore);
+
+    // 編集中のスクロール割合を報告（プレビュー復帰時に使う）
+    const onScroll = () => {
+      const max = s.scrollHeight - s.clientHeight;
+      onScrollFractionRef.current?.(max > 0 ? s.scrollTop / max : 0);
+    };
+    s.addEventListener("scroll", onScroll, { passive: true });
+
     view.focus();
-    return () => view.destroy();
+    return () => {
+      s.removeEventListener("scroll", onScroll);
+      view.destroy();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
