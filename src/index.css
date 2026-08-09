@@ -552,6 +552,61 @@ body {
    未知の疑似要素として警告するのを避けるため） */
 
 /* ============================================================
+   CodeMirror ライブプレビュー（編集モード）
+   ============================================================ */
+.mg-cm,
+.mg-cm .cm-editor {
+  height: 100%;
+}
+.cm-lp-h1 {
+  font-size: 1.9em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.cm-lp-h2 {
+  font-size: 1.55em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.cm-lp-h3 {
+  font-size: 1.3em;
+  font-weight: 600;
+}
+.cm-lp-h4 {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+.cm-lp-h5,
+.cm-lp-h6 {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.cm-lp-bold {
+  font-weight: 700;
+  color: var(--mg-fg);
+}
+.cm-lp-italic {
+  font-style: italic;
+}
+.cm-lp-strike {
+  text-decoration: line-through;
+  color: var(--mg-muted);
+}
+.cm-lp-code {
+  font-family: var(--mg-font-mono);
+  font-size: 0.9em;
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent2);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.3em;
+}
+.cm-lp-link {
+  color: var(--mg-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ============================================================
    スクロールバー
    ============================================================ */
 * {

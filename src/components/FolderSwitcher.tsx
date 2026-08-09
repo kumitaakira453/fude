@@ -4,6 +4,7 @@ import { activeFolderIdAtom, foldersAtom } from "../state/atoms";
 import { pickDirectory } from "../lib/fsAccess";
 import { folderDisplayName, removeFolder, renameFolder } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { Icon } from "./Icon";
 
 export function FolderSwitcher() {
@@ -15,6 +16,7 @@ export function FolderSwitcher() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const ime = useImeSafeEnter();
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -96,8 +98,10 @@ export function FolderSwitcher() {
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
+                      onCompositionStart={ime.onCompositionStart}
+                      onCompositionEnd={ime.onCompositionEnd}
                       onKeyDown={(e) => {
-                        if (e.nativeEvent.isComposing) return; // IME 変換確定の Enter を無視
+                        if (ime.isComposing(e)) return; // IME 変換確定の Enter を無視
                         if (e.key === "Enter") void commitRename(f.id);
                         else if (e.key === "Escape") setEditingId(null);
                       }}

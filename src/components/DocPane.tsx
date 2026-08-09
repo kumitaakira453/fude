@@ -15,6 +15,7 @@ import { closePane } from "../lib/ui";
 import { markdownContext } from "./MarkdownContext";
 import { Markdown } from "./Markdown";
 import { Frontmatter } from "./Frontmatter";
+import { MarkdownEditor } from "./MarkdownEditor";
 import { Toc } from "./Toc";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useSearchHighlight } from "../hooks/useSearchHighlight";
@@ -177,19 +178,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
         {editing && path ? (
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
-                e.preventDefault();
-                save();
-              }
-            }}
-            spellCheck={false}
-            className="mg-editor min-w-0 flex-1 resize-none bg-[var(--mg-bg)] px-6 py-8 font-mono text-[13.5px] leading-relaxed text-[var(--mg-fg)] outline-none sm:px-10"
-            placeholder="# 見出し…"
-          />
+          <MarkdownEditor key={path} initialDoc={draft} onChange={setDraft} onSave={save} />
         ) : (
           <div ref={setScroller} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {path ? (

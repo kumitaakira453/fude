@@ -44,6 +44,9 @@ function joinRel(a: string, b: string): string {
   return a ? `${a}/${b}` : b;
 }
 
+// バックグラウンド索引の世代。新しい構築が始まると古い構築は中断する。
+let indexGen = 0;
+
 export function useWorkspace() {
   const store = useStore();
 
@@ -60,28 +63,36 @@ export function useWorkspace() {
     [store],
   );
 
-  // 全 md を読み込み、全文検索インデックス（生テキストのキャッシュ）を構築する。
+  // 全 md を読み込み、全文検索インデックス（生テキストのキャッシュ）を
+  // バックグラウンドで構築する。UI はツリー表示直後から操作可能。
   const indexContents = useCallback(
-    async (files: TreeNode[]) => {
-      const content = new Map<string, string>();
-      const mtime = new Map<string, number>();
+    async (files: TreeNode[], gen: number) => {
+      // 既存キャッシュ（開いた/編集したファイル）を保持したまま追記していく
+      const content = new Map(store.get(A.contentCacheAtom));
+      const mtime = new Map(store.get(A.mtimeCacheAtom));
       const total = files.length;
       store.set(A.loadingAtom, { active: true, message: "インデックス構築中", done: 0, total });
       for (let i = 0; i < files.length; i++) {
+        if (gen !== indexGen) return; // 新しい構築に置き換えられたら中断
         const node = files[i];
-        try {
-          const data = await readFile(node.abs);
-          content.set(node.path, data.text);
-          mtime.set(node.path, data.lastModified);
-        } catch {
-          /* 読み込めないファイルはスキップ */
+        if (!content.has(node.path)) {
+          try {
+            const data = await readFile(node.abs);
+            content.set(node.path, data.text);
+            mtime.set(node.path, data.lastModified);
+          } catch {
+            /* 読み込めないファイルはスキップ */
+          }
         }
-        if (i % 20 === 0) {
+        if (i % 40 === 0) {
+          store.set(A.contentCacheAtom, new Map(content));
+          store.set(A.mtimeCacheAtom, new Map(mtime));
           store.set(A.loadingAtom, { active: true, message: "インデックス構築中", done: i, total });
         }
       }
-      store.set(A.contentCacheAtom, content);
-      store.set(A.mtimeCacheAtom, mtime);
+      if (gen !== indexGen) return;
+      store.set(A.contentCacheAtom, new Map(content));
+      store.set(A.mtimeCacheAtom, new Map(mtime));
       store.set(A.loadingAtom, { active: false, message: "", done: total, total });
     },
     [store],
@@ -94,7 +105,9 @@ export function useWorkspace() {
     const files = flattenFiles(tree);
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, files);
-    await indexContents(files);
+    // インデックスはバックグラウンドで（await しない）
+    const gen = ++indexGen;
+    void indexContents(files, gen);
   }, [store, getRootPath, indexContents]);
 
   // ツリー構造だけ更新（全文再インデックスしない）。ファイル操作用。

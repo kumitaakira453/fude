@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { filesAtom, paletteOpenAtom } from "../state/atoms";
 import { quickOpen } from "../lib/search";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { Icon } from "./Icon";
 
 // Cmd/Ctrl+P のクイックオープン（ファイル名ファジー検索）。
@@ -13,6 +14,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const ime = useImeSafeEnter();
 
   const results = useMemo(() => quickOpen(files, query), [files, query]);
 
@@ -55,8 +57,10 @@ export function CommandPalette() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onCompositionStart={ime.onCompositionStart}
+            onCompositionEnd={ime.onCompositionEnd}
             onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return; // IME 変換中のキーを無視
+            if (ime.isComposing(e)) return; // IME 変換中のキーを無視
             if (e.key === "ArrowDown") {
               e.preventDefault();
               setActive((a) => Math.min(a + 1, results.length - 1));

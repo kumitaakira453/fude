@@ -10,6 +10,7 @@ import {
 } from "../state/atoms";
 import type { TreeNode } from "../lib/fsAccess";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { openToSide } from "../lib/ui";
 import { DND_MIME } from "../lib/dnd";
 import { Icon } from "./Icon";
@@ -73,6 +74,7 @@ function NameInput({
   icon: string;
 }) {
   const [v, setV] = useState(initial);
+  const ime = useImeSafeEnter();
   return (
     <div className="flex h-7 items-center gap-1" style={{ paddingLeft: `${pad}px` }}>
       <Icon name={icon} size={16} className="shrink-0 text-[var(--mg-muted)]" />
@@ -80,8 +82,10 @@ function NameInput({
         autoFocus
         value={v}
         onChange={(e) => setV(e.target.value)}
+        onCompositionStart={ime.onCompositionStart}
+        onCompositionEnd={ime.onCompositionEnd}
         onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
+          if (ime.isComposing(e)) return;
           if (e.key === "Enter") onCommit(v);
           else if (e.key === "Escape") onCancel();
         }}
