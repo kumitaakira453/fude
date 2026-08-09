@@ -30,6 +30,9 @@
 - **12 テーマ / 6 書体**（Anthropic Serif 含む）・本文幅切替
 - **UI 崩れ対策** — 固定グリッド。長い表・コード・数式は各領域内でスクロール
 
+> リリース（タグ push → 各OSビルド → GitHub Releases 配布 → 自動更新）の手順は
+> [`RELEASING.md`](./RELEASING.md) を参照。
+
 ## 動作要件
 
 - macOS / Windows / Linux（システム WebView を使用）
