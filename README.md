@@ -1,9 +1,20 @@
 # ✨ mdglow
 
+<p>
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white">
+  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-4-38BDF8?logo=tailwindcss&logoColor=white">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey">
+  <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg">
+  <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg">
+</p>
+
 ローカルの Markdown フォルダを美しく読むための **デスクトップアプリ**（Tauri）。
 数式・コード・図・全文検索・リアルタイム反映に対応し、ファイルは常に端末内で完結します。
 
-> Web（File System Access API）版は `main` ブランチにあります。この `tauri` ブランチは
+> Web（File System Access API）版は `web` ブランチにあります。この `main` ブランチは
 > ネイティブアプリ版で、**許可プロンプトなし・OS ネイティブ監視・本物の絶対パス**が使えます。
 
 ---
