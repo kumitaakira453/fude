@@ -517,10 +517,13 @@ body {
 .mg-table-wrap > table {
   margin: 0;
 }
-/* テーブルのセルは折り返さない（意図しない改行を防ぐ） */
+/* セル幅は 200px を上限に。短いセルは 1 行のまま、200px を超える内容だけ
+   折り返す（長い URL/トークンも anywhere で確実に折り返す）。 */
 .mg-prose table th,
 .mg-prose table td {
-  white-space: nowrap;
+  max-width: 200px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ============================================================
