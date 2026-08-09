@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useAtomValue, useStore } from "jotai";
 import {
   activePaneIdAtom,
@@ -16,6 +16,7 @@ import { markdownContext } from "./MarkdownContext";
 import { Markdown } from "./Markdown";
 import { Frontmatter } from "./Frontmatter";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { Tooltip } from "./Tooltip";
 import { Toc } from "./Toc";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useSearchHighlight } from "../hooks/useSearchHighlight";
@@ -40,6 +41,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
   const [progress, setProgress] = useState(0);
+  // プレビューのスクロール位置（編集↔プレビュー切替で復元）
+  const scrollPosRef = useRef<{ path: string | null; top: number }>({ path: null, top: 0 });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -92,15 +95,18 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const onScroll = () => {
       const max = scroller.scrollHeight - scroller.clientHeight;
       setProgress(max > 0 ? Math.min(1, scroller.scrollTop / max) : 0);
+      scrollPosRef.current = { path, top: scroller.scrollTop };
     };
     onScroll();
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => scroller.removeEventListener("scroll", onScroll);
-  }, [scroller, raw]);
+  }, [scroller, raw, path]);
 
-  // 別ファイルに切り替わったら先頭へ
+  // scroller マウント時: 同じファイルなら保存位置を復元、別ファイルなら先頭へ
   useEffect(() => {
-    scroller?.scrollTo({ top: 0 });
+    if (!scroller) return;
+    const saved = scrollPosRef.current;
+    scroller.scrollTop = saved.path === path ? saved.top : 0;
   }, [path, scroller]);
 
   useSearchHighlight(content, isActive);
@@ -129,22 +135,25 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           {path ? path.split("/").join("  ›  ") : "ファイル未選択"}
         </div>
-        <span
-          title={
+        <Tooltip
+          label={
             watchMode === "observer"
               ? "ファイルの変更をリアルタイム監視中（外部エディタでの保存も自動反映）"
               : watchMode === "polling"
                 ? "ファイルの変更を監視中（ポーリング）"
                 : "ファイル監視は停止中"
           }
-          className={`h-2 w-2 shrink-0 cursor-help rounded-full ${
-            watchMode === "observer"
-              ? "bg-emerald-400"
-              : watchMode === "polling"
-                ? "bg-amber-400"
-                : "bg-zinc-500"
-          }`}
-        />
+        >
+          <span
+            className={`h-2 w-2 shrink-0 cursor-help rounded-full ${
+              watchMode === "observer"
+                ? "bg-emerald-400"
+                : watchMode === "polling"
+                  ? "bg-amber-400"
+                  : "bg-zinc-500"
+            }`}
+          />
+        </Tooltip>
         {path && (
           <button
             onClick={toggleEdit}
@@ -182,7 +191,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         ) : (
           <div ref={setScroller} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {path ? (
-            <div className="px-6 py-8 sm:px-10">
+            <div
+              className="px-6 py-8 sm:px-10"
+              onDoubleClick={() => {
+                // ダブルクリックで編集モードへ（リンク/画像上は除く）
+                const sel = window.getSelection?.();
+                if (sel && sel.toString().length > 40) return;
+                enterEdit();
+              }}
+            >
               <article
                 ref={setContent}
                 style={{ fontFamily: fontStack(font) }}

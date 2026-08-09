@@ -6,6 +6,40 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from "@codemirror/language";
 import { livePreview } from "../lib/livePreview";
 
+// リスト行で Enter: 同じインデント/マーカーを継続。空項目ならマーカーを消して抜ける。
+function continueList(view: EditorView): boolean {
+  const { state } = view;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const line = state.doc.lineAt(range.head);
+  const m = /^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?(.*)$/.exec(line.text);
+  if (!m) return false;
+  const [, indent, marker, space, checkbox = "", content] = m;
+
+  if (content.length === 0) {
+    // 空項目 → 行を空にしてリストから抜ける
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: "" },
+      selection: { anchor: line.from },
+    });
+    return true;
+  }
+
+  let nextMarker = marker;
+  if (/\d+[.)]/.test(marker)) {
+    const num = parseInt(marker, 10) + 1;
+    nextMarker = num + marker.replace(/\d+/, "");
+  }
+  const nextCheckbox = checkbox ? "[ ] " : "";
+  const insert = "\n" + indent + nextMarker + space + nextCheckbox;
+  view.dispatch({
+    changes: { from: range.head, insert },
+    selection: { anchor: range.head + insert.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
 const theme = EditorView.theme({
   "&": {
     height: "100%",
@@ -64,6 +98,7 @@ export function MarkdownEditor({
                 return true;
               },
             },
+            { key: "Enter", run: continueList }, // リスト継続
             indentWithTab, // Tab / Shift-Tab でインデント調整
             ...defaultKeymap,
             ...historyKeymap,
