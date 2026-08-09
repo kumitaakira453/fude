@@ -516,6 +516,11 @@ body {
 }
 .mg-table-wrap > table {
   margin: 0;
+  /* コンテナ幅に合わせて列を縮めない。各列は内容幅（セル上限 400px）を確保し、
+     日本語が 200px 付近で折り返される問題を解消。400px を超えた分だけ折り返し、
+     テーブル全体が広い時は横スクロールする。 */
+  width: max-content;
+  max-width: none;
 }
 /* セル幅は 400px を上限に。短いセルは 1 行のまま、超える内容は折り返す。
    ただし単語の途中では折り返さない（英語の識別子が読みづらくなるのを回避）。
@@ -803,6 +808,70 @@ body {
 .mg-prose .mg-linkcard .mg-lc-t span {
   font-size: 0.78em;
   color: var(--mg-muted);
+}
+
+/* --- editorial の遊び心（控えめに） --- */
+/* リンク: ホバーで下線が左から伸びる（リンクカードは除外） */
+.mg-prose.mg-editorial a:not(.mg-linkcard) {
+  border-bottom: 0;
+  background-image: linear-gradient(var(--mg-accent), var(--mg-accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1.5px;
+  transition: background-size 0.25s ease;
+}
+.mg-prose.mg-editorial a:not(.mg-linkcard):hover {
+  background-size: 100% 1.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-prose.mg-editorial a:not(.mg-linkcard) {
+    transition: none;
+  }
+}
+/* 区切り線: ただの罫線ではなく「· · ·」の上品なディバイダ */
+.mg-prose.mg-editorial hr {
+  border: 0;
+  height: auto;
+  margin: 2.4em 0;
+  text-align: center;
+  overflow: visible;
+}
+.mg-prose.mg-editorial hr::before {
+  content: "· · ·";
+  color: var(--mg-accent);
+  opacity: 0.6;
+  letter-spacing: 0.5em;
+  font-size: 1.1rem;
+}
+/* 箇条書きのマーカーをアクセント色で少し際立たせる */
+.mg-prose.mg-editorial ul > li::marker {
+  color: var(--mg-accent);
+}
+
+/* --- 読みたくなる可読性の仕上げ（文字サイズは変えない） --- */
+/* 本文はゆったりした行間で「読み物」の呼吸に */
+.mg-prose.mg-editorial p,
+.mg-prose.mg-editorial li {
+  line-height: 1.85;
+}
+/* 見出しは締まりのあるトラッキングで存在感を出す */
+.mg-prose.mg-editorial h1 {
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+/* 選択はアクセント色でやわらかく */
+.mg-prose.mg-editorial ::selection {
+  background: var(--mg-accent-soft);
+}
+/* 画像は角丸＋淡い影で誌面のような質感に */
+.mg-prose.mg-editorial img {
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+/* 段落から見出しへ移る余白を少し広げ、章の切れ目を感じさせる */
+.mg-prose.mg-editorial h2 + p,
+.mg-prose.mg-editorial h3 + p {
+  margin-top: 0.6em;
 }
 .katex-display {
   overflow-x: auto;
