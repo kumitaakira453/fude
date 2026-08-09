@@ -1,9 +1,12 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAtomValue } from "jotai";
 import { themeAtom } from "../state/atoms";
 import { DARK_THEME_IDS } from "../lib/themes";
 
 let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
+// render 用 id は effect ごとにユニークにする（StrictMode の二重実行で id が衝突し、
+// 片方の cleanup がもう片方の描画済み SVG を消してしまうのを防ぐ）
+let mermaidSeq = 0;
 
 // フォントを inherit にすると mermaid が文字幅を測定できず巨大 SVG を吐くことがあるため、
 // 実在するフォントスタックを指定する。
@@ -35,8 +38,6 @@ function cleanupOrphans(id: string) {
 
 export function Mermaid({ code }: { code: string }) {
   const theme = useAtomValue(themeAtom);
-  const rawId = useId();
-  const id = `mmd-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +49,8 @@ export function Mermaid({ code }: { code: string }) {
       setError(null);
       return;
     }
+    // effect ごとにユニークな id（StrictMode 二重実行での cleanup 衝突回避）
+    const id = `mmd-${mermaidSeq++}`;
     const dark = DARK_THEME_IDS.has(theme);
     getMermaid(dark)
       .then((mermaid) => mermaid.parse(trimmed).then(() => mermaid.render(id, trimmed)))
@@ -77,7 +80,7 @@ export function Mermaid({ code }: { code: string }) {
       alive = false;
       cleanupOrphans(id);
     };
-  }, [code, theme, id]);
+  }, [code, theme]);
 
   // 失敗時（記述途中含む）はコードとエラー内容を表示して UI を壊さない。
   if (error) {

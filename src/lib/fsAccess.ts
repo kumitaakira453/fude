@@ -1,8 +1,7 @@
 // Tauri ネイティブ FS 経由でローカルフォルダを走査・読込する。
 // ブラウザの File System Access API は使わない（許可プロンプト不要・絶対パス取得可）。
-import { readDir, readTextFile, stat } from "@tauri-apps/plugin-fs";
+import { readDir, readFile as readBinaryFile, readTextFile, stat } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
-import { convertFileSrc } from "@tauri-apps/api/core";
 
 export const MD_EXTENSIONS = [".md", ".markdown", ".mdx", ".mdown", ".mkd"];
 
@@ -93,7 +92,36 @@ export async function readFile(abs: string): Promise<FileData> {
   return { text, lastModified };
 }
 
-// 画像などローカル資産を webview で表示可能な URL（asset://）に変換する。
-export function assetUrl(abs: string): string {
-  return convertFileSrc(abs);
+// 画像などローカル資産を fs 経由でバイト読みして blob URL 化する。
+// asset:// プロトコルはスコープの都合で先頭ドットのパスを弾くため、fs 読みに統一。
+const IMG_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  avif: "image/avif",
+  ico: "image/x-icon",
+};
+const imgCache = new Map<string, string>();
+
+export function peekImageUrl(abs: string): string | null {
+  return imgCache.get(abs) ?? null;
+}
+
+export async function imageUrl(abs: string): Promise<string | null> {
+  const cached = imgCache.get(abs);
+  if (cached) return cached;
+  try {
+    const ext = abs.split(".").pop()?.toLowerCase() ?? "";
+    const bytes = await readBinaryFile(abs);
+    const blob = new Blob([bytes], { type: IMG_MIME[ext] ?? "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    imgCache.set(abs, url);
+    return url;
+  } catch {
+    return null;
+  }
 }

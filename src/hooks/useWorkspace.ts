@@ -1,7 +1,14 @@
 import { useCallback } from "react";
 import { useStore } from "jotai";
 import * as A from "../state/atoms";
-import { buildTree, flattenFiles, readFile, assetUrl, type TreeNode } from "../lib/fsAccess";
+import {
+  buildTree,
+  flattenFiles,
+  readFile,
+  imageUrl,
+  peekImageUrl,
+  type TreeNode,
+} from "../lib/fsAccess";
 import { registerFolder, loadFolders } from "../lib/idb";
 import { resetLayout, reviveLayout, setPanePath } from "../lib/ui";
 
@@ -140,21 +147,28 @@ export function useWorkspace() {
     [store, openFile],
   );
 
-  // 相対パス資産（画像など）を webview 表示用 URL に変換する（同期）。
+  // 相対パス資産（画像など）: キャッシュ済み blob URL を同期取得。
   const peekAsset = useCallback(
     (fromDocPath: string, src: string): string | null => {
       const root = getRootPath();
       if (!root) return null;
       const full = resolvePath(dirOf(fromDocPath), src);
       if (!full) return null;
-      return assetUrl(`${root}/${full}`);
+      return peekImageUrl(`${root}/${full}`);
     },
     [getRootPath],
   );
 
+  // 画像を fs 経由で読み blob URL 化（非同期）。
   const resolveAsset = useCallback(
-    async (fromDocPath: string, src: string): Promise<string | null> => peekAsset(fromDocPath, src),
-    [peekAsset],
+    async (fromDocPath: string, src: string): Promise<string | null> => {
+      const root = getRootPath();
+      if (!root) return null;
+      const full = resolvePath(dirOf(fromDocPath), src);
+      if (!full) return null;
+      return imageUrl(`${root}/${full}`);
+    },
+    [getRootPath],
   );
 
   return {
