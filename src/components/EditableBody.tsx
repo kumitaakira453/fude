@@ -6,6 +6,9 @@ import { Markdown } from "./Markdown";
 // タスク行（- [ ] / 1. [x] など）
 const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
 
+// mermaid コードフェンスのブロックか（インライン編集の対象外にする）
+const isMermaidBlock = (src: string) => /^\s*`{3,}\s*mermaid\b/i.test(src);
+
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
 // 生ソース編集にする。編集対象以外は一切動かない（目線を動かさない）。
 export function EditableBody({
@@ -82,8 +85,12 @@ export function EditableBody({
           <div
             key={key}
             className="mg-block"
-            onDoubleClick={(e) =>
-              setEditing({ index: b.index, x: e.clientX, y: e.clientY })
+            onDoubleClick={
+              // mermaid はダブルクリック編集の対象外（拡大モーダルと衝突するため）
+              isMermaidBlock(b.src)
+                ? undefined
+                : (e) =>
+                    setEditing({ index: b.index, x: e.clientX, y: e.clientY })
             }
           >
             <Markdown
