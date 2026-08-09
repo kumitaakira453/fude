@@ -15,7 +15,12 @@ export function EditableBody({
   onSaveBody: (newBody: string) => void;
 }) {
   const blocks = useMemo(() => splitBlocks(body), [body]);
-  const [editing, setEditing] = useState<number | null>(null);
+  // 編集対象ブロックと、開始時のダブルクリック座標（カーソル配置に使う）
+  const [editing, setEditing] = useState<{
+    index: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const commit = (index: number, newSrc: string) => {
     setEditing(null);
@@ -27,10 +32,12 @@ export function EditableBody({
   return (
     <>
       {blocks.map((b) =>
-        editing === b.index ? (
+        editing?.index === b.index ? (
           <BlockSourceEditor
             key={b.index}
             src={b.src}
+            clickX={editing.x}
+            clickY={editing.y}
             onCommit={(s) => commit(b.index, s)}
             onCancel={() => setEditing(null)}
           />
@@ -40,7 +47,9 @@ export function EditableBody({
           <div
             key={b.index}
             className="mg-block"
-            onDoubleClick={() => setEditing(b.index)}
+            onDoubleClick={(e) =>
+              setEditing({ index: b.index, x: e.clientX, y: e.clientY })
+            }
           >
             <Markdown body={b.src} editorial={editorial} />
           </div>

@@ -58,8 +58,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  // フロントマター（先頭の --- ブロック）をその場編集中か
-  const [editingFm, setEditingFm] = useState(false);
+  // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
+  const [editingFm, setEditingFm] = useState<{ x: number; y: number } | null>(
+    null,
+  );
 
   const isActive = activeId === pane.id;
   const path = pane.path;
@@ -81,7 +83,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // ファイル切替で編集モード解除
   useEffect(() => {
     setEditing(false);
-    setEditingFm(false);
+    setEditingFm(null);
   }, [path]);
 
   // ⌘E で編集/プレビュー切替（アクティブペインのみ）
@@ -271,16 +273,20 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     (editingFm ? (
                       <BlockSourceEditor
                         src={fmPrefix}
+                        clickX={editingFm.x}
+                        clickY={editingFm.y}
                         onCommit={(s) => {
-                          setEditingFm(false);
+                          setEditingFm(null);
                           saveFm(s);
                         }}
-                        onCancel={() => setEditingFm(false)}
+                        onCancel={() => setEditingFm(null)}
                       />
                     ) : (
                       <div
                         className="mg-block"
-                        onDoubleClick={() => setEditingFm(true)}
+                        onDoubleClick={(e) =>
+                          setEditingFm({ x: e.clientX, y: e.clientY })
+                        }
                       >
                         <Frontmatter data={data} />
                       </div>

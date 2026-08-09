@@ -36,14 +36,20 @@ export function BlockSourceEditor({
   src,
   onCommit,
   onCancel,
+  clickX,
+  clickY,
 }: {
   src: string;
   onCommit: (newSrc: string) => void;
   onCancel: () => void;
+  // 編集開始時のダブルクリック座標（ビューポート）。カーソルをその近くに置く。
+  clickX?: number;
+  clickY?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onCommitRef = useRef(onCommit);
   const onCancelRef = useRef(onCancel);
+  const clickRef = useRef({ x: clickX, y: clickY });
   onCommitRef.current = onCommit;
   onCancelRef.current = onCancel;
 
@@ -99,8 +105,12 @@ export function BlockSourceEditor({
       }),
     });
     view.focus();
-    // カーソルは末尾に（クリックした場所の近くから編集を続けやすい）
-    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    // ダブルクリックした画面座標に最も近いソース位置へカーソルを置く。
+    // 座標が無い/範囲外なら先頭へ。
+    const { x, y } = clickRef.current;
+    const pos =
+      x != null && y != null ? view.posAtCoords({ x, y }) : null;
+    view.dispatch({ selection: { anchor: pos ?? 0 } });
     return () => view.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
