@@ -1,18 +1,18 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { splitInto } from "../lib/ui";
 import {
   activeFolderIdAtom,
   canBackAtom,
   canForwardAtom,
+  paletteOpenAtom,
   panesAtom,
   sidebarOpenAtom,
   sidebarTabAtom,
   tocOpenAtom,
-  paletteOpenAtom,
 } from "../state/atoms";
-import { ThemeSwitcher } from "./ThemeSwitcher";
 import { Icon } from "./Icon";
-import { splitInto } from "../lib/ui";
-import { useMediaQuery } from "../hooks/useMediaQuery";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 function IconButton({
   onClick,
@@ -73,13 +73,30 @@ export function Toolbar() {
         title="スタート画面へ"
         className="mx-1 flex select-none items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:bg-[var(--mg-hover)]"
       >
-        <Icon name="auto_awesome" size={17} fill className="text-[var(--mg-accent)]" />
-        <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">mdglow</span>
+        <Icon
+          name="auto_awesome"
+          size={17}
+          fill
+          className="text-[var(--mg-accent)]"
+        />
+        <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">
+          mdglow
+        </span>
       </button>
 
       <div className="mx-0.5 h-5 w-px bg-[var(--mg-border)]" />
-      <IconButton onClick={() => history.back()} title="戻る (⌘[)" icon="arrow_back" disabled={!canBack} />
-      <IconButton onClick={() => history.forward()} title="進む (⌘])" icon="arrow_forward" disabled={!canForward} />
+      <IconButton
+        onClick={() => history.back()}
+        title="戻る (⌘[)"
+        icon="arrow_back"
+        disabled={!canBack}
+      />
+      <IconButton
+        onClick={() => history.forward()}
+        title="進む (⌘])"
+        icon="arrow_forward"
+        disabled={!canForward}
+      />
 
       <div className="ml-auto flex items-center gap-0.5">
         <IconButton
@@ -90,7 +107,11 @@ export function Toolbar() {
           title="全文検索 (⌘⇧F)"
           icon="search"
         />
-        <IconButton onClick={() => setPalette(true)} title="クイックオープン (⌘P)" icon="bolt" />
+        <IconButton
+          onClick={() => setPalette(true)}
+          title="クイックオープン (⌘P)"
+          icon="bolt"
+        />
         <IconButton
           onClick={() => splitInto(store, "row")}
           title="右に分割 (⌘\)"

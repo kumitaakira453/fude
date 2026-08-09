@@ -2,7 +2,13 @@ import { useRef, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
 // コードフェンスの言語ラベル + コピー ボタン付きラッパー（pre の描画差し替え）。
-export function CodeBlock({ language, children }: { language: string | null; children: ReactNode }) {
+export function CodeBlock({
+  language,
+  children,
+}: {
+  language: string | null;
+  children: ReactNode;
+}) {
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
 

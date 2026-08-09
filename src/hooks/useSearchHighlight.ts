@@ -1,16 +1,22 @@
-import { useEffect } from "react";
 import { useAtomValue } from "jotai";
+import { useEffect } from "react";
 import { highlightAtom } from "../state/atoms";
 
 // CSS Custom Highlight API で検索語を非破壊ハイライトし、先頭へスクロールする。
 // DOM を書き換えないため、レイアウト崩れが起きない。
-export function useSearchHighlight(container: HTMLElement | null, isActive: boolean) {
+export function useSearchHighlight(
+  container: HTMLElement | null,
+  isActive: boolean,
+) {
   const highlight = useAtomValue(highlightAtom);
 
   useEffect(() => {
-    const cssHighlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
-    const HighlightCtor = (window as unknown as { Highlight?: new (...r: Range[]) => unknown })
-      .Highlight;
+    const cssHighlights = (
+      CSS as unknown as { highlights?: Map<string, unknown> }
+    ).highlights;
+    const HighlightCtor = (
+      window as unknown as { Highlight?: new (...r: Range[]) => unknown }
+    ).Highlight;
     if (!cssHighlights || !HighlightCtor) return;
 
     cssHighlights.delete("mgsearch");

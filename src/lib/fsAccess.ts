@@ -1,17 +1,17 @@
 // Tauri ネイティブ FS 経由でローカルフォルダを走査・読込する。
 // ブラウザの File System Access API は使わない（許可プロンプト不要・絶対パス取得可）。
+import { open } from "@tauri-apps/plugin-dialog";
 import {
-  readDir,
-  readFile as readBinaryFile,
-  readTextFile,
-  stat,
-  writeTextFile,
+  exists,
   mkdir,
+  readFile as readBinaryFile,
+  readDir,
+  readTextFile,
   remove,
   rename,
-  exists,
+  stat,
+  writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { open } from "@tauri-apps/plugin-dialog";
 
 export const MD_EXTENSIONS = [".md", ".markdown", ".mdx", ".mdown", ".mkd"];
 
@@ -30,7 +30,11 @@ export function isMarkdown(name: string): boolean {
 
 // フォルダ選択ダイアログ（ネイティブ）。選択した絶対パスを返す。
 export async function pickDirectory(): Promise<string | null> {
-  const sel = await open({ directory: true, multiple: false, title: "Markdown フォルダを選択" });
+  const sel = await open({
+    directory: true,
+    multiple: false,
+    title: "Markdown フォルダを選択",
+  });
   return typeof sel === "string" ? sel : null;
 }
 
@@ -46,7 +50,10 @@ const SKIP_DIRS = new Set([
 ]);
 
 // ディレクトリを再帰走査して md ファイルのツリーを構築する。
-export async function buildTree(rootAbs: string, parentRel = ""): Promise<TreeNode[]> {
+export async function buildTree(
+  rootAbs: string,
+  parentRel = "",
+): Promise<TreeNode[]> {
   const dirAbs = parentRel ? `${rootAbs}/${parentRel}` : rootAbs;
   let entries: Awaited<ReturnType<typeof readDir>>;
   try {
@@ -98,10 +105,16 @@ export async function writeFile(abs: string, text: string): Promise<void> {
 export async function createDir(abs: string): Promise<void> {
   await mkdir(abs, { recursive: true });
 }
-export async function removePath(abs: string, recursive: boolean): Promise<void> {
+export async function removePath(
+  abs: string,
+  recursive: boolean,
+): Promise<void> {
   await remove(abs, { recursive });
 }
-export async function renamePath(oldAbs: string, newAbs: string): Promise<void> {
+export async function renamePath(
+  oldAbs: string,
+  newAbs: string,
+): Promise<void> {
   await rename(oldAbs, newAbs);
 }
 export async function pathExists(abs: string): Promise<boolean> {
@@ -149,7 +162,9 @@ export async function imageUrl(abs: string): Promise<string | null> {
   try {
     const ext = abs.split(".").pop()?.toLowerCase() ?? "";
     const bytes = await readBinaryFile(abs);
-    const blob = new Blob([bytes], { type: IMG_MIME[ext] ?? "application/octet-stream" });
+    const blob = new Blob([bytes], {
+      type: IMG_MIME[ext] ?? "application/octet-stream",
+    });
     const url = URL.createObjectURL(blob);
     imgCache.set(abs, url);
     return url;

@@ -1,5 +1,13 @@
-import { useEffect } from "react";
 import { useAtomValue, useStore } from "jotai";
+import { useEffect } from "react";
+import { CommandPalette } from "./components/CommandPalette";
+import { Landing } from "./components/Landing";
+import { PaneGroup } from "./components/PaneGroup";
+import { Sidebar } from "./components/Sidebar";
+import { Toolbar } from "./components/Toolbar";
+import { useHotkeys } from "./hooks/useHotkeys";
+import { useUrlSync } from "./hooks/useUrlSync";
+import { useWatcher } from "./hooks/useWatcher";
 import {
   activeFolderIdAtom,
   activePaneIdAtom,
@@ -8,14 +16,6 @@ import {
   sidebarOpenAtom,
   themeAtom,
 } from "./state/atoms";
-import { useWatcher } from "./hooks/useWatcher";
-import { useHotkeys } from "./hooks/useHotkeys";
-import { useUrlSync } from "./hooks/useUrlSync";
-import { Landing } from "./components/Landing";
-import { Toolbar } from "./components/Toolbar";
-import { Sidebar } from "./components/Sidebar";
-import { PaneGroup } from "./components/PaneGroup";
-import { CommandPalette } from "./components/CommandPalette";
 
 export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);

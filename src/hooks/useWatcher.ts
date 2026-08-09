@@ -1,8 +1,8 @@
-import { useEffect } from "react";
-import { useAtomValue, useStore } from "jotai";
 import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
-import * as A from "../state/atoms";
+import { useAtomValue, useStore } from "jotai";
+import { useEffect } from "react";
 import { isMarkdown } from "../lib/fsAccess";
+import * as A from "../state/atoms";
 import { useWorkspace } from "./useWorkspace";
 
 // Tauri の OS ネイティブ file watcher でアクティブフォルダを監視し、変更を即反映する。

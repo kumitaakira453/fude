@@ -1,8 +1,13 @@
-import { useCallback, useRef, useState } from "react";
 import { useAtomValue, useStore } from "jotai";
-import { layoutAtom, panesAtom, type LayoutNode, type SplitNode } from "../state/atoms";
-import { dropOnPane, updateSplitSizes, type DropZone } from "../lib/ui";
+import { useCallback, useRef, useState } from "react";
 import { DND_MIME } from "../lib/dnd";
+import { dropOnPane, updateSplitSizes, type DropZone } from "../lib/ui";
+import {
+  layoutAtom,
+  panesAtom,
+  type LayoutNode,
+  type SplitNode,
+} from "../state/atoms";
 import { DocPane } from "./DocPane";
 
 export function PaneGroup() {
@@ -25,7 +30,10 @@ function SplitView({ node, isSplit }: { node: SplitNode; isSplit: boolean }) {
   const store = useStore();
   const isRow = node.dir === "row";
   const ref = useRef<HTMLDivElement>(null);
-  const sizes = node.sizes.length === node.children.length ? node.sizes : node.children.map(() => 1 / node.children.length);
+  const sizes =
+    node.sizes.length === node.children.length
+      ? node.sizes
+      : node.children.map(() => 1 / node.children.length);
 
   const startDrag = useCallback(
     (i: number) => (e: React.PointerEvent) => {
@@ -60,17 +68,27 @@ function SplitView({ node, isSplit }: { node: SplitNode; isSplit: boolean }) {
   );
 
   return (
-    <div ref={ref} className={`flex min-h-0 min-w-0 flex-1 ${isRow ? "flex-row" : "flex-col"}`}>
+    <div
+      ref={ref}
+      className={`flex min-h-0 min-w-0 flex-1 ${isRow ? "flex-row" : "flex-col"}`}
+    >
       {node.children.map((child, i) => (
         <div key={child.id} className="contents">
-          <div style={{ flexBasis: `${sizes[i] * 100}%` }} className="flex min-h-0 min-w-0 grow-0">
+          <div
+            style={{ flexBasis: `${sizes[i] * 100}%` }}
+            className="flex min-h-0 min-w-0 grow-0"
+          >
             <LayoutView node={child} isSplit={isSplit} />
           </div>
           {i < node.children.length - 1 && (
             <div
               onPointerDown={startDrag(i)}
               onDoubleClick={() =>
-                updateSplitSizes(store, node.id, node.children.map(() => 1 / node.children.length))
+                updateSplitSizes(
+                  store,
+                  node.id,
+                  node.children.map(() => 1 / node.children.length),
+                )
               }
               title="ドラッグでサイズ調整 / ダブルクリックで均等"
               className={`group relative shrink-0 bg-[var(--mg-border)] ${
@@ -106,11 +124,26 @@ function zoneOf(e: React.DragEvent): DropZone {
   const x = (e.clientX - rect.left) / rect.width;
   const y = (e.clientY - rect.top) / rect.height;
   if (x > 0.3 && x < 0.7 && y > 0.3 && y < 0.7) return "center";
-  const d: Record<DropZone, number> = { left: x, right: 1 - x, top: y, bottom: 1 - y, center: 1 };
-  return (Object.keys(d) as DropZone[]).reduce((a, b) => (d[b] < d[a] ? b : a), "left");
+  const d: Record<DropZone, number> = {
+    left: x,
+    right: 1 - x,
+    top: y,
+    bottom: 1 - y,
+    center: 1,
+  };
+  return (Object.keys(d) as DropZone[]).reduce(
+    (a, b) => (d[b] < d[a] ? b : a),
+    "left",
+  );
 }
 
-function PaneCell({ leaf, isSplit }: { leaf: { id: string; path: string | null }; isSplit: boolean }) {
+function PaneCell({
+  leaf,
+  isSplit,
+}: {
+  leaf: { id: string; path: string | null };
+  isSplit: boolean;
+}) {
   const store = useStore();
   const [zone, setZone] = useState<DropZone | null>(null);
 

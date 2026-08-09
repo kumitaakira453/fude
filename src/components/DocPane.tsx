@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useAtomValue, useStore } from "jotai";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchHighlight } from "../hooks/useSearchHighlight";
+import { useWorkspace } from "../hooks/useWorkspace";
+import { fontStack } from "../lib/fonts";
+import { parseFrontmatter } from "../lib/frontmatter";
+import { closePane } from "../lib/ui";
 import {
   activePaneIdAtom,
   contentCacheAtom,
@@ -9,18 +14,13 @@ import {
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
-import { parseFrontmatter } from "../lib/frontmatter";
-import { fontStack } from "../lib/fonts";
-import { closePane } from "../lib/ui";
-import { markdownContext } from "./MarkdownContext";
-import { Markdown } from "./Markdown";
 import { Frontmatter } from "./Frontmatter";
-import { MarkdownEditor } from "./MarkdownEditor";
-import { Tooltip } from "./Tooltip";
-import { Toc } from "./Toc";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { useSearchHighlight } from "../hooks/useSearchHighlight";
 import { Icon } from "./Icon";
+import { Markdown } from "./Markdown";
+import { markdownContext } from "./MarkdownContext";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { Toc } from "./Toc";
+import { Tooltip } from "./Tooltip";
 
 const WIDTH_CLASS: Record<string, string> = {
   cozy: "max-w-[760px]",
@@ -36,13 +36,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   const store = useStore();
-  const { navigate, resolveAsset, peekAsset, reloadFile, saveFile } = useWorkspace();
+  const { navigate, resolveAsset, peekAsset, reloadFile, saveFile } =
+    useWorkspace();
 
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
   const [progress, setProgress] = useState(0);
   // プレビューのスクロール位置（編集↔プレビュー切替で復元）
-  const scrollPosRef = useRef<{ path: string | null; top: number }>({ path: null, top: 0 });
+  const scrollPosRef = useRef<{ path: string | null; top: number }>({
+    path: null,
+    top: 0,
+  });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -127,7 +131,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     <section
       onMouseDown={() => !isActive && setActiveId(pane.id)}
       className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${
-        isSplit && isActive ? "ring-1 ring-inset ring-[var(--mg-accent)]/40" : ""
+        isSplit && isActive
+          ? "ring-1 ring-inset ring-[var(--mg-accent)]/40"
+          : ""
       }`}
     >
       {/* ヘッダー */}
@@ -160,10 +166,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             onClick={toggleEdit}
             title={editing ? "プレビュー (⌘E)" : "編集 (⌘E)"}
             className={`grid h-6 w-6 place-items-center rounded transition hover:bg-[var(--mg-hover)] ${
-              editing ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)] hover:text-[var(--mg-fg)]"
+              editing
+                ? "text-[var(--mg-accent)]"
+                : "text-[var(--mg-muted)] hover:text-[var(--mg-fg)]"
             }`}
           >
-            <Icon name={editing ? "visibility" : "edit"} size={15} fill={editing} />
+            <Icon
+              name={editing ? "visibility" : "edit"}
+              size={15}
+              fill={editing}
+            />
           </button>
         )}
         {isSplit && (
@@ -188,38 +200,50 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
         {editing && path ? (
-          <MarkdownEditor key={path} initialDoc={draft} onChange={setDraft} onSave={save} />
+          <MarkdownEditor
+            key={path}
+            initialDoc={draft}
+            onChange={setDraft}
+            onSave={save}
+          />
         ) : (
-          <div ref={setScroller} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          {path ? (
-            <div
-              className="px-6 py-8 sm:px-10"
-              onDoubleClick={() => {
-                // ダブルクリックで編集モードへ（リンク/画像上は除く）
-                const sel = window.getSelection?.();
-                if (sel && sel.toString().length > 40) return;
-                enterEdit();
-              }}
-            >
-              <article
-                ref={setContent}
-                style={{ fontFamily: fontStack(font) }}
-                className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}
+          <div
+            ref={setScroller}
+            className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+          >
+            {path ? (
+              <div
+                className="px-6 py-8 sm:px-10"
+                onDoubleClick={() => {
+                  // ダブルクリックで編集モードへ（リンク/画像上は除く）
+                  const sel = window.getSelection?.();
+                  if (sel && sel.toString().length > 40) return;
+                  enterEdit();
+                }}
               >
-                {data && <Frontmatter data={data} />}
-                <markdownContext.Provider value={ctx}>
-                  <Markdown body={body} />
-                </markdownContext.Provider>
-              </article>
-            </div>
-          ) : (
-            <EmptyPane />
-          )}
+                <article
+                  ref={setContent}
+                  style={{ fontFamily: fontStack(font) }}
+                  className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}
+                >
+                  {data && <Frontmatter data={data} />}
+                  <markdownContext.Provider value={ctx}>
+                    <Markdown body={body} />
+                  </markdownContext.Provider>
+                </article>
+              </div>
+            ) : (
+              <EmptyPane />
+            )}
           </div>
         )}
 
         {!editing && !isSplit && tocOpen && path && (
-          <Toc content={content} scroller={scroller} contentKey={path + (raw?.length ?? 0)} />
+          <Toc
+            content={content}
+            scroller={scroller}
+            contentKey={path + (raw?.length ?? 0)}
+          />
         )}
       </div>
     </section>

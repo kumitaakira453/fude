@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { useAtom, useAtomValue, useStore } from "jotai";
 import { confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
+import { useAtom, useAtomValue, useStore } from "jotai";
+import { useEffect, useMemo, useState } from "react";
+import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
+import { useWorkspace } from "../hooks/useWorkspace";
+import { DND_MIME } from "../lib/dnd";
+import type { TreeNode } from "../lib/fsAccess";
+import { openToSide } from "../lib/ui";
 import {
   activeFolderIdAtom,
   activePaneAtom,
@@ -8,11 +13,6 @@ import {
   treeAtom,
   treeFilterAtom,
 } from "../state/atoms";
-import type { TreeNode } from "../lib/fsAccess";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
-import { openToSide } from "../lib/ui";
-import { DND_MIME } from "../lib/dnd";
 import { Icon } from "./Icon";
 
 const MD_EXT_RE = /\.(md|markdown|mdx|mdown|mkd)$/i;
@@ -33,7 +33,11 @@ function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
   const out: TreeNode[] = [];
   for (const n of nodes) {
     if (n.kind === "file") {
-      if (n.name.toLowerCase().includes(lower) || n.path.toLowerCase().includes(lower)) out.push(n);
+      if (
+        n.name.toLowerCase().includes(lower) ||
+        n.path.toLowerCase().includes(lower)
+      )
+        out.push(n);
     } else if (n.children) {
       const children = filterTree(n.children, q);
       if (children.length) out.push({ ...n, children });
@@ -56,6 +60,8 @@ interface ItemCtx {
   dragOverPath: string | null;
   setDragOverPath: (p: string | null) => void;
   onMoveDrop: (destDir: string, e: React.DragEvent) => void;
+  onNewFile: (parentPath: string) => void;
+  onNewFolder: (parentPath: string) => void;
 }
 
 function NameInput({
@@ -76,7 +82,10 @@ function NameInput({
   const [v, setV] = useState(initial);
   const ime = useImeSafeEnter();
   return (
-    <div className="flex h-7 items-center gap-1" style={{ paddingLeft: `${pad}px` }}>
+    <div
+      className="flex h-7 items-center gap-1"
+      style={{ paddingLeft: `${pad}px` }}
+    >
       <Icon name={icon} size={16} className="shrink-0 text-[var(--mg-muted)]" />
       <input
         autoFocus
@@ -97,7 +106,15 @@ function NameInput({
   );
 }
 
-function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: ItemCtx }) {
+function TreeItem({
+  node,
+  depth,
+  ctx,
+}: {
+  node: TreeNode;
+  depth: number;
+  ctx: ItemCtx;
+}) {
   const activePane = useAtomValue(activePaneAtom);
   const { openFile } = useWorkspace();
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
@@ -121,7 +138,9 @@ function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: It
             icon="folder"
           />
         ) : (
-          <button
+          <div
+            role="button"
+            tabIndex={0}
             draggable
             onDragStart={startDrag}
             onDragOver={(e) => {
@@ -131,16 +150,26 @@ function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: It
               e.dataTransfer.dropEffect = "move";
               ctx.setDragOverPath(node.path);
             }}
-            onDragLeave={() => ctx.dragOverPath === node.path && ctx.setDragOverPath(null)}
+            onDragLeave={() =>
+              ctx.dragOverPath === node.path && ctx.setDragOverPath(null)
+            }
             onDrop={(e) => {
               e.stopPropagation();
               ctx.onMoveDrop(node.path, e);
             }}
             onClick={() => ctx.toggle(node.path)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                ctx.toggle(node.path);
+              }
+            }}
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
-            className={`group flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[13px] text-[var(--mg-fg-dim)] transition ${
-              isDropTarget ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]" : "hover:bg-[var(--mg-hover)]"
+            className={`group flex h-7 w-full cursor-pointer items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none transition ${
+              isDropTarget
+                ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]"
+                : "hover:bg-[var(--mg-hover)]"
             }`}
           >
             <Icon
@@ -148,16 +177,52 @@ function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: It
               size={18}
               className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
             />
-            <Icon name={isOpen ? "folder_open" : "folder"} size={17} fill className="shrink-0 text-[var(--mg-accent2)]" />
+            <Icon
+              name={isOpen ? "folder_open" : "folder"}
+              size={17}
+              fill
+              className="shrink-0 text-[var(--mg-accent2)]"
+            />
             <span className="truncate font-medium">{node.name}</span>
-          </button>
+            {/* ホバー時に「このフォルダ内に作成」アクション */}
+            <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+              <span
+                role="button"
+                tabIndex={-1}
+                title="このフォルダに新規ファイル"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.onNewFile(node.path);
+                }}
+                className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              >
+                <Icon name="note_add" size={14} />
+              </span>
+              <span
+                role="button"
+                tabIndex={-1}
+                title="このフォルダに新規フォルダ"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.onNewFolder(node.path);
+                }}
+                className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              >
+                <Icon name="create_new_folder" size={14} />
+              </span>
+            </span>
+          </div>
         )}
         {isOpen && (
           <div>
             {ctx.creating?.parentPath === node.path && (
               <NameInput
                 initial=""
-                placeholder={ctx.creating.kind === "dir" ? "新しいフォルダ名" : "新しいファイル名"}
+                placeholder={
+                  ctx.creating.kind === "dir"
+                    ? "新しいフォルダ名"
+                    : "新しいファイル名"
+                }
                 onCommit={ctx.commitCreate}
                 onCancel={ctx.cancelCreate}
                 pad={(depth + 1) * 14 + 8}
@@ -207,7 +272,11 @@ function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: It
         name="description"
         size={16}
         fill={active}
-        className={active ? "shrink-0 text-[var(--mg-accent)]" : "shrink-0 text-[var(--mg-muted)]"}
+        className={
+          active
+            ? "shrink-0 text-[var(--mg-accent)]"
+            : "shrink-0 text-[var(--mg-muted)]"
+        }
       />
       <span className="truncate">{node.name.replace(MD_EXT_RE, "")}</span>
     </button>
@@ -248,29 +317,82 @@ function ContextMenu({
     };
   }, [onClose]);
 
-  const copy = (t: string) => void navigator.clipboard.writeText(t).catch(() => {});
-  type MI = { icon: string; label: string; action: () => void; danger?: boolean } | "sep";
+  const copy = (t: string) =>
+    void navigator.clipboard.writeText(t).catch(() => {});
+  type MI =
+    | { icon: string; label: string; action: () => void; danger?: boolean }
+    | "sep";
   const items: MI[] =
     node.kind === "file"
       ? [
-          { icon: "description", label: "開く", action: () => openFile(node.path) },
-          { icon: "vertical_split", label: "横に開く", action: () => openToSide(store, node.path) },
+          {
+            icon: "description",
+            label: "開く",
+            action: () => openFile(node.path),
+          },
+          {
+            icon: "vertical_split",
+            label: "横に開く",
+            action: () => openToSide(store, node.path),
+          },
           "sep",
-          { icon: "drive_file_rename_outline", label: "名前を変更", action: () => onRename(node) },
-          { icon: "delete", label: "削除", action: () => onDelete(node), danger: true },
+          {
+            icon: "drive_file_rename_outline",
+            label: "名前を変更",
+            action: () => onRename(node),
+          },
+          {
+            icon: "delete",
+            label: "削除",
+            action: () => onDelete(node),
+            danger: true,
+          },
           "sep",
-          { icon: "content_copy", label: "相対パスをコピー", action: () => copy(node.path) },
-          { icon: "folder_open", label: "絶対パスをコピー", action: () => copy(absPath) },
+          {
+            icon: "content_copy",
+            label: "相対パスをコピー",
+            action: () => copy(node.path),
+          },
+          {
+            icon: "folder_open",
+            label: "絶対パスをコピー",
+            action: () => copy(absPath),
+          },
         ]
       : [
-          { icon: "note_add", label: "新規ファイル", action: () => onNewFile(node) },
-          { icon: "create_new_folder", label: "新規フォルダ", action: () => onNewFolder(node) },
+          {
+            icon: "note_add",
+            label: "新規ファイル",
+            action: () => onNewFile(node),
+          },
+          {
+            icon: "create_new_folder",
+            label: "新規フォルダ",
+            action: () => onNewFolder(node),
+          },
           "sep",
-          { icon: "drive_file_rename_outline", label: "名前を変更", action: () => onRename(node) },
-          { icon: "delete", label: "削除", action: () => onDelete(node), danger: true },
+          {
+            icon: "drive_file_rename_outline",
+            label: "名前を変更",
+            action: () => onRename(node),
+          },
+          {
+            icon: "delete",
+            label: "削除",
+            action: () => onDelete(node),
+            danger: true,
+          },
           "sep",
-          { icon: "content_copy", label: "相対パスをコピー", action: () => copy(node.path) },
-          { icon: "folder_open", label: "絶対パスをコピー", action: () => copy(absPath) },
+          {
+            icon: "content_copy",
+            label: "相対パスをコピー",
+            action: () => copy(node.path),
+          },
+          {
+            icon: "folder_open",
+            label: "絶対パスをコピー",
+            action: () => copy(absPath),
+          },
         ];
 
   const rows = items.length;
@@ -299,7 +421,11 @@ function ContextMenu({
               it.danger ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
             }`}
           >
-            <Icon name={it.icon} size={16} className={it.danger ? "" : "text-[var(--mg-muted)]"} />
+            <Icon
+              name={it.icon}
+              size={16}
+              className={it.danger ? "" : "text-[var(--mg-muted)]"}
+            />
             {it.label}
           </button>
         ),
@@ -318,7 +444,8 @@ export function FileTree() {
   const [creating, setCreating] = useState<Creating | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
-  const { createFile, createFolder, renameEntry, deleteEntry, moveEntry } = useWorkspace();
+  const { createFile, createFolder, renameEntry, deleteEntry, moveEntry } =
+    useWorkspace();
   const filtered = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
   useEffect(() => {
@@ -329,7 +456,8 @@ export function FileTree() {
   }, [activeFolderId, tree, expandedByFolder, setExpandedByFolder]);
 
   const expanded = useMemo(
-    () => new Set(activeFolderId ? (expandedByFolder[activeFolderId] ?? []) : []),
+    () =>
+      new Set(activeFolderId ? (expandedByFolder[activeFolderId] ?? []) : []),
     [expandedByFolder, activeFolderId],
   );
 
@@ -374,7 +502,8 @@ export function FileTree() {
     creating,
     commitCreate: (name) => {
       if (creating && name.trim()) {
-        if (creating.kind === "dir") void createFolder(creating.parentPath, name);
+        if (creating.kind === "dir")
+          void createFolder(creating.parentPath, name);
         else void createFile(creating.parentPath, name);
       }
       setCreating(null);
@@ -390,6 +519,8 @@ export function FileTree() {
         void moveEntry(src, destDir);
       }
     },
+    onNewFile: (parentPath) => startCreate(parentPath, "file"),
+    onNewFolder: (parentPath) => startCreate(parentPath, "dir"),
   };
 
   const askDelete = async (node: TreeNode) => {
@@ -439,7 +570,8 @@ export function FileTree() {
           setRootDragOver(true);
         }}
         onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setRootDragOver(false);
+          if (!e.currentTarget.contains(e.relatedTarget as Node))
+            setRootDragOver(false);
         }}
         onDrop={onRootDrop}
         className={`min-h-full flex-1 rounded py-1 pl-1 ${
@@ -449,7 +581,9 @@ export function FileTree() {
         {creating?.parentPath === "" && (
           <NameInput
             initial=""
-            placeholder={creating.kind === "dir" ? "新しいフォルダ名" : "新しいファイル名"}
+            placeholder={
+              creating.kind === "dir" ? "新しいフォルダ名" : "新しいファイル名"
+            }
             onCommit={ctx.commitCreate}
             onCancel={ctx.cancelCreate}
             pad={8}
@@ -458,10 +592,14 @@ export function FileTree() {
         )}
         {filtered.length === 0 && !creating ? (
           <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
-            {filter ? "一致するファイルがありません" : "Markdown ファイルがありません"}
+            {filter
+              ? "一致するファイルがありません"
+              : "Markdown ファイルがありません"}
           </div>
         ) : (
-          filtered.map((n) => <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />)
+          filtered.map((n) => (
+            <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />
+          ))
         )}
       </div>
 

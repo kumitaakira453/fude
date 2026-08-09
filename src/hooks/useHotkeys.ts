@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { useStore } from "jotai";
-import * as A from "../state/atoms";
+import { useEffect } from "react";
 import { splitPane } from "../lib/ui";
+import * as A from "../state/atoms";
 
 export function useHotkeys() {
   const store = useStore();

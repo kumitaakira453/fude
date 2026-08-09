@@ -1,9 +1,9 @@
 import { useAtom, useAtomValue } from "jotai";
 import { loadingAtom, sidebarTabAtom, treeFilterAtom } from "../state/atoms";
-import { FolderSwitcher } from "./FolderSwitcher";
 import { FileTree } from "./FileTree";
-import { SearchPanel } from "./SearchPanel";
+import { FolderSwitcher } from "./FolderSwitcher";
 import { Icon } from "./Icon";
+import { SearchPanel } from "./SearchPanel";
 
 export function Sidebar() {
   const [tab, setTab] = useAtom(sidebarTabAtom);

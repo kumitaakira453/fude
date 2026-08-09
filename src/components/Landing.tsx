@@ -1,8 +1,8 @@
 import { useAtomValue } from "jotai";
-import { foldersAtom } from "../state/atoms";
+import { useWorkspace } from "../hooks/useWorkspace";
 import { pickDirectory } from "../lib/fsAccess";
 import { folderDisplayName } from "../lib/idb";
-import { useWorkspace } from "../hooks/useWorkspace";
+import { foldersAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 function timeAgo(ts: number): string {
@@ -45,13 +45,19 @@ export function Landing() {
       <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-8 py-12">
         <div className="mb-10 flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)]">
-            <Icon name="auto_awesome" size={22} className="text-[var(--mg-accent)]" />
+            <Icon
+              name="auto_awesome"
+              size={22}
+              className="text-[var(--mg-accent)]"
+            />
           </div>
           <div>
             <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.02em] text-[var(--mg-fg)]">
               mdglow
             </h1>
-            <p className="text-[13px] text-[var(--mg-muted)]">ローカルの Markdown を、美しく読む</p>
+            <p className="text-[13px] text-[var(--mg-muted)]">
+              ローカルの Markdown を、美しく読む
+            </p>
           </div>
         </div>
 
@@ -71,7 +77,9 @@ export function Landing() {
             <SectionTitle className="mt-8">最近</SectionTitle>
             <div className="mt-1">
               {folders.length === 0 ? (
-                <p className="px-2 py-2 text-[13px] text-[var(--mg-muted)]">履歴はまだありません</p>
+                <p className="px-2 py-2 text-[13px] text-[var(--mg-muted)]">
+                  履歴はまだありません
+                </p>
               ) : (
                 folders.map((f) => (
                   <button
@@ -79,7 +87,11 @@ export function Landing() {
                     onClick={() => openFolder(f.path)}
                     className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
                   >
-                    <Icon name="folder" size={17} className="shrink-0 text-[var(--mg-muted)]" />
+                    <Icon
+                      name="folder"
+                      size={17}
+                      className="shrink-0 text-[var(--mg-muted)]"
+                    />
                     <span
                       className="truncate text-[13.5px] font-medium text-[var(--mg-fg-dim)]"
                       title={f.path}
@@ -99,7 +111,10 @@ export function Landing() {
             <SectionTitle>ショートカット</SectionTitle>
             <div className="mt-2 space-y-1.5">
               {SHORTCUTS.map((s) => (
-                <div key={s.label} className="flex items-center gap-2 px-2 text-[13px]">
+                <div
+                  key={s.label}
+                  className="flex items-center gap-2 px-2 text-[13px]"
+                >
                   <div className="flex gap-1">
                     {s.keys.map((k, i) => (
                       <Kbd key={i}>{k}</Kbd>
@@ -112,7 +127,11 @@ export function Landing() {
 
             <SectionTitle className="mt-8">補足</SectionTitle>
             <p className="mt-2 flex items-start gap-2 px-2 text-[12.5px] leading-relaxed text-[var(--mg-muted)]">
-              <Icon name="lock" size={15} className="mt-0.5 shrink-0 text-[var(--mg-accent)]" />
+              <Icon
+                name="lock"
+                size={15}
+                className="mt-0.5 shrink-0 text-[var(--mg-accent)]"
+              />
               すべての読み込みは端末内で完結します。
             </p>
           </div>
@@ -122,7 +141,13 @@ export function Landing() {
   );
 }
 
-function SectionTitle({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function SectionTitle({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <h2
       className={`px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--mg-muted)] ${className}`}

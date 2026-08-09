@@ -1,18 +1,28 @@
-import { Children, isValidElement, memo, useContext, type ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  memo,
+  useContext,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import remarkFrontmatter from "remark-frontmatter";
+import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
-import rehypeKatex from "rehype-katex";
-import rehypeHighlight from "rehype-highlight";
+import remarkFrontmatter from "remark-frontmatter";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { CodeBlock } from "./CodeBlock";
-import { Mermaid } from "./Mermaid";
-import { MdImage } from "./MdImage";
 import { markdownContext } from "./MarkdownContext";
+import { MdImage } from "./MdImage";
+import { Mermaid } from "./Mermaid";
 
-const remarkPlugins = [remarkGfm, remarkMath, [remarkFrontmatter, ["yaml"]] as const];
+const remarkPlugins = [
+  remarkGfm,
+  remarkMath,
+  [remarkFrontmatter, ["yaml"]] as const,
+];
 const rehypePlugins = [
   rehypeRaw,
   rehypeSlug,
@@ -24,7 +34,8 @@ function childrenToString(children: ReactNode): string {
   return Children.toArray(children)
     .map((c) => {
       if (typeof c === "string") return c;
-      if (isValidElement(c)) return childrenToString((c.props as { children?: ReactNode }).children);
+      if (isValidElement(c))
+        return childrenToString((c.props as { children?: ReactNode }).children);
       return "";
     })
     .join("");
@@ -45,7 +56,9 @@ export const Markdown = memo(function Markdown({ body }: { body: string }) {
         code({ className, children, ...props }) {
           const match = /language-([\w-]+)/.exec(className || "");
           if (match?.[1] === "mermaid") {
-            return <Mermaid code={childrenToString(children).replace(/\n$/, "")} />;
+            return (
+              <Mermaid code={childrenToString(children).replace(/\n$/, "")} />
+            );
           }
           return (
             <code className={className} {...props}>
@@ -59,7 +72,9 @@ export const Markdown = memo(function Markdown({ body }: { body: string }) {
             const cls = (child.props as { className?: string }).className || "";
             if (/language-mermaid/.test(cls)) return <>{children}</>;
             const match = /language-([\w-]+)/.exec(cls);
-            return <CodeBlock language={match?.[1] ?? null}>{children}</CodeBlock>;
+            return (
+              <CodeBlock language={match?.[1] ?? null}>{children}</CodeBlock>
+            );
           }
           return <pre>{children}</pre>;
         },
@@ -93,7 +108,13 @@ export const Markdown = memo(function Markdown({ body }: { body: string }) {
           );
         },
         img({ src, alt, title }) {
-          return <MdImage src={typeof src === "string" ? src : undefined} alt={alt} title={title} />;
+          return (
+            <MdImage
+              src={typeof src === "string" ? src : undefined}
+              alt={alt}
+              title={title}
+            />
+          );
         },
         table({ children }) {
           return (

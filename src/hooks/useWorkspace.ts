@@ -1,22 +1,27 @@
-import { useCallback } from "react";
 import { useStore } from "jotai";
-import * as A from "../state/atoms";
+import { useCallback } from "react";
 import {
   buildTree,
-  flattenFiles,
-  readFile,
-  imageUrl,
-  peekImageUrl,
-  writeFile,
   createDir,
+  flattenFiles,
+  imageUrl,
+  isMarkdown,
+  pathExists,
+  peekImageUrl,
+  readFile,
   removePath,
   renamePath,
-  pathExists,
-  isMarkdown,
+  writeFile,
   type TreeNode,
 } from "../lib/fsAccess";
-import { registerFolder, loadFolders } from "../lib/idb";
-import { remapLeafPaths, resetLayout, reviveLayout, setPanePath } from "../lib/ui";
+import { loadFolders, registerFolder } from "../lib/idb";
+import {
+  remapLeafPaths,
+  resetLayout,
+  reviveLayout,
+  setPanePath,
+} from "../lib/ui";
+import * as A from "../state/atoms";
 
 // path 正規化（. / .. を解決）。
 function resolvePath(baseDir: string, rel: string): string {
@@ -67,33 +72,40 @@ export function useWorkspace() {
   // バックグラウンドで構築する。UI はツリー表示直後から操作可能。
   const indexContents = useCallback(
     async (files: TreeNode[], gen: number) => {
-      // 既存キャッシュ（開いた/編集したファイル）を保持したまま追記していく
-      const content = new Map(store.get(A.contentCacheAtom));
-      const mtime = new Map(store.get(A.mtimeCacheAtom));
       const total = files.length;
-      store.set(A.loadingAtom, { active: true, message: "インデックス構築中", done: 0, total });
+      // 読み込んだ分を「ライブキャッシュへマージ」する（自前 Map で上書きしない）。
+      // 索引中のファイル操作/編集の変更を潰さず、白フラッシュも起きない。
+      let batch = new Map<string, string>();
+      const flush = (done: number, active: boolean) => {
+        if (batch.size) {
+          const merged = new Map(store.get(A.contentCacheAtom));
+          for (const [k, v] of batch) if (!merged.has(k)) merged.set(k, v);
+          store.set(A.contentCacheAtom, merged);
+          batch = new Map();
+        }
+        store.set(A.loadingAtom, {
+          active,
+          message: active ? "インデックス構築中" : "",
+          done,
+          total,
+        });
+      };
+      flush(0, true);
       for (let i = 0; i < files.length; i++) {
         if (gen !== indexGen) return; // 新しい構築に置き換えられたら中断
         const node = files[i];
-        if (!content.has(node.path)) {
+        if (!store.get(A.contentCacheAtom).has(node.path) && !batch.has(node.path)) {
           try {
             const data = await readFile(node.abs);
-            content.set(node.path, data.text);
-            mtime.set(node.path, data.lastModified);
+            batch.set(node.path, data.text);
           } catch {
             /* 読み込めないファイルはスキップ */
           }
         }
-        if (i % 40 === 0) {
-          store.set(A.contentCacheAtom, new Map(content));
-          store.set(A.mtimeCacheAtom, new Map(mtime));
-          store.set(A.loadingAtom, { active: true, message: "インデックス構築中", done: i, total });
-        }
+        if (i % 40 === 0) flush(i, true);
       }
       if (gen !== indexGen) return;
-      store.set(A.contentCacheAtom, new Map(content));
-      store.set(A.mtimeCacheAtom, new Map(mtime));
-      store.set(A.loadingAtom, { active: false, message: "", done: total, total });
+      flush(total, false);
     },
     [store],
   );
@@ -153,7 +165,11 @@ export function useWorkspace() {
       await refreshTree();
       if (saved) {
         const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
-        const { layout, active } = reviveLayout(saved.layout, valid, saved.active);
+        const { layout, active } = reviveLayout(
+          saved.layout,
+          valid,
+          saved.active,
+        );
         store.set(A.layoutAtom, layout);
         store.set(A.activePaneIdAtom, active);
       }
@@ -193,10 +209,14 @@ export function useWorkspace() {
   const navigate = useCallback(
     (fromDocPath: string, href: string) => {
       let target = resolvePath(dirOf(fromDocPath), href);
-      if (!store.get(A.filesAtom).some((f) => f.path === target) && !/\.[a-z]+$/i.test(target)) {
+      if (
+        !store.get(A.filesAtom).some((f) => f.path === target) &&
+        !/\.[a-z]+$/i.test(target)
+      ) {
         target = `${target}.md`;
       }
-      if (store.get(A.filesAtom).some((f) => f.path === target)) openFile(target);
+      if (store.get(A.filesAtom).some((f) => f.path === target))
+        openFile(target);
     },
     [store, openFile],
   );
@@ -235,21 +255,24 @@ export function useWorkspace() {
   );
 
   // 一意な名前を作る（重複時に連番）。
-  const uniqueRel = useCallback(async (rel: string): Promise<string> => {
-    const abs = absOf(rel);
-    if (!abs || !(await pathExists(abs))) return rel;
-    const dir = dirOf(rel);
-    const base = baseOf(rel);
-    const dot = base.lastIndexOf(".");
-    const stem = dot > 0 ? base.slice(0, dot) : base;
-    const ext = dot > 0 ? base.slice(dot) : "";
-    for (let i = 2; i < 1000; i++) {
-      const cand = joinRel(dir, `${stem} ${i}${ext}`);
-      const a = absOf(cand);
-      if (a && !(await pathExists(a))) return cand;
-    }
-    return rel;
-  }, [absOf]);
+  const uniqueRel = useCallback(
+    async (rel: string): Promise<string> => {
+      const abs = absOf(rel);
+      if (!abs || !(await pathExists(abs))) return rel;
+      const dir = dirOf(rel);
+      const base = baseOf(rel);
+      const dot = base.lastIndexOf(".");
+      const stem = dot > 0 ? base.slice(0, dot) : base;
+      const ext = dot > 0 ? base.slice(dot) : "";
+      for (let i = 2; i < 1000; i++) {
+        const cand = joinRel(dir, `${stem} ${i}${ext}`);
+        const a = absOf(cand);
+        if (a && !(await pathExists(a))) return cand;
+      }
+      return rel;
+    },
+    [absOf],
+  );
 
   const createFile = useCallback(
     async (parentRel: string, name: string) => {
@@ -313,7 +336,8 @@ export function useWorkspace() {
       const abs = absOf(rel);
       if (!abs) return;
       await removePath(abs, isDir);
-      const gone = (p: string | null) => (p === rel || (p && p.startsWith(rel + "/")) ? null : p);
+      const gone = (p: string | null) =>
+        p === rel || (p && p.startsWith(rel + "/")) ? null : p;
       remapLeafPaths(store, gone);
       remapCache((p) => gone(p) ?? null);
       await refreshTreeStructure();
@@ -323,7 +347,12 @@ export function useWorkspace() {
 
   const moveEntry = useCallback(
     async (rel: string, destDirRel: string) => {
-      if (rel === destDirRel || destDirRel.startsWith(rel + "/") || dirOf(rel) === destDirRel) return;
+      if (
+        rel === destDirRel ||
+        destDirRel.startsWith(rel + "/") ||
+        dirOf(rel) === destDirRel
+      )
+        return;
       const newRel = await uniqueRel(joinRel(destDirRel, baseOf(rel)));
       const oldAbs = absOf(rel);
       const newAbs = absOf(newRel);

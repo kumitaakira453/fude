@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
 import { useAtom } from "jotai";
-import { fontAtom, readingWidthAtom, themeAtom } from "../state/atoms";
-import { THEMES } from "../lib/themes";
+import { useEffect, useRef, useState } from "react";
 import { FONTS } from "../lib/fonts";
+import { THEMES } from "../lib/themes";
+import { fontAtom, readingWidthAtom, themeAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 export function ThemeSwitcher() {
@@ -14,7 +14,8 @@ export function ThemeSwitcher() {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -30,7 +31,9 @@ export function ThemeSwitcher() {
         className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm transition hover:bg-[var(--mg-hover)]"
       >
         <Icon name="palette" size={19} className="text-[var(--mg-accent)]" />
-        <span className="hidden text-[13px] text-[var(--mg-fg-dim)] sm:inline">{current.label}</span>
+        <span className="hidden text-[13px] text-[var(--mg-fg-dim)] sm:inline">
+          {current.label}
+        </span>
         <Icon name="expand_more" size={16} className="text-[var(--mg-muted)]" />
       </button>
       {open && (
@@ -92,7 +95,9 @@ export function ThemeSwitcher() {
                 key={w}
                 onClick={() => setWidth(w)}
                 className={`flex-1 rounded-lg px-2 py-1 text-[13px] transition ${
-                  w === width ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]" : "hover:bg-[var(--mg-hover)]"
+                  w === width
+                    ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
+                    : "hover:bg-[var(--mg-hover)]"
                 }`}
               >
                 {label}

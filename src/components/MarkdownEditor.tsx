@@ -1,9 +1,18 @@
-import { useEffect, useRef } from "react";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+} from "@codemirror/commands";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import {
+  defaultHighlightStyle,
+  indentUnit,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from "@codemirror/language";
+import { useEffect, useRef } from "react";
 import { livePreview } from "../lib/livePreview";
 
 // リスト行で Enter: 同じインデント/マーカーを継続。空項目ならマーカーを消して抜ける。
@@ -61,9 +70,10 @@ const theme = EditorView.theme({
     caretColor: "var(--mg-accent)",
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--mg-accent)" },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
-    backgroundColor: "var(--mg-accent-soft)",
-  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection":
+    {
+      backgroundColor: "var(--mg-accent-soft)",
+    },
 });
 
 export function MarkdownEditor({
@@ -120,5 +130,7 @@ export function MarkdownEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={ref} className="mg-cm min-h-0 min-w-0 flex-1 overflow-hidden" />;
+  return (
+    <div ref={ref} className="mg-cm min-h-0 min-w-0 flex-1 overflow-hidden" />
+  );
 }

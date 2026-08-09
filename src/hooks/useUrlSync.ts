@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
 import { useAtomValue, useStore } from "jotai";
-import * as A from "../state/atoms";
+import { useEffect, useRef } from "react";
 import { buildHash, parseHash } from "../lib/url";
+import * as A from "../state/atoms";
 import { useWorkspace } from "./useWorkspace";
 
 // URL(hash) と「開いているフォルダ・ファイル」を双方向同期する。
@@ -25,7 +25,10 @@ export function useUrlSync() {
   });
 
   const applyUrl = useRef(
-    async (state: { folderId?: string; file?: string }, opts: { force?: boolean } = {}) => {
+    async (
+      state: { folderId?: string; file?: string },
+      opts: { force?: boolean } = {},
+    ) => {
       applyingRef.current = true;
       try {
         const { folderId, file } = state;
@@ -43,7 +46,8 @@ export function useUrlSync() {
         }
         // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
         // 戻る/進む(popstate)では force で必ず切り替える。
-        if (file && (opts.force || !store.get(A.activePaneAtom)?.path)) openFile(file);
+        if (file && (opts.force || !store.get(A.activePaneAtom)?.path))
+          openFile(file);
       } finally {
         applyingRef.current = false;
       }
@@ -83,7 +87,10 @@ export function useUrlSync() {
   useEffect(() => {
     if (!readyRef.current || applyingRef.current) return;
     const desired = buildHash(activeFolderId, activePane?.path);
-    if (location.hash !== desired && !(location.hash === "" && desired === "#")) {
+    if (
+      location.hash !== desired &&
+      !(location.hash === "" && desired === "#")
+    ) {
       navIdx.current += 1;
       navMax.current = navIdx.current;
       history.pushState({ mdglowIdx: navIdx.current }, "", desired);

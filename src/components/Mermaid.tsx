@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import { useAtomValue } from "jotai";
-import { themeAtom } from "../state/atoms";
+import { useEffect, useState } from "react";
 import { DARK_THEME_IDS } from "../lib/themes";
+import { themeAtom } from "../state/atoms";
 
 let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
 // render 用 id は effect ごとにユニークにする（StrictMode の二重実行で id が衝突し、
@@ -53,7 +53,9 @@ export function Mermaid({ code }: { code: string }) {
     const id = `mmd-${mermaidSeq++}`;
     const dark = DARK_THEME_IDS.has(theme);
     getMermaid(dark)
-      .then((mermaid) => mermaid.parse(trimmed).then(() => mermaid.render(id, trimmed)))
+      .then((mermaid) =>
+        mermaid.parse(trimmed).then(() => mermaid.render(id, trimmed)),
+      )
       .then(({ svg }) => {
         if (alive) {
           setSvg(svg);
@@ -86,7 +88,9 @@ export function Mermaid({ code }: { code: string }) {
   if (error) {
     return (
       <div className="my-4 overflow-x-auto rounded-lg border border-[var(--mg-danger)]/40 bg-[var(--mg-code-bg)] p-3">
-        <div className="mb-2 text-xs font-medium text-[var(--mg-danger)]">mermaid エラー</div>
+        <div className="mb-2 text-xs font-medium text-[var(--mg-danger)]">
+          mermaid エラー
+        </div>
         <pre className="mb-2 whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--mg-danger)]">
           {error}
         </pre>
