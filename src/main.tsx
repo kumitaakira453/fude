@@ -7,6 +7,14 @@ import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
+// ページ読み込み回数を計測（ホワイトアウト＝リロードかどうかの切り分け用）
+try {
+  const n = Number(sessionStorage.getItem("mdglow:loads") ?? "0") + 1;
+  sessionStorage.setItem("mdglow:loads", String(n));
+} catch {
+  /* noop */
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>

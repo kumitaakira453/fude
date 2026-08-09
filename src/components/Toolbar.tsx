@@ -82,6 +82,12 @@ export function Toolbar() {
         <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">
           mdglow
         </span>
+        <span
+          title="ページ読み込み回数（移動で増えるならリロード発生）"
+          className="ml-1 rounded bg-[var(--mg-hover)] px-1 text-[10px] font-medium text-[var(--mg-muted)]"
+        >
+          ↻{sessionStorage.getItem("mdglow:loads") ?? "?"}
+        </span>
       </button>
 
       <div className="mx-0.5 h-5 w-px bg-[var(--mg-border)]" />

@@ -9,6 +9,26 @@ export default defineConfig({
   server: {
     port: 5273,
     strictPort: true,
+    watch: {
+      // dev 時、プロジェクト配下のフォルダを開いて md/画像を移動・編集しても
+      // Vite が全ページリロードしないよう、ドキュメント/画像を監視対象から除外。
+      // （本番=tauri build では Vite 自体が無いので無関係）
+      ignored: [
+        "**/*.md",
+        "**/*.markdown",
+        "**/*.mdx",
+        "**/*.mdown",
+        "**/*.mkd",
+        "**/*.png",
+        "**/*.jpg",
+        "**/*.jpeg",
+        "**/*.gif",
+        "**/*.webp",
+        "**/*.bmp",
+        "**/*.avif",
+        "**/sample/**",
+      ],
+    },
   },
   build: {
     chunkSizeWarningLimit: 2000,
