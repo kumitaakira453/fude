@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from "@codemirror/language";
 import { livePreview } from "../lib/livePreview";
 
 const theme = EditorView.theme({
@@ -64,9 +64,11 @@ export function MarkdownEditor({
                 return true;
               },
             },
+            indentWithTab, // Tab / Shift-Tab でインデント調整
             ...defaultKeymap,
             ...historyKeymap,
           ]),
+          indentUnit.of("    "), // インデント幅 = 半角スペース4
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(defaultHighlightStyle),
           livePreview,
