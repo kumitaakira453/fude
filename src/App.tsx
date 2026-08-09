@@ -5,6 +5,7 @@ import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useWatcher } from "./hooks/useWatcher";
@@ -82,6 +83,7 @@ export default function App() {
     return (
       <div className="h-screen w-screen bg-[var(--mg-bg)] text-[var(--mg-fg)]">
         <Landing />
+        <UpdateBanner />
       </div>
     );
   }
@@ -98,6 +100,7 @@ export default function App() {
         <PaneGroup />
       </div>
       <CommandPalette />
+      <UpdateBanner />
     </div>
   );
 }

@@ -1,0 +1,81 @@
+name: Release
+
+# v* タグを push すると各 OS でビルドし、GitHub Releases に成果物
+# (.dmg / .app.tar.gz / .msi / .exe / .deb / .AppImage) を添付する。
+on:
+  push:
+    tags:
+      - "v*"
+  # 手動実行も可能（タグ名を入力してドラフトを作る）
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "リリースタグ (例: v0.1.0)"
+        required: true
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # Apple Silicon
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest # Intel
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build & release (Tauri)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 自動更新の署名（未設定だと updater 用アーティファクトが作れない）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # タグ push 時は github.ref_name、手動実行時は入力タグ
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "mdglow ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: "各 OS のインストーラは下記 Assets からダウンロードしてください。"
+          releaseDraft: true
+          prerelease: false
+          # updater 用の latest.json を生成して Release に添付
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}
