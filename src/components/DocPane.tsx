@@ -136,12 +136,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           {path ? path.split("/").join("  ›  ") : "ファイル未選択"}
         </div>
         <Tooltip
+          align="end"
           label={
             watchMode === "observer"
-              ? "ファイルの変更をリアルタイム監視中（外部エディタでの保存も自動反映）"
+              ? "変更をリアルタイム監視中"
               : watchMode === "polling"
-                ? "ファイルの変更を監視中（ポーリング）"
-                : "ファイル監視は停止中"
+                ? "変更を監視中（ポーリング）"
+                : "監視は停止中"
           }
         >
           <span
