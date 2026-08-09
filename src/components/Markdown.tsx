@@ -145,11 +145,18 @@ function standaloneLink(
 export const Markdown = memo(function Markdown({
   body,
   editorial,
+  blockIndex,
+  onToggleTask,
 }: {
   body: string;
   editorial: boolean;
+  // タスクチェックボックスのトグル用（ブロック内の何番目のタスクかで特定）
+  blockIndex?: number;
+  onToggleTask?: (blockIndex: number, ordinal: number) => void;
 }) {
   const ctx = useContext(markdownContext);
+  // レンダーごとにリセットされるチェックボックスの通し番号
+  const taskSeq = { n: 0 };
 
   return (
     <ReactMarkdown
@@ -208,6 +215,32 @@ export const Markdown = memo(function Markdown({
         ol({ children }) {
           return (
             <ol className={editorial ? "mg-steps" : undefined}>{children}</ol>
+          );
+        },
+        input({ type, checked }) {
+          if (type !== "checkbox") {
+            return <input type={type} checked={checked} readOnly />;
+          }
+          // ネイティブ checkbox を Material アイコンに統一。クリックでトグル。
+          const icon = checked ? "check_box" : "check_box_outline_blank";
+          const ordinal = taskSeq.n++;
+          if (onToggleTask && typeof blockIndex === "number") {
+            const bi = blockIndex;
+            return (
+              <button
+                type="button"
+                className="mg-task-check"
+                aria-label={checked ? "未完了に戻す" : "完了にする"}
+                onClick={() => onToggleTask(bi, ordinal)}
+              >
+                <Icon name={icon} size={20} fill={checked} />
+              </button>
+            );
+          }
+          return (
+            <span className="mg-task-check" aria-hidden>
+              <Icon name={icon} size={20} fill={checked} />
+            </span>
           );
         },
         a({ href, children, ...props }) {

@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { replaceBlock, splitBlocks } from "../lib/blocks";
 import { BlockSourceEditor } from "./BlockSourceEditor";
 import { Markdown } from "./Markdown";
+
+// タスク行（- [ ] / 1. [x] など）
+const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
 
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
 // 生ソース編集にする。編集対象以外は一切動かない（目線を動かさない）。
@@ -29,6 +32,28 @@ export function EditableBody({
     onSaveBody(replaceBlock(body, block, newSrc));
   };
 
+  // ブロック内 ordinal 番目のタスクの [ ]↔[x] をトグルして保存
+  const toggleTask = useCallback(
+    (blockIndex: number, ordinal: number) => {
+      const block = blocks[blockIndex];
+      if (!block) return;
+      const lines = block.src.split("\n");
+      let count = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (!TASK_RE.test(lines[i])) continue;
+        count++;
+        if (count !== ordinal) continue;
+        lines[i] = lines[i].replace(
+          TASK_RE,
+          (_m, a, c, b) => a + (c === " " ? "x" : " ") + b,
+        );
+        onSaveBody(replaceBlock(body, block, lines.join("\n")));
+        return;
+      }
+    },
+    [blocks, body, onSaveBody],
+  );
+
   return (
     <>
       {blocks.map((b) =>
@@ -51,7 +76,12 @@ export function EditableBody({
               setEditing({ index: b.index, x: e.clientX, y: e.clientY })
             }
           >
-            <Markdown body={b.src} editorial={editorial} />
+            <Markdown
+              body={b.src}
+              editorial={editorial}
+              blockIndex={b.index}
+              onToggleTask={toggleTask}
+            />
           </div>
         ),
       )}

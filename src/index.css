@@ -477,21 +477,31 @@ body {
 .mg-prose thead th {
   color: var(--mg-fg);
 }
-.mg-prose input[type="checkbox"] {
-  accent-color: var(--mg-accent);
-}
-/* タスクリストは箇条書きの点を出さない（チェックボックスと二重にしない） */
+/* タスクリスト: ネイティブ checkbox をやめ Material アイコンに統一。
+   箇条書きの点は出さない（アイコンと二重にしない）。 */
 .mg-prose li.task-list-item,
-.mg-prose li:has(> input[type="checkbox"]) {
+.mg-prose li:has(> .mg-task-check) {
   list-style: none;
 }
 .mg-prose ul.contains-task-list {
   padding-left: 0.5rem;
 }
-.mg-prose li.task-list-item > input[type="checkbox"],
-.mg-prose li:has(> input[type="checkbox"]) > input[type="checkbox"] {
-  margin-right: 0.5em;
-  transform: translateY(1px);
+.mg-prose .mg-task-check {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.28em; /* 1 行目のテキストと高さを揃える */
+  margin-right: 0.35em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mg-accent);
+  line-height: 1;
+}
+button.mg-task-check {
+  cursor: pointer;
+}
+button.mg-task-check:hover {
+  color: color-mix(in srgb, var(--mg-accent) 70%, var(--mg-fg));
 }
 .mg-prose img {
   margin-inline: auto;
