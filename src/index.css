@@ -542,17 +542,43 @@ body {
 .mg-block {
   display: contents;
 }
-/* 編集中ブロックのその場エディタ。周囲を動かさないよう本文幅のまま、
-   薄い枠と下地で「ここを編集中」を示す。 */
+/* 編集中ブロックのその場エディタ。重いカードではなく、左のアクセントレール
+   ＋薄い下地で「ここを編集中」を上品に示す。周囲は動かさない。 */
 .mg-block-editor {
-  margin: 0.4rem 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
-  border-radius: 0.6rem;
-  background: color-mix(in srgb, var(--mg-accent) 6%, var(--mg-bg));
+  position: relative;
+  margin: 0.3rem 0;
+  padding: 0.15rem 0.3rem 0.2rem 0.95rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--mg-accent) 5%, transparent);
+  box-shadow: inset 2px 0 0 0 var(--mg-accent);
 }
 .mg-block-editor .cm-editor {
   background: transparent;
+}
+/* 操作ヒント（⌘↵ 確定 / esc 取消） */
+.mg-block-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  padding-left: 0.1rem;
+  font-family: var(--mg-font-sans);
+  font-size: 11px;
+  color: var(--mg-muted);
+  user-select: none;
+}
+.mg-block-hint kbd {
+  font-family: var(--mg-font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 0.02rem 0.34rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.25rem;
+  color: var(--mg-fg-dim);
+  background: var(--mg-panel);
+}
+.mg-block-hint-sep {
+  opacity: 0.5;
 }
 
 /* 見出し: 下線ではなくアクセントの色帯 */

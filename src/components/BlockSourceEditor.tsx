@@ -105,5 +105,16 @@ export function BlockSourceEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={ref} className="mg-block-editor" />;
+  return (
+    <div className="mg-block-editor">
+      <div ref={ref} className="mg-block-cm" />
+      <div className="mg-block-hint" contentEditable={false}>
+        <kbd>⌘ ↵</kbd>
+        <span>確定</span>
+        <span className="mg-block-hint-sep">·</span>
+        <kbd>esc</kbd>
+        <span>取消</span>
+      </div>
+    </div>
+  );
 }
