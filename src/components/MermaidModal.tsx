@@ -15,6 +15,9 @@ export function MermaidModal({
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(
     null,
   );
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -51,12 +54,28 @@ export function MermaidModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale]);
 
+  // ホイール/トラックパッド: 通常スクロール=パン、ピンチ(⌘/ctrl+wheel)=ズーム。
+  // ページ側のスクロール/ズームを止めるため非パッシブで preventDefault する。
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey) {
+        setScale((s) => clamp(s * (e.deltaY < 0 ? 1.06 : 0.94), 0.4, 6));
+      } else {
+        setPos((p) =>
+          clampPos(p.x - e.deltaX, p.y - e.deltaY, scaleRef.current),
+        );
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return createPortal(
-    <div
-      className="mg-mmd-overlay"
-      onClick={onClose}
-      onWheel={(e) => zoom(e.deltaY < 0 ? 1.12 : 0.89)}
-    >
+    <div ref={overlayRef} className="mg-mmd-overlay" onClick={onClose}>
       <div className="mg-mmd-toolbar" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => zoom(1.2)} title="拡大">
           <Icon name="add" size={18} />
