@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react";
 import { livePreview } from "../lib/livePreview";
 
 // リスト行で Enter: 同じインデント/マーカーを継続。空項目ならマーカーを消して抜ける。
-function continueList(view: EditorView): boolean {
+export function continueList(view: EditorView): boolean {
   const { state } = view;
   const range = state.selection.main;
   if (!range.empty) return false;

@@ -534,6 +534,27 @@ body {
    ============================================================ */
 /* 本文サイズは通常描画と同じに保つ（editorial で拡大しない） */
 
+/* ============================================================
+   ブロック単位インライン編集
+   ============================================================ */
+/* ブロックのラッパは display:contents でレイアウトに影響を与えず、
+   ダブルクリックだけを拾う（余白・縦リズムは元のまま） */
+.mg-block {
+  display: contents;
+}
+/* 編集中ブロックのその場エディタ。周囲を動かさないよう本文幅のまま、
+   薄い枠と下地で「ここを編集中」を示す。 */
+.mg-block-editor {
+  margin: 0.4rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--mg-accent) 6%, var(--mg-bg));
+}
+.mg-block-editor .cm-editor {
+  background: transparent;
+}
+
 /* 見出し: 下線ではなくアクセントの色帯 */
 .mg-prose.mg-editorial h2 {
   border-bottom: 0;

@@ -15,9 +15,9 @@ import {
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
+import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
-import { Markdown } from "./Markdown";
 import { markdownContext } from "./MarkdownContext";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { Toc } from "./Toc";
@@ -43,7 +43,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
-  const [progress, setProgress] = useState(0);
+  // 進捗バーはスクロール毎に DOM へ直接反映する。
+  // （React 再描画 + CSS transition を挟むと遅延してむしろ煩わしいため）
+  const progressRef = useRef<HTMLDivElement>(null);
+  const setBar = (frac: number) => {
+    if (progressRef.current) progressRef.current.style.width = `${frac * 100}%`;
+  };
   // スクロール割合(0〜1)をプレビューと編集で共有し、切替で位置を引き継ぐ。
   // 同一内容なら frac×max は元の top と一致するため、ファイル復帰時の復元にも使える。
   const scrollFracRef = useRef<{ path: string | null; frac: number }>({
@@ -91,6 +96,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
 
+  // ブロック編集の確定: body を差し戻し、フロントマターを保ったまま全文保存する。
+  // body は raw の suffix なので、先頭の frontmatter 部分を prefix として復元する。
+  const saveBody = (newBody: string) => {
+    if (!path) return;
+    const full = raw ?? "";
+    const prefix = full.slice(0, full.length - body.length);
+    void saveFile(path, prefix + newBody);
+  };
+
   // path はあるが未読込なら読み込む
   useEffect(() => {
     if (path && !cache.has(path)) void reloadFile(path);
@@ -105,7 +119,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const onScroll = () => {
       const max = scroller.scrollHeight - scroller.clientHeight;
       const frac = max > 0 ? Math.min(1, scroller.scrollTop / max) : 0;
-      setProgress(frac);
+      setBar(frac);
       scrollFracRef.current = { path, frac };
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
@@ -118,7 +132,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!scroller) return;
     const saved = scrollFracRef.current;
     const frac = saved.path === path ? saved.frac : 0;
-    setProgress(frac);
+    setBar(frac);
     const raf = requestAnimationFrame(() => {
       const max = scroller.scrollHeight - scroller.clientHeight;
       scroller.scrollTop = max > 0 ? frac * max : 0;
@@ -177,7 +191,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {path && (
           <button
             onClick={toggleEdit}
-            title={editing ? "プレビュー (⌘E)" : "編集 (⌘E)"}
+            title={editing ? "プレビュー (⌘E)" : "全文編集 (⌘E) ／ 本文はダブルクリックでその場編集"}
             className={`grid h-6 w-6 place-items-center rounded transition hover:bg-[var(--mg-hover)] ${
               editing
                 ? "text-[var(--mg-accent)]"
@@ -205,8 +219,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* 読書プログレスバー */}
       <div className="h-0.5 w-full bg-transparent">
         <div
-          className="h-full bg-[var(--mg-accent)] transition-[width] duration-150"
-          style={{ width: `${progress * 100}%` }}
+          ref={progressRef}
+          className="h-full bg-[var(--mg-accent)]"
+          style={{ width: 0 }}
         />
       </div>
 
@@ -233,15 +248,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
           >
             {path ? (
-              <div
-                className="px-6 py-8 sm:px-10"
-                onDoubleClick={() => {
-                  // ダブルクリックで編集モードへ（リンク/画像上は除く）
-                  const sel = window.getSelection?.();
-                  if (sel && sel.toString().length > 40) return;
-                  enterEdit();
-                }}
-              >
+              <div className="px-6 py-8 sm:px-10">
                 <article
                   ref={setContent}
                   style={{ fontFamily: fontStack(font) }}
@@ -251,7 +258,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 >
                   {data && <Frontmatter data={data} />}
                   <markdownContext.Provider value={ctx}>
-                    <Markdown body={body} editorial={editorial} />
+                    {/* ダブルクリックしたブロックだけをその場で生ソース編集 */}
+                    <EditableBody
+                      body={body}
+                      editorial={editorial}
+                      onSaveBody={saveBody}
+                    />
                   </markdownContext.Provider>
                 </article>
               </div>
