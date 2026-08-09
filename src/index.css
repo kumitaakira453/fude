@@ -599,26 +599,26 @@ button.mg-task-check:hover {
   opacity: 0.5;
 }
 
-/* 見出し: 下線ではなくアクセントの色帯 */
-.mg-prose.mg-editorial h2 {
+/* 見出し: 下線ではなく、全レベルに一貫してアクセントの色帯を付ける
+   （h2 だけだと h3 以降が字下げだけでズレて見えるため） */
+.mg-prose.mg-editorial :is(h1, h2, h3, h4, h5, h6) {
+  position: relative;
+  padding-left: 0.7rem;
   border-bottom: 0;
   padding-bottom: 0;
-  padding-left: 0.7rem;
-  margin-top: 2.1em;
-  position: relative;
 }
-.mg-prose.mg-editorial h2::before {
+.mg-prose.mg-editorial :is(h1, h2, h3, h4, h5, h6)::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 0.18em;
-  bottom: 0.18em;
-  width: 4px;
+  top: 0.16em;
+  bottom: 0.16em;
+  width: 3px;
   border-radius: 3px;
   background: var(--mg-accent);
 }
-.mg-prose.mg-editorial h3 {
-  padding-left: 0.7rem;
+.mg-prose.mg-editorial h2 {
+  margin-top: 2.1em;
 }
 
 /* 通常の引用: 本文サイズのまま、左のアクセントバーだけ整える（拡大しない） */
