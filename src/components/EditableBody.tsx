@@ -54,12 +54,22 @@ export function EditableBody({
     [blocks, body, onSaveBody],
   );
 
+  // 内容ベースの安定 key。ブロックの追加/削除で index がずれても、内容が
+  // 変わらないブロックは同じ key を保ち再マウントしない（削除時のちらつき防止）。
+  const seen = new Map<string, number>();
+  const keyOf = (src: string) => {
+    const n = seen.get(src) ?? 0;
+    seen.set(src, n + 1);
+    return `${n}:${src}`;
+  };
+
   return (
     <>
-      {blocks.map((b) =>
-        editing?.index === b.index ? (
+      {blocks.map((b) => {
+        const key = keyOf(b.src);
+        return editing?.index === b.index ? (
           <BlockSourceEditor
-            key={b.index}
+            key={key}
             src={b.src}
             clickX={editing.x}
             clickY={editing.y}
@@ -70,7 +80,7 @@ export function EditableBody({
           // display:contents で余白（prose の縦リズム）を崩さずに
           // ダブルクリックだけ拾う
           <div
-            key={b.index}
+            key={key}
             className="mg-block"
             onDoubleClick={(e) =>
               setEditing({ index: b.index, x: e.clientX, y: e.clientY })
@@ -83,8 +93,8 @@ export function EditableBody({
               onToggleTask={toggleTask}
             />
           </div>
-        ),
-      )}
+        );
+      })}
     </>
   );
 }

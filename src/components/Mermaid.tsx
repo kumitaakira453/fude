@@ -112,7 +112,12 @@ export function Mermaid({ code }: { code: string }) {
         className="mg-mermaid my-4"
         role="button"
         title="クリックで拡大"
-        onClick={() => setZoomed(true)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setZoomed(true);
+        }}
+        // ブロックのダブルクリック編集（コード表示）を抑止
+        onDoubleClick={(e) => e.stopPropagation()}
       >
         {/* mermaid が生成する SVG（securityLevel: strict でサニタイズ済み） */}
         <div

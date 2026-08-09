@@ -18,14 +18,34 @@ export function MermaidModal({
   const overlayRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
+  // ドラッグ直後のクリックで閉じないためのフラグ
+  const draggedRef = useRef(false);
+  // 開いた直後(ダブルタップの2打目)で即閉じしないためのガード
+  const closableRef = useRef(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const t = window.setTimeout(() => {
+      closableRef.current = true;
+    }, 300);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearTimeout(t);
+    };
   }, [onClose]);
+
+  // 背景（図・ツールバー以外）クリックで閉じる
+  const handleBackground = () => {
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
+    if (!closableRef.current) return;
+    onClose();
+  };
 
   const clamp = (v: number, a: number, b: number) =>
     Math.min(b, Math.max(a, v));
@@ -78,7 +98,7 @@ export function MermaidModal({
   }, []);
 
   return createPortal(
-    <div ref={overlayRef} className="mg-mmd-overlay" onClick={onClose}>
+    <div ref={overlayRef} className="mg-mmd-overlay" onClick={handleBackground}>
       <div className="mg-mmd-toolbar" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => zoom(1.2)} title="拡大">
           <Icon name="add" size={18} />
@@ -95,14 +115,20 @@ export function MermaidModal({
       </div>
       <div
         className="mg-mmd-stage"
-        onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => {
           (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+          draggedRef.current = false;
           drag.current = { x: e.clientX, y: e.clientY, ox: pos.x, oy: pos.y };
         }}
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
+          if (
+            Math.abs(e.clientX - d.x) > 4 ||
+            Math.abs(e.clientY - d.y) > 4
+          ) {
+            draggedRef.current = true;
+          }
           setPos(
             clampPos(d.ox + (e.clientX - d.x), d.oy + (e.clientY - d.y), scale),
           );
@@ -114,6 +140,7 @@ export function MermaidModal({
       >
         <div
           className="mg-mmd-svg"
+          onClick={(e) => e.stopPropagation()}
           style={{
             // ズームは要素サイズで行う（SVG をベクターのまま再描画＝ボケない）
             width: `calc(92vw * ${scale})`,
