@@ -100,6 +100,8 @@ export const paletteOpenAtom = atom<boolean>(false);
 
 // ---- 監視状態 ----
 export const watchModeAtom = atom<"observer" | "polling" | "off">("off");
+// 画像が変更されたら増える。MdImage はこれを見て再取得する。
+export const assetVersionAtom = atom<number>(0);
 
 // ---- 戻る/進むの可否 ----
 export const canBackAtom = atom<boolean>(false);

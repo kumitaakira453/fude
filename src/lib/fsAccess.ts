@@ -156,6 +156,21 @@ export function peekImageUrl(abs: string): string | null {
   return imgCache.get(abs) ?? null;
 }
 
+// 拡張子が画像かどうか
+export function isImage(path: string): boolean {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return ext in IMG_MIME;
+}
+
+// ファイルが変わった時にキャッシュを破棄し、次回 imageUrl で再読込させる。
+export function invalidateImage(abs: string): void {
+  const url = imgCache.get(abs);
+  if (url) {
+    URL.revokeObjectURL(url);
+    imgCache.delete(abs);
+  }
+}
+
 export async function imageUrl(abs: string): Promise<string | null> {
   const cached = imgCache.get(abs);
   if (cached) return cached;

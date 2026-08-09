@@ -1,7 +1,7 @@
 import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
-import { isMarkdown } from "../lib/fsAccess";
+import { invalidateImage, isImage, isMarkdown } from "../lib/fsAccess";
 import * as A from "../state/atoms";
 import { useWorkspace } from "./useWorkspace";
 
@@ -31,15 +31,23 @@ export function useWatcher() {
         if (disposed) return;
         const known = new Set(store.get(A.filesAtom).map((f) => f.path));
         let structural = false;
+        let imageChanged = false;
         for (const abs of event.paths) {
           if (!abs.startsWith(root)) continue;
           const rel = abs.slice(root.length + 1);
           if (isMarkdown(rel)) {
             if (known.has(rel)) void reloadFile(rel);
             else structural = true; // 新規 md
+          } else if (isImage(rel)) {
+            // 画像が変わったらキャッシュを捨てて再取得させる
+            invalidateImage(abs);
+            imageChanged = true;
           } else {
             structural = true; // ディレクトリ変化など
           }
+        }
+        if (imageChanged) {
+          store.set(A.assetVersionAtom, store.get(A.assetVersionAtom) + 1);
         }
         if (structural) scheduleTreeRefresh();
       },

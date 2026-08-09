@@ -1,4 +1,6 @@
+import { useAtomValue } from "jotai";
 import { memo, useContext, useEffect, useState } from "react";
+import { assetVersionAtom } from "../state/atoms";
 import { markdownContext } from "./MarkdownContext";
 
 // 相対パス画像をローカル FS から解決して表示する。
@@ -15,22 +17,29 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
     return ctx?.peekAsset(src) ?? null;
   });
   const [failed, setFailed] = useState(false);
+  // 画像が変わると increment される。これを見て再取得する。
+  const assetVersion = useAtomValue(assetVersionAtom);
 
   useEffect(() => {
-    if (!src || isRemote || !ctx || resolved) return;
+    if (!src || isRemote || !ctx) return;
     let alive = true;
     ctx
       .resolveAsset(src)
       .then((r) => {
         if (!alive) return;
-        if (r) setResolved(r);
-        else setFailed(true);
+        if (r) {
+          setResolved(r);
+          setFailed(false);
+        } else {
+          setFailed(true);
+        }
       })
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
     };
-  }, [src, isRemote, ctx, resolved]);
+    // assetVersion が変わったら（画像更新時）再解決する
+  }, [src, isRemote, ctx, assetVersion]);
 
   if (failed || (!resolved && !isRemote)) {
     return (
