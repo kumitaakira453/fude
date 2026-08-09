@@ -691,6 +691,12 @@ body {
 
 /* テーブル: ゼブラとヘッダーの下地のみ。列の揃えは GFM の指定を尊重し
    こちらでは text-align を上書きしない（カラムずれ防止） */
+/* prose 既定は先頭/末尾セルの外側 padding が無く、下地と相まって詰まって
+   見えるため、全セルに対称の padding を明示する */
+.mg-prose.mg-editorial table th,
+.mg-prose.mg-editorial table td {
+  padding: 0.5rem 0.9rem;
+}
 .mg-prose.mg-editorial thead th {
   background: var(--mg-panel);
   font-weight: 700;
