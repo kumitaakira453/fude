@@ -883,19 +883,92 @@ body {
   display: none;
 }
 
-/* mermaid: 生成 SVG のサイズを正規化し、巨大化・スクロール不能を防ぐ */
+/* mermaid: 生成 SVG のサイズを正規化。縦長・横長で巨大化しないよう最大サイズを
+   決めて収める。クリックで拡大モーダルを開く。 */
 .mg-mermaid {
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.mg-mermaid::-webkit-scrollbar {
-  display: none;
+  position: relative;
+  overflow: hidden;
+  cursor: zoom-in;
+  border-radius: 0.5rem;
 }
 .mg-mermaid svg {
   max-width: 100% !important;
+  max-height: 440px !important;
   height: auto !important;
+  width: auto !important;
   display: block;
   margin-inline: auto;
+}
+/* 拡大の手がかり（常時表示・控えめ） */
+.mg-mermaid-zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--mg-fg-dim);
+  background: color-mix(in srgb, var(--mg-panel) 82%, transparent);
+  border: 1px solid var(--mg-border);
+  transition: color 0.15s;
+}
+.mg-mermaid:hover .mg-mermaid-zoom {
+  color: var(--mg-accent);
+}
+
+/* Mermaid 拡大モーダル（ライトボックス） */
+.mg-mmd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+  overscroll-behavior: contain;
+}
+.mg-mmd-toolbar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 101;
+  display: flex;
+  gap: 6px;
+}
+.mg-mmd-toolbar button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--mg-fg-dim);
+  background: var(--mg-panel);
+  border: 1px solid var(--mg-border);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.mg-mmd-toolbar button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-mmd-stage {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+.mg-mmd-svg {
+  transform-origin: center center;
+  will-change: transform;
+}
+.mg-mmd-svg svg {
+  max-width: 92vw;
+  max-height: 88vh;
+  width: auto;
+  height: auto;
+  display: block;
 }
 
 /* 検索ハイライト（CSS Custom Highlight API）の配色は index.html の

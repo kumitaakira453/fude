@@ -2,6 +2,8 @@ import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { themeAtom } from "../state/atoms";
+import { Icon } from "./Icon";
+import { MermaidModal } from "./MermaidModal";
 
 let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
 // render 用 id は effect ごとにユニークにする（StrictMode の二重実行で id が衝突し、
@@ -40,6 +42,7 @@ export function Mermaid({ code }: { code: string }) {
   const theme = useAtomValue(themeAtom);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -104,10 +107,23 @@ export function Mermaid({ code }: { code: string }) {
   if (!svg) return null;
 
   return (
-    <div
-      className="mg-mermaid my-4"
-      // mermaid が生成する SVG を挿入（securityLevel: strict でサニタイズ済み）
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <>
+      <div
+        className="mg-mermaid my-4"
+        role="button"
+        title="クリックで拡大"
+        onClick={() => setZoomed(true)}
+      >
+        {/* mermaid が生成する SVG を挿入（securityLevel: strict でサニタイズ済み） */}
+        <div
+          className="mg-mermaid-inner"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+        <span className="mg-mermaid-zoom" aria-hidden>
+          <Icon name="zoom_out_map" size={15} />
+        </span>
+      </div>
+      {zoomed && <MermaidModal svg={svg} onClose={() => setZoomed(false)} />}
+    </>
   );
 }
