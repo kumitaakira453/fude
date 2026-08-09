@@ -123,11 +123,15 @@ function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: It
             onDragOver={(e) => {
               if (!e.dataTransfer.types.includes(DND_MIME)) return;
               e.preventDefault();
+              e.stopPropagation();
               e.dataTransfer.dropEffect = "move";
               ctx.setDragOverPath(node.path);
             }}
             onDragLeave={() => ctx.dragOverPath === node.path && ctx.setDragOverPath(null)}
-            onDrop={(e) => ctx.onMoveDrop(node.path, e)}
+            onDrop={(e) => {
+              e.stopPropagation();
+              ctx.onMoveDrop(node.path, e);
+            }}
             onClick={() => ctx.toggle(node.path)}
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
@@ -309,6 +313,7 @@ export function FileTree() {
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [creating, setCreating] = useState<Creating | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [rootDragOver, setRootDragOver] = useState(false);
   const { createFile, createFolder, renameEntry, deleteEntry, moveEntry } = useWorkspace();
   const filtered = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
@@ -343,9 +348,9 @@ export function FileTree() {
     });
   };
 
-  const startCreate = (node: TreeNode, kind: "file" | "dir") => {
-    setExpandedOpen(node.path);
-    setCreating({ parentPath: node.path, kind });
+  const startCreate = (parentPath: string, kind: "file" | "dir") => {
+    if (parentPath) setExpandedOpen(parentPath);
+    setCreating({ parentPath, kind });
   };
 
   const ctx: ItemCtx = {
@@ -391,21 +396,77 @@ export function FileTree() {
     if (ok) void deleteEntry(node.path, node.kind === "dir");
   };
 
+  const onRootDrop = (e: React.DragEvent) => {
+    setRootDragOver(false);
+    if (!e.dataTransfer.types.includes(DND_MIME)) return;
+    const src = e.dataTransfer.getData(DND_MIME);
+    e.preventDefault();
+    if (src) void moveEntry(src, ""); // ルートへ移動
+  };
+
   return (
-    <div className="py-1 pl-1">
-      {filtered.length === 0 && !creating ? (
-        <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
-          {filter ? "一致するファイルがありません" : "Markdown ファイルがありません"}
-        </div>
-      ) : (
-        filtered.map((n) => <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />)
-      )}
+    <div className="flex min-h-0 flex-col">
+      {/* ルート操作ツールバー（VSCode Explorer 風） */}
+      <div className="flex items-center gap-0.5 px-2 pb-1">
+        <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
+          エクスプローラー
+        </span>
+        <button
+          onClick={() => startCreate("", "file")}
+          title="ルートに新規ファイル"
+          className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+        >
+          <Icon name="note_add" size={16} />
+        </button>
+        <button
+          onClick={() => startCreate("", "dir")}
+          title="ルートに新規フォルダ"
+          className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+        >
+          <Icon name="create_new_folder" size={16} />
+        </button>
+      </div>
+
+      <div
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DND_MIME)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setRootDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setRootDragOver(false);
+        }}
+        onDrop={onRootDrop}
+        className={`min-h-full flex-1 rounded py-1 pl-1 ${
+          rootDragOver ? "ring-1 ring-inset ring-[var(--mg-accent)]" : ""
+        }`}
+      >
+        {creating?.parentPath === "" && (
+          <NameInput
+            initial=""
+            placeholder={creating.kind === "dir" ? "新しいフォルダ名" : "新しいファイル名"}
+            onCommit={ctx.commitCreate}
+            onCancel={ctx.cancelCreate}
+            pad={8}
+            icon={creating.kind === "dir" ? "folder" : "description"}
+          />
+        )}
+        {filtered.length === 0 && !creating ? (
+          <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
+            {filter ? "一致するファイルがありません" : "Markdown ファイルがありません"}
+          </div>
+        ) : (
+          filtered.map((n) => <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />)
+        )}
+      </div>
+
       {menu && (
         <ContextMenu
           menu={menu}
           onClose={() => setMenu(null)}
-          onNewFile={(n) => startCreate(n, "file")}
-          onNewFolder={(n) => startCreate(n, "dir")}
+          onNewFile={(n) => startCreate(n.path, "file")}
+          onNewFolder={(n) => startCreate(n.path, "dir")}
           onRename={(n) => setEditingPath(n.path)}
           onDelete={askDelete}
         />
