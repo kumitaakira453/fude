@@ -135,19 +135,17 @@ export function MarkdownEditor({
       }),
     });
 
-    // プレビューで読んでいた位置(割合)へ復元。カーソルもその位置へ置き、
-    // 該当行を先頭に表示する（切替後すぐ編集を始められる）。
+    // 目線を動かさない復元:
+    // プレビューと同じスクロール割合まで「画面の内容を動かさず」に合わせ、
+    // カーソルは今ビューポート先頭に見えている行へ置く（先頭へ飛ばさない）。
     // CodeMirror のレイアウト確定を待つため二重 rAF で適用する。
     const s = view.scrollDOM;
     const restore = () => {
-      const frac = initialFractionRef.current;
-      if (frac <= 0) return;
-      const len = view.state.doc.length;
-      const pos = Math.min(len, Math.max(0, Math.round(frac * len)));
-      view.dispatch({
-        selection: { anchor: pos },
-        effects: EditorView.scrollIntoView(pos, { y: "start" }),
-      });
+      const max = s.scrollHeight - s.clientHeight;
+      if (max > 0) s.scrollTop = initialFractionRef.current * max;
+      // スクロールは動かさずに、可視先頭行へカーソルを置く
+      const block = view.lineBlockAtHeight(s.scrollTop);
+      view.dispatch({ selection: { anchor: block.from } });
     };
     const raf = requestAnimationFrame(() => requestAnimationFrame(restore));
 
