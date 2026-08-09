@@ -32,6 +32,13 @@ export function EditableBody({
     setEditing(null);
     const block = blocks[index];
     if (!block || newSrc === block.src) return;
+    if (newSrc.trim() === "") {
+      // ブロック丸ごと削除: 継ぎ目の空行を畳んで、跡地に大きな隙間を残さない
+      const before = body.slice(0, block.start).replace(/\n+$/, "");
+      const after = body.slice(block.end).replace(/^\n+/, "");
+      onSaveBody(before && after ? `${before}\n\n${after}` : before + after);
+      return;
+    }
     onSaveBody(replaceBlock(body, block, newSrc));
   };
 

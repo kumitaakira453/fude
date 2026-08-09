@@ -396,10 +396,12 @@ export function useWorkspace() {
     async (rel: string, text: string) => {
       const abs = absOf(rel);
       if (!abs) return;
-      await writeFile(abs, text);
+      // 先にキャッシュを更新（楽観的）＝ UI を即反映し、ブロック削除時に一瞬
+      // 元内容が再表示される「がくっ」を防ぐ。書き込みは後追い。
       const content = new Map(store.get(A.contentCacheAtom));
       content.set(rel, text);
       store.set(A.contentCacheAtom, content);
+      await writeFile(abs, text);
     },
     [absOf, store],
   );
