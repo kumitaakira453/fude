@@ -96,7 +96,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (path && !cache.has(path)) void reloadFile(path);
   }, [path, cache, reloadFile]);
 
-  // 読書プログレス
+  // 読書プログレス + スクロール位置の保存。
+  // 重要: マウント時に即時実行しない。まだ復元前で scrollTop=0 のため、
+  // 保存割合を 0 で上書きしてしまい「切替のたびに先頭へ」戻る原因になる。
+  // 保存は実際のスクロール操作時のみ行う。
   useEffect(() => {
     if (!scroller) return;
     const onScroll = () => {
@@ -105,7 +108,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       setProgress(frac);
       scrollFracRef.current = { path, frac };
     };
-    onScroll();
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => scroller.removeEventListener("scroll", onScroll);
   }, [scroller, raw, path]);
@@ -116,10 +118,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!scroller) return;
     const saved = scrollFracRef.current;
     const frac = saved.path === path ? saved.frac : 0;
-    requestAnimationFrame(() => {
+    setProgress(frac);
+    const raf = requestAnimationFrame(() => {
       const max = scroller.scrollHeight - scroller.clientHeight;
       scroller.scrollTop = max > 0 ? frac * max : 0;
     });
+    return () => cancelAnimationFrame(raf);
   }, [path, scroller]);
 
   useSearchHighlight(content, isActive);

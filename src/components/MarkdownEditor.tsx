@@ -135,13 +135,14 @@ export function MarkdownEditor({
       }),
     });
 
-    // プレビューで読んでいた位置(割合)へ復元
+    // プレビューで読んでいた位置(割合)へ復元。
+    // CodeMirror のレイアウト確定を待つため二重 rAF で適用する。
     const s = view.scrollDOM;
     const restore = () => {
       const max = s.scrollHeight - s.clientHeight;
       if (max > 0) s.scrollTop = initialFractionRef.current * max;
     };
-    requestAnimationFrame(restore);
+    const raf = requestAnimationFrame(() => requestAnimationFrame(restore));
 
     // 編集中のスクロール割合を報告（プレビュー復帰時に使う）
     const onScroll = () => {
@@ -152,6 +153,7 @@ export function MarkdownEditor({
 
     view.focus();
     return () => {
+      cancelAnimationFrame(raf);
       s.removeEventListener("scroll", onScroll);
       view.destroy();
     };
