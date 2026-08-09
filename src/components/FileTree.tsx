@@ -509,7 +509,8 @@ export function FileTree() {
           `[data-path="${CSS.escape(target)}"]`,
         );
         if (!el) return;
-        el.scrollIntoView({ block: "nearest" });
+        // リストが十分スクロール可能なら中央付近に、そうでなければ見える位置に。
+        el.scrollIntoView({ block: "center" });
         el.classList.add("mg-tree-reveal");
         window.setTimeout(() => el.classList.remove("mg-tree-reveal"), 1400);
       });

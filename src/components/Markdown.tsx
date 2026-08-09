@@ -308,6 +308,22 @@ export const Markdown = memo(function Markdown({
             </div>
           );
         },
+        // 列幅はセルではなく内容を包む div で制御する。table-layout:auto のセルへの
+        // min/max-width は CSS 仕様上 undefined で、macOS の WKWebView は無視するため。
+        td({ node: _node, children, ...rest }) {
+          return (
+            <td {...rest}>
+              <div className="mg-cell">{children}</div>
+            </td>
+          );
+        },
+        th({ node: _node, children, ...rest }) {
+          return (
+            <th {...rest}>
+              <div className="mg-cell">{children}</div>
+            </th>
+          );
+        },
       }}
     >
       {body}

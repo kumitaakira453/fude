@@ -529,19 +529,26 @@ button.mg-task-check:hover {
 }
 .mg-table-wrap > table {
   margin: 0;
-  /* ペイン幅にフィットさせ、右端の見切れを防ぐ。列は内容に応じて自動配分し、
-     長い内容はセル内で折り返す。 */
-  width: 100%;
-  max-width: 100%;
+  /* 各列を内容の自然幅（1 行）で並べる。width:auto だと table はラッパーの
+     利用可能幅に自分を縮め、CJK 列を 1 文字ずつ縦潰しにする。max-content なら
+     縮まず自然幅を取り、ペインを超えた分はラッパー(overflow-x:auto)が横スクロール
+     する。長文列は .mg-cell の max-width で 400px に抑えるため総幅は有限。 */
+  width: max-content;
+  max-width: none;
 }
-/* セルは折り返して収める。長い連続トークン（コード識別子等）は、はみ出して
-   見切れるより折り返す方を優先する。ただし min-width で下限を設け、CJK 列が
-   1 文字ずつ縦に潰れるのを防ぐ。 */
 .mg-prose table th,
 .mg-prose table td {
+  padding-block: 0.4rem;
+}
+/* 列幅の制御は内容を包む .mg-cell（ブロック div）で行う。
+   セル(td/th)自身への max-width は table-layout:auto では仕様上 undefined で
+   WKWebView が無視するが、ブロック div の max-width は全エンジンで定義済み。
+   長文列は 400px で折り返し、短い列は自然幅（1 行）を保つ。table は width:auto の
+   ため、総幅がペインを超えたらラッパーが横スクロールし、列は潰れない。 */
+.mg-prose .mg-cell {
+  max-width: 400px;
   white-space: normal;
-  overflow-wrap: anywhere;
-  min-width: 5em;
+  overflow-wrap: break-word;
 }
 
 /* ============================================================
