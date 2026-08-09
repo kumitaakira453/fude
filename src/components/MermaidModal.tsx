@@ -5,11 +5,11 @@ import { Icon } from "./Icon";
 // Mermaid 図を全画面のライトボックスで拡大表示。ホイールでズーム、ドラッグでパン。
 export function MermaidModal({
   svg,
-  bg,
+  dark,
   onClose,
 }: {
   svg: string;
-  bg: string;
+  dark: boolean;
   onClose: () => void;
 }) {
   const [scale, setScale] = useState(1);
@@ -100,7 +100,15 @@ export function MermaidModal({
   }, []);
 
   return createPortal(
-    <div ref={overlayRef} className="mg-mmd-overlay" onClick={handleBackground}>
+    <div
+      ref={overlayRef}
+      className="mg-mmd-overlay"
+      // 背景（動かない）をテーマに合わせ、透明 SVG の線が沈まないようにする
+      style={{
+        background: dark ? "rgba(6,8,12,0.86)" : "rgba(244,245,248,0.94)",
+      }}
+      onClick={handleBackground}
+    >
       <div className="mg-mmd-toolbar" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => zoom(1.2)} title="拡大">
           <Icon name="add" size={18} />
@@ -144,7 +152,6 @@ export function MermaidModal({
           className="mg-mmd-svg"
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: bg,
             // ズームは要素サイズで行う（SVG をベクターのまま再描画＝ボケない）
             width: `calc(92vw * ${scale})`,
             height: `calc(88vh * ${scale})`,

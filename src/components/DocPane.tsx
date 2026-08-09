@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchHighlight } from "../hooks/useSearchHighlight";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
@@ -102,14 +102,28 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
 
+  // 最新の raw/body/path を ref で参照し、saveBody を安定な関数に保つ。
+  // （背景索引などで再レンダーしても Markdown のメモ化が壊れず、Mermaid の
+  //  再パース＝チカチカを防ぐ）
+  const rawRef = useRef(raw);
+  const bodyRef = useRef(body);
+  const pathRef = useRef(path);
+  rawRef.current = raw;
+  bodyRef.current = body;
+  pathRef.current = path;
+
   // ブロック編集の確定: body を差し戻し、フロントマターを保ったまま全文保存する。
   // body は raw の suffix なので、先頭の frontmatter 部分を prefix として復元する。
-  const saveBody = (newBody: string) => {
-    if (!path) return;
-    const full = raw ?? "";
-    const prefix = full.slice(0, full.length - body.length);
-    void saveFile(path, prefix + newBody);
-  };
+  const saveBody = useCallback(
+    (newBody: string) => {
+      const p = pathRef.current;
+      if (!p) return;
+      const full = rawRef.current ?? "";
+      const prefix = full.slice(0, full.length - bodyRef.current.length);
+      void saveFile(p, prefix + newBody);
+    },
+    [saveFile],
+  );
 
   // フロントマター（本文の前にある --- ブロック）の生ソース
   const fmPrefix = (raw ?? "").slice(0, (raw ?? "").length - body.length);
