@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue, useStore } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchHighlight } from "../hooks/useSearchHighlight";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -11,6 +11,9 @@ import {
   editorialAtom,
   fontAtom,
   readingWidthAtom,
+  revealInTreeAtom,
+  sidebarOpenAtom,
+  sidebarTabAtom,
   tocOpenAtom,
   watchModeAtom,
   type Pane,
@@ -204,6 +207,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const doClosePane = () => closePane(store, pane.id);
 
+  // パンくずのセグメントをクリック → サイドバーを開き、ツリーで対象を展開/強調
+  const setSidebarOpen = useSetAtom(sidebarOpenAtom);
+  const setSidebarTab = useSetAtom(sidebarTabAtom);
+  const setReveal = useSetAtom(revealInTreeAtom);
+  const revealInTree = (target: string) => {
+    setSidebarOpen(true);
+    setSidebarTab("files");
+    setReveal({ path: target, nonce: Date.now() });
+  };
+
   return (
     <section
       onMouseDown={() => !isActive && setActiveId(pane.id)}
@@ -216,7 +229,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* ヘッダー */}
       <header className="flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
-          {path ? path.split("/").join("  ›  ") : "ファイル未選択"}
+          {path ? (
+            path.split("/").map((seg, i, arr) => (
+              <span key={i}>
+                {i > 0 && <span className="mx-1.5 opacity-60">›</span>}
+                <button
+                  onClick={() => revealInTree(arr.slice(0, i + 1).join("/"))}
+                  title="ツリーで表示"
+                  className="rounded hover:text-[var(--mg-accent)] hover:underline"
+                >
+                  {seg}
+                </button>
+              </span>
+            ))
+          ) : (
+            <span>ファイル未選択</span>
+          )}
         </div>
         <Tooltip
           align="end"

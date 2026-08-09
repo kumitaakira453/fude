@@ -1,6 +1,6 @@
 import { confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { DND_MIME } from "../lib/dnd";
@@ -10,6 +10,7 @@ import {
   activeFolderIdAtom,
   activePaneAtom,
   expandedByFolderAtom,
+  revealInTreeAtom,
   treeAtom,
   treeFilterAtom,
 } from "../state/atoms";
@@ -142,6 +143,7 @@ function TreeItem({
             role="button"
             tabIndex={0}
             draggable
+            data-path={node.path}
             onDragStart={startDrag}
             onDragOver={(e) => {
               if (!e.dataTransfer.types.includes(DND_MIME)) return;
@@ -254,6 +256,7 @@ function TreeItem({
   return (
     <button
       draggable
+      data-path={node.path}
       onDragStart={startDrag}
       onClick={() => openFile(node.path)}
       onContextMenu={(e) => ctx.onContext(e, node)}
@@ -480,6 +483,43 @@ export function FileTree() {
     });
   };
 
+  // パンくず等からの「ツリーで表示」: 祖先を展開し、対象行へスクロール＋強調
+  const listRef = useRef<HTMLDivElement>(null);
+  const reveal = useAtomValue(revealInTreeAtom);
+  useEffect(() => {
+    if (!reveal || !activeFolderId) return;
+    const target = reveal.path;
+    const segs = target.split("/");
+    const ancestors: string[] = [];
+    for (let i = 1; i < segs.length; i++) {
+      ancestors.push(segs.slice(0, i).join("/"));
+    }
+    if (ancestors.length) {
+      setExpandedByFolder((prev) => {
+        const set = new Set(prev[activeFolderId] ?? []);
+        ancestors.forEach((a) => set.add(a));
+        return { ...prev, [activeFolderId]: [...set] };
+      });
+    }
+    // 展開が反映されてから対象行を探してスクロール＆強調
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const el = listRef.current?.querySelector<HTMLElement>(
+          `[data-path="${CSS.escape(target)}"]`,
+        );
+        if (!el) return;
+        el.scrollIntoView({ block: "nearest" });
+        el.classList.add("mg-tree-reveal");
+        window.setTimeout(() => el.classList.remove("mg-tree-reveal"), 1400);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [reveal, activeFolderId, setExpandedByFolder]);
+
   const startCreate = (parentPath: string, kind: "file" | "dir") => {
     if (parentPath) setExpandedOpen(parentPath);
     setCreating({ parentPath, kind });
@@ -563,6 +603,7 @@ export function FileTree() {
       </div>
 
       <div
+        ref={listRef}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes(DND_MIME)) return;
           e.preventDefault();

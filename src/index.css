@@ -529,21 +529,17 @@ button.mg-task-check:hover {
 }
 .mg-table-wrap > table {
   margin: 0;
-  /* コンテナ幅に合わせて列を縮めない。各列は内容幅（セル上限 400px）を確保し、
-     日本語が 200px 付近で折り返される問題を解消。400px を超えた分だけ折り返し、
-     テーブル全体が広い時は横スクロールする。 */
-  width: max-content;
-  max-width: none;
+  /* ペイン幅にフィットさせ、右端の見切れを防ぐ。列は内容に応じて自動配分し、
+     長い内容はセル内で折り返す。 */
+  width: 100%;
+  max-width: 100%;
 }
-/* セル幅は 400px を上限に。短いセルは 1 行のまま、超える内容は折り返す。
-   ただし単語の途中では折り返さない（英語の識別子が読みづらくなるのを回避）。
-   400px を超える連続トークンは折らず、表全体を横スクロールさせる。 */
+/* セルは折り返して収める。長い連続トークン（コード識別子等）は、はみ出して
+   見切れるより折り返す方を優先する。 */
 .mg-prose table th,
 .mg-prose table td {
-  max-width: 400px;
   white-space: normal;
-  overflow-wrap: normal;
-  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ============================================================
@@ -551,6 +547,29 @@ button.mg-task-check:hover {
    構造を読み取り「開いた瞬間に読ませる」組版へ変換する
    ============================================================ */
 /* 本文サイズは通常描画と同じに保つ（editorial で拡大しない） */
+
+/* パンくずから「ツリーで表示」した行の一時ハイライト */
+.mg-tree-reveal {
+  animation: mgTreeReveal 1.4s ease;
+}
+@keyframes mgTreeReveal {
+  0%,
+  55% {
+    background: var(--mg-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--mg-accent);
+    border-radius: 6px;
+  }
+  100% {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+    border-radius: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-tree-reveal {
+    animation: none;
+  }
+}
 
 /* ============================================================
    ブロック単位インライン編集

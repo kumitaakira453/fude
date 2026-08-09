@@ -93,6 +93,12 @@ export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(
   {},
 );
 
+// ---- ツリーで対象を表示（パンくずクリック等） ----
+// path のフォルダ/ファイルをツリー上で展開・スクロール・強調するための信号
+export const revealInTreeAtom = atom<{ path: string; nonce: number } | null>(
+  null,
+);
+
 // ---- 検索・パレット ----
 export const treeFilterAtom = atom<string>("");
 export const sidebarTabAtom = atom<"files" | "search">("files");
