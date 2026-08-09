@@ -140,8 +140,6 @@ function standaloneLink(
   return null;
 }
 
-const NUMERIC_RE = /^[+\-−]?[\d,]+(\.\d+)?\s*%?$/;
-
 // スクロール等での親再レンダー時に再パースしないよう body でメモ化する。
 // （再パースは画像 blob の revoke や mermaid のチカチカを引き起こす）
 export const Markdown = memo(function Markdown({
@@ -152,8 +150,6 @@ export const Markdown = memo(function Markdown({
   editorial: boolean;
 }) {
   const ctx = useContext(markdownContext);
-  // レンダーごとにリセットされる、先頭段落（リード文）の消費フラグ
-  const lead = { used: false };
 
   return (
     <ReactMarkdown
@@ -188,15 +184,10 @@ export const Markdown = memo(function Markdown({
           return <pre>{children}</pre>;
         },
         p({ children }) {
+          // 単独の外部リンク → リンクカード
           if (editorial) {
-            // 単独の外部リンク → リンクカード
             const link = standaloneLink(children);
             if (link) return <LinkCard href={link.href} text={link.text} />;
-            // 本文の最初の段落 → リード文
-            if (!lead.used) {
-              lead.used = true;
-              return <p className="mg-lead">{children}</p>;
-            }
           }
           return <p>{children}</p>;
         },
@@ -218,11 +209,6 @@ export const Markdown = memo(function Markdown({
           return (
             <ol className={editorial ? "mg-steps" : undefined}>{children}</ol>
           );
-        },
-        td({ children }) {
-          const isNum =
-            editorial && NUMERIC_RE.test(childrenToString(children).trim());
-          return <td className={isNum ? "mg-num" : undefined}>{children}</td>;
         },
         a({ href, children, ...props }) {
           const h = href ?? "";

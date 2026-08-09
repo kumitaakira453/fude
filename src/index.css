@@ -527,18 +527,7 @@ body {
    エディトリアル組版（ベータ） — .mg-editorial で全面ゲート
    構造を読み取り「開いた瞬間に読ませる」組版へ変換する
    ============================================================ */
-.mg-prose.mg-editorial {
-  font-size: 16.5px;
-  line-height: 1.8;
-}
-
-/* リード文: 本文の最初の段落を大きく淡く */
-.mg-prose.mg-editorial p.mg-lead {
-  font-size: 1.22em;
-  line-height: 1.62;
-  color: var(--mg-fg);
-  margin-bottom: 1.4em;
-}
+/* 本文サイズは通常描画と同じに保つ（editorial で拡大しない） */
 
 /* 見出し: 下線ではなくアクセントの色帯 */
 .mg-prose.mg-editorial h2 {
@@ -562,26 +551,13 @@ body {
   padding-left: 0.7rem;
 }
 
-/* 通常の引用 → プルクオート */
+/* 通常の引用: 本文サイズのまま、左のアクセントバーだけ整える（拡大しない） */
 .mg-prose.mg-editorial blockquote.mg-pull {
   background: transparent;
-  border-left: 0;
+  border-left: 3px solid var(--mg-accent);
   border-radius: 0;
-  padding: 0.2rem 0 0.2rem 1.6rem;
-  position: relative;
-  font-size: 1.2em;
-  line-height: 1.55;
-  color: var(--mg-fg);
-}
-.mg-prose.mg-editorial blockquote.mg-pull::before {
-  content: "\201C";
-  position: absolute;
-  left: -0.15rem;
-  top: 0.55rem;
-  font-size: 2.6em;
-  line-height: 0;
-  color: var(--mg-accent);
-  opacity: 0.5;
+  padding: 0.15rem 0 0.15rem 1rem;
+  color: var(--mg-fg-dim);
 }
 
 /* コールアウト（> [!NOTE] など） */
@@ -713,21 +689,15 @@ body {
   display: none;
 }
 
-/* テーブル: ゼブラ・ヘッダー・数値右揃え */
+/* テーブル: ゼブラとヘッダーの下地のみ。列の揃えは GFM の指定を尊重し
+   こちらでは text-align を上書きしない（カラムずれ防止） */
 .mg-prose.mg-editorial thead th {
   background: var(--mg-panel);
-  text-transform: uppercase;
-  font-size: 0.72em;
-  letter-spacing: 0.06em;
-  color: var(--mg-muted);
   font-weight: 700;
+  color: var(--mg-fg);
 }
 .mg-prose.mg-editorial tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
-}
-.mg-prose.mg-editorial td.mg-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 /* リンクカード（行独立の外部リンク） */
