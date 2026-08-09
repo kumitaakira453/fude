@@ -147,6 +147,9 @@ export function useWorkspace() {
       const saved = store.get(A.savedLayoutsAtom)[activeId];
       store.set(A.activeFolderIdAtom, activeId);
       resetLayout(store);
+      // 前フォルダの内容が検索/キャッシュに残らないよう初期化
+      store.set(A.contentCacheAtom, new Map());
+      store.set(A.mtimeCacheAtom, new Map());
       await refreshTree();
       if (saved) {
         const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
