@@ -74,6 +74,8 @@ export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
 );
 export const sidebarOpenAtom = atomWithStorage<boolean>("mdglow:sidebar", true);
 export const tocOpenAtom = atomWithStorage<boolean>("mdglow:toc", true);
+// エディトリアル組版（ベータ）: 構造を読み取って組版を強化する描画モード
+export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
 
 // ---- ファイルツリー開閉状態（フォルダ ID ごとに永続化） ----
 export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(

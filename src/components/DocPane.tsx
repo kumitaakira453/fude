@@ -8,6 +8,7 @@ import { closePane } from "../lib/ui";
 import {
   activePaneIdAtom,
   contentCacheAtom,
+  editorialAtom,
   fontAtom,
   readingWidthAtom,
   tocOpenAtom,
@@ -32,6 +33,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const cache = useAtomValue(contentCacheAtom);
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
+  const editorial = useAtomValue(editorialAtom);
   const tocOpen = useAtomValue(tocOpenAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
@@ -239,11 +241,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 <article
                   ref={setContent}
                   style={{ fontFamily: fontStack(font) }}
-                  className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}
+                  className={`mg-prose prose ${
+                    editorial ? "mg-editorial" : ""
+                  } ${WIDTH_CLASS[width]} mx-auto`}
                 >
                   {data && <Frontmatter data={data} />}
                   <markdownContext.Provider value={ctx}>
-                    <Markdown body={body} />
+                    <Markdown body={body} editorial={editorial} />
                   </markdownContext.Provider>
                 </article>
               </div>

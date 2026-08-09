@@ -2,13 +2,19 @@ import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { FONTS } from "../lib/fonts";
 import { THEMES } from "../lib/themes";
-import { fontAtom, readingWidthAtom, themeAtom } from "../state/atoms";
+import {
+  editorialAtom,
+  fontAtom,
+  readingWidthAtom,
+  themeAtom,
+} from "../state/atoms";
 import { Icon } from "./Icon";
 
 export function ThemeSwitcher() {
   const [theme, setTheme] = useAtom(themeAtom);
   const [font, setFont] = useAtom(fontAtom);
   const [width, setWidth] = useAtom(readingWidthAtom);
+  const [editorial, setEditorial] = useAtom(editorialAtom);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -104,6 +110,38 @@ export function ThemeSwitcher() {
               </button>
             ))}
           </div>
+
+          <div className="my-2 h-px bg-[var(--mg-border)]" />
+          <button
+            onClick={() => setEditorial((v) => !v)}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
+          >
+            <Icon
+              name="auto_awesome"
+              size={17}
+              fill={editorial}
+              className={
+                editorial ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+              }
+            />
+            <span className="flex-1 text-[13px] text-[var(--mg-fg-dim)]">
+              エディトリアル組版
+            </span>
+            <span className="rounded bg-[var(--mg-accent-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--mg-accent)]">
+              Beta
+            </span>
+            <span
+              className={`relative h-4 w-7 shrink-0 rounded-full transition ${
+                editorial ? "bg-[var(--mg-accent)]" : "bg-[var(--mg-border)]"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${
+                  editorial ? "left-3.5" : "left-0.5"
+                }`}
+              />
+            </span>
+          </button>
         </div>
       )}
     </div>
