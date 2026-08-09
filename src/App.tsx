@@ -47,6 +47,28 @@ export default function App() {
     };
   }, []);
 
+  // リンククリックの安全ネット: 未処理の外部リンクは opener で開き、
+  // それ以外のナビゲーション（生HTML内の相対リンク等）は抑止して
+  // WebView 遷移（=全画面白）を防ぐ。
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as
+        | HTMLAnchorElement
+        | null;
+      if (!a) return;
+      const href = a.getAttribute("href") ?? "";
+      if (/^(https?:|mailto:|tel:)/.test(href)) {
+        e.preventDefault();
+        void import("@tauri-apps/plugin-opener").then((m) => m.openUrl(href));
+      } else if (href && !href.startsWith("#")) {
+        e.preventDefault(); // アプリ外/相対への遷移は抑止
+      }
+    };
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }, []);
+
   // 分割レイアウトをフォルダごとに永続化
   useEffect(() => {
     if (!activeFolderId) return;

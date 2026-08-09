@@ -5,6 +5,7 @@ import {
   useContext,
   type ReactNode,
 } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
@@ -81,8 +82,17 @@ export const Markdown = memo(function Markdown({ body }: { body: string }) {
         a({ href, children, ...props }) {
           const h = href ?? "";
           if (/^(https?:|mailto:|tel:)/.test(h)) {
+            // WKWebView では target=_blank でも本体が遷移してしまう。
+            // opener で外部（既定ブラウザ/メールクライアント）に開く。
             return (
-              <a href={h} target="_blank" rel="noreferrer" {...props}>
+              <a
+                href={h}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void openUrl(h);
+                }}
+                {...props}
+              >
                 {children}
               </a>
             );
