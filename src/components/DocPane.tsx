@@ -9,11 +9,12 @@ import {
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
-import { parseFrontmatter, extractMeta } from "../lib/frontmatter";
+import { parseFrontmatter } from "../lib/frontmatter";
 import { fontStack } from "../lib/fonts";
 import { closePane } from "../lib/ui";
 import { markdownContext } from "./MarkdownContext";
 import { Markdown } from "./Markdown";
+import { Frontmatter } from "./Frontmatter";
 import { Toc } from "./Toc";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useSearchHighlight } from "../hooks/useSearchHighlight";
@@ -44,7 +45,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const raw = path ? cache.get(path) : undefined;
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
-  const meta = useMemo(() => extractMeta(data), [data]);
 
   // path はあるが未読込なら読み込む
   useEffect(() => {
@@ -139,25 +139,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 style={{ fontFamily: fontStack(font) }}
                 className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}
               >
-                {(meta.title || meta.tags.length > 0) && (
-                  <div className="mb-6 border-b border-[var(--mg-border)] pb-4">
-                    {meta.title && (
-                      <h1 className="!mb-2 !mt-0">{meta.title}</h1>
-                    )}
-                    {meta.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {meta.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="rounded-full bg-[var(--mg-accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--mg-accent)]"
-                          >
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {data && <Frontmatter data={data} />}
                 <markdownContext.Provider value={ctx}>
                   <Markdown body={body} />
                 </markdownContext.Provider>

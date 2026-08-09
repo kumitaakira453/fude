@@ -22,6 +22,12 @@ export function useHotkeys() {
       } else if (mod && e.key === "\\") {
         e.preventDefault();
         splitPane(store, "row");
+      } else if (mod && e.key === "[") {
+        e.preventDefault();
+        history.back();
+      } else if (mod && e.key === "]") {
+        e.preventDefault();
+        history.forward();
       } else if (e.key === "Escape") {
         store.set(A.paletteOpenAtom, false);
         store.set(A.highlightAtom, null);

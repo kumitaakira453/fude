@@ -17,28 +17,31 @@ export function useUrlSync() {
   // 初期復元が完了するまで URL 書き込みを止める（マウント時のハッシュ上書き=クロバー防止）
   const readyRef = useRef(false);
 
-  const applyUrl = useRef(async (state: { folderId?: string; file?: string }) => {
-    applyingRef.current = true;
-    try {
-      const { folderId, file } = state;
-      if (!folderId) {
-        store.set(A.activeFolderIdAtom, null);
-        return;
+  const applyUrl = useRef(
+    async (state: { folderId?: string; file?: string }, opts: { force?: boolean } = {}) => {
+      applyingRef.current = true;
+      try {
+        const { folderId, file } = state;
+        if (!folderId) {
+          store.set(A.activeFolderIdAtom, null);
+          return;
+        }
+        const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
+        if (!entry) {
+          store.set(A.activeFolderIdAtom, null);
+          return;
+        }
+        if (store.get(A.activeFolderIdAtom) !== folderId) {
+          await openFolder(entry.path);
+        }
+        // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
+        // 戻る/進む(popstate)では force で必ず切り替える。
+        if (file && (opts.force || !store.get(A.activePaneAtom)?.path)) openFile(file);
+      } finally {
+        applyingRef.current = false;
       }
-      const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
-      if (!entry) {
-        store.set(A.activeFolderIdAtom, null);
-        return;
-      }
-      if (store.get(A.activeFolderIdAtom) !== folderId) {
-        await openFolder(entry.path);
-      }
-      // 保存レイアウトで既にファイルが復元されている場合は URL で上書きしない
-      if (file && !store.get(A.activePaneAtom)?.path) openFile(file);
-    } finally {
-      applyingRef.current = false;
-    }
-  });
+    },
+  );
 
   // 初期復元（この完了までは URL 書き込みを行わない）
   useEffect(() => {
@@ -59,7 +62,7 @@ export function useUrlSync() {
 
   // popstate（ブラウザの戻る/進む）
   useEffect(() => {
-    const onPop = () => void applyUrl.current(parseHash());
+    const onPop = () => void applyUrl.current(parseHash(), { force: true });
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);

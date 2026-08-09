@@ -73,6 +73,10 @@ export function Toolbar() {
         <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">mdglow</span>
       </button>
 
+      <div className="mx-0.5 h-5 w-px bg-[var(--mg-border)]" />
+      <IconButton onClick={() => history.back()} title="戻る (⌘[)" icon="arrow_back" />
+      <IconButton onClick={() => history.forward()} title="進む (⌘])" icon="arrow_forward" />
+
       <div className="ml-auto flex items-center gap-0.5">
         <IconButton
           onClick={() => {
