@@ -1,6 +1,8 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   activeFolderIdAtom,
+  canBackAtom,
+  canForwardAtom,
   panesAtom,
   sidebarOpenAtom,
   sidebarTabAtom,
@@ -51,6 +53,8 @@ export function Toolbar() {
   const [, setTab] = useAtom(sidebarTabAtom);
   const [, setPalette] = useAtom(paletteOpenAtom);
   const panes = useAtomValue(panesAtom);
+  const canBack = useAtomValue(canBackAtom);
+  const canForward = useAtomValue(canForwardAtom);
   const isSplit = panes.length > 1;
   const isLg = useMediaQuery("(min-width: 1024px)");
   // 目次は lg 以上かつ単一ペインのときのみ表示可能
@@ -74,8 +78,8 @@ export function Toolbar() {
       </button>
 
       <div className="mx-0.5 h-5 w-px bg-[var(--mg-border)]" />
-      <IconButton onClick={() => history.back()} title="戻る (⌘[)" icon="arrow_back" />
-      <IconButton onClick={() => history.forward()} title="進む (⌘])" icon="arrow_forward" />
+      <IconButton onClick={() => history.back()} title="戻る (⌘[)" icon="arrow_back" disabled={!canBack} />
+      <IconButton onClick={() => history.forward()} title="進む (⌘])" icon="arrow_forward" disabled={!canForward} />
 
       <div className="ml-auto flex items-center gap-0.5">
         <IconButton

@@ -7,10 +7,16 @@ import {
   readFile,
   imageUrl,
   peekImageUrl,
+  writeFile,
+  createDir,
+  removePath,
+  renamePath,
+  pathExists,
+  isMarkdown,
   type TreeNode,
 } from "../lib/fsAccess";
 import { registerFolder, loadFolders } from "../lib/idb";
-import { resetLayout, reviveLayout, setPanePath } from "../lib/ui";
+import { remapLeafPaths, resetLayout, reviveLayout, setPanePath } from "../lib/ui";
 
 // path 正規化（. / .. を解決）。
 function resolvePath(baseDir: string, rel: string): string {
@@ -27,6 +33,15 @@ function resolvePath(baseDir: string, rel: string): string {
 function dirOf(path: string): string {
   const i = path.lastIndexOf("/");
   return i === -1 ? "" : path.slice(0, i);
+}
+
+function baseOf(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i === -1 ? path : path.slice(i + 1);
+}
+
+function joinRel(a: string, b: string): string {
+  return a ? `${a}/${b}` : b;
 }
 
 export function useWorkspace() {
@@ -171,6 +186,124 @@ export function useWorkspace() {
     [getRootPath],
   );
 
+  // ---- ファイル操作（Obsidian 風の編集機能） ----
+  const absOf = useCallback(
+    (rel: string): string | null => {
+      const root = getRootPath();
+      return root ? `${root}/${rel}` : null;
+    },
+    [getRootPath],
+  );
+
+  // 一意な名前を作る（重複時に連番）。
+  const uniqueRel = useCallback(async (rel: string): Promise<string> => {
+    const abs = absOf(rel);
+    if (!abs || !(await pathExists(abs))) return rel;
+    const dir = dirOf(rel);
+    const base = baseOf(rel);
+    const dot = base.lastIndexOf(".");
+    const stem = dot > 0 ? base.slice(0, dot) : base;
+    const ext = dot > 0 ? base.slice(dot) : "";
+    for (let i = 2; i < 1000; i++) {
+      const cand = joinRel(dir, `${stem} ${i}${ext}`);
+      const a = absOf(cand);
+      if (a && !(await pathExists(a))) return cand;
+    }
+    return rel;
+  }, [absOf]);
+
+  const createFile = useCallback(
+    async (parentRel: string, name: string) => {
+      let fileName = name.trim();
+      if (!fileName) return;
+      if (!/\.[a-z0-9]+$/i.test(fileName)) fileName += ".md";
+      const rel = await uniqueRel(joinRel(parentRel, fileName));
+      const abs = absOf(rel);
+      if (!abs) return;
+      const stem = baseOf(rel).replace(/\.[^.]+$/, "");
+      await writeFile(abs, isMarkdown(rel) ? `# ${stem}\n\n` : "");
+      await refreshTree();
+      openFile(rel);
+    },
+    [absOf, uniqueRel, refreshTree, openFile],
+  );
+
+  const createFolder = useCallback(
+    async (parentRel: string, name: string) => {
+      const n = name.trim();
+      if (!n) return;
+      const rel = await uniqueRel(joinRel(parentRel, n));
+      const abs = absOf(rel);
+      if (!abs) return;
+      await createDir(abs);
+      await refreshTree();
+    },
+    [absOf, uniqueRel, refreshTree],
+  );
+
+  const renameEntry = useCallback(
+    async (rel: string, newName: string, isDir: boolean) => {
+      const trimmed = newName.trim();
+      if (!trimmed) return;
+      let base = trimmed;
+      if (!isDir && !/\.[a-z0-9]+$/i.test(base)) base += ".md";
+      const newRel = joinRel(dirOf(rel), base);
+      if (newRel === rel) return;
+      const oldAbs = absOf(rel);
+      const newAbs = absOf(newRel);
+      if (!oldAbs || !newAbs) return;
+      await renamePath(oldAbs, newAbs);
+      remapLeafPaths(store, (p) => {
+        if (p === rel) return newRel;
+        if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
+        return p;
+      });
+      await refreshTree();
+    },
+    [absOf, store, refreshTree],
+  );
+
+  const deleteEntry = useCallback(
+    async (rel: string, isDir: boolean) => {
+      const abs = absOf(rel);
+      if (!abs) return;
+      await removePath(abs, isDir);
+      remapLeafPaths(store, (p) => (p === rel || (p && p.startsWith(rel + "/")) ? null : p));
+      await refreshTree();
+    },
+    [absOf, store, refreshTree],
+  );
+
+  const moveEntry = useCallback(
+    async (rel: string, destDirRel: string) => {
+      if (rel === destDirRel || destDirRel.startsWith(rel + "/") || dirOf(rel) === destDirRel) return;
+      const newRel = await uniqueRel(joinRel(destDirRel, baseOf(rel)));
+      const oldAbs = absOf(rel);
+      const newAbs = absOf(newRel);
+      if (!oldAbs || !newAbs) return;
+      await renamePath(oldAbs, newAbs);
+      remapLeafPaths(store, (p) => {
+        if (p === rel) return newRel;
+        if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
+        return p;
+      });
+      await refreshTree();
+    },
+    [absOf, uniqueRel, store, refreshTree],
+  );
+
+  const saveFile = useCallback(
+    async (rel: string, text: string) => {
+      const abs = absOf(rel);
+      if (!abs) return;
+      await writeFile(abs, text);
+      const content = new Map(store.get(A.contentCacheAtom));
+      content.set(rel, text);
+      store.set(A.contentCacheAtom, content);
+    },
+    [absOf, store],
+  );
+
   return {
     getRootPath,
     refreshFolders,
@@ -181,5 +314,11 @@ export function useWorkspace() {
     navigate,
     resolveAsset,
     peekAsset,
+    createFile,
+    createFolder,
+    renameEntry,
+    deleteEntry,
+    moveEntry,
+    saveFile,
   };
 }

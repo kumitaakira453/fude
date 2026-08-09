@@ -34,15 +34,49 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   const store = useStore();
-  const { navigate, resolveAsset, peekAsset, reloadFile } = useWorkspace();
+  const { navigate, resolveAsset, peekAsset, reloadFile, saveFile } = useWorkspace();
 
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
   const [progress, setProgress] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
 
   const isActive = activeId === pane.id;
   const path = pane.path;
   const raw = path ? cache.get(path) : undefined;
+
+  const enterEdit = () => {
+    setDraft(raw ?? "");
+    setEditing(true);
+  };
+  const save = () => {
+    if (path) void saveFile(path, draft);
+  };
+  const exitEdit = () => {
+    if (path && draft !== (raw ?? "")) void saveFile(path, draft);
+    setEditing(false);
+  };
+  const toggleEdit = () => (editing ? exitEdit() : enterEdit());
+
+  // ファイル切替で編集モード解除
+  useEffect(() => {
+    setEditing(false);
+  }, [path]);
+
+  // ⌘E で編集/プレビュー切替（アクティブペインのみ）
+  useEffect(() => {
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
+        e.preventDefault();
+        toggleEdit();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, editing, draft, raw, path]);
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
 
@@ -110,6 +144,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 : "bg-zinc-500"
           }`}
         />
+        {path && (
+          <button
+            onClick={toggleEdit}
+            title={editing ? "プレビュー (⌘E)" : "編集 (⌘E)"}
+            className={`grid h-6 w-6 place-items-center rounded transition hover:bg-[var(--mg-hover)] ${
+              editing ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)] hover:text-[var(--mg-fg)]"
+            }`}
+          >
+            <Icon name={editing ? "visibility" : "edit"} size={15} fill={editing} />
+          </button>
+        )}
         {isSplit && (
           <button
             onClick={doClosePane}
@@ -131,7 +176,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
-        <div ref={setScroller} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+        {editing && path ? (
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+                e.preventDefault();
+                save();
+              }
+            }}
+            spellCheck={false}
+            className="mg-editor min-w-0 flex-1 resize-none bg-[var(--mg-bg)] px-6 py-8 font-mono text-[13.5px] leading-relaxed text-[var(--mg-fg)] outline-none sm:px-10"
+            placeholder="# 見出し…"
+          />
+        ) : (
+          <div ref={setScroller} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {path ? (
             <div className="px-6 py-8 sm:px-10">
               <article
@@ -148,9 +208,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           ) : (
             <EmptyPane />
           )}
-        </div>
+          </div>
+        )}
 
-        {!isSplit && tocOpen && path && (
+        {!editing && !isSplit && tocOpen && path && (
           <Toc content={content} scroller={scroller} contentKey={path + (raw?.length ?? 0)} />
         )}
       </div>

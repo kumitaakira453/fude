@@ -1,6 +1,16 @@
 // Tauri ネイティブ FS 経由でローカルフォルダを走査・読込する。
 // ブラウザの File System Access API は使わない（許可プロンプト不要・絶対パス取得可）。
-import { readDir, readFile as readBinaryFile, readTextFile, stat } from "@tauri-apps/plugin-fs";
+import {
+  readDir,
+  readFile as readBinaryFile,
+  readTextFile,
+  stat,
+  writeTextFile,
+  mkdir,
+  remove,
+  rename,
+  exists,
+} from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
 
 export const MD_EXTENSIONS = [".md", ".markdown", ".mdx", ".mdown", ".mkd"];
@@ -78,6 +88,27 @@ export function flattenFiles(nodes: TreeNode[]): TreeNode[] {
 export interface FileData {
   text: string;
   lastModified: number;
+}
+
+// ---- 書き込み系（編集・ファイル操作） ----
+export async function writeFile(abs: string, text: string): Promise<void> {
+  await writeTextFile(abs, text);
+}
+export async function createDir(abs: string): Promise<void> {
+  await mkdir(abs, { recursive: true });
+}
+export async function removePath(abs: string, recursive: boolean): Promise<void> {
+  await remove(abs, { recursive });
+}
+export async function renamePath(oldAbs: string, newAbs: string): Promise<void> {
+  await rename(oldAbs, newAbs);
+}
+export async function pathExists(abs: string): Promise<boolean> {
+  try {
+    return await exists(abs);
+  } catch {
+    return false;
+  }
 }
 
 export async function readFile(abs: string): Promise<FileData> {

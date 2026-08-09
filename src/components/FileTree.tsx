@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtom, useAtomValue, useStore } from "jotai";
+import { confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
 import {
   activeFolderIdAtom,
   activePaneAtom,
@@ -20,6 +21,10 @@ interface MenuState {
   y: number;
   node: TreeNode;
 }
+interface Creating {
+  parentPath: string;
+  kind: "file" | "dir";
+}
 
 function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
   if (!q) return nodes;
@@ -36,70 +41,123 @@ function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
   return out;
 }
 
-function IndentGuides({ depth }: { depth: number }) {
-  if (depth === 0) return null;
+interface ItemCtx {
+  expanded: Set<string>;
+  filtering: boolean;
+  toggle: (path: string) => void;
+  onContext: (e: React.MouseEvent, node: TreeNode) => void;
+  editingPath: string | null;
+  commitRename: (node: TreeNode, name: string) => void;
+  cancelRename: () => void;
+  creating: Creating | null;
+  commitCreate: (name: string) => void;
+  cancelCreate: () => void;
+  dragOverPath: string | null;
+  setDragOverPath: (p: string | null) => void;
+  onMoveDrop: (destDir: string, e: React.DragEvent) => void;
+}
+
+function NameInput({
+  initial,
+  placeholder,
+  onCommit,
+  onCancel,
+  pad,
+  icon,
+}: {
+  initial: string;
+  placeholder?: string;
+  onCommit: (v: string) => void;
+  onCancel: () => void;
+  pad: number;
+  icon: string;
+}) {
+  const [v, setV] = useState(initial);
   return (
-    <>
-      {Array.from({ length: depth }).map((_, i) => (
-        <span key={i} className="w-3.5 shrink-0 self-stretch border-l border-[var(--mg-border)]" />
-      ))}
-    </>
+    <div className="flex h-7 items-center gap-1" style={{ paddingLeft: `${pad}px` }}>
+      <Icon name={icon} size={16} className="shrink-0 text-[var(--mg-muted)]" />
+      <input
+        autoFocus
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === "Enter") onCommit(v);
+          else if (e.key === "Escape") onCancel();
+        }}
+        onBlur={() => onCommit(v)}
+        placeholder={placeholder}
+        className="min-w-0 flex-1 rounded border border-[var(--mg-accent)] bg-[var(--mg-input-bg)] px-1 py-0.5 text-[13px] outline-none"
+      />
+    </div>
   );
 }
 
-function TreeItem({
-  node,
-  depth,
-  filtering,
-  expanded,
-  toggle,
-  onContext,
-}: {
-  node: TreeNode;
-  depth: number;
-  filtering: boolean;
-  expanded: Set<string>;
-  toggle: (path: string) => void;
-  onContext: (e: React.MouseEvent, node: TreeNode) => void;
-}) {
+function TreeItem({ node, depth, ctx }: { node: TreeNode; depth: number; ctx: ItemCtx }) {
   const activePane = useAtomValue(activePaneAtom);
   const { openFile } = useWorkspace();
-  const isOpen = filtering || expanded.has(node.path);
+  const isOpen = ctx.filtering || ctx.expanded.has(node.path);
+  const basePad = depth * 14 + 8;
+
+  const startDrag = (e: React.DragEvent) => {
+    e.dataTransfer.setData(DND_MIME, node.path);
+    e.dataTransfer.effectAllowed = "copyMove";
+  };
 
   if (node.kind === "dir") {
+    const isDropTarget = ctx.dragOverPath === node.path;
     return (
       <div>
-        <button
-          onClick={() => toggle(node.path)}
-          onContextMenu={(e) => onContext(e, node)}
-          className="group flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[13px] text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)]"
-        >
-          <IndentGuides depth={depth} />
-          <Icon
-            name="chevron_right"
-            size={18}
-            className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
+        {ctx.editingPath === node.path ? (
+          <NameInput
+            initial={node.name}
+            onCommit={(v) => ctx.commitRename(node, v)}
+            onCancel={ctx.cancelRename}
+            pad={basePad}
+            icon="folder"
           />
-          <Icon
-            name={isOpen ? "folder_open" : "folder"}
-            size={17}
-            fill
-            className="shrink-0 text-[var(--mg-accent2)]"
-          />
-          <span className="truncate font-medium">{node.name}</span>
-        </button>
+        ) : (
+          <button
+            draggable
+            onDragStart={startDrag}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes(DND_MIME)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              ctx.setDragOverPath(node.path);
+            }}
+            onDragLeave={() => ctx.dragOverPath === node.path && ctx.setDragOverPath(null)}
+            onDrop={(e) => ctx.onMoveDrop(node.path, e)}
+            onClick={() => ctx.toggle(node.path)}
+            onContextMenu={(e) => ctx.onContext(e, node)}
+            style={{ paddingLeft: `${basePad}px` }}
+            className={`group flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[13px] text-[var(--mg-fg-dim)] transition ${
+              isDropTarget ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]" : "hover:bg-[var(--mg-hover)]"
+            }`}
+          >
+            <Icon
+              name="chevron_right"
+              size={18}
+              className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
+            />
+            <Icon name={isOpen ? "folder_open" : "folder"} size={17} fill className="shrink-0 text-[var(--mg-accent2)]" />
+            <span className="truncate font-medium">{node.name}</span>
+          </button>
+        )}
         {isOpen && (
           <div>
-            {node.children!.map((c) => (
-              <TreeItem
-                key={c.path}
-                node={c}
-                depth={depth + 1}
-                filtering={filtering}
-                expanded={expanded}
-                toggle={toggle}
-                onContext={onContext}
+            {ctx.creating?.parentPath === node.path && (
+              <NameInput
+                initial=""
+                placeholder={ctx.creating.kind === "dir" ? "新しいフォルダ名" : "新しいファイル名"}
+                onCommit={ctx.commitCreate}
+                onCancel={ctx.cancelCreate}
+                pad={(depth + 1) * 14 + 8}
+                icon={ctx.creating.kind === "dir" ? "folder" : "description"}
               />
+            )}
+            {node.children!.map((c) => (
+              <TreeItem key={c.path} node={c} depth={depth + 1} ctx={ctx} />
             ))}
           </div>
         )}
@@ -107,16 +165,26 @@ function TreeItem({
     );
   }
 
+  if (ctx.editingPath === node.path) {
+    return (
+      <NameInput
+        initial={node.name}
+        onCommit={(v) => ctx.commitRename(node, v)}
+        onCancel={ctx.cancelRename}
+        pad={basePad + 18}
+        icon="description"
+      />
+    );
+  }
+
   const active = activePane?.path === node.path;
   return (
     <button
       draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(DND_MIME, node.path);
-        e.dataTransfer.effectAllowed = "copy";
-      }}
+      onDragStart={startDrag}
       onClick={() => openFile(node.path)}
-      onContextMenu={(e) => onContext(e, node)}
+      onContextMenu={(e) => ctx.onContext(e, node)}
+      style={{ paddingLeft: `${basePad}px` }}
       className={`group relative flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[13px] transition ${
         active
           ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
@@ -126,7 +194,6 @@ function TreeItem({
       {active && (
         <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--mg-accent)]" />
       )}
-      <IndentGuides depth={depth} />
       <span className="w-[18px] shrink-0" />
       <Icon
         name="description"
@@ -139,9 +206,23 @@ function TreeItem({
   );
 }
 
-function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () => void }) {
-  const store = useStore();
+function ContextMenu({
+  menu,
+  onClose,
+  onNewFile,
+  onNewFolder,
+  onRename,
+  onDelete,
+}: {
+  menu: MenuState;
+  onClose: () => void;
+  onNewFile: (n: TreeNode) => void;
+  onNewFolder: (n: TreeNode) => void;
+  onRename: (n: TreeNode) => void;
+  onDelete: (n: TreeNode) => void;
+}) {
   const { openFile, getRootPath } = useWorkspace();
+  const store = useStore();
   const { node } = menu;
   const root = getRootPath();
   const absPath = root ? `${root}/${node.path}` : node.path;
@@ -150,37 +231,44 @@ function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () => void }
     const close = () => onClose();
     window.addEventListener("click", close);
     window.addEventListener("resize", close);
-    window.addEventListener("blur", close);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("resize", close);
-      window.removeEventListener("blur", close);
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
 
-  const copy = (text: string) => void navigator.clipboard.writeText(text).catch(() => {});
-
-  const items: { icon: string; label: string; action: () => void }[] =
+  const copy = (t: string) => void navigator.clipboard.writeText(t).catch(() => {});
+  type MI = { icon: string; label: string; action: () => void; danger?: boolean } | "sep";
+  const items: MI[] =
     node.kind === "file"
       ? [
           { icon: "description", label: "開く", action: () => openFile(node.path) },
           { icon: "vertical_split", label: "横に開く", action: () => openToSide(store, node.path) },
+          "sep",
+          { icon: "drive_file_rename_outline", label: "名前を変更", action: () => onRename(node) },
+          { icon: "delete", label: "削除", action: () => onDelete(node), danger: true },
+          "sep",
           { icon: "content_copy", label: "相対パスをコピー", action: () => copy(node.path) },
           { icon: "folder_open", label: "絶対パスをコピー", action: () => copy(absPath) },
-          { icon: "title", label: "ファイル名をコピー", action: () => copy(node.name) },
         ]
       : [
+          { icon: "note_add", label: "新規ファイル", action: () => onNewFile(node) },
+          { icon: "create_new_folder", label: "新規フォルダ", action: () => onNewFolder(node) },
+          "sep",
+          { icon: "drive_file_rename_outline", label: "名前を変更", action: () => onRename(node) },
+          { icon: "delete", label: "削除", action: () => onDelete(node), danger: true },
+          "sep",
           { icon: "content_copy", label: "相対パスをコピー", action: () => copy(node.path) },
           { icon: "folder_open", label: "絶対パスをコピー", action: () => copy(absPath) },
         ];
 
-  // 画面外にはみ出さないよう位置を補正
+  const rows = items.length;
   const style: React.CSSProperties = {
     left: Math.min(menu.x, window.innerWidth - 220),
-    top: Math.min(menu.y, window.innerHeight - (items.length * 34 + 16)),
+    top: Math.min(menu.y, window.innerHeight - (rows * 30 + 16)),
   };
 
   return (
@@ -189,19 +277,25 @@ function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () => void }
       onClick={(e) => e.stopPropagation()}
       className="fixed z-50 w-52 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
     >
-      {items.map((it, i) => (
-        <button
-          key={i}
-          onClick={() => {
-            it.action();
-            onClose();
-          }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)]"
-        >
-          <Icon name={it.icon} size={16} className="text-[var(--mg-muted)]" />
-          {it.label}
-        </button>
-      ))}
+      {items.map((it, i) =>
+        it === "sep" ? (
+          <div key={i} className="my-1 h-px bg-[var(--mg-border)]" />
+        ) : (
+          <button
+            key={i}
+            onClick={() => {
+              it.action();
+              onClose();
+            }}
+            className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
+              it.danger ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
+            }`}
+          >
+            <Icon name={it.icon} size={16} className={it.danger ? "" : "text-[var(--mg-muted)]"} />
+            {it.label}
+          </button>
+        ),
+      )}
     </div>
   );
 }
@@ -212,6 +306,10 @@ export function FileTree() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [creating, setCreating] = useState<Creating | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const { createFile, createFolder, renameEntry, deleteEntry, moveEntry } = useWorkspace();
   const filtered = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
   useEffect(() => {
@@ -226,6 +324,15 @@ export function FileTree() {
     [expandedByFolder, activeFolderId],
   );
 
+  const setExpandedOpen = (path: string) => {
+    if (!activeFolderId) return;
+    setExpandedByFolder((prev) => {
+      const set = new Set(prev[activeFolderId] ?? []);
+      set.add(path);
+      return { ...prev, [activeFolderId]: [...set] };
+    });
+  };
+
   const toggle = (path: string) => {
     if (!activeFolderId) return;
     setExpandedByFolder((prev) => {
@@ -236,33 +343,73 @@ export function FileTree() {
     });
   };
 
-  const onContext = (e: React.MouseEvent, node: TreeNode) => {
-    e.preventDefault();
-    setMenu({ x: e.clientX, y: e.clientY, node });
+  const startCreate = (node: TreeNode, kind: "file" | "dir") => {
+    setExpandedOpen(node.path);
+    setCreating({ parentPath: node.path, kind });
   };
 
-  if (filtered.length === 0) {
-    return (
-      <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
-        {filter ? "一致するファイルがありません" : "Markdown ファイルがありません"}
-      </div>
+  const ctx: ItemCtx = {
+    expanded,
+    filtering: !!filter,
+    toggle,
+    onContext: (e, node) => {
+      e.preventDefault();
+      setMenu({ x: e.clientX, y: e.clientY, node });
+    },
+    editingPath,
+    commitRename: (node, name) => {
+      setEditingPath(null);
+      void renameEntry(node.path, name, node.kind === "dir");
+    },
+    cancelRename: () => setEditingPath(null),
+    creating,
+    commitCreate: (name) => {
+      if (creating && name.trim()) {
+        if (creating.kind === "dir") void createFolder(creating.parentPath, name);
+        else void createFile(creating.parentPath, name);
+      }
+      setCreating(null);
+    },
+    cancelCreate: () => setCreating(null),
+    dragOverPath,
+    setDragOverPath,
+    onMoveDrop: (destDir, e) => {
+      const src = e.dataTransfer.getData(DND_MIME);
+      setDragOverPath(null);
+      if (src) {
+        e.preventDefault();
+        void moveEntry(src, destDir);
+      }
+    },
+  };
+
+  const askDelete = async (node: TreeNode) => {
+    const ok = await dialogConfirm(
+      `「${node.name}」を削除しますか？${node.kind === "dir" ? "\n中身ごと削除されます。" : ""}`,
+      { title: "削除の確認", kind: "warning" },
     );
-  }
+    if (ok) void deleteEntry(node.path, node.kind === "dir");
+  };
 
   return (
     <div className="py-1 pl-1">
-      {filtered.map((n) => (
-        <TreeItem
-          key={n.path}
-          node={n}
-          depth={0}
-          filtering={!!filter}
-          expanded={expanded}
-          toggle={toggle}
-          onContext={onContext}
+      {filtered.length === 0 && !creating ? (
+        <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
+          {filter ? "一致するファイルがありません" : "Markdown ファイルがありません"}
+        </div>
+      ) : (
+        filtered.map((n) => <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />)
+      )}
+      {menu && (
+        <ContextMenu
+          menu={menu}
+          onClose={() => setMenu(null)}
+          onNewFile={(n) => startCreate(n, "file")}
+          onNewFolder={(n) => startCreate(n, "dir")}
+          onRename={(n) => setEditingPath(n.path)}
+          onDelete={askDelete}
         />
-      ))}
-      {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
+      )}
     </div>
   );
 }

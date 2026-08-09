@@ -122,6 +122,16 @@ export function setPanePath(store: Store, paneId: string, path: string) {
   store.set(A.layoutAtom, setPath(store.get(A.layoutAtom), paneId, path));
 }
 
+// 全 leaf の path を写像で更新（rename/move/delete でペイン表示を追従）。
+// mapper が null を返すとそのペインは空になる。
+export function remapLeafPaths(store: Store, mapper: (path: string | null) => string | null) {
+  const walk = (n: LayoutNode): LayoutNode =>
+    n.kind === "leaf"
+      ? { ...n, path: mapper(n.path) }
+      : { ...n, children: n.children.map(walk) };
+  store.set(A.layoutAtom, walk(store.get(A.layoutAtom)));
+}
+
 // レイアウトを単一空ペインにリセット（フォルダ切替時など）。
 export function resetLayout(store: Store) {
   store.set(A.layoutAtom, { kind: "leaf", id: "p1", path: null });

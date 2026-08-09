@@ -1,5 +1,39 @@
 import { useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Icon } from "./Icon";
+
+const isUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
+
+function Val({ v }: { v: unknown }) {
+  if (Array.isArray(v)) {
+    return (
+      <>
+        {v.map((x, i) => (
+          <span key={i}>
+            {i > 0 && <span className="text-[var(--mg-muted)]"> / </span>}
+            <Val v={x} />
+          </span>
+        ))}
+      </>
+    );
+  }
+  const s = fmt(v);
+  if (typeof v === "string" && isUrl(v)) {
+    return (
+      <a
+        href={v}
+        onClick={(e) => {
+          e.preventDefault();
+          void openUrl(v);
+        }}
+        className="text-[var(--mg-accent)] underline decoration-[var(--mg-accent-soft)] underline-offset-2 transition hover:decoration-[var(--mg-accent)]"
+      >
+        {s}
+      </a>
+    );
+  }
+  return <>{s}</>;
+}
 
 const KEY_ICON: Record<string, string> = {
   author: "person",
@@ -90,7 +124,7 @@ export function Frontmatter({ data }: { data: Record<string, unknown> }) {
                 />
                 {!ic && <span className="shrink-0 text-[var(--mg-muted)]">{k}:</span>}
                 <span className="truncate text-[var(--mg-fg-dim)]" title={fmt(v)}>
-                  {Array.isArray(v) ? v.map(fmt).join(" / ") : fmt(v)}
+                  <Val v={v} />
                 </span>
               </span>
             );

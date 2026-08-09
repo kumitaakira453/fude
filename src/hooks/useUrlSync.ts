@@ -16,6 +16,13 @@ export function useUrlSync() {
   const applyingRef = useRef(false);
   // 初期復元が完了するまで URL 書き込みを止める（マウント時のハッシュ上書き=クロバー防止）
   const readyRef = useRef(false);
+  // 戻る/進むの可否判定用に自前でナビゲーション位置を追跡
+  const navIdx = useRef(0);
+  const navMax = useRef(0);
+  const updateNav = useRef(() => {
+    store.set(A.canBackAtom, navIdx.current > 0);
+    store.set(A.canForwardAtom, navIdx.current < navMax.current);
+  });
 
   const applyUrl = useRef(
     async (state: { folderId?: string; file?: string }, opts: { force?: boolean } = {}) => {
@@ -62,7 +69,12 @@ export function useUrlSync() {
 
   // popstate（ブラウザの戻る/進む）
   useEffect(() => {
-    const onPop = () => void applyUrl.current(parseHash(), { force: true });
+    const onPop = (e: PopStateEvent) => {
+      const st = e.state as { mdglowIdx?: number } | null;
+      navIdx.current = typeof st?.mdglowIdx === "number" ? st.mdglowIdx : 0;
+      updateNav.current();
+      void applyUrl.current(parseHash(), { force: true });
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -72,7 +84,10 @@ export function useUrlSync() {
     if (!readyRef.current || applyingRef.current) return;
     const desired = buildHash(activeFolderId, activePane?.path);
     if (location.hash !== desired && !(location.hash === "" && desired === "#")) {
-      history.pushState(null, "", desired);
+      navIdx.current += 1;
+      navMax.current = navIdx.current;
+      history.pushState({ mdglowIdx: navIdx.current }, "", desired);
+      updateNav.current();
     }
   }, [activeFolderId, activePane?.path]);
 }

@@ -89,6 +89,10 @@ export const paletteOpenAtom = atom<boolean>(false);
 // ---- 監視状態 ----
 export const watchModeAtom = atom<"observer" | "polling" | "off">("off");
 
+// ---- 戻る/進むの可否 ----
+export const canBackAtom = atom<boolean>(false);
+export const canForwardAtom = atom<boolean>(false);
+
 // ---- 本文内ハイライト（検索ヒットからのジャンプ） ----
 export interface Highlight {
   term: string;
