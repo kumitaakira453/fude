@@ -1,7 +1,8 @@
 name: Release
 
-# v* タグを push すると各 OS でビルドし、GitHub Releases に成果物
-# (.dmg / .app.tar.gz / .msi / .exe / .deb / .AppImage) を添付する。
+# v* タグを push すると macOS (Apple Silicon) をビルドし、GitHub Releases に
+# 成果物 (.dmg と自動更新用の .app.tar.gz + latest.json) を添付する。
+# ビルド短縮のため対象は aarch64 macOS 単体（他 OS が要る時は matrix を追加）。
 on:
   push:
     tags:
@@ -17,19 +18,7 @@ jobs:
   release:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest # Apple Silicon
-            args: "--target aarch64-apple-darwin"
-          - platform: macos-latest # Intel
-            args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-latest
-            args: ""
-    runs-on: ${{ matrix.platform }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -42,22 +31,12 @@ jobs:
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
 
       - name: Install frontend dependencies
         run: npm ci
@@ -73,9 +52,9 @@ jobs:
           # タグ push 時は github.ref_name、手動実行時は入力タグ
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: "mdglow ${{ github.event.inputs.tag || github.ref_name }}"
-          releaseBody: "各 OS のインストーラは下記 Assets からダウンロードしてください。"
+          releaseBody: "macOS (Apple Silicon) 用インストーラ (.dmg) を下記 Assets からダウンロードしてください。"
           releaseDraft: true
           prerelease: false
           # updater 用の latest.json を生成して Release に添付
           includeUpdaterJson: true
-          args: ${{ matrix.args }}
+          args: "--target aarch64-apple-darwin"

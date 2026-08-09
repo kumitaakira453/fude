@@ -50,16 +50,17 @@ git push origin main vX.Y.Z
 
 ## 3. ビルドを待つ
 
-`.github/workflows/release.yml` が以下をビルドする（マトリクス並列）。
+`.github/workflows/release.yml` が以下をビルドする（ビルド短縮のため対象は
+**macOS (Apple Silicon) 単体**）。
 
 | OS | 成果物 |
 |----|--------|
 | macOS (Apple Silicon) | `.dmg` / `.app.tar.gz`（+ 署名 `.sig`） |
-| macOS (Intel) | `.dmg` / `.app.tar.gz`（+ 署名 `.sig`） |
-| Windows | `.msi` / `.exe`（NSIS）（+ 署名 `.sig`） |
-| Linux | `.deb` / `.AppImage`（+ 署名 `.sig`） |
 
 あわせて自動更新用の **`latest.json`** が生成され、Release に添付される。
+
+> 他 OS（Intel mac / Windows / Linux）が必要になったら、`release.yml` を
+> matrix 構成に戻して `runs-on` と `args` を各プラットフォーム分に増やす。
 
 ## 4. Release を公開する
 
