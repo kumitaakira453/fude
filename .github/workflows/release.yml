@@ -42,6 +42,9 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          # リリース間でキャッシュを共有し、失敗時も保存して次回に活かす
+          shared-key: "release"
+          cache-on-failure: true
 
       - name: Install frontend dependencies
         run: npm ci

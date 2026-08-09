@@ -10,13 +10,16 @@ GitHub Releases に成果物と自動更新用マニフェスト (`latest.json`)
 ## TL;DR
 
 ```bash
-# 1) バージョンを上げる（下記3ファイルを同じ値に）
-#    package.json / src-tauri/tauri.conf.json / src-tauri/Cargo.toml
+# 1) バージョンを上げる（下記2ファイルを同じ値に）
+#    package.json / src-tauri/tauri.conf.json
+#    ※ src-tauri/Cargo.toml の version は上げない（固定）。
+#      リリース版の値は tauri.conf.json が正。Cargo.toml を触らないことで
+#      Cargo.lock が安定し、CI の Rust キャッシュが毎回ヒットして速い。
 # 2) コミットしてタグを打つ（タグは v + バージョン）
 git commit -am "release: v0.2.0"
 git tag v0.2.0
 git push origin main v0.2.0
-# 3) Actions が各OSをビルドし「ドラフト」Release を作成
+# 3) Actions が macOS(Apple Silicon) をビルドし「ドラフト」Release を作成
 # 4) Release ページで内容を確認し Publish（公開）する
 ```
 
@@ -24,17 +27,22 @@ git push origin main v0.2.0
 
 ## 1. バージョンを上げる
 
-3 ファイルのバージョンを**同じ値**に揃える。`latest.json` のバージョンは
+2 ファイルのバージョンを**同じ値**に揃える。`latest.json`・バンドルのバージョンは
 `src-tauri/tauri.conf.json` が基準になる。
 
-| ファイル | フィールド |
-|----------|-----------|
-| `package.json` | `"version"` |
-| `src-tauri/tauri.conf.json` | `"version"` |
-| `src-tauri/Cargo.toml` | `[package] version` |
+| ファイル | フィールド | 備考 |
+|----------|-----------|------|
+| `package.json` | `"version"` | 表示・整合用 |
+| `src-tauri/tauri.conf.json` | `"version"` | **リリース版の正**（updater/バンドル） |
+| ~~`src-tauri/Cargo.toml`~~ | ~~`[package] version`~~ | **上げない（固定）** |
+
+`src-tauri/Cargo.toml` の version は**リリースごとに変更しない**。Tauri は
+tauri.conf.json の version を優先するため実害はなく、Cargo.lock を安定させて
+**CI の Rust キャッシュ（Cargo.lock ハッシュがキー）を毎回ヒット**させられる。
+これがビルド時間短縮の要。
 
 自動更新が「更新あり」と判定するのは **インストール済みより新しいバージョン**
-のときだけなので、必ず上げること。
+のときだけなので、tauri.conf.json / package.json は必ず上げること。
 
 ## 2. タグを打って push
 
