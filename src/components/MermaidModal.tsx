@@ -75,8 +75,8 @@ export function MermaidModal({
             // ズームは要素サイズで行う（SVG をベクターのまま再描画＝ボケない）
             width: `calc(92vw * ${scale})`,
             height: `calc(88vh * ${scale})`,
-            // パンのみ transform（translate はボケない）
-            transform: `translate(${pos.x}px, ${pos.y}px)`,
+            // 中央アンカー(-50%)＋パン(pos)。中心から拡大するので吹っ飛ばない
+            transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`,
           }}
           dangerouslySetInnerHTML={{ __html: svg }}
         />

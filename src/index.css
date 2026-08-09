@@ -966,19 +966,19 @@ button.mg-task-check:hover {
   color: #fff;
 }
 .mg-mmd-stage {
+  position: relative;
   width: 100vw;
   height: 100vh;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
   touch-action: none;
 }
-/* 確定サイズのコンテナに SVG を width/height:100% で収める（WebKit で確実に描画）。
-   拡大/パンは transform で行う。 */
-/* サイズは inline style（scale 反映）で指定。SVG を実サイズで再描画するので
-   拡大してもボケない。will-change は付けない（レイヤ化でラスタライズされ
-   ボケる原因になるため）。 */
+/* 中央アンカー: top/left 50% + translate(-50%) で常に中心基準。サイズ(scale)を
+   変えても中心から拡大し、はみ出しても吹っ飛ばない。pos で translate 加算=パン。
+   サイズ指定で SVG を実サイズ再描画するのでボケない（will-change は付けない）。 */
 .mg-mmd-svg {
-  flex: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
 }
 .mg-mmd-svg svg {
   width: 100% !important;
