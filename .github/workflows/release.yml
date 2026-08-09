@@ -14,6 +14,11 @@ on:
         description: "リリースタグ (例: v0.1.0)"
         required: true
 
+# 同一 ref で新しい実行が始まったら、進行中の古い実行はキャンセル（無駄な分を削る）
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     permissions:

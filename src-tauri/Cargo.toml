@@ -30,3 +30,13 @@ tauri-plugin-opener = "2"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+
+# CI のビルド時間短縮を優先したリリースプロファイル。
+# Rust 側は薄い（ファイル I/O とプラグイン仲介のみ）ため、実行時最適化より
+# 「速くコンパイルできる」ことを優先する（opt-level を下げ・並列度を上げ・LTO 無効）。
+[profile.release]
+opt-level = 1
+codegen-units = 256
+lto = false
+incremental = false
+strip = true
