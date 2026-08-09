@@ -974,11 +974,11 @@ button.mg-task-check:hover {
 }
 /* 確定サイズのコンテナに SVG を width/height:100% で収める（WebKit で確実に描画）。
    拡大/パンは transform で行う。 */
+/* サイズは inline style（scale 反映）で指定。SVG を実サイズで再描画するので
+   拡大してもボケない。will-change は付けない（レイヤ化でラスタライズされ
+   ボケる原因になるため）。 */
 .mg-mmd-svg {
-  width: 92vw;
-  height: 88vh;
-  transform-origin: center center;
-  will-change: transform;
+  flex: none;
 }
 .mg-mmd-svg svg {
   width: 100% !important;

@@ -72,7 +72,11 @@ export function MermaidModal({
         <div
           className="mg-mmd-svg"
           style={{
-            transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
+            // ズームは要素サイズで行う（SVG をベクターのまま再描画＝ボケない）
+            width: `calc(92vw * ${scale})`,
+            height: `calc(88vh * ${scale})`,
+            // パンのみ transform（translate はボケない）
+            transform: `translate(${pos.x}px, ${pos.y}px)`,
           }}
           dangerouslySetInnerHTML={{ __html: svg }}
         />
