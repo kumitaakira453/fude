@@ -941,16 +941,17 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  color: var(--mg-fg-dim);
-  background: var(--mg-panel);
-  border: 1px solid var(--mg-border);
+  /* ポータル(body 直下)でも確実に見えるようフォールバック色を指定 */
+  color: var(--mg-fg-dim, #c2ccd6);
+  background: var(--mg-panel, #151a21);
+  border: 1px solid var(--mg-border, #2a2f3a);
   transition:
     background 0.15s,
     color 0.15s;
 }
 .mg-mmd-toolbar button:hover {
-  background: var(--mg-hover);
-  color: var(--mg-fg);
+  background: var(--mg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--mg-fg, #e6edf3);
 }
 .mg-mmd-stage {
   width: 100vw;
@@ -963,11 +964,13 @@ body {
   transform-origin: center center;
   will-change: transform;
 }
+/* mermaid の SVG は width="100%" を持つことがあり、中央寄せの縮小コンテナ内では
+   0 に潰れて表示されない。intrinsic サイズを !important で強制して確実に描画する。 */
 .mg-mmd-svg svg {
-  max-width: 92vw;
-  max-height: 88vh;
-  width: auto;
-  height: auto;
+  width: auto !important;
+  height: auto !important;
+  max-width: 92vw !important;
+  max-height: 88vh !important;
   display: block;
 }
 
