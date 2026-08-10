@@ -13,9 +13,11 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
+import remarkCjkFriendly from "remark-cjk-friendly";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { CellEditor } from "./CellEditor";
 import { CodeBlock } from "./CodeBlock";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
@@ -24,6 +26,9 @@ import { Mermaid } from "./Mermaid";
 
 const remarkPlugins = [
   remarkGfm,
+  // 日本語で **強調（かっこ)**を数える のように閉じ記号の直後が CJK 文字だと
+  // CommonMark のフランキング規則で太字が成立しない問題を解消する
+  remarkCjkFriendly,
   remarkMath,
   [remarkFrontmatter, ["yaml"]] as const,
 ];
@@ -142,21 +147,93 @@ function standaloneLink(
 
 // スクロール等での親再レンダー時に再パースしないよう body でメモ化する。
 // （再パースは画像 blob の revoke や mermaid のチカチカを引き起こす）
+export interface CellEditInfo {
+  blockIndex: number;
+  cellStart: number;
+  colIndex: number;
+  rowKind: "head" | "body";
+  rowIndex: number;
+}
+
 export const Markdown = memo(function Markdown({
   body,
   editorial,
   blockIndex,
   onToggleTask,
+  editCell,
+  onEditCell,
+  onCellCommit,
+  onCellCancel,
 }: {
   body: string;
   editorial: boolean;
   // タスクチェックボックスのトグル用（ブロック内の何番目のタスクかで特定）
   blockIndex?: number;
   onToggleTask?: (blockIndex: number, ordinal: number) => void;
+  // テーブルのセル単位編集。編集対象セルは cellStart（ソース内オフセット）で特定。
+  editCell?: { cellStart: number; value: string } | null;
+  onEditCell?: (info: CellEditInfo) => void;
+  onCellCommit?: (v: string) => void;
+  onCellCancel?: () => void;
 }) {
   const ctx = useContext(markdownContext);
   // レンダーごとにリセットされるチェックボックスの通し番号
   const taskSeq = { n: 0 };
+
+  // td/th 共通のレンダリング。編集対象セルはインラインエディタに差し替える。
+  const renderCell = (
+    tag: "td" | "th",
+    node: unknown,
+    children: ReactNode,
+    rest: Record<string, unknown>,
+  ) => {
+    const Tag = tag;
+    const start = (node as { position?: { start?: { offset?: number } } })
+      ?.position?.start?.offset;
+    if (
+      onEditCell &&
+      editCell &&
+      start !== undefined &&
+      editCell.cellStart === start
+    ) {
+      return (
+        <Tag {...rest}>
+          <div className="mg-cell mg-cell-editing">
+            <CellEditor
+              value={editCell.value}
+              onCommit={(v) => onCellCommit?.(v)}
+              onCancel={() => onCellCancel?.()}
+            />
+          </div>
+        </Tag>
+      );
+    }
+    const editable = !!onEditCell && start !== undefined;
+    return (
+      <Tag
+        {...rest}
+        onDoubleClick={
+          editable
+            ? (e) => {
+                e.stopPropagation();
+                const cell = e.currentTarget as HTMLTableCellElement;
+                const tr = cell.parentElement as HTMLTableRowElement;
+                const section = tr.parentElement as HTMLTableSectionElement;
+                onEditCell!({
+                  blockIndex: blockIndex ?? 0,
+                  cellStart: start!,
+                  colIndex: cell.cellIndex,
+                  rowKind: section.tagName === "THEAD" ? "head" : "body",
+                  rowIndex: Array.prototype.indexOf.call(section.rows, tr),
+                });
+              }
+            : undefined
+        }
+      >
+        <div className="mg-cell">{children}</div>
+      </Tag>
+    );
+  };
 
   return (
     <ReactMarkdown
@@ -308,21 +385,14 @@ export const Markdown = memo(function Markdown({
             </div>
           );
         },
-        // 列幅はセルではなく内容を包む div で制御する。table-layout:auto のセルへの
-        // min/max-width は CSS 仕様上 undefined で、macOS の WKWebView は無視するため。
-        td({ node: _node, children, ...rest }) {
-          return (
-            <td {...rest}>
-              <div className="mg-cell">{children}</div>
-            </td>
-          );
+        // 列幅は内容を包む .mg-cell（ブロック div）で制御する。table-layout:auto の
+        // セルへの min/max-width は仕様上 undefined で WKWebView が無視するため。
+        // ダブルクリックでそのセルだけをインライン編集できる（renderCell 参照）。
+        td({ node, children, ...rest }) {
+          return renderCell("td", node, children, rest);
         },
-        th({ node: _node, children, ...rest }) {
-          return (
-            <th {...rest}>
-              <div className="mg-cell">{children}</div>
-            </th>
-          );
+        th({ node, children, ...rest }) {
+          return renderCell("th", node, children, rest);
         },
       }}
     >

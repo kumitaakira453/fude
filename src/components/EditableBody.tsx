@@ -1,13 +1,81 @@
 import { useCallback, useMemo, useState } from "react";
 import { replaceBlock, splitBlocks } from "../lib/blocks";
 import { BlockSourceEditor } from "./BlockSourceEditor";
-import { Markdown } from "./Markdown";
+import { type CellEditInfo, Markdown } from "./Markdown";
 
 // タスク行（- [ ] / 1. [x] など）
 const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
 
 // mermaid コードフェンスのブロックか（インライン編集の対象外にする）
 const isMermaidBlock = (src: string) => /^\s*`{3,}\s*mermaid\b/i.test(src);
+
+// GFM テーブルのブロックか（2 行目が区切り行 `| --- | --- |`）
+const isTableBlock = (src: string) => {
+  const lines = src.split("\n");
+  return (
+    lines.length >= 2 &&
+    /^[\s|:-]+$/.test(lines[1]) &&
+    lines[1].includes("-") &&
+    lines[1].includes("|")
+  );
+};
+
+// 1 行を「エスケープされていない `|`」で分割する（`\|` は区切りにしない）
+function splitRow(line: string): string[] {
+  const parts: string[] = [];
+  let cur = "";
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "\\" && i + 1 < line.length) {
+      cur += ch + line[i + 1];
+      i++;
+      continue;
+    }
+    if (ch === "|") {
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  parts.push(cur);
+  return parts;
+}
+
+// DOM 列 index を分割済み parts の index に変換（先頭 `|` があれば +1）
+const partIndexOf = (line: string, colIndex: number) =>
+  colIndex + (/^\s*\|/.test(line) ? 1 : 0);
+
+const getCellValue = (src: string, lineIndex: number, colIndex: number) => {
+  const line = src.split("\n")[lineIndex] ?? "";
+  return (splitRow(line)[partIndexOf(line, colIndex)] ?? "").trim();
+};
+
+const setCellValue = (
+  src: string,
+  lineIndex: number,
+  colIndex: number,
+  value: string,
+) => {
+  const lines = src.split("\n");
+  const line = lines[lineIndex];
+  if (line === undefined) return src;
+  const parts = splitRow(line);
+  const idx = partIndexOf(line, colIndex);
+  if (idx < 0 || idx >= parts.length) return src;
+  const t = value.trim();
+  parts[idx] = t ? ` ${t} ` : "  ";
+  lines[lineIndex] = parts.join("|");
+  return lines.join("\n");
+};
+
+interface EditingCell {
+  blockIndex: number;
+  cellStart: number;
+  lineIndex: number;
+  colIndex: number;
+  value: string;
+}
 
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
 // 生ソース編集にする。編集対象以外は一切動かない（目線を動かさない）。
@@ -27,6 +95,45 @@ export function EditableBody({
     x: number;
     y: number;
   } | null>(null);
+  // 編集中のテーブルセル（ブロック全体ではなく 1 セルだけ）
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+
+  // ダブルクリックされたセルの位置から編集対象を確定する
+  const handleEditCell = useCallback(
+    (info: CellEditInfo) => {
+      const block = blocks[info.blockIndex];
+      if (!block) return;
+      const lineIndex = info.rowKind === "head" ? 0 : 2 + info.rowIndex;
+      setEditing(null);
+      setEditingCell({
+        blockIndex: info.blockIndex,
+        cellStart: info.cellStart,
+        lineIndex,
+        colIndex: info.colIndex,
+        value: getCellValue(block.src, lineIndex, info.colIndex),
+      });
+    },
+    [blocks],
+  );
+
+  const commitCell = useCallback(
+    (v: string) => {
+      if (!editingCell) return;
+      const block = blocks[editingCell.blockIndex];
+      setEditingCell(null);
+      if (!block) return;
+      const newSrc = setCellValue(
+        block.src,
+        editingCell.lineIndex,
+        editingCell.colIndex,
+        v,
+      );
+      if (newSrc !== block.src) onSaveBody(replaceBlock(body, block, newSrc));
+    },
+    [editingCell, blocks, body, onSaveBody],
+  );
+
+  const cancelCell = useCallback(() => setEditingCell(null), []);
 
   const commit = (index: number, newSrc: string) => {
     setEditing(null);
@@ -77,6 +184,7 @@ export function EditableBody({
     <>
       {blocks.map((b) => {
         const key = keyOf(b.src);
+        const isTable = isTableBlock(b.src);
         return editing?.index === b.index ? (
           <BlockSourceEditor
             key={key}
@@ -93,8 +201,9 @@ export function EditableBody({
             key={key}
             className="mg-block"
             onDoubleClick={
-              // mermaid はダブルクリック編集の対象外（拡大モーダルと衝突するため）
-              isMermaidBlock(b.src)
+              // mermaid・テーブルはブロック全体編集の対象外。
+              // テーブルはセル単位のインライン編集（handleEditCell）を使う。
+              isMermaidBlock(b.src) || isTable
                 ? undefined
                 : (e) =>
                     setEditing({ index: b.index, x: e.clientX, y: e.clientY })
@@ -105,6 +214,21 @@ export function EditableBody({
               editorial={editorial}
               blockIndex={b.index}
               onToggleTask={toggleTask}
+              onEditCell={isTable ? handleEditCell : undefined}
+              editCell={
+                editingCell?.blockIndex === b.index
+                  ? {
+                      cellStart: editingCell.cellStart,
+                      value: editingCell.value,
+                    }
+                  : undefined
+              }
+              onCellCommit={
+                editingCell?.blockIndex === b.index ? commitCell : undefined
+              }
+              onCellCancel={
+                editingCell?.blockIndex === b.index ? cancelCell : undefined
+              }
             />
           </div>
         );

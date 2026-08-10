@@ -550,6 +550,29 @@ button.mg-task-check:hover {
   white-space: normal;
   overflow-wrap: break-word;
 }
+/* セルのインライン編集。見た目の跳ねを抑えるため、セルの本文と同じ字送り・
+   行高でその場に重ね、控えめなアクセント枠で「編集中」を示す。 */
+.mg-prose .mg-cell-editing {
+  max-width: none;
+}
+.mg-cell-editor {
+  display: block;
+  width: 100%;
+  min-width: 6ch;
+  margin: -0.15em -0.35em;
+  padding: 0.15em 0.35em;
+  box-sizing: content-box;
+  font: inherit;
+  color: inherit;
+  line-height: inherit;
+  background: color-mix(in srgb, var(--mg-accent) 8%, var(--mg-bg));
+  border: 1px solid color-mix(in srgb, var(--mg-accent) 55%, var(--mg-border));
+  border-radius: 0.35rem;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg-accent) 16%, transparent);
+}
 
 /* ============================================================
    エディトリアル組版（ベータ） — .mg-editorial で全面ゲート

@@ -102,7 +102,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || (e.key !== "z" && e.key !== "Z")) return;
       const ae = document.activeElement as HTMLElement | null;
-      if (ae?.closest?.(".cm-editor")) return; // 編集中はエディタのアンドゥ
+      // 編集中の入力欄（CodeMirror・セルのインライン textarea 等）では、
+      // その入力欄自身のネイティブ undo を優先し、ドキュメント全体の undo は行わない
+      if (
+        ae?.closest?.(".cm-editor") ||
+        ae?.tagName === "TEXTAREA" ||
+        ae?.tagName === "INPUT" ||
+        ae?.isContentEditable
+      )
+        return;
       if (!path) return;
       e.preventDefault();
       if (e.shiftKey) void redoFile(path);
