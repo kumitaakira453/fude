@@ -28,22 +28,29 @@ export function useHotkeys() {
       } else if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
         // ⌘⇧F: ディレクトリ全体検索（サイドバー）。選択語をプリフィルし入力欄へフォーカス。
         e.preventDefault();
-        const sel = selectionText();
-        if (sel) store.set(A.searchQueryAtom, sel);
+        // 検索語の引き継ぎ: 選択があれば優先、なければ ⌘F のファイル内検索語を維持
+        const carry = selectionText() || store.get(A.highlightAtom)?.term || "";
+        if (carry) store.set(A.searchQueryAtom, carry);
         // ファイル内検索ウィジェットが開いていたら閉じる（ディレクトリ検索へ移る）
         store.set(A.docFindOpenAtom, false);
         store.set(A.sidebarOpenAtom, true);
         store.set(A.sidebarTabAtom, "search");
         store.set(A.searchFocusNonceAtom, store.get(A.searchFocusNonceAtom) + 1);
       } else if (mod && (e.key === "f" || e.key === "F")) {
-        // ⌘F: 現在ファイル内検索（本文の find ウィジェット）。選択語をプリフィル。
+        // ⌘F: 現在ファイル内検索（本文の find ウィジェット）。
+        // 検索語の引き継ぎ: 選択 > サイドバー検索語 > 既存のハイライト語。
         e.preventDefault();
-        const sel = selectionText();
-        if (sel) {
+        const carry =
+          selectionText() ||
+          store.get(A.searchQueryAtom) ||
+          store.get(A.highlightAtom)?.term ||
+          "";
+        if (carry) {
           store.set(A.highlightAtom, {
-            term: sel,
+            term: carry,
             caseSensitive: false,
             useRegex: false,
+            wholeWord: false,
             nonce: Math.random(),
           });
         }

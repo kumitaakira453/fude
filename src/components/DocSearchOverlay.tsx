@@ -7,6 +7,7 @@ import {
   highlightAtom,
   searchActiveHitAtom,
 } from "../state/atoms";
+import { buildMatcher } from "../lib/search";
 import { Icon } from "./Icon";
 
 interface RectBox {
@@ -49,14 +50,14 @@ export function DocSearchOverlay({
       setMatches([]);
       return;
     }
-    let re: RegExp;
-    try {
-      const flags = highlight.caseSensitive ? "g" : "gi";
-      const pat = highlight.useRegex
-        ? highlight.term
-        : highlight.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      re = new RegExp(pat, flags);
-    } catch {
+    // サイドバー検索と同じマッチャを使い、結果とハイライト位置を完全一致させる
+    // （whole-word / 大小 / 正規表現の解釈を揃える）
+    const re = buildMatcher(highlight.term, {
+      caseSensitive: highlight.caseSensitive,
+      useRegex: highlight.useRegex,
+      wholeWord: highlight.wholeWord,
+    });
+    if (!re) {
       rangesRef.current = [];
       setMatches([]);
       return;
@@ -188,7 +189,13 @@ export function DocSearchOverlay({
     setQ(v);
     setHighlight(
       v
-        ? { term: v, caseSensitive: false, useRegex: false, nonce: Math.random() }
+        ? {
+            term: v,
+            caseSensitive: false,
+            useRegex: false,
+            wholeWord: false,
+            nonce: Math.random(),
+          }
         : null,
     );
   };

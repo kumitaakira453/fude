@@ -228,7 +228,7 @@ function TreeItem({
                 onCommit={ctx.commitCreate}
                 onCancel={ctx.cancelCreate}
                 pad={(depth + 1) * 14 + 8}
-                icon={ctx.creating.kind === "dir" ? "folder" : "description"}
+                icon={ctx.creating.kind === "dir" ? "folder" : "markdown"}
               />
             )}
             {node.children!.map((c) => (
@@ -247,7 +247,7 @@ function TreeItem({
         onCommit={(v) => ctx.commitRename(node, v)}
         onCancel={ctx.cancelRename}
         pad={basePad + 18}
-        icon="description"
+        icon="markdown"
       />
     );
   }
@@ -272,7 +272,7 @@ function TreeItem({
       )}
       <span className="w-[18px] shrink-0" />
       <Icon
-        name="description"
+        name="markdown"
         size={16}
         fill={active}
         className={
@@ -329,7 +329,7 @@ function ContextMenu({
     node.kind === "file"
       ? [
           {
-            icon: "description",
+            icon: "markdown",
             label: "開く",
             action: () => openFile(node.path),
           },
@@ -629,7 +629,7 @@ export function FileTree() {
             onCommit={ctx.commitCreate}
             onCancel={ctx.cancelCreate}
             pad={8}
-            icon={creating.kind === "dir" ? "folder" : "description"}
+            icon={creating.kind === "dir" ? "folder" : "markdown"}
           />
         )}
         {filtered.length === 0 && !creating ? (

@@ -61,7 +61,7 @@ export interface SearchOptions {
   wholeWord: boolean;
 }
 
-function buildMatcher(query: string, opts: SearchOptions): RegExp | null {
+export function buildMatcher(query: string, opts: SearchOptions): RegExp | null {
   if (!query) return null;
   const flags = opts.caseSensitive ? "g" : "gi";
   try {

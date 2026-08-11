@@ -523,11 +523,8 @@ button.mg-task-check:hover {
 .mg-prose {
   overflow-wrap: anywhere;
   word-break: normal;
-  /* 検索ハイライトのオーバーレイ層を本文座標系に載せるための配置基準。
-     isolation で独自スタッキング文脈を作り、z-index:-1 の層を本文の文字より
-     背面・地の背景より前面に収める（＝マーカーが文字を邪魔しない）。 */
+  /* 検索ハイライトのオーバーレイ層を本文座標系に載せるための配置基準。 */
   position: relative;
-  isolation: isolate;
 }
 
 /* 横に長い要素は各自スクロールさせ、ページ本体を横スクロールさせない */
@@ -1064,17 +1061,18 @@ button.mg-task-check:hover {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: -1; /* 文字の背面（isolation により地の背景より前面） */
+  /* 文字の前面（半透明マーカー）。背面に置くとコードブロック等の不透明背景に
+     隠れて見えなくなるため、前面に重ねて透過で可読性を確保する。 */
 }
 .mg-hl {
   position: absolute;
   border-radius: 0.4em;
-  background: color-mix(in srgb, var(--mg-mark) 50%, transparent);
+  background: color-mix(in srgb, var(--mg-mark) 42%, transparent);
   transition: background 0.12s ease;
 }
 .mg-hl-active {
-  background: color-mix(in srgb, var(--mg-mark) 85%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--mg-mark) 62%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
 
 /* 本文内の検索ナビ（ヒット数・前後移動・解除） */

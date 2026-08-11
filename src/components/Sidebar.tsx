@@ -19,7 +19,7 @@ export function Sidebar() {
       <div className="flex gap-1 px-2 pt-2">
         {(
           [
-            ["files", "ファイル", "account_tree"],
+            ["files", "ファイル", "folder_open"],
             ["search", "検索", "search"],
           ] as const
         ).map(([id, label, icon]) => (

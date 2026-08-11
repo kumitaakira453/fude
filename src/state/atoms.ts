@@ -118,6 +118,7 @@ export interface Highlight {
   term: string;
   caseSensitive: boolean;
   useRegex: boolean;
+  wholeWord: boolean; // 単語単位（サイドバー検索と本文ハイライトを一致させる）
   nonce: number; // 同じ語で再ジャンプさせるための識別子
 }
 export const highlightAtom = atom<Highlight | null>(null);
@@ -127,6 +128,8 @@ export const highlightAtom = atom<Highlight | null>(null);
 export const searchQueryAtom = atom<string>("");
 // 入力欄にフォーカス＋全選択を要求する（nonce を増やすたびに発火）
 export const searchFocusNonceAtom = atom<number>(0);
+// 検索結果の表示形式（フラットなファイル別リスト / ディレクトリツリー）
+export const searchViewAtom = atom<"list" | "tree">("list");
 // ⌘F: アクティブなペインのファイル内検索ウィジェットを開いてフォーカスする要求
 export const docFindNonceAtom = atom<number>(0);
 // ファイル内検索ウィジェットの表示状態（⌘F で true、⌘⇧F やサイドバー操作で false）
