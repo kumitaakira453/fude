@@ -121,3 +121,20 @@ export interface Highlight {
   nonce: number; // 同じ語で再ジャンプさせるための識別子
 }
 export const highlightAtom = atom<Highlight | null>(null);
+
+// ---- 検索パネル（共有クエリ / フォーカス要求 / アクティブヒット指定） ----
+// クエリを共有化することで ⌘F 押下時に選択語をプリフィルできる
+export const searchQueryAtom = atom<string>("");
+// 入力欄にフォーカス＋全選択を要求する（nonce を増やすたびに発火）
+export const searchFocusNonceAtom = atom<number>(0);
+// ⌘F: アクティブなペインのファイル内検索ウィジェットを開いてフォーカスする要求
+export const docFindNonceAtom = atom<number>(0);
+// ファイル内検索ウィジェットの表示状態（⌘F で true、⌘⇧F やサイドバー操作で false）
+export const docFindOpenAtom = atom<boolean>(false);
+// 検索結果リストのナビゲーションで「このファイルの N 番目のヒットへ」を本文側へ伝える
+export interface SearchActiveHit {
+  path: string;
+  hitIndex: number; // ファイル内の 0 始まりヒット順
+  nonce: number;
+}
+export const searchActiveHitAtom = atom<SearchActiveHit | null>(null);

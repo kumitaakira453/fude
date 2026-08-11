@@ -471,6 +471,18 @@ body {
   padding-bottom: 0.3rem;
   border-bottom: 1px solid var(--mg-border);
 }
+/* 見出しの視認性強化: 本文とのコントラストを上げ、上の余白で塊を切る。
+   長い文書でも見出しが「面」として立ち上がって拾いやすくする。 */
+.mg-prose :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--mg-fg);
+  font-weight: 700;
+}
+.mg-prose :is(h2, h3, h4) {
+  margin-top: 2em;
+}
+.mg-prose h1 {
+  font-weight: 800;
+}
 .mg-prose table {
   font-size: 0.9em;
 }
@@ -511,6 +523,11 @@ button.mg-task-check:hover {
 .mg-prose {
   overflow-wrap: anywhere;
   word-break: normal;
+  /* 検索ハイライトのオーバーレイ層を本文座標系に載せるための配置基準。
+     isolation で独自スタッキング文脈を作り、z-index:-1 の層を本文の文字より
+     背面・地の背景より前面に収める（＝マーカーが文字を邪魔しない）。 */
+  position: relative;
+  isolation: isolate;
 }
 
 /* 横に長い要素は各自スクロールさせ、ページ本体を横スクロールさせない */
@@ -1040,9 +1057,82 @@ button.mg-task-check:hover {
   display: block;
 }
 
-/* 検索ハイライト（CSS Custom Highlight API）の配色は index.html の
-   インライン <style> で定義している（Lightning CSS が ::highlight() を
-   未知の疑似要素として警告するのを避けるため） */
+/* ============================================================
+   検索ハイライト（本文 DOM を書き換えないオーバーレイ）
+   ============================================================ */
+.mg-hl-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1; /* 文字の背面（isolation により地の背景より前面） */
+}
+.mg-hl {
+  position: absolute;
+  border-radius: 0.4em;
+  background: color-mix(in srgb, var(--mg-mark) 50%, transparent);
+  transition: background 0.12s ease;
+}
+.mg-hl-active {
+  background: color-mix(in srgb, var(--mg-mark) 85%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-accent) 45%, transparent);
+}
+
+/* 本文内の検索ナビ（ヒット数・前後移動・解除） */
+.mg-find {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem 0.3rem 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-panel) 92%, transparent);
+  border: 1px solid var(--mg-border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+}
+.mg-find-input {
+  width: 12rem;
+  max-width: 40vw;
+  padding: 0.15rem 0.1rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--mg-fg);
+  font-size: 13px;
+}
+.mg-find-input::placeholder {
+  color: var(--mg-muted);
+}
+.mg-find-count {
+  margin: 0 0.35rem;
+  color: var(--mg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.mg-find-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  color: var(--mg-muted);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-find-btn:hover:not(:disabled) {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-find-btn:disabled {
+  opacity: 0.4;
+}
 
 /* ============================================================
    CodeMirror ライブプレビュー（編集モード）

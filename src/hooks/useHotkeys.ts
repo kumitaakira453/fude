@@ -3,6 +3,19 @@ import { useEffect } from "react";
 import { splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
 
+// 入力欄以外で選択中のテキストを検索語プリフィル用に取得する
+function selectionText(): string {
+  const ae = document.activeElement as HTMLElement | null;
+  if (
+    ae?.tagName === "INPUT" ||
+    ae?.tagName === "TEXTAREA" ||
+    ae?.isContentEditable
+  )
+    return "";
+  const s = window.getSelection?.()?.toString().trim() ?? "";
+  return s.length > 0 && s.length <= 200 ? s : "";
+}
+
 export function useHotkeys() {
   const store = useStore();
 
@@ -13,9 +26,29 @@ export function useHotkeys() {
         e.preventDefault();
         store.set(A.paletteOpenAtom, !store.get(A.paletteOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
+        // ⌘⇧F: ディレクトリ全体検索（サイドバー）。選択語をプリフィルし入力欄へフォーカス。
         e.preventDefault();
+        const sel = selectionText();
+        if (sel) store.set(A.searchQueryAtom, sel);
+        // ファイル内検索ウィジェットが開いていたら閉じる（ディレクトリ検索へ移る）
+        store.set(A.docFindOpenAtom, false);
         store.set(A.sidebarOpenAtom, true);
         store.set(A.sidebarTabAtom, "search");
+        store.set(A.searchFocusNonceAtom, store.get(A.searchFocusNonceAtom) + 1);
+      } else if (mod && (e.key === "f" || e.key === "F")) {
+        // ⌘F: 現在ファイル内検索（本文の find ウィジェット）。選択語をプリフィル。
+        e.preventDefault();
+        const sel = selectionText();
+        if (sel) {
+          store.set(A.highlightAtom, {
+            term: sel,
+            caseSensitive: false,
+            useRegex: false,
+            nonce: Math.random(),
+          });
+        }
+        store.set(A.docFindOpenAtom, true);
+        store.set(A.docFindNonceAtom, store.get(A.docFindNonceAtom) + 1);
       } else if (mod && (e.key === "b" || e.key === "B")) {
         e.preventDefault();
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));

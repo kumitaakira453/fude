@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchHighlight } from "../hooks/useSearchHighlight";
+import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
 import { parseFrontmatter } from "../lib/frontmatter";
@@ -201,7 +201,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return () => cancelAnimationFrame(raf);
   }, [path, scroller]);
 
-  useSearchHighlight(content, isActive);
 
   const ctx = useMemo(
     () => ({
@@ -385,6 +384,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             content={content}
             scroller={scroller}
             contentKey={path + (raw?.length ?? 0)}
+          />
+        )}
+
+        {!editing && path && (
+          <DocSearchOverlay
+            content={content}
+            isActive={isActive}
+            path={path}
+            docKey={path + (raw?.length ?? 0)}
           />
         )}
       </div>
