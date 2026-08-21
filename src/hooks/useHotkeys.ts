@@ -3,15 +3,22 @@ import { useEffect } from "react";
 import { splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
 
+// フォーカスが編集可能な要素（入力欄・CodeMirror 等）にあるか
+function inEditable(target: EventTarget | null): boolean {
+  const el = (target as HTMLElement | null) ?? null;
+  const ae = document.activeElement as HTMLElement | null;
+  const editable = (n: HTMLElement | null) =>
+    !!n &&
+    (n.tagName === "INPUT" ||
+      n.tagName === "TEXTAREA" ||
+      n.isContentEditable ||
+      !!n.closest?.(".cm-editor"));
+  return editable(el) || editable(ae);
+}
+
 // 入力欄以外で選択中のテキストを検索語プリフィル用に取得する
 function selectionText(): string {
-  const ae = document.activeElement as HTMLElement | null;
-  if (
-    ae?.tagName === "INPUT" ||
-    ae?.tagName === "TEXTAREA" ||
-    ae?.isContentEditable
-  )
-    return "";
+  if (inEditable(document.activeElement)) return "";
   const s = window.getSelection?.()?.toString().trim() ?? "";
   return s.length > 0 && s.length <= 200 ? s : "";
 }
@@ -22,6 +29,17 @@ export function useHotkeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
+      // プレビュー（非編集）で本文を選択して Backspace/Delete を押すと、
+      // WKWebView の既定動作で「戻る」が発火し、直前に見ていた別ファイルへ
+      // 切り替わってしまう。編集欄の外では既定動作を抑止する。
+      if (
+        (e.key === "Backspace" || e.key === "Delete") &&
+        !mod &&
+        !inEditable(e.target)
+      ) {
+        e.preventDefault();
+        return;
+      }
       if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         store.set(A.paletteOpenAtom, !store.get(A.paletteOpenAtom));
