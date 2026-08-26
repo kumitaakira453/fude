@@ -1,6 +1,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
+import { useOptimisticSetting } from "../hooks/useOptimisticSetting";
 import { FONTS } from "../lib/fonts";
 import { THEMES } from "../lib/themes";
 import {
@@ -14,10 +15,18 @@ import {
 import { Icon } from "./Icon";
 
 export function ThemeSwitcher() {
-  const [theme, setTheme] = useAtom(themeAtom);
-  const [font, setFont] = useAtom(fontAtom);
-  const [width, setWidth] = useAtom(readingWidthAtom);
-  const [editorial, setEditorial] = useAtom(editorialAtom);
+  const [themeValue, setThemeValue] = useAtom(themeAtom);
+  const [fontValue, setFontValue] = useAtom(fontAtom);
+  const [widthValue, setWidthValue] = useAtom(readingWidthAtom);
+  const [editorialValue, setEditorialValue] = useAtom(editorialAtom);
+  // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
+  const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
+  const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
+  const [width, setWidth] = useOptimisticSetting(widthValue, setWidthValue);
+  const [editorial, setEditorial] = useOptimisticSetting(
+    editorialValue,
+    setEditorialValue,
+  );
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
   const [version, setVersion] = useState("");
@@ -135,7 +144,7 @@ export function ThemeSwitcher() {
 
           <div className="my-2 h-px bg-[var(--mg-border)]" />
           <button
-            onClick={() => setEditorial((v) => !v)}
+            onClick={() => setEditorial(!editorial)}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
           >
             <Icon

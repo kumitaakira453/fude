@@ -40,6 +40,9 @@ function cleanupOrphans(id: string) {
 
 export function Mermaid({ code }: { code: string }) {
   const theme = useAtomValue(themeAtom);
+  // 図の見た目は暗テーマ / 明テーマの 2 種類しかないため、同じ明暗の
+  // テーマ間を移動しただけでは描き直さない（テーマ切替が重くなるのを防ぐ）。
+  const dark = DARK_THEME_IDS.has(theme);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [zoomed, setZoomed] = useState(false);
@@ -54,7 +57,6 @@ export function Mermaid({ code }: { code: string }) {
     }
     // effect ごとにユニークな id（StrictMode 二重実行での cleanup 衝突回避）
     const id = `mmd-${mermaidSeq++}`;
-    const dark = DARK_THEME_IDS.has(theme);
     getMermaid(dark)
       .then((mermaid) =>
         mermaid.parse(trimmed).then(() => mermaid.render(id, trimmed)),
@@ -85,7 +87,7 @@ export function Mermaid({ code }: { code: string }) {
       alive = false;
       cleanupOrphans(id);
     };
-  }, [code, theme]);
+  }, [code, dark]);
 
   // 失敗時（記述途中含む）はコードとエラー内容を表示して UI を壊さない。
   if (error) {
@@ -108,7 +110,6 @@ export function Mermaid({ code }: { code: string }) {
 
   // 図はテーマに合わせて描画済み（暗テーマ=明線 / 明テーマ=暗線）。カードは敷かず、
   // モーダルの固定オーバーレイをテーマに合わせて線が沈まないようにする。
-  const dark = DARK_THEME_IDS.has(theme);
 
   return (
     <>

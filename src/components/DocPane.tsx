@@ -207,12 +207,36 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const saved = scrollFracRef.current;
     const frac = saved.path === path ? saved.frac : 0;
     setBar(frac);
-    const raf = requestAnimationFrame(() => {
+    if (frac === 0) {
+      scroller.scrollTop = 0;
+      return;
+    }
+    // 本文は先頭から順に描画されるので、高さが伸びている間は復元をやり直す。
+    // 画像や KaTeX で後から高さが変わる場合にも効く。
+    // ユーザーが自分でスクロールしたら、そこで復元を打ち切る。
+    let settled = false;
+    const apply = () => {
+      if (settled) return;
       const max = scroller.scrollHeight - scroller.clientHeight;
-      scroller.scrollTop = max > 0 ? frac * max : 0;
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [path, scroller]);
+      if (max > 0) scroller.scrollTop = frac * max;
+    };
+    const stop = () => {
+      settled = true;
+    };
+    const raf = requestAnimationFrame(apply);
+    const ro = content ? new ResizeObserver(apply) : null;
+    ro?.observe(content!);
+    scroller.addEventListener("wheel", stop, { passive: true, once: true });
+    scroller.addEventListener("touchstart", stop, { passive: true, once: true });
+    const timer = window.setTimeout(stop, 2000);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+      window.clearTimeout(timer);
+      scroller.removeEventListener("wheel", stop);
+      scroller.removeEventListener("touchstart", stop);
+    };
+  }, [path, scroller, content]);
 
 
   const ctx = useMemo(
@@ -386,7 +410,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     ))}
                   <markdownContext.Provider value={ctx}>
                     {/* ダブルクリックしたブロックだけをその場で生ソース編集 */}
+                    {/* key でファイルごとに貼り替え、漸進描画を先頭からやり直す */}
                     <EditableBody
+                      key={path}
                       body={body}
                       editorial={editorial}
                       onSaveBody={saveBody}

@@ -19,13 +19,32 @@ export function Toc({
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState("");
 
-  // 見出し収集
+  // 見出し収集。本文は先頭から順に描画されるので、後から増える見出しも取り込む。
   useEffect(() => {
     if (!content) return;
-    const hs = Array.from(content.querySelectorAll<HTMLElement>("h1, h2, h3, h4"));
-    setHeadings(
-      hs.map((h) => ({ id: h.id, text: h.textContent ?? "", level: Number(h.tagName[1]) })),
-    );
+    const collect = () => {
+      const hs = Array.from(
+        content.querySelectorAll<HTMLElement>("h1, h2, h3, h4"),
+      );
+      setHeadings(
+        hs.map((h) => ({
+          id: h.id,
+          text: h.textContent ?? "",
+          level: Number(h.tagName[1]),
+        })),
+      );
+    };
+    collect();
+    let raf = 0;
+    const mo = new MutationObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(collect);
+    });
+    mo.observe(content, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      cancelAnimationFrame(raf);
+    };
   }, [content, contentKey]);
 
   // スクロールスパイ

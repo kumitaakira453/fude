@@ -1,10 +1,14 @@
-import { useCallback, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { replaceBlock, splitBlocks } from "../lib/blocks";
 import { BlockSourceEditor } from "./BlockSourceEditor";
 import { type CellEditInfo, type ItemEditInfo, Markdown } from "./Markdown";
 
 // タスク行（- [ ] / 1. [x] など）
 const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
+
+// 漸進描画の粒度。最初のひと塊は 1 画面を埋める程度、以降はフレームごとに足す。
+const FIRST_CHUNK = 24;
+const NEXT_CHUNK = 40;
 
 // mermaid コードフェンスのブロックか（インライン編集の対象外にする）
 const isMermaidBlock = (src: string) => /^\s*`{3,}\s*mermaid\b/i.test(src);
@@ -119,6 +123,24 @@ export function EditableBody({
   onSaveBody: (newBody: string) => void;
 }) {
   const blocks = useMemo(() => splitBlocks(body), [body]);
+
+  // 本文は先頭から順に描画する。全ブロックを 1 回のペイントで描くと、
+  // 400 ブロックのファイルで初回描画に 900ms 以上かかって固まって見えるため、
+  // 最初のひと塊だけ即座に出し、残りはフレームごとに足していく。
+  // limit は初期値のみ（DocPane がファイルごとに key で貼り替える）。編集で
+  // body が変わっても描き直しにはならない。
+  const [limit, setLimit] = useState(FIRST_CHUNK);
+  useEffect(() => {
+    if (limit >= blocks.length) return;
+    const id = requestAnimationFrame(() => {
+      // 低優先度で足すことで、この間の入力やスクロールを妨げない
+      startTransition(() =>
+        setLimit((l) => Math.min(l + NEXT_CHUNK, blocks.length)),
+      );
+    });
+    return () => cancelAnimationFrame(id);
+  }, [limit, blocks.length]);
+  const shown = limit >= blocks.length ? blocks : blocks.slice(0, limit);
   // 編集対象ブロックと、開始時のダブルクリック座標（カーソル配置に使う）
   const [editing, setEditing] = useState<{
     index: number;
@@ -253,7 +275,7 @@ export function EditableBody({
 
   return (
     <>
-      {blocks.map((b) => {
+      {shown.map((b) => {
         const key = keyOf(b.src);
         const isTable = isTableBlock(b.src);
         return editing?.index === b.index ? (
