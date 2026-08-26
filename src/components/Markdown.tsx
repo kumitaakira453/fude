@@ -36,7 +36,11 @@ const rehypePlugins = [
   rehypeRaw,
   rehypeSlug,
   rehypeKatex,
-  [rehypeHighlight, { ignoreMissing: true, detect: true }] as const,
+  // detect は付けない。言語指定のないコードフェンス 1 個ごとに highlight.js の
+  // 言語自動判定が走り、全登録文法との照合で約 90ms かかる。本文はブロック単位に
+  // 分けて描画するため、この分だけでファイルを開くのに数秒かかっていた。
+  // 言語指定ありのフェンスは従来どおり色が付く。
+  [rehypeHighlight, { ignoreMissing: true }] as const,
 ];
 
 function childrenToString(children: ReactNode): string {

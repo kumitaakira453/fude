@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { DND_MIME } from "../lib/dnd";
+import { EXTERNAL_APPS, openWith, revealInFinder } from "../lib/external";
 import type { TreeNode } from "../lib/fsAccess";
 import { openToSide } from "../lib/ui";
 import {
@@ -325,6 +326,49 @@ function ContextMenu({
   type MI =
     | { icon: string; label: string; action: () => void; danger?: boolean }
     | "sep";
+  // Finder / 外部エディタで開く（ファイル・フォルダ共通）
+  const externalItems: MI[] = [
+    {
+      icon: "folder_open",
+      label: "Finder で表示",
+      action: () => revealInFinder(absPath),
+    },
+    ...EXTERNAL_APPS.map((a) => ({
+      icon: a.icon,
+      label: a.label,
+      action: () => openWith(absPath, a.app),
+    })),
+  ];
+  const pathItems: MI[] = [
+    {
+      icon: "content_copy",
+      label: "相対パスをコピー",
+      action: () => copy(node.path),
+    },
+    {
+      icon: "file_copy",
+      label: "絶対パスをコピー",
+      action: () => copy(absPath),
+    },
+  ];
+  const commonItems: MI[] = [
+    "sep",
+    {
+      icon: "drive_file_rename_outline",
+      label: "名前を変更",
+      action: () => onRename(node),
+    },
+    {
+      icon: "delete",
+      label: "削除",
+      action: () => onDelete(node),
+      danger: true,
+    },
+    "sep",
+    ...externalItems,
+    "sep",
+    ...pathItems,
+  ];
   const items: MI[] =
     node.kind === "file"
       ? [
@@ -338,29 +382,7 @@ function ContextMenu({
             label: "横に開く",
             action: () => openToSide(store, node.path),
           },
-          "sep",
-          {
-            icon: "drive_file_rename_outline",
-            label: "名前を変更",
-            action: () => onRename(node),
-          },
-          {
-            icon: "delete",
-            label: "削除",
-            action: () => onDelete(node),
-            danger: true,
-          },
-          "sep",
-          {
-            icon: "content_copy",
-            label: "相対パスをコピー",
-            action: () => copy(node.path),
-          },
-          {
-            icon: "folder_open",
-            label: "絶対パスをコピー",
-            action: () => copy(absPath),
-          },
+          ...commonItems,
         ]
       : [
           {
@@ -373,29 +395,7 @@ function ContextMenu({
             label: "新規フォルダ",
             action: () => onNewFolder(node),
           },
-          "sep",
-          {
-            icon: "drive_file_rename_outline",
-            label: "名前を変更",
-            action: () => onRename(node),
-          },
-          {
-            icon: "delete",
-            label: "削除",
-            action: () => onDelete(node),
-            danger: true,
-          },
-          "sep",
-          {
-            icon: "content_copy",
-            label: "相対パスをコピー",
-            action: () => copy(node.path),
-          },
-          {
-            icon: "folder_open",
-            label: "絶対パスをコピー",
-            action: () => copy(absPath),
-          },
+          ...commonItems,
         ];
 
   const rows = items.length;

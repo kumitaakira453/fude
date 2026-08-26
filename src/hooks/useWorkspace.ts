@@ -9,6 +9,7 @@ import {
   pathExists,
   peekImageUrl,
   readFile,
+  readText,
   removePath,
   renamePath,
   writeFile,
@@ -108,8 +109,7 @@ export function useWorkspace() {
         const node = files[i];
         if (!store.get(A.contentCacheAtom).has(node.path) && !batch.has(node.path)) {
           try {
-            const data = await readFile(node.abs);
-            batch.set(node.path, data.text);
+            batch.set(node.path, await readText(node.abs));
           } catch {
             /* 読み込めないファイルはスキップ */
           }

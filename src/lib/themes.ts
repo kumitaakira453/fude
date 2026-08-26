@@ -19,6 +19,10 @@ export const THEMES: ThemeDef[] = [
   { id: "sunset", label: "Sunset", emoji: "🌅", dark: false },
   { id: "rose", label: "Rosé", emoji: "🌸", dark: false },
   { id: "solarized", label: "Solarized", emoji: "☀️", dark: false },
+  { id: "daylight", label: "Daylight", emoji: "🌤️", dark: false },
+  { id: "latte", label: "Latte", emoji: "☕", dark: false },
+  { id: "mint", label: "Mint", emoji: "🌿", dark: false },
+  { id: "lavender", label: "Lavender", emoji: "💐", dark: false },
 ];
 
 // 暗色テーマ ID（Mermaid のテーマ切替などで使用）

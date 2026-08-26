@@ -25,6 +25,10 @@
     {
       "identifier": "fs:scope",
       "allow": ["$HOME/**"]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$HOME/**", "app": true }]
     }
   ]
 }

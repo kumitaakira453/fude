@@ -284,6 +284,86 @@ body {
   --mg-mark-fg: #586e75;
   --mg-danger: #dc322f;
 }
+[data-theme="daylight"] {
+  color-scheme: light;
+  --mg-bg: #fbfcfd;
+  --mg-panel: #ffffff;
+  --mg-fg: #1b2430;
+  --mg-fg-dim: #33414f;
+  --mg-muted: #8996a5;
+  --mg-border: #e3e8ee;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #2563eb;
+  --mg-accent2: #0891b2;
+  --mg-accent-soft: rgba(37, 99, 235, 0.1);
+  --mg-code-bg: #f4f7fa;
+  --mg-code-head: #e9eef4;
+  --mg-code-fg: #26313d;
+  --mg-input-bg: #ffffff;
+  --mg-mark: #bfdbfe;
+  --mg-mark-fg: #1e293b;
+  --mg-danger: #dc2626;
+}
+[data-theme="latte"] {
+  color-scheme: light;
+  --mg-bg: #eff1f5;
+  --mg-panel: #e6e9ef;
+  --mg-fg: #3c3f54;
+  --mg-fg-dim: #4c4f69;
+  --mg-muted: #9ca0b0;
+  --mg-border: #ccd0da;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #8839ef;
+  --mg-accent2: #1e66f5;
+  --mg-accent-soft: rgba(136, 57, 239, 0.12);
+  --mg-code-bg: #e6e9ef;
+  --mg-code-head: #dce0e8;
+  --mg-code-fg: #4c4f69;
+  --mg-input-bg: #eff1f5;
+  --mg-mark: #fce8b2;
+  --mg-mark-fg: #4c4f69;
+  --mg-danger: #d20f39;
+}
+[data-theme="mint"] {
+  color-scheme: light;
+  --mg-bg: #f5faf7;
+  --mg-panel: #fdfffe;
+  --mg-fg: #1f2d27;
+  --mg-fg-dim: #334740;
+  --mg-muted: #8aa199;
+  --mg-border: #dbeae3;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #0f766e;
+  --mg-accent2: #7c3aed;
+  --mg-accent-soft: rgba(15, 118, 110, 0.11);
+  --mg-code-bg: #edf6f1;
+  --mg-code-head: #e0efe8;
+  --mg-code-fg: #24352e;
+  --mg-input-bg: #fdfffe;
+  --mg-mark: #a7f3d0;
+  --mg-mark-fg: #14342b;
+  --mg-danger: #dc2626;
+}
+[data-theme="lavender"] {
+  color-scheme: light;
+  --mg-bg: #f8f6fd;
+  --mg-panel: #fefdff;
+  --mg-fg: #2a2440;
+  --mg-fg-dim: #3d3557;
+  --mg-muted: #9790b0;
+  --mg-border: #e6e0f3;
+  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-accent: #6d28d9;
+  --mg-accent2: #0d9488;
+  --mg-accent-soft: rgba(109, 40, 217, 0.1);
+  --mg-code-bg: #f1ecfa;
+  --mg-code-head: #e7e0f5;
+  --mg-code-fg: #302a47;
+  --mg-input-bg: #fefdff;
+  --mg-mark: #ddd6fe;
+  --mg-mark-fg: #2e2748;
+  --mg-danger: #dc2626;
+}
 
 /* ============================================================
    シンタックスハイライト（highlight.js トークン → CSS 変数）
@@ -309,7 +389,11 @@ body {
 [data-theme="paper"],
 [data-theme="sunset"],
 [data-theme="rose"],
-[data-theme="solarized"] {
+[data-theme="solarized"],
+[data-theme="daylight"],
+[data-theme="latte"],
+[data-theme="mint"],
+[data-theme="lavender"] {
   --sx-comment: #9a948a;
   --sx-key: #9333ea;
   --sx-str: #15803d;
@@ -973,6 +1057,24 @@ button.mg-task-check:hover {
   max-width: 100% !important;
   height: auto !important;
   max-height: 440px !important;
+}
+/* mermaid はラベルを body 直下の一時要素で計測してノードの高さを決める。最終描画は
+   .mg-prose の中なので、本文の line-height（1.75）や typography プラグインの段落
+   マージンが描画側にだけ効き、テキストが計測より高くなってノード枠から溢れる
+   （最終行が欠ける）。計測側の SVG も最終描画の SVG も id が mmd- で始まるため、
+   両方に同じ組版を固定して一致させる。 */
+svg[id^="mmd-"] foreignObject div,
+svg[id^="mmd-"] foreignObject span,
+svg[id^="mmd-"] foreignObject p,
+svg[id^="mmd-"] .nodeLabel,
+svg[id^="mmd-"] .edgeLabel,
+svg[id^="mmd-"] .label {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+svg[id^="mmd-"] foreignObject p {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 /* 拡大の手がかり（常時表示・控えめ） */
 .mg-mermaid-zoom {

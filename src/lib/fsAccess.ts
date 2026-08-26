@@ -125,6 +125,11 @@ export async function pathExists(abs: string): Promise<boolean> {
   }
 }
 
+// 全文検索インデックス用。mtime を使わない経路では stat を省いて IPC を半減させる。
+export async function readText(abs: string): Promise<string> {
+  return readTextFile(abs);
+}
+
 export async function readFile(abs: string): Promise<FileData> {
   const text = await readTextFile(abs);
   let lastModified = 0;
