@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { replaceBlock, splitBlocks } from "../lib/blocks";
 import { BlockSourceEditor } from "./BlockSourceEditor";
-import { type CellEditInfo, Markdown } from "./Markdown";
+import { type CellEditInfo, type ItemEditInfo, Markdown } from "./Markdown";
 
 // タスク行（- [ ] / 1. [x] など）
 const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
@@ -77,6 +77,13 @@ interface EditingCell {
   value: string;
 }
 
+interface EditingItem {
+  blockIndex: number;
+  start: number;
+  end: number;
+  value: string;
+}
+
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
 // 生ソース編集にする。編集対象以外は一切動かない（目線を動かさない）。
 export function EditableBody({
@@ -97,6 +104,41 @@ export function EditableBody({
   } | null>(null);
   // 編集中のテーブルセル（ブロック全体ではなく 1 セルだけ）
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  // 編集中の箇条書き項目（リスト全体ではなく 1 項目の本文だけ）
+  const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
+
+  const handleEditItem = useCallback(
+    (info: ItemEditInfo) => {
+      const block = blocks[info.blockIndex];
+      if (!block) return;
+      setEditing(null);
+      setEditingCell(null);
+      setEditingItem({
+        blockIndex: info.blockIndex,
+        start: info.start,
+        end: info.end,
+        value: block.src.slice(info.start, info.end),
+      });
+    },
+    [blocks],
+  );
+
+  const commitItem = useCallback(
+    (v: string) => {
+      if (!editingItem) return;
+      const block = blocks[editingItem.blockIndex];
+      setEditingItem(null);
+      if (!block) return;
+      const newSrc =
+        block.src.slice(0, editingItem.start) +
+        v +
+        block.src.slice(editingItem.end);
+      if (newSrc !== block.src) onSaveBody(replaceBlock(body, block, newSrc));
+    },
+    [editingItem, blocks, body, onSaveBody],
+  );
+
+  const cancelItem = useCallback(() => setEditingItem(null), []);
 
   // ダブルクリックされたセルの位置から編集対象を確定する
   const handleEditCell = useCallback(
@@ -105,6 +147,7 @@ export function EditableBody({
       if (!block) return;
       const lineIndex = info.rowKind === "head" ? 0 : 2 + info.rowIndex;
       setEditing(null);
+      setEditingItem(null);
       setEditingCell({
         blockIndex: info.blockIndex,
         cellStart: info.cellStart,
@@ -185,6 +228,7 @@ export function EditableBody({
       {blocks.map((b) => {
         const key = keyOf(b.src);
         const isTable = isTableBlock(b.src);
+        const isList = b.type === "list";
         return editing?.index === b.index ? (
           <BlockSourceEditor
             key={key}
@@ -201,9 +245,10 @@ export function EditableBody({
             key={key}
             className="mg-block"
             onDoubleClick={
-              // mermaid・テーブルはブロック全体編集の対象外。
-              // テーブルはセル単位のインライン編集（handleEditCell）を使う。
-              isMermaidBlock(b.src) || isTable
+              // mermaid・テーブル・箇条書きはブロック全体編集の対象外。
+              // テーブルはセル単位（handleEditCell）、箇条書きは項目単位
+              // （handleEditItem）のインライン編集を使う。
+              isMermaidBlock(b.src) || isTable || isList
                 ? undefined
                 : (e) =>
                     setEditing({ index: b.index, x: e.clientX, y: e.clientY })
@@ -228,6 +273,18 @@ export function EditableBody({
               }
               onCellCancel={
                 editingCell?.blockIndex === b.index ? cancelCell : undefined
+              }
+              onEditItem={handleEditItem}
+              editItem={
+                editingItem?.blockIndex === b.index
+                  ? { start: editingItem.start, value: editingItem.value }
+                  : undefined
+              }
+              onItemCommit={
+                editingItem?.blockIndex === b.index ? commitItem : undefined
+              }
+              onItemCancel={
+                editingItem?.blockIndex === b.index ? cancelItem : undefined
               }
             />
           </div>

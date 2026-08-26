@@ -77,6 +77,19 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const path = pane.path;
   const raw = path ? cache.get(path) : undefined;
 
+  // 本文が未読込のあいだはローディングを出す。ただし一瞬で読める場合に
+  // ちらつかせないよう、遅延してから表示する（読めたら即座に消す）。
+  const loaded = !!path && raw !== undefined;
+  const [showLoading, setShowLoading] = useState(false);
+  useEffect(() => {
+    if (!path || loaded) {
+      setShowLoading(false);
+      return;
+    }
+    const t = window.setTimeout(() => setShowLoading(true), 180);
+    return () => window.clearTimeout(t);
+  }, [path, loaded]);
+
   const enterEdit = () => {
     setDraft(raw ?? "");
     setEditing(true);
@@ -332,7 +345,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             ref={setScroller}
             className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
           >
-            {path ? (
+            {path && !loaded ? (
+              <div className="px-6 py-8 sm:px-10">
+                {showLoading && (
+                  <div className={`${WIDTH_CLASS[width]} mx-auto`}>
+                    <LoadingBody />
+                  </div>
+                )}
+              </div>
+            ) : path ? (
               <div className="px-6 py-8 sm:px-10">
                 <article
                   ref={setContent}
@@ -397,6 +418,23 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
       </div>
     </section>
+  );
+}
+
+// 読込中のプレースホルダ。見出し＋段落の骨組みを並べ、本文が出たときに
+// 位置が大きく動かないようにする。
+function LoadingBody() {
+  const widths = ["45%", "100%", "92%", "78%", "100%", "88%", "60%"];
+  return (
+    <div className="mg-skeleton" aria-label="読み込み中" aria-busy>
+      {widths.map((w, i) => (
+        <div
+          key={i}
+          className={`mg-skeleton-bar${i === 0 ? " mg-skeleton-head" : ""}`}
+          style={{ width: w }}
+        />
+      ))}
+    </div>
   );
 }
 

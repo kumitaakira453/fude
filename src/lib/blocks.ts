@@ -11,11 +11,13 @@ export interface Block {
   src: string; // このブロックの生 Markdown
   start: number; // body 内のオフセット（開始）
   end: number; // body 内のオフセット（終端・排他）
+  type: string; // mdast のノード種別（list / table / paragraph など）
 }
 
 const processor = unified().use(remarkParse).use(remarkGfm);
 
 interface MdastNode {
+  type?: string;
   position?: {
     start: { offset?: number };
     end: { offset?: number };
@@ -28,7 +30,13 @@ export function splitBlocks(body: string): Block[] {
   tree.children.forEach((node, index) => {
     const start = node.position?.start.offset ?? 0;
     const end = node.position?.end.offset ?? body.length;
-    blocks.push({ index, src: body.slice(start, end), start, end });
+    blocks.push({
+      index,
+      src: body.slice(start, end),
+      start,
+      end,
+      type: node.type ?? "",
+    });
   });
   return blocks;
 }

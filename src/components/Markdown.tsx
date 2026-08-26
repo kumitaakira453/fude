@@ -4,6 +4,7 @@ import {
   isValidElement,
   memo,
   useContext,
+  useState,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -89,6 +90,41 @@ function stripCalloutMarker(children: ReactNode): ReactNode {
   });
 }
 
+// タスクのチェックボックス。クリック直後に見た目を反転させ（楽観的更新）、
+// 保存 → 再パースの往復を待たせない。markdown 側が更新されるとブロックごと
+// 再マウントされるため、このローカル状態は自然に破棄される。
+function TaskCheck({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle?: () => void;
+}) {
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  const on = optimistic ?? checked;
+  const icon = on ? "check_box" : "check_box_outline_blank";
+  if (!onToggle) {
+    return (
+      <span className="mg-task-check" aria-hidden>
+        <Icon name={icon} size={20} fill={on} />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="mg-task-check"
+      aria-label={on ? "未完了に戻す" : "完了にする"}
+      onClick={() => {
+        setOptimistic(!on);
+        onToggle();
+      }}
+    >
+      <Icon name={icon} size={20} fill={on} />
+    </button>
+  );
+}
+
 function Callout({ type, children }: { type: string; children: ReactNode }) {
   const c = CALLOUT[type] ?? CALLOUT.NOTE;
   return (
@@ -159,6 +195,38 @@ export interface CellEditInfo {
   rowIndex: number;
 }
 
+// 箇条書き 1 項目の「本文」だけのソース範囲。マーカー（- / 1. / [ ]）と
+// ネストした子リストは範囲に含めないので、編集で壊れない。
+export interface ItemEditInfo {
+  blockIndex: number;
+  start: number;
+  end: number;
+}
+
+interface HastChild {
+  type: string;
+  tagName?: string;
+  value?: string;
+  position?: { start: { offset?: number }; end: { offset?: number } };
+}
+
+function itemTextRange(node: unknown): { start: number; end: number } | null {
+  const kids = ((node as { children?: HastChild[] })?.children ?? []).filter(
+    (c) => {
+      // 空白だけのテキスト（loose list の改行）は無視
+      if (c.type === "text" && !(c.value ?? "").trim()) return false;
+      // ネストした子リストは項目の本文ではない
+      if (c.type === "element" && (c.tagName === "ul" || c.tagName === "ol"))
+        return false;
+      return c.position?.start.offset !== undefined;
+    },
+  );
+  if (!kids.length) return null;
+  const start = kids[0].position?.start.offset;
+  const end = kids[kids.length - 1].position?.end.offset;
+  return start === undefined || end === undefined ? null : { start, end };
+}
+
 export const Markdown = memo(function Markdown({
   body,
   editorial,
@@ -168,6 +236,10 @@ export const Markdown = memo(function Markdown({
   onEditCell,
   onCellCommit,
   onCellCancel,
+  editItem,
+  onEditItem,
+  onItemCommit,
+  onItemCancel,
 }: {
   body: string;
   editorial: boolean;
@@ -179,6 +251,11 @@ export const Markdown = memo(function Markdown({
   onEditCell?: (info: CellEditInfo) => void;
   onCellCommit?: (v: string) => void;
   onCellCancel?: () => void;
+  // 箇条書きの項目単位編集。編集対象は本文の開始オフセットで特定。
+  editItem?: { start: number; value: string } | null;
+  onEditItem?: (info: ItemEditInfo) => void;
+  onItemCommit?: (v: string) => void;
+  onItemCancel?: () => void;
 }) {
   const ctx = useContext(markdownContext);
   // レンダーごとにリセットされるチェックボックスの通し番号
@@ -298,6 +375,41 @@ export const Markdown = memo(function Markdown({
             <ol className={editorial ? "mg-steps" : undefined}>{children}</ol>
           );
         },
+        // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
+        li({ node, children, ...rest }) {
+          const range = itemTextRange(node);
+          if (editItem && range && editItem.start === range.start) {
+            return (
+              <li {...rest}>
+                <CellEditor
+                  value={editItem.value}
+                  onCommit={(v) => onItemCommit?.(v)}
+                  onCancel={() => onItemCancel?.()}
+                />
+              </li>
+            );
+          }
+          return (
+            <li
+              {...rest}
+              onDoubleClick={
+                onEditItem && range
+                  ? (e) => {
+                      // ネストの内側を優先し、ブロック全体編集にも渡さない
+                      e.stopPropagation();
+                      onEditItem({
+                        blockIndex: blockIndex ?? 0,
+                        start: range.start,
+                        end: range.end,
+                      });
+                    }
+                  : undefined
+              }
+            >
+              {children}
+            </li>
+          );
+        },
         hr() {
           // WebKit は hr::before を描画しないため、editorial の「· · ·」区切りは
           // ドットを実テキストで持つ div にする（確実に表示される）。
@@ -314,25 +426,17 @@ export const Markdown = memo(function Markdown({
             return <input type={type} checked={checked} readOnly />;
           }
           // ネイティブ checkbox を Material アイコンに統一。クリックでトグル。
-          const icon = checked ? "check_box" : "check_box_outline_blank";
           const ordinal = taskSeq.n++;
-          if (onToggleTask && typeof blockIndex === "number") {
-            const bi = blockIndex;
-            return (
-              <button
-                type="button"
-                className="mg-task-check"
-                aria-label={checked ? "未完了に戻す" : "完了にする"}
-                onClick={() => onToggleTask(bi, ordinal)}
-              >
-                <Icon name={icon} size={20} fill={checked} />
-              </button>
-            );
-          }
+          const bi = blockIndex;
           return (
-            <span className="mg-task-check" aria-hidden>
-              <Icon name={icon} size={20} fill={checked} />
-            </span>
+            <TaskCheck
+              checked={!!checked}
+              onToggle={
+                onToggleTask && typeof bi === "number"
+                  ? () => onToggleTask(bi, ordinal)
+                  : undefined
+              }
+            />
           );
         },
         a({ href, children, ...props }) {
