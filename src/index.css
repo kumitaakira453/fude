@@ -63,6 +63,8 @@ body {
   --mg-mark: #f6e05e;
   --mg-mark-fg: #1a1a1a;
   --mg-danger: #f87171;
+  --mg-icode-fg: #a977ee;
+  --mg-icode-bg: rgba(146, 83, 234, 0.13);
 }
 [data-theme="midnight"] {
   color-scheme: dark;
@@ -83,6 +85,8 @@ body {
   --mg-mark: #ffd166;
   --mg-mark-fg: #10162c;
   --mg-danger: #ff6b6b;
+  --mg-icode-fg: #b471ef;
+  --mg-icode-bg: rgba(163, 81, 236, 0.13);
 }
 [data-theme="nord"] {
   color-scheme: dark;
@@ -103,6 +107,8 @@ body {
   --mg-mark: #ebcb8b;
   --mg-mark-fg: #2e3440;
   --mg-danger: #bf616a;
+  --mg-icode-fg: #d9abcb;
+  --mg-icode-bg: rgba(195, 121, 173, 0.13);
 }
 [data-theme="forest"] {
   color-scheme: dark;
@@ -123,6 +129,8 @@ body {
   --mg-mark: #fde047;
   --mg-mark-fg: #0b1410;
   --mg-danger: #f87171;
+  --mg-icode-fg: #c59c20;
+  --mg-icode-bg: rgba(228, 193, 88, 0.13);
 }
 [data-theme="dracula"] {
   color-scheme: dark;
@@ -143,6 +151,8 @@ body {
   --mg-mark: #f1fa8c;
   --mg-mark-fg: #282a36;
   --mg-danger: #ff5555;
+  --mg-icode-fg: #f782c4;
+  --mg-icode-bg: rgba(243, 73, 169, 0.13);
 }
 [data-theme="tokyonight"] {
   color-scheme: dark;
@@ -163,6 +173,8 @@ body {
   --mg-mark: #e0af68;
   --mg-mark-fg: #16161e;
   --mg-danger: #f7768e;
+  --mg-icode-fg: #f66f8a;
+  --mg-icode-bg: rgba(243, 73, 107, 0.13);
 }
 [data-theme="catppuccin"] {
   color-scheme: dark;
@@ -183,6 +195,8 @@ body {
   --mg-mark: #f9e2af;
   --mg-mark-fg: #1e1e2e;
   --mg-danger: #f38ba8;
+  --mg-icode-fg: #b788f2;
+  --mg-icode-bg: rgba(150, 81, 236, 0.13);
 }
 [data-theme="rosepine"] {
   color-scheme: dark;
@@ -203,6 +217,8 @@ body {
   --mg-mark: #f6c177;
   --mg-mark-fg: #191724;
   --mg-danger: #eb6f92;
+  --mg-icode-fg: #af85e0;
+  --mg-icode-bg: rgba(154, 100, 216, 0.13);
 }
 [data-theme="paper"] {
   color-scheme: light;
@@ -223,6 +239,8 @@ body {
   --mg-mark: #fde68a;
   --mg-mark-fg: #3a3a2a;
   --mg-danger: #dc2626;
+  --mg-icode-fg: #8d2ab2;
+  --mg-icode-bg: rgba(168, 57, 208, 0.13);
 }
 [data-theme="sunset"] {
   color-scheme: light;
@@ -243,6 +261,8 @@ body {
   --mg-mark: #fed7aa;
   --mg-mark-fg: #3a2b28;
   --mg-danger: #dc2626;
+  --mg-icode-fg: #ad1f58;
+  --mg-icode-bg: rgba(218, 47, 115, 0.13);
 }
 [data-theme="rose"] {
   color-scheme: light;
@@ -263,6 +283,8 @@ body {
   --mg-mark: #fbcfe8;
   --mg-mark-fg: #322229;
   --mg-danger: #dc2626;
+  --mg-icode-fg: #6b2bda;
+  --mg-icode-bg: rgba(110, 47, 218, 0.13);
 }
 [data-theme="solarized"] {
   color-scheme: light;
@@ -283,6 +305,8 @@ body {
   --mg-mark: #eee3b8;
   --mg-mark-fg: #586e75;
   --mg-danger: #dc322f;
+  --mg-icode-fg: #a52764;
+  --mg-icode-bg: rgba(208, 57, 130, 0.13);
 }
 [data-theme="daylight"] {
   color-scheme: light;
@@ -303,6 +327,8 @@ body {
   --mg-mark: #bfdbfe;
   --mg-mark-fg: #1e293b;
   --mg-danger: #dc2626;
+  --mg-icode-fg: #1f6984;
+  --mg-icode-bg: rgba(57, 168, 208, 0.13);
 }
 [data-theme="latte"] {
   color-scheme: light;
@@ -323,6 +349,8 @@ body {
   --mg-mark: #fce8b2;
   --mg-mark-fg: #4c4f69;
   --mg-danger: #d20f39;
+  --mg-icode-fg: #a9232e;
+  --mg-icode-bg: rgba(213, 52, 65, 0.13);
 }
 [data-theme="mint"] {
   color-scheme: light;
@@ -343,6 +371,8 @@ body {
   --mg-mark: #a7f3d0;
   --mg-mark-fg: #14342b;
   --mg-danger: #dc2626;
+  --mg-icode-fg: #6c30d5;
+  --mg-icode-bg: rgba(111, 52, 213, 0.13);
 }
 [data-theme="lavender"] {
   color-scheme: light;
@@ -363,6 +393,8 @@ body {
   --mg-mark: #ddd6fe;
   --mg-mark-fg: #2e2748;
   --mg-danger: #dc2626;
+  --mg-icode-fg: #1d6d67;
+  --mg-icode-bg: rgba(62, 204, 194, 0.13);
 }
 
 /* ============================================================
@@ -475,7 +507,7 @@ body {
   --tw-prose-quotes: var(--mg-fg-dim);
   --tw-prose-quote-borders: var(--mg-accent);
   --tw-prose-captions: var(--mg-muted);
-  --tw-prose-code: var(--mg-accent2);
+  --tw-prose-code: var(--mg-icode-fg);
   --tw-prose-pre-code: var(--mg-code-fg);
   --tw-prose-pre-bg: var(--mg-code-bg);
   --tw-prose-th-borders: var(--mg-border);
@@ -514,9 +546,12 @@ body {
   font-size: 0.85em;
   line-height: 1.65;
 }
+/* インラインコード: 背景の色味と文字色を同じ色相で揃え（従来は背景が accent、
+   文字が accent2 で色相が食い違っていた）、どのテーマでも AA 以上の
+   コントラストになる明度を選んである。 */
 .mg-prose :not(pre) > code {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent2);
+  background: var(--mg-icode-bg);
+  color: var(--mg-icode-fg);
   font-family: var(--mg-font-mono);
   font-weight: 500;
   font-size: 0.86em;
