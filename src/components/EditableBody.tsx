@@ -79,9 +79,32 @@ interface EditingCell {
 
 interface EditingItem {
   blockIndex: number;
+  anchor: number;
   start: number;
   end: number;
   value: string;
+}
+
+// 箇条書き項目のマーカー（インデント + - / 1. + 任意の [ ] チェックボックス）
+const ITEM_MARKER_RE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/;
+
+// anchor を含む 1 行から、マーカーを除いた「項目の本文」の範囲を求める。
+// 子リストは別の行なので範囲に入らず、マーカーも保たれる。
+function itemTextRange(
+  src: string,
+  anchor: number,
+): { start: number; end: number } | null {
+  const at = Math.max(0, Math.min(anchor, src.length));
+  const lineStart = src.lastIndexOf("\n", at - 1) + 1;
+  const nl = src.indexOf("\n", lineStart);
+  const lineEnd = nl === -1 ? src.length : nl;
+  const line = src.slice(lineStart, lineEnd);
+  const marker = ITEM_MARKER_RE.exec(line);
+  if (!marker) return null;
+  let start = lineStart + marker[0].length;
+  let end = lineEnd;
+  while (end > start && /\s/.test(src[end - 1])) end--;
+  return start < end ? { start, end } : null;
 }
 
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
@@ -111,13 +134,18 @@ export function EditableBody({
     (info: ItemEditInfo) => {
       const block = blocks[info.blockIndex];
       if (!block) return;
+      const range = itemTextRange(block.src, info.anchor);
+      // 行からマーカーが読めない（継続行など）場合は項目編集にせず、
+      // ブロック全体編集へのフォールバックに任せる。
+      if (!range) return;
       setEditing(null);
       setEditingCell(null);
       setEditingItem({
         blockIndex: info.blockIndex,
-        start: info.start,
-        end: info.end,
-        value: block.src.slice(info.start, info.end),
+        anchor: info.anchor,
+        start: range.start,
+        end: range.end,
+        value: block.src.slice(range.start, range.end),
       });
     },
     [blocks],
@@ -228,7 +256,6 @@ export function EditableBody({
       {blocks.map((b) => {
         const key = keyOf(b.src);
         const isTable = isTableBlock(b.src);
-        const isList = b.type === "list";
         return editing?.index === b.index ? (
           <BlockSourceEditor
             key={key}
@@ -245,10 +272,10 @@ export function EditableBody({
             key={key}
             className="mg-block"
             onDoubleClick={
-              // mermaid・テーブル・箇条書きはブロック全体編集の対象外。
-              // テーブルはセル単位（handleEditCell）、箇条書きは項目単位
-              // （handleEditItem）のインライン編集を使う。
-              isMermaidBlock(b.src) || isTable || isList
+              // mermaid・テーブルはブロック全体編集の対象外（テーブルはセル単位）。
+              // 箇条書きは項目単位で編集するが、項目の範囲が取れない場合は li 側が
+              // イベントを止めないので、ここに落ちてリスト全体の編集になる。
+              isMermaidBlock(b.src) || isTable
                 ? undefined
                 : (e) =>
                     setEditing({ index: b.index, x: e.clientX, y: e.clientY })
@@ -277,7 +304,7 @@ export function EditableBody({
               onEditItem={handleEditItem}
               editItem={
                 editingItem?.blockIndex === b.index
-                  ? { start: editingItem.start, value: editingItem.value }
+                  ? { anchor: editingItem.anchor, value: editingItem.value }
                   : undefined
               }
               onItemCommit={

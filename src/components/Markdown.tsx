@@ -195,36 +195,29 @@ export interface CellEditInfo {
   rowIndex: number;
 }
 
-// 箇条書き 1 項目の「本文」だけのソース範囲。マーカー（- / 1. / [ ]）と
-// ネストした子リストは範囲に含めないので、編集で壊れない。
+// ダブルクリックされた箇条書き項目の位置。実際に編集するソース範囲は
+// EditableBody がこの位置を含む行から求める（マーカーとネスト項目は除く）。
 export interface ItemEditInfo {
   blockIndex: number;
-  start: number;
-  end: number;
+  anchor: number;
 }
 
 interface HastChild {
-  type: string;
+  type?: string;
   tagName?: string;
   value?: string;
-  position?: { start: { offset?: number }; end: { offset?: number } };
+  // 合成ノードでは position ごと、あるいは start / end が欠けることがある
+  position?: { start?: { offset?: number }; end?: { offset?: number } };
 }
 
-function itemTextRange(node: unknown): { start: number; end: number } | null {
-  const kids = ((node as { children?: HastChild[] })?.children ?? []).filter(
-    (c) => {
-      // 空白だけのテキスト（loose list の改行）は無視
-      if (c.type === "text" && !(c.value ?? "").trim()) return false;
-      // ネストした子リストは項目の本文ではない
-      if (c.type === "element" && (c.tagName === "ul" || c.tagName === "ol"))
-        return false;
-      return c.position?.start.offset !== undefined;
-    },
-  );
-  if (!kids.length) return null;
-  const start = kids[0].position?.start.offset;
-  const end = kids[kids.length - 1].position?.end.offset;
-  return start === undefined || end === undefined ? null : { start, end };
+// 項目の開始オフセット。実際に編集する範囲は EditableBody 側がソースの行から
+// 決めるので、ここでは「どの項目か」を特定できる位置だけを返す。
+// rehype-raw / rehype-katex を通すと子ノードの position が落ちることがあるため、
+// li 自身の position を基点にする。
+function itemAnchor(node: unknown): number | null {
+  const n = node as HastChild | null | undefined;
+  const s = n?.position?.start?.offset;
+  return typeof s === "number" ? s : null;
 }
 
 export const Markdown = memo(function Markdown({
@@ -251,8 +244,8 @@ export const Markdown = memo(function Markdown({
   onEditCell?: (info: CellEditInfo) => void;
   onCellCommit?: (v: string) => void;
   onCellCancel?: () => void;
-  // 箇条書きの項目単位編集。編集対象は本文の開始オフセットで特定。
-  editItem?: { start: number; value: string } | null;
+  // 箇条書きの項目単位編集。編集対象は項目の開始オフセットで特定。
+  editItem?: { anchor: number; value: string } | null;
   onEditItem?: (info: ItemEditInfo) => void;
   onItemCommit?: (v: string) => void;
   onItemCancel?: () => void;
@@ -377,8 +370,8 @@ export const Markdown = memo(function Markdown({
         },
         // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
         li({ node, children, ...rest }) {
-          const range = itemTextRange(node);
-          if (editItem && range && editItem.start === range.start) {
+          const anchor = itemAnchor(node);
+          if (editItem && anchor !== null && editItem.anchor === anchor) {
             return (
               <li {...rest}>
                 <CellEditor
@@ -393,15 +386,11 @@ export const Markdown = memo(function Markdown({
             <li
               {...rest}
               onDoubleClick={
-                onEditItem && range
+                onEditItem && anchor !== null
                   ? (e) => {
                       // ネストの内側を優先し、ブロック全体編集にも渡さない
                       e.stopPropagation();
-                      onEditItem({
-                        blockIndex: blockIndex ?? 0,
-                        start: range.start,
-                        end: range.end,
-                      });
+                      onEditItem({ blockIndex: blockIndex ?? 0, anchor });
                     }
                   : undefined
               }
