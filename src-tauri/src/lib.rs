@@ -57,6 +57,14 @@ async fn review_create_thread(
     .map_err(|e| format!("指摘の作成に失敗しました: {e}"))?
 }
 
+// 版の本文を返す。差分表示のために、指摘を付けた時点の全文を読む。
+#[tauri::command]
+async fn review_version_text(id: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || review::snapshot::get(&id))
+        .await
+        .map_err(|e| format!("版の読み込みに失敗しました: {e}"))?
+}
+
 #[tauri::command]
 async fn review_reply(thread: String, author: String, body: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::reply(&thread, &author, &body))
@@ -69,13 +77,6 @@ async fn review_resolve(thread: String, by: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::resolve(&thread, &by))
         .await
         .map_err(|e| format!("解決に失敗しました: {e}"))?
-}
-
-#[tauri::command]
-async fn review_commit(file: String, message: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || review::commit(&PathBuf::from(file), &message))
-        .await
-        .map_err(|e| format!("版の記録に失敗しました: {e}"))?
 }
 
 // 外部エディタで開く。opener プラグイン経由だと detached 起動で終了コードが
@@ -134,9 +135,9 @@ pub fn run() {
             installed_apps,
             review_store_path,
             review_create_thread,
+            review_version_text,
             review_reply,
-            review_resolve,
-            review_commit
+            review_resolve
         ])
         .setup(|app| {
             // 自動更新（デスクトップのみ）

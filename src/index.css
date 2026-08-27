@@ -1216,6 +1216,68 @@ svg[id^="mmd-"] foreignObject p {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
 
+/* ============================================================
+   レビューの指摘（本文 DOM を書き換えないオーバーレイ）
+   検索ハイライトと違い読書中も出したままにするため、塗りではなく
+   下線にとどめて本文の可読性を落とさない。色はアクセントから導出する。
+   ============================================================ */
+.mg-review-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mg-review-mark {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  border-radius: 0.15em;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.mg-review-mark:hover {
+  background: color-mix(in srgb, var(--mg-accent) 12%, transparent);
+  border-bottom-color: var(--mg-accent);
+}
+.mg-review-mark-active {
+  background: color-mix(in srgb, var(--mg-accent) 18%, transparent);
+  border-bottom-color: var(--mg-accent);
+}
+
+/* 差分の枠。追加と削除は緑と赤で示す。この 2 色だけはアクセント色から
+   導出できないため固定値を使い、薄い着色にして明暗どちらの地色でも成立させる。 */
+.mg-diff {
+  border-left: 3px solid;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.85rem 0.1rem;
+}
+.mg-diff-add {
+  border-color: #10b981;
+  background: color-mix(in srgb, #10b981 8%, transparent);
+}
+.mg-diff-del {
+  border-color: #f43f5e;
+  background: color-mix(in srgb, #f43f5e 8%, transparent);
+}
+.mg-diff-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--mg-muted);
+}
+
+/* 小窓に出す引用。長い表やリストでも小窓が伸びないように畳む。 */
+.mg-review-quote {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
 /* 本文内の検索ナビ（ヒット数・前後移動・解除） */
 .mg-find {
   position: absolute;

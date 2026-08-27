@@ -12,12 +12,14 @@ export interface Block {
   start: number; // body 内のオフセット（開始）
   end: number; // body 内のオフセット（終端・排他）
   type: string; // mdast のノード種別（list / table / paragraph など）
+  depth?: number; // 見出しの階層（type が heading のときだけ）
 }
 
 const processor = unified().use(remarkParse).use(remarkGfm);
 
 interface MdastNode {
   type?: string;
+  depth?: number;
   position?: {
     start: { offset?: number };
     end: { offset?: number };
@@ -36,9 +38,33 @@ export function splitBlocks(body: string): Block[] {
       start,
       end,
       type: node.type ?? "",
+      depth: node.type === "heading" ? node.depth : undefined,
     });
   });
   return blocks;
+}
+
+// 指定したブロックが属する見出しの階層を、上位から順に返す。
+// レビューの指摘に「どのセクションに対するものか」を持たせるために使う。
+export function sectionPathAt(blocks: Block[], blockIndex: number): string[] {
+  const stack: { depth: number; text: string }[] = [];
+  for (const block of blocks) {
+    if (block.index >= blockIndex) break;
+    if (block.type !== "heading" || !block.depth) continue;
+    while (stack.length && stack[stack.length - 1].depth >= block.depth) stack.pop();
+    stack.push({ depth: block.depth, text: headingText(block.src) });
+  }
+  return stack.map((s) => s.text);
+}
+
+// 見出しブロックのソースから表示される文字列を取り出す。
+// ATX（### 見出し）と Setext（見出し\n===）の両方を扱う。
+function headingText(src: string): string {
+  const firstLine = src.split("\n", 1)[0] ?? "";
+  return firstLine
+    .replace(/^\s*#{1,6}\s*/, "")
+    .replace(/\s*#+\s*$/, "")
+    .trim();
 }
 
 // ブロックの編集結果を body に差し戻す（範囲外＝ブロック間の空行等は保持）。

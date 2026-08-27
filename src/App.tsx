@@ -4,10 +4,12 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
+import { ReviewScreen } from "./components/review/ReviewScreen";
 import { Toolbar } from "./components/Toolbar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
+import { useReviewLedger } from "./hooks/useReviewLedger";
 import { useWatcher } from "./hooks/useWatcher";
 import {
   activeFolderIdAtom,
@@ -17,6 +19,7 @@ import {
   sidebarOpenAtom,
   themeAtom,
 } from "./state/atoms";
+import { reviewScreenAtom } from "./state/review";
 
 export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
@@ -24,11 +27,13 @@ export default function App() {
   const theme = useAtomValue(themeAtom);
   const layout = useAtomValue(layoutAtom);
   const activePaneId = useAtomValue(activePaneIdAtom);
+  const reviewOpen = useAtomValue(reviewScreenAtom);
   const store = useStore();
 
   useHotkeys();
   useWatcher();
   useUrlSync();
+  useReviewLedger();
 
   // テーマを html 要素に反映
   useEffect(() => {
@@ -85,6 +90,16 @@ export default function App() {
         <Landing />
         <UpdateBanner />
       </div>
+    );
+  }
+
+  // レビューは専用画面。読書ビューに重ねると差分を並べて見せられない。
+  if (reviewOpen) {
+    return (
+      <>
+        <ReviewScreen />
+        <UpdateBanner />
+      </>
     );
   }
 

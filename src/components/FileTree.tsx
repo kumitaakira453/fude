@@ -3,6 +3,7 @@ import { useAtom, useAtomValue, useStore } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { openCountsAtom } from "../state/review";
 import { DND_MIME } from "../lib/dnd";
 import {
   availableApps,
@@ -123,6 +124,7 @@ function TreeItem({
   ctx: ItemCtx;
 }) {
   const activePane = useAtomValue(activePaneAtom);
+  const openCounts = useAtomValue(openCountsAtom);
   const { openFile } = useWorkspace();
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
   const basePad = depth * 14 + 8;
@@ -259,6 +261,7 @@ function TreeItem({
   }
 
   const active = activePane?.path === node.path;
+  const reviewCount = openCounts.get(node.path) ?? 0;
   return (
     <button
       draggable
@@ -288,6 +291,14 @@ function TreeItem({
         }
       />
       <span className="truncate">{node.name.replace(MD_EXT_RE, "")}</span>
+      {reviewCount > 0 && (
+        <span
+          title={`未解決の指摘 ${reviewCount} 件`}
+          className="ml-auto shrink-0 rounded-full bg-[var(--mg-accent-soft)] px-1.5 text-[10.5px] font-medium text-[var(--mg-accent)]"
+        >
+          {reviewCount}
+        </span>
+      )}
     </button>
   );
 }

@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
+import { useReview } from "../hooks/useReview";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
 import { parseFrontmatter } from "../lib/frontmatter";
@@ -24,6 +25,8 @@ import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { AnchorOverlay } from "./review/AnchorOverlay";
+import { CommentComposer } from "./review/CommentComposer";
 import { Toc } from "./Toc";
 import { Tooltip } from "./Tooltip";
 
@@ -43,6 +46,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   const store = useStore();
   const {
+    absOf,
     navigate,
     resolveAsset,
     peekAsset,
@@ -148,6 +152,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   }, [isActive, editing, draft, raw, path]);
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
+  const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
+  const review = useReview({ absPath, body, raw, content, isActive });
 
   // 最新の raw/body/path を ref で参照し、saveBody を安定な関数に保つ。
   // （背景索引などで再レンダーしても Markdown のメモ化が壊れず、Mermaid の
@@ -431,6 +437,47 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             content={content}
             scroller={scroller}
             contentKey={path + (raw?.length ?? 0)}
+          />
+        )}
+
+        {!editing && path && (
+          <AnchorOverlay
+            content={content}
+            threads={review.threads}
+            blocks={review.blocks}
+            contentKey={path + (raw?.length ?? 0)}
+            onPick={review.inspect}
+          />
+        )}
+
+        {!editing && review.selection && !review.draft && (
+          <button
+            type="button"
+            // mousedown で処理する。click を待つと、押した時点でブラウザが選択を
+            // 解除し selectionchange でこのボタン自身が消えるため mouseup が
+            // どこにも届かない。preventDefault で選択の解除も止める。
+            onMouseDown={(e) => {
+              e.preventDefault();
+              review.startDraft();
+            }}
+            style={{
+              top: review.selection.rect.bottom + 6,
+              left: review.selection.rect.left,
+            }}
+            className="fixed z-30 flex items-center gap-1 rounded-lg border border-[var(--mg-border)] bg-[var(--mg-panel)] px-2 py-1 text-[12px] font-medium shadow-lg transition hover:border-[var(--mg-accent)] hover:text-[var(--mg-accent)]"
+          >
+            <Icon name="add_comment" size={14} />
+            指摘する
+          </button>
+        )}
+
+        {!editing && review.draft && (
+          <CommentComposer
+            anchorRect={review.draft.hit}
+            selection={review.draft.text}
+            busy={review.busy}
+            onSubmit={(text) => void review.submit(text)}
+            onClose={review.close}
           />
         )}
 

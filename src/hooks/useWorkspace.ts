@@ -463,6 +463,7 @@ export function useWorkspace() {
 
   return {
     getRootPath,
+    absOf,
     refreshFolders,
     openFolder,
     refreshTree,

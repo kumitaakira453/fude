@@ -11,6 +11,7 @@ import {
   sidebarTabAtom,
   tocOpenAtom,
 } from "../state/atoms";
+import { openTotalAtom, reviewScreenAtom } from "../state/review";
 import { Icon } from "./Icon";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
@@ -47,6 +48,8 @@ function IconButton({
 
 export function Toolbar() {
   const store = useStore();
+  const openTotal = useAtomValue(openTotalAtom);
+  const setReviewOpen = useSetAtom(reviewScreenAtom);
   const setActiveFolderId = useSetAtom(activeFolderIdAtom);
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const [tocOpen, setTocOpen] = useAtom(tocOpenAtom);
@@ -130,6 +133,19 @@ export function Toolbar() {
           disabled={!canToc}
           icon="toc"
         />
+        <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
+        <button
+          onClick={() => setReviewOpen(true)}
+          title="レビュー (⌘⇧R)"
+          className="relative flex h-8 items-center gap-1 rounded-lg px-2 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+        >
+          <Icon name="rate_review" size={18} />
+          {openTotal > 0 && (
+            <span className="rounded-full bg-[var(--mg-accent-soft)] px-1.5 text-[10.5px] font-medium text-[var(--mg-accent)]">
+              {openTotal}
+            </span>
+          )}
+        </button>
         <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
         <ThemeSwitcher />
       </div>

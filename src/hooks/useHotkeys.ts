@@ -2,6 +2,7 @@ import { useStore } from "jotai";
 import { useEffect } from "react";
 import { splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
+import { reviewScreenAtom } from "../state/review";
 
 // フォーカスが編集可能な要素（入力欄・CodeMirror 等）にあるか
 function inEditable(target: EventTarget | null): boolean {
@@ -77,7 +78,10 @@ export function useHotkeys() {
       } else if (mod && (e.key === "b" || e.key === "B")) {
         e.preventDefault();
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
-      } else if (mod && e.key === "\\") {
+      } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {
+      e.preventDefault();
+      store.set(reviewScreenAtom, true);
+    } else if (mod && e.key === "\\") {
         e.preventDefault();
         splitPane(store, "row");
       } else if (mod && e.key === "[") {

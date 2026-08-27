@@ -293,6 +293,9 @@ export function EditableBody({
           <div
             key={key}
             className="mg-block"
+            // 選択範囲からどのブロックかを辿るための目印。display:contents でも
+            // 属性は残るので、キーボードでの選択でもブロックを特定できる。
+            data-mg-block={b.index}
             onDoubleClick={
               // mermaid・テーブルはブロック全体編集の対象外（テーブルはセル単位）。
               // 箇条書きは項目単位で編集するが、項目の範囲が取れない場合は li 側が
