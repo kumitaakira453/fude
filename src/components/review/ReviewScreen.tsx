@@ -2,7 +2,7 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { splitBlocks } from "../../lib/blocks";
-import { diffBlocks, targetIndex } from "../../lib/blockDiff";
+import { diffBlocks, targetIndex, type BlockChange } from "../../lib/blockDiff";
 import { fontStack } from "../../lib/fonts";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import {
@@ -27,7 +27,7 @@ import {
 } from "../../state/review";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
-import { DiffView, diffWindow } from "./DiffView";
+import { DiffView } from "./DiffView";
 
 // レビュー専用の画面。読書ビューに小窓を重ねる形では、スクロールで位置が崩れ、
 // 指摘がどのブロックのことかも並べて見せられない。
@@ -166,13 +166,39 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
     };
   }, [thread.base_version]);
 
-  const win = useMemo(() => {
-    if (baseText === null || currentBody === null) return null;
-    const diff = diffBlocks(
-      splitBlocks(parseFrontmatter(baseText).body),
-      splitBlocks(currentBody),
-    );
-    return diffWindow(diff, targetIndex(diff, thread.quote, thread.selection));
+  // 基準版に指摘の対象が見つかるときだけ差分を出す。見つからない基準版と
+  // 比べても、指摘とは関係ない版どうしの差分が大量に並ぶだけで読み手を惑わせる。
+  // 取り込んだ指摘では、対象の文が基準版にも現在の本文にも残っていないことが多い。
+  const view = useMemo(() => {
+    if (currentBody === null) return null;
+    const head = splitBlocks(currentBody);
+
+    if (baseText !== null) {
+      const diff = diffBlocks(splitBlocks(parseFrontmatter(baseText).body), head);
+      const target = targetIndex(diff, thread.quote, thread.selection);
+      if (target >= 0) {
+        const changed = diff.filter((c) => c.kind !== "same").length;
+        return {
+          diff,
+          target,
+          note:
+            changed === 0
+              ? "指摘した時点から、この文書は変わっていません。"
+              : `指摘した時点から変わった箇所 ${changed} 件。対象の箇所に印を付けています。`,
+        };
+      }
+    }
+
+    const plain: BlockChange[] = head.map((b) => ({ kind: "same", base: b, head: b }));
+    const target = targetIndex(plain, thread.quote, thread.selection);
+    return {
+      diff: plain,
+      target,
+      note:
+        target >= 0
+          ? "指摘した時点の版が残っていないため、現在の本文を表示しています。対象の箇所に印を付けています。"
+          : "指摘した時点の版が残っておらず、対象の文も現在の本文には見当たりません。現在の本文を表示しています。",
+    };
   }, [baseText, currentBody, thread.quote, thread.selection]);
 
   const ctx = useMemo(
@@ -252,11 +278,17 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
             <p className="text-[12px] text-[var(--mg-muted)]">
               このファイルは今開いているフォルダの中にないため、現在の本文と比べられません。
             </p>
-          ) : win === null ? (
+          ) : view === null ? (
             <p className="text-[12px] text-[var(--mg-muted)]">差分を読み込んでいます…</p>
           ) : (
             <markdownContext.Provider value={ctx}>
-              <DiffView window={win} editorial={editorial} style={style} />
+              <DiffView
+                diff={view.diff}
+                targetIndex={view.target}
+                note={view.note}
+                editorial={editorial}
+                style={style}
+              />
             </markdownContext.Provider>
           )}
         </div>

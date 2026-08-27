@@ -41,20 +41,51 @@ export function diffBlocks(base: Block[], head: Block[]): BlockChange[] {
 
 // 指摘が付いていたブロックが、差分の何番目にあたるかを返す。無ければ -1。
 //
-// quote はブロック本文の逐語コピーだが、別アプリから取り込んだ指摘は
-// ブロック本文ではなく選択した文だけを持つ。その場合はその文を含むブロックを探す。
+// quote はブロック本文の逐語コピー。これで当たれば確実。
+// 別アプリから取り込んだ指摘はブロック本文ではなく「画面に出ていた文字列」を
+// 持っており、記法（**、バッククォート、表の |、行頭の記号）が落ちているため
+// ソースと素朴に比べても当たらない。最後の手段として双方から記法を落として比べる。
 export function targetIndex(diff: BlockChange[], quote: string, selection = ""): number {
   for (let i = 0; i < diff.length; i++) {
     const change = diff[i];
     if ("base" in change && change.base.src === quote) return i;
   }
+
   const text = (selection || quote).trim();
   if (!text) return -1;
+
   for (let i = 0; i < diff.length; i++) {
     const change = diff[i];
     if ("base" in change && change.base.src.includes(text)) return i;
   }
+
+  // 選択が複数ブロックにまたがっていることもあるので、先頭の一部で当てる
+  const probe = stripMarkup(text).slice(0, PROBE_LENGTH);
+  if (probe.length < MIN_PROBE_LENGTH) return -1;
+  for (let i = 0; i < diff.length; i++) {
+    const change = diff[i];
+    if ("base" in change && stripMarkup(change.base.src).includes(probe)) return i;
+  }
   return -1;
+}
+
+const PROBE_LENGTH = 24;
+const MIN_PROBE_LENGTH = 6;
+
+// 突き合わせ用に記法と空白の違いを均す。描画結果を復元するものではなく、
+// 同じ箇所かどうかを判定するためだけの正規化。
+function stripMarkup(src: string): string {
+  return src
+    .replace(/```[^\n]*\n?/g, "")
+    .replace(/[`*_~]/g, "")
+    .replace(/^\s*>+\s?/gm, "")
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, "")
+    .replace(/^\s*#{1,6}\s+/gm, "")
+    .replace(/^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$/gm, "")
+    .replace(/\|/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // 最長共通部分列をとり、一致したブロックの添字の組を返す。

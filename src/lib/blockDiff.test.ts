@@ -83,6 +83,27 @@ describe("targetIndex", () => {
     expect(targetIndex(diff, "   ")).toBe(-1);
   });
 
+  it("記法が落ちた選択テキストでも位置を引ける", () => {
+    // 別アプリから取り込んだ指摘は「画面に出ていた文字列」を持つ。
+    // 太字・インラインコード・表の区切りが落ちている。
+    const src = [
+      "**`member_basic_field`** の選択肢",
+      "",
+      "| 定数名 | 値 |",
+      "| --- | --- |",
+      "| `EMAIL` | email |",
+    ].join("\n");
+    const d = diffBlocks(splitBlocks(src), splitBlocks(src));
+    expect(targetIndex(d, "", "member_basic_field の選択肢")).toBe(0);
+    // 表のセル間にブラウザが差し込むタブや改行も均される
+    expect(targetIndex(d, "", "定数名\t値\nEMAIL\temail")).toBe(1);
+  });
+
+  it("記法を落としても短すぎる文では当てにいかない", () => {
+    const d = diffBlocks(splitBlocks("**あ** い"), splitBlocks("**あ** い"));
+    expect(targetIndex(d, "", "あ")).toBe(-1);
+  });
+
   it("削除されたブロックの位置を引ける", () => {
     const d = diffBlocks(splitBlocks("段落A\n\n消える段落"), splitBlocks("段落A"));
     expect(d[targetIndex(d, "消える段落")].kind).toBe("removed");

@@ -1268,6 +1268,23 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-muted);
 }
 
+/* 指摘の対象。差分の枠が左罫線なので印も左に揃える。囲みにすると
+   入力欄のように見えて本文から浮く。 */
+.mg-diff-target {
+  position: relative;
+  padding-left: 0.85rem;
+}
+.mg-diff-target::before {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  bottom: 0.15rem;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--mg-accent);
+}
+
 /* 小窓に出す引用。長い表やリストでも小窓が伸びないように畳む。 */
 .mg-review-quote {
   display: -webkit-box;
