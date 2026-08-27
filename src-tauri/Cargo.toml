@@ -23,6 +23,11 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
+# レビュー機能。台帳と版の内容ハッシュ、CLI の引数解析、
+# NFD で作られたファイル名を突き合わせるための正規化に使う。
+sha2 = "0.10"
+clap = { version = "4", features = ["derive"] }
+unicode-normalization = "0.1"
 tauri = { version = "2.11.3", features = ["protocol-asset"] }
 tauri-plugin-log = "2"
 tauri-plugin-fs = { version = "2", features = ["watch"] }
