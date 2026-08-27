@@ -41,36 +41,40 @@ export function diffBlocks(base: Block[], head: Block[]): BlockChange[] {
 
 // 指摘が付いていたブロックが、差分の何番目にあたるかを返す。無ければ -1。
 //
-// quote はブロック本文の逐語コピー。これで当たれば確実。
+// quote はブロック本文の逐語コピー。指摘を付けた時点の記録なので当たれば確実。
 // 別アプリから取り込んだ指摘はブロック本文ではなく「画面に出ていた文字列」を
-// 持っており、記法（**、バッククォート、表の |、行頭の記号）が落ちているため
-// ソースと素朴に比べても当たらない。最後の手段として双方から記法を落として比べる。
+// 持っており、記法（**、バッククォート、表の |、行頭記号）が落ちているため
+// ソースと素朴に比べても当たらない。段階的に緩めて照合する。
+//
+// 緩い照合では、候補が一意に決まらなければ特定できなかったものとして扱う。
+// 短い文はどの文書にも複数現れるので、無理に当てると別の箇所を指してしまう。
 export function targetIndex(diff: BlockChange[], quote: string, selection = ""): number {
-  for (let i = 0; i < diff.length; i++) {
-    const change = diff[i];
-    if ("base" in change && change.base.src === quote) return i;
-  }
+  const exact = indicesWhere(diff, (src) => src === quote);
+  // 内容が同じブロックが複数あるときは先頭を採る。逐語一致なのでどれでも同じ本文
+  if (exact.length > 0) return exact[0];
 
   const text = (selection || quote).trim();
   if (!text) return -1;
 
-  for (let i = 0; i < diff.length; i++) {
-    const change = diff[i];
-    if ("base" in change && change.base.src.includes(text)) return i;
-  }
+  const contains = indicesWhere(diff, (src) => src.includes(text));
+  if (contains.length === 1) return contains[0];
 
-  // 選択が複数ブロックにまたがっていることもあるので、先頭の一部で当てる
   const probe = stripMarkup(text).slice(0, PROBE_LENGTH);
-  if (probe.length < MIN_PROBE_LENGTH) return -1;
-  for (let i = 0; i < diff.length; i++) {
-    const change = diff[i];
-    if ("base" in change && stripMarkup(change.base.src).includes(probe)) return i;
-  }
-  return -1;
+  if (!probe) return -1;
+  const loose = indicesWhere(diff, (src) => stripMarkup(src).includes(probe));
+  return loose.length === 1 ? loose[0] : -1;
 }
 
 const PROBE_LENGTH = 24;
-const MIN_PROBE_LENGTH = 6;
+
+function indicesWhere(diff: BlockChange[], match: (src: string) => boolean): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < diff.length; i++) {
+    const change = diff[i];
+    if ("base" in change && match(change.base.src)) out.push(i);
+  }
+  return out;
+}
 
 // 突き合わせ用に記法と空白の違いを均す。描画結果を復元するものではなく、
 // 同じ箇所かどうかを判定するためだけの正規化。

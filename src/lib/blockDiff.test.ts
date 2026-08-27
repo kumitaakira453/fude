@@ -99,9 +99,16 @@ describe("targetIndex", () => {
     expect(targetIndex(d, "", "定数名\t値\nEMAIL\temail")).toBe(1);
   });
 
-  it("記法を落としても短すぎる文では当てにいかない", () => {
-    const d = diffBlocks(splitBlocks("**あ** い"), splitBlocks("**あ** い"));
+  it("候補が一意に決まらない選択は特定しない", () => {
+    // 短い文はどの文書にも複数現れる。無理に当てると別の箇所を指してしまう
+    const src = "**あ** い\n\nまた **あ** い";
+    const d = diffBlocks(splitBlocks(src), splitBlocks(src));
     expect(targetIndex(d, "", "あ")).toBe(-1);
+  });
+
+  it("一意に決まるなら短い選択でも特定する", () => {
+    const d = diffBlocks(splitBlocks("はじめに\n\n背景"), splitBlocks("はじめに\n\n背景"));
+    expect(targetIndex(d, "", "背景")).toBe(1);
   });
 
   it("削除されたブロックの位置を引ける", () => {
