@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { DND_MIME } from "../lib/dnd";
-import { EXTERNAL_APPS, openWith, revealInFinder } from "../lib/external";
+import {
+  availableApps,
+  type ExternalApp,
+  openWith,
+  revealInFinder,
+} from "../lib/external";
 import type { TreeNode } from "../lib/fsAccess";
 import { openToSide } from "../lib/ui";
 import {
@@ -307,6 +312,17 @@ function ContextMenu({
   const { node } = menu;
   const root = getRootPath();
   const absPath = root ? `${root}/${node.path}` : node.path;
+  // 実在するエディタだけを項目に出す（押しても無反応になるのを避ける）
+  const [editors, setEditors] = useState<ExternalApp[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void availableApps().then((a) => {
+      if (alive) setEditors(a);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     const close = () => onClose();
@@ -333,7 +349,7 @@ function ContextMenu({
       label: "Finder で表示",
       action: () => revealInFinder(absPath),
     },
-    ...EXTERNAL_APPS.map((a) => ({
+    ...editors.map((a) => ({
       icon: a.icon,
       label: a.label,
       action: () => openWith(absPath, a.app),
