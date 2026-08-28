@@ -444,7 +444,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           <AnchorOverlay
             content={content}
             threads={review.threads}
-            blocks={review.blocks}
+            resolutions={review.resolutions}
             contentKey={path + (raw?.length ?? 0)}
             onPick={review.inspect}
           />

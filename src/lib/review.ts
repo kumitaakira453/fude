@@ -29,6 +29,13 @@ export interface ReviewThread {
   status: ThreadStatus;
   comments: ReviewComment[];
   created_at: number;
+  resolved?: ResolvedCache | null; // GUI が対応付けた結果の控え
+}
+
+export interface ResolvedCache {
+  state: ResolvedState;
+  head_quote: string;
+  at: number;
 }
 
 export interface ReviewVersion {
@@ -51,9 +58,6 @@ export const EMPTY_LEDGER: Ledger = {
   versions: [],
 };
 
-// 指摘の対象が今の本文に残っているか。指摘の状態（未解決 / 解決済み）とは別の軸。
-export type AnchorState = "ok" | "stale";
-
 // GUI から書いた指摘・返信・解決の記録者。CLI 側の既定は "AI"。
 export const REVIEW_AUTHOR = "you";
 
@@ -67,10 +71,6 @@ export interface AnchorHit {
 
 export function isOpen(thread: ReviewThread): boolean {
   return thread.status.kind === "open";
-}
-
-export function anchorStateOf(thread: ReviewThread, body: string): AnchorState {
-  return body.includes(thread.quote) ? "ok" : "stale";
 }
 
 let storePathCache: string | null = null;
@@ -95,14 +95,39 @@ export async function loadLedger(): Promise<Ledger> {
   }
 }
 
-// 版の本文を読む。差分表示に使う。
+// 版の本文を読む。版 ID は内容ハッシュなので中身が変わることはなく、
+// キャッシュの無効化を考える必要がない。
+const versionCache = new Map<string, string | null>();
+
 export async function readVersion(id: string): Promise<string | null> {
   if (!id) return null;
+  const cached = versionCache.get(id);
+  if (cached !== undefined) return cached;
+  let text: string | null = null;
   try {
-    return await invoke<string>("review_version_text", { id });
+    text = await invoke<string>("review_version_text", { id });
   } catch {
     // 版の実体が無い（取り込み元にスナップショットが無かった等）
-    return null;
+    text = null;
+  }
+  versionCache.set(id, text);
+  return text;
+}
+
+// 解決結果を台帳に控える。CLI は Markdown を解析しないため、GUI が対応付けた
+// 結果をここに置いて読ませる。headQuote は解決時点の「現在のブロック本文」で、
+// CLI はそれが今のファイルに含まれるかでキャッシュの新しさを自分で判定できる。
+export type ResolvedState = "unchanged" | "rewritten" | "removed" | "unknown";
+
+export async function setResolved(
+  thread: string,
+  state: ResolvedState,
+  headQuote: string,
+): Promise<void> {
+  try {
+    await invoke("review_set_resolved", { thread, state, headQuote });
+  } catch {
+    // 控えが書けなくても画面の表示には影響しないので黙って諦める
   }
 }
 

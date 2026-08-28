@@ -39,6 +39,47 @@ export function diffBlocks(base: Block[], head: Block[]): BlockChange[] {
   return out;
 }
 
+// 指摘が今の版でどうなっているか。
+//
+// 指摘は「付けた時点の版」の中では位置が確定している。その版は指摘作成時に
+// 画面に出ていた全文をそのまま保存しているので、基準版側の照合は必ず当たる。
+// 現在位置は探すのではなく、基準版のブロック → 対応付け → 現在のブロックと辿って
+// 導出する。現在の本文から引用文字列を探す方法は、指摘に応えて本文が
+// 書き換えられた瞬間に失敗する（この機能がいちばん働くべき場面で位置を失う）。
+export type Resolution =
+  | { state: "unchanged"; index: number; head: Block }
+  | { state: "rewritten"; index: number; base: Block; head: Block }
+  | { state: "removed"; index: number; base: Block }
+  | { state: "unknown"; index: number };
+
+export function resolveInDiff(
+  diff: BlockChange[],
+  quote: string,
+  selection = "",
+): Resolution {
+  const index = targetIndex(diff, quote, selection);
+  if (index < 0) return { state: "unknown", index };
+  const change = diff[index];
+  switch (change.kind) {
+    case "same":
+      return { state: "unchanged", index, head: change.head };
+    case "changed":
+      return { state: "rewritten", index, base: change.base, head: change.head };
+    case "removed":
+      return { state: "removed", index, base: change.base };
+    default:
+      // added は基準版側を持たないので targetIndex では選ばれない
+      return { state: "unknown", index: -1 };
+  }
+}
+
+// 解決結果のうち、今の版に現れているブロック。印を付ける位置に使う。
+export function headOf(resolution: Resolution): Block | null {
+  return resolution.state === "unchanged" || resolution.state === "rewritten"
+    ? resolution.head
+    : null;
+}
+
 // 指摘が付いていたブロックが、差分の何番目にあたるかを返す。無ければ -1。
 //
 // quote はブロック本文の逐語コピー。指摘を付けた時点の記録なので当たれば確実。

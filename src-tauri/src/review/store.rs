@@ -58,6 +58,22 @@ pub struct Thread {
     #[serde(default)]
     pub comments: Vec<Comment>,
     pub created_at: i64, // epoch ミリ秒
+    // GUI が対応付けた結果の控え。CLI は Markdown を解析しないためこれを読む。
+    #[serde(default)]
+    pub resolved: Option<Resolved>,
+}
+
+// 指摘の対象が今の版でどうなっているか。GUI が基準版との対応付けで求めて書く。
+//
+// head_quote は解決した時点の「現在のブロック本文」。CLI はファイルを読めるので、
+// この文字列が今のファイルに含まれるかで控えの新しさを自分で判定できる。
+// 版のハッシュを別に持つ必要がない。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Resolved {
+    pub state: String, // unchanged | rewritten | removed | unknown
+    #[serde(default)]
+    pub head_quote: String,
+    pub at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -298,6 +314,7 @@ mod tests {
                 created_at: 1,
             }],
             created_at: 1,
+            resolved: None,
         }
     }
 

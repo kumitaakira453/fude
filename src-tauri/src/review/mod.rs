@@ -9,31 +9,34 @@ use std::path::{Path, PathBuf};
 use store::{Comment, Ledger, Origin, Status, Thread, Version};
 
 // GUI（Tauri コマンド）と CLI が共通で呼ぶ操作層。
-// Markdown の解析は一切しない。指摘の位置は「指摘した時点のブロック本文」の
-// 逐語コピーで持っており、現在のファイルに対する部分文字列検索だけで
-// 対象がまだ残っているかを判定できる。
+// Markdown の解析は一切しない。指摘が今の版でどこに対応するかは GUI が
+// 基準版との対応付けで求めて台帳に控えるので、ここでは控えを読むだけで済む。
 
 // 指摘そのものの状態。人間が解決したかどうかだけを表す。
-// アンカーが現在の本文に残っているかとは独立。
+// 対象が書き換わったかどうかとは独立。
 pub use store::Status as ThreadStatus;
 
-// 指摘の対象が現在の本文に残っているか。ThreadStatus とは別の軸で扱う。
-// この 2 つを 1 つの列挙にすると、陳腐化した指摘が未解決の一覧から
+// 指摘の対象が今の版でどうなっているか。ThreadStatus（未解決 / 解決済み）とは
+// 別の軸で扱う。1 つの列挙にまとめると、書き換わった指摘が未解決の一覧から
 // 抜け落ちてフィードバックが黙って消える。
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnchorState {
-    Ok,      // 対象のブロックが現在の本文にそのまま存在する
-    Stale,   // 本文が書き換わって対象が見つからない
-    NoFile,  // ファイル自体が見つからない
+    Unchanged, // 指摘した箇所は書き換わっていない
+    Rewritten, // 書き換わった。現在の本文は head_quote にある
+    Removed,   // 削除された
+    Unknown,   // 対応付けができていない
+    NoFile,    // ファイル自体が見つからない
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ThreadView {
     pub thread: Thread,
     pub anchor: AnchorState,
-    pub base: Option<Version>,   // 指摘した時点の版
-    pub latest: Option<Version>, // そのファイルの最新の版
+    pub head_quote: Option<String>, // 現在のブロック本文（控えから）
+    pub cache_fresh: bool,          // 控えが今のファイルと合っているか
+    pub base: Option<Version>,      // 指摘した時点の版
+    pub latest: Option<Version>,    // そのファイルの最新の版
 }
 
 #[derive(Debug, Clone, Default)]
@@ -69,8 +72,11 @@ pub fn list(filter: &Filter) -> Result<Vec<ThreadView>, String> {
                 continue;
             }
         }
+        let (anchor, head_quote, cache_fresh) = resolve_view(thread);
         views.push(ThreadView {
-            anchor: anchor_state(thread),
+            anchor,
+            head_quote,
+            cache_fresh,
             base: ledger
                 .versions
                 .iter()
@@ -99,13 +105,61 @@ pub fn versions(file: &Path) -> Result<Vec<Version>, String> {
         .collect::<Vec<_>>())
 }
 
-// 対象のブロックが現在の本文に残っているかを見る。Markdown の解析は要らない。
-fn anchor_state(thread: &Thread) -> AnchorState {
-    match fs::read_to_string(&thread.file) {
-        Ok(text) if text.contains(&thread.quote) => AnchorState::Ok,
-        Ok(_) => AnchorState::Stale,
-        Err(_) => AnchorState::NoFile,
+// 指摘が今どうなっているかを求める。位置の対応付けは GUI が済ませて台帳に
+// 控えているので、ここでは控えを読むだけ。Markdown の解析はしない。
+//
+// 控えの「現在のブロック本文」がまだファイルに含まれていれば控えは最新。
+// 含まれていなければ、GUI が最後に見たあとで本文が変わっている。
+fn resolve_view(thread: &Thread) -> (AnchorState, Option<String>, bool) {
+    let text = match fs::read_to_string(&thread.file) {
+        Ok(text) => text,
+        Err(_) => return (AnchorState::NoFile, None, false),
+    };
+
+    match &thread.resolved {
+        Some(resolved) => {
+            let state = match resolved.state.as_str() {
+                "unchanged" => AnchorState::Unchanged,
+                "rewritten" => AnchorState::Rewritten,
+                "removed" => AnchorState::Removed,
+                _ => AnchorState::Unknown,
+            };
+            if resolved.head_quote.is_empty() {
+                return (state, None, true);
+            }
+            let fresh = text.contains(&resolved.head_quote);
+            (state, Some(resolved.head_quote.clone()), fresh)
+        }
+        None => {
+            // GUI が一度も対応付けていない。引用がまだ残っているかだけ分かる。
+            if text.contains(&thread.quote) {
+                (AnchorState::Unchanged, Some(thread.quote.clone()), true)
+            } else {
+                (AnchorState::Unknown, None, false)
+            }
+        }
     }
+}
+
+pub const RESOLVED_STATES: [&str; 4] = ["unchanged", "rewritten", "removed", "unknown"];
+
+// GUI が求めた対応付けの結果を控える。
+pub fn set_resolved(thread_id: &str, state: &str, head_quote: &str) -> Result<(), String> {
+    if !RESOLVED_STATES.contains(&state) {
+        return Err(format!("解決状態が不正です: {state}"));
+    }
+    let now = store::now_millis();
+    store::update(|ledger: &mut Ledger| {
+        let thread = ledger
+            .thread_mut(thread_id)
+            .ok_or_else(|| format!("指摘 {thread_id} が見つかりません"))?;
+        thread.resolved = Some(store::Resolved {
+            state: state.to_string(),
+            head_quote: head_quote.to_string(),
+            at: now,
+        });
+        Ok(())
+    })
 }
 
 // ---- 更新 ----
@@ -148,6 +202,7 @@ pub fn create_thread(input: NewThread) -> Result<String, String> {
                 created_at: now,
             }],
             created_at: now,
+            resolved: None,
         });
         Ok(id)
     })
@@ -266,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn anchor_is_no_file_when_target_is_missing() {
+    fn missing_file_reports_no_file() {
         let thread = Thread {
             id: "t".into(),
             file: "/tmp/mdglow-does-not-exist-9f3a.md".into(),
@@ -279,8 +334,9 @@ mod tests {
             status: Status::Open,
             comments: vec![],
             created_at: 0,
+            resolved: None,
         };
-        assert_eq!(anchor_state(&thread), AnchorState::NoFile);
+        assert_eq!(resolve_view(&thread).0, AnchorState::NoFile);
     }
 
     #[test]

@@ -2,7 +2,7 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { splitBlocks } from "../../lib/blocks";
-import { diffBlocks, targetIndex, type BlockChange } from "../../lib/blockDiff";
+import { diffBlocks, resolveInDiff, targetIndex, type BlockChange } from "../../lib/blockDiff";
 import { fontStack } from "../../lib/fonts";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import {
@@ -175,17 +175,17 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
 
     if (baseText !== null) {
       const diff = diffBlocks(splitBlocks(parseFrontmatter(baseText).body), head);
-      const target = targetIndex(diff, thread.quote, thread.selection);
-      if (target >= 0) {
+      const resolution = resolveInDiff(diff, thread.quote, thread.selection);
+      if (resolution.state !== "unknown") {
         const changed = diff.filter((c) => c.kind !== "same").length;
-        return {
-          diff,
-          target,
-          note:
-            changed === 0
-              ? "指摘した時点から、この文書は変わっていません。"
-              : `指摘した時点から変わった箇所 ${changed} 件。対象の箇所に印を付けています。`,
-        };
+        const where = changed === 0 ? "" : `この文書で変わった箇所は ${changed} 件。`;
+        const note =
+          resolution.state === "rewritten"
+            ? `${where}指摘した箇所は書き換わっています。印の位置に指摘した時点と現在を並べています。`
+            : resolution.state === "removed"
+              ? `${where}指摘した箇所は削除されています。`
+              : `${where}指摘した箇所は書き換わっていません。`;
+        return { diff, target: resolution.index, note };
       }
     }
 

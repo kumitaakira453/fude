@@ -3,8 +3,9 @@ use super::{AnchorState, ThreadView};
 
 // CLI の既定出力。読み手は AI なので、JSON より読みやすく字数も少ない Markdown にする。
 //
-// どのアンカー状態でも「指摘した時点の本文」を必ず添える。これがあれば、
-// 本文が書き換わって位置が特定できなくなっても対象を見失わない。
+// どの状態でも「指摘した時点の本文」を必ず添える。これがあれば、本文が
+// 書き換わって位置が特定できなくなっても対象を見失わない。
+// 書き換わっている場合は、対応付けで求めた「現在の本文」も添える。
 
 pub fn threads_markdown(views: &[ThreadView]) -> String {
     if views.is_empty() {
@@ -32,9 +33,7 @@ fn thread_section(view: &ThreadView) -> String {
     let mut s = String::new();
 
     s.push_str(&format!("\n### 指摘 #{}", t.id));
-    if let Some(label) = anchor_label(view.anchor) {
-        s.push_str(&format!(" — {label}"));
-    }
+    s.push_str(&format!(" — {}", anchor_label(view.anchor)));
     if let Status::Resolved { ref by, at } = t.status {
         s.push_str(&format!(" — 解決済み（{by} / {}）", format_iso_utc(at)));
     }
@@ -55,6 +54,20 @@ fn thread_section(view: &ThreadView) -> String {
     }
     s.push_str(&format!("\n指摘時の本文:\n{}\n", quote_block(&t.quote)));
 
+    // 書き換わっているときだけ現在の本文を添える。変わっていなければ
+    // 指摘時の本文と同じで、二度出す意味がない。
+    if view.anchor == AnchorState::Rewritten {
+        if let Some(ref head) = view.head_quote {
+            s.push_str(&format!("\n現在の本文:\n{}\n", quote_block(head)));
+        }
+    }
+    if !view.cache_fresh && view.head_quote.is_some() {
+        s.push_str(
+            "\n注: この対応付けは mdglow が最後にこのファイルを開いた時点のものです。\
+             その後ファイルが変わっています。\n",
+        );
+    }
+
     if !t.comments.is_empty() {
         s.push_str("\n会話:\n");
         for c in &t.comments {
@@ -66,12 +79,13 @@ fn thread_section(view: &ThreadView) -> String {
     s
 }
 
-fn anchor_label(state: AnchorState) -> Option<&'static str> {
+fn anchor_label(state: AnchorState) -> &'static str {
     match state {
-        // 対象がそのまま残っているのは既定なので、あえて書かない
-        AnchorState::Ok => None,
-        AnchorState::Stale => Some("対象が現在の本文に見つかりません"),
-        AnchorState::NoFile => Some("ファイルが見つかりません"),
+        AnchorState::Unchanged => "対象はまだ書き換わっていません",
+        AnchorState::Rewritten => "対象は指摘のあと書き換わっています",
+        AnchorState::Removed => "対象は削除されています",
+        AnchorState::Unknown => "対象の位置を特定できていません",
+        AnchorState::NoFile => "ファイルが見つかりません",
     }
 }
 
@@ -106,30 +120,36 @@ fn quote_block(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::store::{Origin, Thread};
+    use super::super::store::{Comment, Origin, Thread};
     use super::*;
+
+    const QUOTE: &str = "生成AIの利用料金は、従来のSaaSと費用構造が異なる。";
+    const HEAD: &str = "生成AIの利用料金は、従来のSaaSと費用構造が根本的に異なり、従量課金である。";
 
     fn view(anchor: AnchorState) -> ThreadView {
         ThreadView {
             thread: Thread {
                 id: "a3f10000".into(),
                 file: "/docs/05_要件定義書.md".into(),
-                quote: "生成AIの利用料金は、従来のSaaSと費用構造が異なる。".into(),
+                quote: QUOTE.into(),
                 block_hash: "h".into(),
                 selection: "費用構造が異なる".into(),
                 selection_offset: 12,
                 section_path: vec!["背景".into(), "費用構造".into()],
                 base_version: "aaaaaaaabbbb".into(),
                 status: Status::Open,
-                comments: vec![super::super::store::Comment {
+                comments: vec![Comment {
                     id: "c1".into(),
-                    author: "汲田 晶".into(),
+                    author: "you".into(),
                     body: "「根本的に」を入れて".into(),
                     created_at: 1_772_183_400_000,
                 }],
                 created_at: 1_772_183_400_000,
+                resolved: None,
             },
             anchor,
+            head_quote: Some(HEAD.into()),
+            cache_fresh: true,
             base: Some(Version {
                 id: "aaaaaaaabbbb".into(),
                 file: "/docs/05_要件定義書.md".into(),
@@ -147,6 +167,14 @@ mod tests {
         }
     }
 
+    const ALL_STATES: [AnchorState; 5] = [
+        AnchorState::Unchanged,
+        AnchorState::Rewritten,
+        AnchorState::Removed,
+        AnchorState::Unknown,
+        AnchorState::NoFile,
+    ];
+
     #[test]
     fn empty_input_says_so() {
         assert_eq!(threads_markdown(&[]), "未解決の指摘はありません。");
@@ -154,10 +182,10 @@ mod tests {
 
     #[test]
     fn quote_is_always_included() {
-        for anchor in [AnchorState::Ok, AnchorState::Stale, AnchorState::NoFile] {
+        for anchor in ALL_STATES {
             let md = threads_markdown(&[view(anchor)]);
             assert!(
-                md.contains("> 生成AIの利用料金は、従来のSaaSと費用構造が異なる。"),
+                md.contains(&format!("> {QUOTE}")),
                 "{anchor:?} で指摘時の本文が落ちた"
             );
             assert!(md.contains("指摘時の本文:"), "{anchor:?}");
@@ -165,21 +193,46 @@ mod tests {
     }
 
     #[test]
-    fn stale_anchor_is_labelled_and_ok_is_not() {
-        let ok = threads_markdown(&[view(AnchorState::Ok)]);
-        assert!(ok.contains("### 指摘 #a3f10000\n"));
-        assert!(!ok.contains("見つかりません"));
+    fn every_state_is_labelled() {
+        for anchor in ALL_STATES {
+            let md = threads_markdown(&[view(anchor)]);
+            assert!(
+                md.contains(&format!("### 指摘 #a3f10000 — {}", anchor_label(anchor))),
+                "{anchor:?} のラベルが出ていない"
+            );
+        }
+    }
 
-        let stale = threads_markdown(&[view(AnchorState::Stale)]);
-        assert!(stale.contains("対象が現在の本文に見つかりません"));
+    #[test]
+    fn current_text_is_shown_only_when_rewritten() {
+        // 書き換わっているときは、対応付けで求めた現在の本文を添える
+        let rewritten = threads_markdown(&[view(AnchorState::Rewritten)]);
+        assert!(rewritten.contains("現在の本文:"));
+        assert!(rewritten.contains(&format!("> {HEAD}")));
 
-        let gone = threads_markdown(&[view(AnchorState::NoFile)]);
-        assert!(gone.contains("ファイルが見つかりません"));
+        // 変わっていなければ指摘時の本文と同じなので二度出さない
+        for anchor in [AnchorState::Unchanged, AnchorState::Removed, AnchorState::Unknown] {
+            assert!(
+                !threads_markdown(&[view(anchor)]).contains("現在の本文:"),
+                "{anchor:?} で現在の本文を余計に出している"
+            );
+        }
+    }
+
+    #[test]
+    fn stale_cache_is_disclosed() {
+        let mut v = view(AnchorState::Rewritten);
+        v.cache_fresh = false;
+        let md = threads_markdown(&[v]);
+        assert!(md.contains("その後ファイルが変わっています"));
+
+        assert!(!threads_markdown(&[view(AnchorState::Rewritten)])
+            .contains("その後ファイルが変わっています"));
     }
 
     #[test]
     fn header_carries_section_path_and_versions() {
-        let md = threads_markdown(&[view(AnchorState::Ok)]);
+        let md = threads_markdown(&[view(AnchorState::Unchanged)]);
         assert!(md.contains("## /docs/05_要件定義書.md"));
         assert!(md.contains("場所: 背景 › 費用構造"));
         assert!(md.contains("指摘時 aaaaaaaa (2026-02-27T09:10:00Z)"));
@@ -188,29 +241,31 @@ mod tests {
 
     #[test]
     fn file_heading_is_written_once_per_file() {
-        let md = threads_markdown(&[view(AnchorState::Ok), view(AnchorState::Stale)]);
+        let md = threads_markdown(&[
+            view(AnchorState::Unchanged),
+            view(AnchorState::Rewritten),
+        ]);
         assert_eq!(md.matches("## /docs/05_要件定義書.md").count(), 1);
         assert_eq!(md.matches("### 指摘 #").count(), 2);
     }
 
     #[test]
     fn section_path_falls_back_for_top_of_file() {
-        let mut v = view(AnchorState::Ok);
+        let mut v = view(AnchorState::Unchanged);
         v.thread.section_path.clear();
         assert!(threads_markdown(&[v]).contains("場所: (ファイル先頭)"));
     }
 
     #[test]
     fn selection_is_omitted_when_it_equals_the_quote() {
-        let mut v = view(AnchorState::Ok);
+        let mut v = view(AnchorState::Unchanged);
         v.thread.selection = v.thread.quote.clone();
-        let md = threads_markdown(&[v]);
-        assert!(!md.contains("選択された箇所:"));
+        assert!(!threads_markdown(&[v]).contains("選択された箇所:"));
     }
 
     #[test]
     fn multiline_quote_is_prefixed_per_line() {
-        let mut v = view(AnchorState::Ok);
+        let mut v = view(AnchorState::Unchanged);
         v.thread.quote = "| 定数名 | 値 |\n| --- | --- |\n| EMAIL | email |".into();
         let md = threads_markdown(&[v]);
         assert!(md.contains("> | 定数名 | 値 |"));
@@ -219,12 +274,12 @@ mod tests {
 
     #[test]
     fn resolved_threads_show_who_and_when() {
-        let mut v = view(AnchorState::Ok);
+        let mut v = view(AnchorState::Unchanged);
         v.thread.status = Status::Resolved {
-            by: "汲田 晶".into(),
+            by: "you".into(),
             at: 1_772_190_000_000,
         };
         let md = threads_markdown(&[v]);
-        assert!(md.contains("解決済み（汲田 晶 / 2026-02-27T11:00:00Z）"));
+        assert!(md.contains("解決済み（you / 2026-02-27T11:00:00Z）"));
     }
 }

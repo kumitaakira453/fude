@@ -65,6 +65,20 @@ async fn review_version_text(id: String) -> Result<String, String> {
         .map_err(|e| format!("版の読み込みに失敗しました: {e}"))?
 }
 
+// GUI が求めた対応付けの結果を控える。CLI はこれを読んで「現在の本文」を出す。
+#[tauri::command]
+async fn review_set_resolved(
+    thread: String,
+    state: String,
+    head_quote: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        review::set_resolved(&thread, &state, &head_quote)
+    })
+    .await
+    .map_err(|e| format!("対応付けの記録に失敗しました: {e}"))?
+}
+
 #[tauri::command]
 async fn review_reply(thread: String, author: String, body: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::reply(&thread, &author, &body))
@@ -136,6 +150,7 @@ pub fn run() {
             review_store_path,
             review_create_thread,
             review_version_text,
+            review_set_resolved,
             review_reply,
             review_resolve
         ])

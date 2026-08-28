@@ -1245,6 +1245,11 @@ svg[id^="mmd-"] foreignObject p {
   background: color-mix(in srgb, var(--mg-accent) 18%, transparent);
   border-bottom-color: var(--mg-accent);
 }
+/* 指摘のあと本文が書き換わった箇所。文字単位の対応は取れないのでブロック全体に
+   付く。実線と区別できるよう破線にする。 */
+.mg-review-mark-moved {
+  border-bottom-style: dashed;
+}
 
 /* 差分の枠。追加と削除は緑と赤で示す。この 2 色だけはアクセント色から
    導出できないため固定値を使い、薄い着色にして明暗どちらの地色でも成立させる。 */

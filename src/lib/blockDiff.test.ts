@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitBlocks } from "./blocks";
-import { diffBlocks, targetIndex } from "./blockDiff";
+import { diffBlocks, headOf, resolveInDiff, targetIndex } from "./blockDiff";
 
 const kinds = (body: string, next: string) =>
   diffBlocks(splitBlocks(body), splitBlocks(next)).map((c) => c.kind);
@@ -114,5 +114,57 @@ describe("targetIndex", () => {
   it("削除されたブロックの位置を引ける", () => {
     const d = diffBlocks(splitBlocks("段落A\n\n消える段落"), splitBlocks("段落A"));
     expect(d[targetIndex(d, "消える段落")].kind).toBe("removed");
+  });
+});
+
+describe("resolveInDiff", () => {
+  // 指摘を付けた時点の本文（= 基準版として保存されるもの）
+  const base = "# 背景\n\n従来のSaaSと費用構造が異なる。\n\n別の段落";
+
+  it("対象を丸ごと書き換えても現在のブロックを指せる", () => {
+    // 引用文字列が 1 文字も残らないよう完全に書き換える。
+    // 現在の本文から探す方法ではここで位置を失う
+    const head =
+      "# 背景\n\n生成AIは従量課金であり、月末の着地が読めない点が問題になる。\n\n別の段落";
+    const diff = diffBlocks(splitBlocks(base), splitBlocks(head));
+    const r = resolveInDiff(diff, "従来のSaaSと費用構造が異なる。");
+    expect(r.state).toBe("rewritten");
+    if (r.state === "rewritten") {
+      expect(r.head.src).toBe("生成AIは従量課金であり、月末の着地が読めない点が問題になる。");
+      expect(r.base.src).toBe("従来のSaaSと費用構造が異なる。");
+      expect(r.head.index).toBe(1);
+    }
+    expect(headOf(r)?.index).toBe(1);
+  });
+
+  it("前に段落が挿入されても、ずれた先のブロックを指す", () => {
+    const head = "# 背景\n\n差し込まれた段落\n\n従来のSaaSと費用構造が異なる。\n\n別の段落";
+    const diff = diffBlocks(splitBlocks(base), splitBlocks(head));
+    const r = resolveInDiff(diff, "従来のSaaSと費用構造が異なる。");
+    expect(r.state).toBe("unchanged");
+    // 現在の文書では 3 番目のブロックに移っている
+    expect(headOf(r)?.index).toBe(2);
+  });
+
+  it("変わっていなければ unchanged", () => {
+    const diff = diffBlocks(splitBlocks(base), splitBlocks(base));
+    const r = resolveInDiff(diff, "別の段落");
+    expect(r.state).toBe("unchanged");
+    expect(headOf(r)?.src).toBe("別の段落");
+  });
+
+  it("削除されていれば removed。印を付ける位置は無い", () => {
+    const head = "# 背景\n\n別の段落";
+    const diff = diffBlocks(splitBlocks(base), splitBlocks(head));
+    const r = resolveInDiff(diff, "従来のSaaSと費用構造が異なる。");
+    expect(r.state).toBe("removed");
+    expect(headOf(r)).toBeNull();
+  });
+
+  it("基準版に対象が無ければ unknown", () => {
+    const diff = diffBlocks(splitBlocks(base), splitBlocks(base));
+    const r = resolveInDiff(diff, "この文書には存在しない段落");
+    expect(r.state).toBe("unknown");
+    expect(headOf(r)).toBeNull();
   });
 });

@@ -2,15 +2,22 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sectionPathAt, splitBlocks, type Block } from "../lib/blocks";
-import { readSelection, type BlockSelection } from "../lib/domText";
 import {
-  anchorStateOf,
+  diffBlocks,
+  headOf,
+  resolveInDiff,
+  type BlockChange,
+  type Resolution,
+} from "../lib/blockDiff";
+import { readSelection, type BlockSelection } from "../lib/domText";
+import { parseFrontmatter } from "../lib/frontmatter";
+import {
   createThread,
   isOpen,
+  readVersion,
   REVIEW_AUTHOR,
+  setResolved,
   type AnchorHit,
-  type AnchorState,
-  type ReviewThread,
 } from "../lib/review";
 import {
   ledgerAtom,
@@ -66,15 +73,67 @@ export function useReview({
     return blocksRef.current.blocks;
   }, [body]);
 
-  const blocks = useMemo(
-    () => (threads.length > 0 ? getBlocks() : []),
-    [threads.length, getBlocks],
-  );
+  // 指摘の現在位置は、基準版のブロックから対応付けで導出する。現在の本文から
+  // 引用文字列を探す方法は、指摘に応えて本文が書き換えられた瞬間に失敗する。
+  const [resolutions, setResolutions] = useState<Map<string, Resolution>>(new Map());
 
-  const anchorOf = useCallback(
-    (thread: ReviewThread): AnchorState => anchorStateOf(thread, body),
-    [body],
-  );
+  useEffect(() => {
+    if (threads.length === 0) {
+      setResolutions(new Map());
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const head = getBlocks();
+      const ids = [...new Set(threads.map((t) => t.base_version))].filter(Boolean);
+      const texts = new Map<string, string | null>();
+      for (const id of ids) texts.set(id, await readVersion(id));
+      if (!alive) return;
+
+      // 同じ基準版を参照する指摘は差分を共有する
+      const diffs = new Map<string, BlockChange[]>();
+      const next = new Map<string, Resolution>();
+      for (const thread of threads) {
+        const baseText = texts.get(thread.base_version);
+        if (baseText == null) {
+          next.set(thread.id, { state: "unknown", index: -1 });
+          continue;
+        }
+        let diff = diffs.get(thread.base_version);
+        if (!diff) {
+          diff = diffBlocks(splitBlocks(parseFrontmatter(baseText).body), head);
+          diffs.set(thread.base_version, diff);
+        }
+        next.set(thread.id, resolveInDiff(diff, thread.quote, thread.selection));
+      }
+      if (alive) setResolutions(next);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [threads, getBlocks]);
+
+  // 解決結果を台帳に控える。CLI は Markdown を解析しないのでこれを読ませる。
+  // 同じ内容を書き直して無駄にロックを取らないよう、送った分を覚えておく。
+  const sentRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    for (const thread of threads) {
+      const resolution = resolutions.get(thread.id);
+      if (!resolution) continue;
+      const headQuote = headOf(resolution)?.src ?? "";
+      const signature = `${resolution.state}\u0000${headQuote}`;
+      if (sentRef.current.get(thread.id) === signature) continue;
+      if (
+        thread.resolved?.state === resolution.state &&
+        thread.resolved?.head_quote === headQuote
+      ) {
+        sentRef.current.set(thread.id, signature);
+        continue;
+      }
+      sentRef.current.set(thread.id, signature);
+      void setResolved(thread.id, resolution.state, headQuote);
+    }
+  }, [resolutions, threads]);
 
   useEffect(() => {
     if (!content || !isActive) {
@@ -179,8 +238,7 @@ export function useReview({
 
   return {
     threads,
-    blocks,
-    anchorOf,
+    resolutions,
     selection,
     draft,
     busy,

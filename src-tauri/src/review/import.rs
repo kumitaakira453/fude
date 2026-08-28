@@ -149,6 +149,7 @@ pub fn import_remarker() -> Result<ImportReport, String> {
                         .collect(),
                     created_at: parse_rfc3339_millis(&source.created_at).unwrap_or(now),
                     file,
+                    resolved: None,
                 });
                 report.imported += 1;
             }
@@ -244,26 +245,30 @@ pub fn describe(report: &ImportReport) -> Result<String, String> {
         include_resolved: true,
         ..Default::default()
     })?;
-    let mut ok = 0;
-    let mut stale = 0;
-    let mut no_file = 0;
+    let mut counts = [0usize; 5];
     for v in &views {
-        match v.anchor {
-            super::AnchorState::Ok => ok += 1,
-            super::AnchorState::Stale => stale += 1,
-            super::AnchorState::NoFile => no_file += 1,
-        }
+        let slot = match v.anchor {
+            super::AnchorState::Unchanged => 0,
+            super::AnchorState::Rewritten => 1,
+            super::AnchorState::Removed => 2,
+            super::AnchorState::Unknown => 3,
+            super::AnchorState::NoFile => 4,
+        };
+        counts[slot] += 1;
     }
     Ok(format!(
         "取り込み {} 件 / 既存 {} 件 / 対象ファイル {} 件\n\
-         台帳の指摘 {} 件: 対象が残っている {} / 書き換わった {} / ファイルなし {}",
+         台帳の指摘 {} 件: 未着手 {} / 書き換わった {} / 削除された {} / \
+         位置不明 {} / ファイルなし {}",
         report.imported,
         report.skipped,
         report.files,
         views.len(),
-        ok,
-        stale,
-        no_file
+        counts[0],
+        counts[1],
+        counts[2],
+        counts[3],
+        counts[4]
     ))
 }
 
