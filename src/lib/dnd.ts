@@ -16,6 +16,21 @@ export function setDragPayload(data: DataTransfer, payload: DragPayload): void {
   data.setData(DND_MIME, JSON.stringify(payload));
 }
 
+// ウィンドウの外へ落とされたか。掴んだ側の dragend で判断する。
+//
+// 受け取られなかったドラッグは dropEffect が none になるが、
+// 途中で Esc を押して取り消したときも none になる。取り消しでウィンドウが
+// 増えてしまわないよう、指していた位置がウィンドウの外に出ていることも見る。
+export function droppedOutside(e: { dataTransfer: DataTransfer; clientX: number; clientY: number }): boolean {
+  if (e.dataTransfer.dropEffect !== "none") return false;
+  return (
+    e.clientX < 0 ||
+    e.clientY < 0 ||
+    e.clientX > window.innerWidth ||
+    e.clientY > window.innerHeight
+  );
+}
+
 export function readDragPayload(data: DataTransfer): DragPayload | null {
   const raw = data.getData(DND_MIME);
   if (!raw) return null;

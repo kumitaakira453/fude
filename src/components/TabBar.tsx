@@ -1,7 +1,8 @@
 import { useStore } from "jotai";
 import { useState } from "react";
 import { useDragReset } from "../hooks/useDragReset";
-import { readDragPayload, setDragPayload } from "../lib/dnd";
+import { useWorkspace } from "../hooks/useWorkspace";
+import { droppedOutside, readDragPayload, setDragPayload } from "../lib/dnd";
 import { displayName } from "../lib/fsAccess";
 import { activateTab, closeTab, moveTab, openInPane } from "../lib/ui";
 import type { LeafNode } from "../state/atoms";
@@ -12,6 +13,7 @@ import { Icon } from "./Icon";
 
 export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }) {
   const store = useStore();
+  const { openInNewWindow } = useWorkspace();
   // ドロップで差し込む位置。null なら受け付けていない。
   const [insertAt, setInsertAt] = useState<number | null>(null);
   useDragReset(() => setInsertAt(null));
@@ -70,6 +72,12 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
             onDragStart={(e) => {
               setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
               e.dataTransfer.effectAllowed = "move";
+            }}
+            // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す
+            onDragEnd={(e) => {
+              if (!droppedOutside(e)) return;
+              openInNewWindow(path);
+              closeTab(store, pane.id, i);
             }}
             className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] transition ${
               selected

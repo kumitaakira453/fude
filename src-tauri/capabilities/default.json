@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "mdglow: ローカル Markdown 閲覧に必要な権限",
   "windows": [
-    "main"
+    "main",
+    "doc-*"
   ],
   "permissions": [
     "core:default",

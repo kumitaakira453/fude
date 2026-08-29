@@ -1,3 +1,4 @@
+import { message } from "@tauri-apps/plugin-dialog";
 import { useStore } from "jotai";
 import { useCallback } from "react";
 import {
@@ -15,7 +16,8 @@ import {
   writeFile,
   type TreeNode,
 } from "../lib/fsAccess";
-import { loadFolders, registerFolder } from "../lib/idb";
+import { folderDisplayName, loadFolders, registerFolder } from "../lib/idb";
+import { openDocWindow, recordRecentFolder } from "../lib/windows";
 import {
   remapLeafPaths,
   resetLayout,
@@ -193,6 +195,10 @@ export function useWorkspace() {
       const folders = await registerFolder(path, now);
       store.set(A.foldersAtom, folders);
       const activeId = path;
+      // Dock メニューから読めるよう、Rust 側にも履歴を残す
+      void recordRecentFolder(path, now).catch((e: unknown) => {
+        console.error("最近開いたフォルダを記録できません", e);
+      });
       // 永続化 effect に上書きされる前に保存レイアウトを先読みしておく
       const saved = store.get(A.savedLayoutsAtom)[activeId];
       store.set(A.activeFolderIdAtom, activeId);
@@ -241,6 +247,24 @@ export function useWorkspace() {
       if (!store.get(A.contentCacheAtom).has(path)) void reloadFile(path);
     },
     [store, reloadFile],
+  );
+
+  // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
+  // Dock メニューのウィンドウ一覧でどのフォルダか分かるようにする。
+  const openInNewWindow = useCallback(
+    (path: string | null) => {
+      const folderId = store.get(A.activeFolderIdAtom);
+      if (!folderId) return;
+      const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
+      const title = entry ? folderDisplayName(entry) : "mdglow";
+      void openDocWindow(folderId, path, title).catch((e) => {
+        void message(`新しいウィンドウを開けませんでした。\n${String(e)}`, {
+          title: "mdglow",
+          kind: "error",
+        });
+      });
+    },
+    [store],
   );
 
   const navigate = useCallback(
@@ -469,6 +493,7 @@ export function useWorkspace() {
     refreshTreeStructure,
     reloadFile,
     openFile,
+    openInNewWindow,
     navigate,
     resolveAsset,
     peekAsset,

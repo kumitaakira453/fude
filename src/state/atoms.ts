@@ -2,6 +2,7 @@ import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
 import type { FolderEntry } from "../lib/idb";
+import { windowScopedKey } from "../lib/windows";
 
 // ---- ワークスペース ----
 export const foldersAtom = atom<FolderEntry[]>([]); // 登録フォルダ（履歴）
@@ -46,11 +47,13 @@ export type LayoutNode = LeafNode | SplitNode;
 export const layoutAtom = atom<LayoutNode>({ kind: "leaf", id: "p1", tabs: [], active: 0 });
 export const activePaneIdAtom = atom<string>("p1");
 
-// フォルダごとに分割レイアウトを永続化（リロード/再オープンで復元）
+// フォルダごとに分割レイアウトを永続化（リロード/再オープンで復元）。
+// キーはウィンドウごとに分ける。同じフォルダを 2 つのウィンドウで開いたときに、
+// 互いのレイアウトを上書きし合わないようにする。
 // getOnInit: true = 命令的 store.get でも localStorage を同期読みする
 export const savedLayoutsAtom = atomWithStorage<
   Record<string, { layout: LayoutNode; active: string }>
->("mdglow:layouts", {}, undefined, { getOnInit: true });
+>(windowScopedKey("mdglow:layouts"), {}, undefined, { getOnInit: true });
 
 // ペイン（leaf）の最大数
 export const MAX_PANES = 6;
@@ -74,16 +77,25 @@ export function activePath(pane: Pane | LeafNode | undefined): string | null {
 }
 
 // ---- UI / テーマ（永続化） ----
+// 見た目の好みはアプリ全体で 1 つ。どのウィンドウで変えても揃う。
 export const themeAtom = atomWithStorage<string>("mdglow:theme", "aurora");
 export const fontAtom = atomWithStorage<string>("mdglow:font", "sans");
 export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
   "mdglow:width",
   "cozy",
 );
-export const sidebarOpenAtom = atomWithStorage<boolean>("mdglow:sidebar", true);
-export const tocOpenAtom = atomWithStorage<boolean>("mdglow:toc", true);
 // エディトリアル組版（ベータ）: 構造を読み取って組版を強化する描画モード
 export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
+
+// 画面の使い方はウィンドウごと。片方でサイドバーを閉じても、もう片方は開いたまま。
+export const sidebarOpenAtom = atomWithStorage<boolean>(
+  windowScopedKey("mdglow:sidebar"),
+  true,
+);
+export const tocOpenAtom = atomWithStorage<boolean>(
+  windowScopedKey("mdglow:toc"),
+  true,
+);
 
 // 更新チェック: nonce をインクリメントで手動トリガ、状態を UI で共有する
 export const updateCheckNonceAtom = atom(0);
@@ -95,9 +107,9 @@ export type UpdateStatus =
   | "error";
 export const updateStatusAtom = atom<UpdateStatus>("idle");
 
-// ---- ファイルツリー開閉状態（フォルダ ID ごとに永続化） ----
+// ---- ファイルツリー開閉状態（フォルダ ID ごとに永続化・ウィンドウごと） ----
 export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(
-  "mdglow:expanded",
+  windowScopedKey("mdglow:expanded"),
   {},
 );
 

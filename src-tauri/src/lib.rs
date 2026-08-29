@@ -3,6 +3,7 @@ use std::process::Command;
 
 mod cli;
 pub mod review;
+mod windows;
 
 // 第 1 引数が review のときは CLI として動き、Tauri を初期化せずに終了する。
 // エージェントは GUI が起動していない状態でも指摘を読み書きする。
@@ -152,7 +153,10 @@ pub fn run() {
             review_version_text,
             review_set_resolved,
             review_reply,
-            review_resolve
+            review_resolve,
+            windows::open_doc_window,
+            windows::set_window_title,
+            windows::record_recent_folder
         ])
         .setup(|app| {
             // 自動更新（デスクトップのみ）

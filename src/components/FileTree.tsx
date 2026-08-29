@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { openCountsAtom } from "../state/review";
-import { DND_MIME, readDragPayload, setDragPayload } from "../lib/dnd";
+import {
+  DND_MIME,
+  droppedOutside,
+  readDragPayload,
+  setDragPayload,
+} from "../lib/dnd";
 import {
   availableApps,
   type ExternalApp,
@@ -125,7 +130,7 @@ function TreeItem({
 }) {
   const activePane = useAtomValue(activePaneAtom);
   const openCounts = useAtomValue(openCountsAtom);
-  const { openFile } = useWorkspace();
+  const { openFile, openInNewWindow } = useWorkspace();
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
   const basePad = depth * 14 + 8;
 
@@ -267,7 +272,13 @@ function TreeItem({
       draggable
       data-path={node.path}
       onDragStart={startDrag}
-      onClick={() => openFile(node.path)}
+      // ウィンドウの外へ引き出したら、そのファイルで新しいウィンドウを開く
+      onDragEnd={(e) => {
+        if (droppedOutside(e)) openInNewWindow(node.path);
+      }}
+      onClick={(e) =>
+        e.metaKey ? openInNewWindow(node.path) : openFile(node.path)
+      }
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
       className={`group relative flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[13px] transition ${
@@ -318,7 +329,7 @@ function ContextMenu({
   onRename: (n: TreeNode) => void;
   onDelete: (n: TreeNode) => void;
 }) {
-  const { openFile, getRootPath } = useWorkspace();
+  const { openFile, openInNewWindow, getRootPath } = useWorkspace();
   const store = useStore();
   const { node } = menu;
   const root = getRootPath();
@@ -408,6 +419,11 @@ function ContextMenu({
             icon: "vertical_split",
             label: "横に開く",
             action: () => openToSide(store, node.path),
+          },
+          {
+            icon: "open_in_new",
+            label: "新しいウィンドウで開く",
+            action: () => openInNewWindow(node.path),
           },
           ...commonItems,
         ]

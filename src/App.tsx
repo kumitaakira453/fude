@@ -11,9 +11,12 @@ import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
 import { useWatcher } from "./hooks/useWatcher";
+import { folderDisplayName } from "./lib/idb";
+import { setWindowTitle } from "./lib/windows";
 import {
   activeFolderIdAtom,
   activePaneIdAtom,
+  foldersAtom,
   layoutAtom,
   savedLayoutsAtom,
   sidebarOpenAtom,
@@ -23,6 +26,7 @@ import { reviewScreenAtom } from "./state/review";
 
 export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
+  const folders = useAtomValue(foldersAtom);
   const sidebarOpen = useAtomValue(sidebarOpenAtom);
   const theme = useAtomValue(themeAtom);
   const layout = useAtomValue(layoutAtom);
@@ -75,7 +79,7 @@ export default function App() {
     return () => window.removeEventListener("click", onClick);
   }, []);
 
-  // 分割レイアウトをフォルダごとに永続化
+  // 分割レイアウトをフォルダごとに永続化（保存先はウィンドウごとに分かれている）
   useEffect(() => {
     if (!activeFolderId) return;
     store.set(savedLayoutsAtom, (prev) => ({
@@ -83,6 +87,16 @@ export default function App() {
       [activeFolderId]: { layout, active: activePaneId },
     }));
   }, [layout, activePaneId, activeFolderId, store]);
+
+  // ウィンドウのタイトルは開いているフォルダ名。macOS はこれを Dock メニューの
+  // ウィンドウ一覧にそのまま並べるので、どのウィンドウが何かを名前で選べる。
+  useEffect(() => {
+    const entry = folders.find((f) => f.id === activeFolderId);
+    const title = entry ? folderDisplayName(entry) : "mdglow";
+    void setWindowTitle(title).catch((e: unknown) => {
+      console.error("ウィンドウのタイトルを設定できません", e);
+    });
+  }, [activeFolderId, folders]);
 
   if (!activeFolderId) {
     return (
