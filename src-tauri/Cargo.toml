@@ -38,6 +38,10 @@ tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 
+# Dock メニュー。Tauri v2 に API が無いので Objective-C ランタイムを直接叩く。
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+
 # CI のビルド時間短縮を優先したリリースプロファイル。
 # Rust 側は薄い（ファイル I/O とプラグイン仲介のみ）ため、実行時最適化より
 # 「速くコンパイルできる」ことを優先する（opt-level を下げ・並列度を上げ・LTO 無効）。

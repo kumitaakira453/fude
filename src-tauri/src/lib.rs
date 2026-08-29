@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod cli;
+#[cfg(target_os = "macos")]
+mod dock;
 pub mod review;
 mod windows;
 
@@ -159,6 +161,9 @@ pub fn run() {
             windows::record_recent_folder
         ])
         .setup(|app| {
+            // Dock アイコンのメニュー（macOS のみ。失敗しても起動は続ける）
+            #[cfg(target_os = "macos")]
+            dock::install(app.handle());
             // 自動更新（デスクトップのみ）
             #[cfg(desktop)]
             {
