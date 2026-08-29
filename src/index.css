@@ -1257,22 +1257,8 @@ svg[id^="mmd-"] foreignObject p {
    際立たせ、それ以外は普段どおりの読み心地のまま残す。
    ============================================================ */
 
-/* 見出し帯。細いアクセントの線を一本だけ引いて、通常画面と地続きにしない。 */
 .mg-review-head {
   border-bottom: 1px solid var(--mg-border);
-}
-.mg-review-head::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: -1px;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    var(--mg-accent),
-    var(--mg-accent2) 45%,
-    transparent 85%
-  );
 }
 
 /* 一覧のファイル見出し */
@@ -1371,118 +1357,153 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-muted);
 }
 
-/* 朱書きの札。本文をたどっている間も見えているよう上に貼り付ける。 */
-.mg-note-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  padding: 1rem 0 0.75rem;
-  background: var(--mg-bg);
-}
-/* 長い会話でも本文が隠れないよう高さを抑え、中だけをたどれるようにする */
-.mg-note {
-  max-height: 42vh;
-  overflow-y: auto;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.9rem;
-  background: var(--mg-panel);
-  box-shadow: 0 6px 18px -12px rgb(0 0 0 / 0.5);
-}
-.mg-note::before {
-  content: "";
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: block;
-  height: 3px;
-  background: linear-gradient(90deg, var(--mg-accent), var(--mg-accent2));
-}
-.mg-note-head {
+/* やり取りは本文の横に置く。本文に重ねると、読んでいる途中の段落が
+   隠れて話の筋が切れる。 */
+.mg-side {
   display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 23rem;
+  border-left: 1px solid var(--mg-border);
+  background: var(--mg-panel);
+}
+.mg-side-head {
+  display: flex;
+  flex: none;
   gap: 0.5rem;
   align-items: center;
-  padding: 0.5rem 0.9rem;
+  padding: 0.55rem 0.9rem;
   border-bottom: 1px solid var(--mg-border);
   font-size: 11px;
   color: var(--mg-muted);
 }
-.mg-note-open {
+.mg-side-open {
   display: flex;
   flex: none;
   gap: 0.25rem;
   align-items: center;
-  padding: 0.15rem 0.5rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 0.4rem;
   color: var(--mg-fg-dim);
   transition: background 0.15s;
 }
-.mg-note-open:hover {
+.mg-side-open:hover {
   background: var(--mg-hover);
   color: var(--mg-fg);
 }
 
+/* 見出しを辿った道筋。どの節に付いた指摘かを名前で示す。 */
+.mg-crumbs {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem 0.9rem 0;
+  font-size: 10.5px;
+  color: var(--mg-muted);
+}
+.mg-crumbs .sep {
+  opacity: 0.5;
+}
+
 /* 指摘された文そのもの。二重罫は校正の印を借りている。 */
-.mg-note-quote {
+.mg-side-quote {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   overflow: hidden;
-  margin: 0.9rem 0.9rem 0.75rem;
-  padding-left: 0.75rem;
+  flex: none;
+  margin: 0.5rem 0.9rem 0;
+  padding-left: 0.6rem;
   border-left: 3px double var(--mg-accent);
-  font-size: 13px;
+  font-size: 12px;
   font-style: italic;
-  line-height: 1.6;
+  line-height: 1.55;
   color: var(--mg-fg-dim);
   white-space: pre-wrap;
 }
 
-.mg-note-comment {
+/* やり取りは会話として読ませる。指摘を出した側を右、答えた側を左に置くと
+   どちらの発言かを名前を読まずに追える。 */
+.mg-talk {
   display: flex;
-  gap: 0.6rem;
-  padding: 0 0.9rem 0.7rem;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.85rem 0.9rem;
 }
-.mg-avatar {
-  display: grid;
+.mg-msg {
+  display: flex;
   flex: none;
-  place-items: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 999px;
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
+  flex-direction: column;
+  max-width: 88%;
+  align-self: flex-start;
 }
-.mg-avatar[data-author="AI"] {
-  background: color-mix(in srgb, var(--mg-accent2) 18%, transparent);
-  color: var(--mg-accent2);
+.mg-msg.is-reviewer {
+  align-self: flex-end;
 }
-.mg-note-author {
-  font-size: 10.5px;
-  font-weight: 600;
+/* 同じ人が続けて話しているときは名前を省いて詰める */
+.mg-msg.is-run {
+  margin-top: -0.35rem;
+}
+.mg-msg-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  margin: 0 0.2rem 0.2rem;
+  font-size: 10px;
   color: var(--mg-muted);
 }
-.mg-note-body {
-  font-size: 13px;
-  line-height: 1.65;
+.mg-msg.is-reviewer .mg-msg-meta {
+  justify-content: flex-end;
+}
+.mg-msg-name {
+  font-weight: 600;
+}
+.mg-bubble {
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.9rem 0.9rem 0.9rem 0.2rem;
+  background: var(--mg-hover);
+  font-size: 12.5px;
+  line-height: 1.6;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mg-msg.is-reviewer .mg-bubble {
+  border-radius: 0.9rem 0.9rem 0.2rem;
+  background: var(--mg-accent-soft);
+}
+/* 続きの吹き出しは角を揃えて、ひと続きの発言に見せる */
+.mg-msg.is-run .mg-bubble {
+  border-radius: 0.9rem;
 }
 
 /* 箇所の状態。特定できたときは静かに、できなかったときだけ目を引かせる。 */
-.mg-note-state {
+.mg-side-state {
   display: flex;
+  flex: none;
   gap: 0.35rem;
-  align-items: center;
+  align-items: flex-start;
   padding: 0.45rem 0.9rem;
   border-top: 1px solid var(--mg-border);
-  font-size: 11px;
+  font-size: 10.5px;
+  line-height: 1.5;
   color: var(--mg-muted);
 }
-.mg-note-state.is-unknown {
-  background: color-mix(in srgb, var(--mg-accent2) 10%, transparent);
+.mg-side-state.is-unknown {
+  background: color-mix(in srgb, var(--mg-accent) 8%, transparent);
   color: var(--mg-fg-dim);
+}
+
+.mg-side-compose {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem 0.75rem;
+  border-top: 1px solid var(--mg-border);
 }
 
 /* 本文。指摘の箇所だけ地色を敷き、上端に札を出す。 */
@@ -1500,11 +1521,7 @@ svg[id^="mmd-"] foreignObject p {
   border-radius: 0.75rem;
 }
 .mg-spot {
-  background: linear-gradient(
-    100deg,
-    var(--mg-accent-soft),
-    color-mix(in srgb, var(--mg-accent-soft) 25%, transparent)
-  );
+  background: var(--mg-accent-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
 }
 .mg-spot-gone {
@@ -1565,10 +1582,10 @@ svg[id^="mmd-"] foreignObject p {
   align-items: center;
   padding: 0.5rem 0.9rem;
   border-radius: 0.5rem;
-  background: linear-gradient(135deg, var(--mg-accent), var(--mg-accent2));
+  background: var(--mg-accent);
   color: var(--mg-bg);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   transition: filter 0.15s;
 }
 .mg-resolve:hover:not(:disabled) {

@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { splitBlocks, type Block } from "../../lib/blocks";
+import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
   diffBlocks,
   headIndexAt,
@@ -19,6 +19,7 @@ import {
   replyToThread,
   resolveThread,
   REVIEW_AUTHOR,
+  type ReviewComment,
   type ReviewThread,
 } from "../../lib/review";
 import {
@@ -39,10 +40,36 @@ import { DocumentView, type Anchor } from "./DocumentView";
 
 // レビュー専用の画面。読書ビューに小窓を重ねる形では、スクロールで位置が崩れ、
 // 指摘がどのブロックのことかも並べて見せられない。
-// 指摘を主役に置き、その箇所が今どうなっているかを本文の中で示す。
+// 本文は本文として読ませ、やり取りは横に置く。
+
+// フォルダからの相対パス。台帳は絶対パスで持っている。
+function relativeTo(root: string | null, file: string): string | null {
+  if (!root) return null;
+  const prefix = `${root}/`;
+  return file.startsWith(prefix) ? file.slice(prefix.length) : null;
+}
+
+function plainDiff(blocks: Block[]): BlockChange[] {
+  return blocks.map((b) => ({ kind: "same", base: b, head: b }));
+}
+
+// 見出しを辿った道筋。取り込んだ指摘は節の情報を持たないので、本文から組み立てる。
+function whereOf(thread: ReviewThread, blocks: Block[] | undefined): string {
+  if (blocks) {
+    const index = targetIndex(plainDiff(blocks), thread.quote, thread.selection);
+    if (index >= 0) {
+      const path = sectionPathAt(blocks, index);
+      if (path.length > 0) return path.join(" › ");
+    }
+  }
+  if (thread.section_path.length > 0) return thread.section_path.join(" › ");
+  return "見出しの外";
+}
 
 export function ReviewScreen() {
   const ledger = useAtomValue(ledgerAtom);
+  const cache = useAtomValue(contentCacheAtom);
+  const root = useAtomValue(activeFolderIdAtom);
   const [selectedId, setSelectedId] = useAtom(reviewThreadAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
 
@@ -64,6 +91,19 @@ export function ReviewScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setScreen]);
 
+  // ファイルごとに 1 回だけブロックへ割る。一覧の全件で見出しを辿るため。
+  const blocksByFile = useMemo(() => {
+    const map = new Map<string, Block[]>();
+    for (const t of threads) {
+      if (map.has(t.file)) continue;
+      const rel = relativeTo(root, t.file);
+      const raw = rel === null ? undefined : cache.get(rel);
+      if (raw === undefined) continue;
+      map.set(t.file, splitBlocks(parseFrontmatter(raw).body));
+    }
+    return map;
+  }, [threads, cache, root]);
+
   const groups = useMemo(() => {
     const byFile = new Map<string, ReviewThread[]>();
     for (const t of threads) {
@@ -76,7 +116,7 @@ export function ReviewScreen() {
 
   return (
     <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
-      <header className="mg-review-head relative flex h-14 shrink-0 items-center gap-3 px-5">
+      <header className="mg-review-head flex h-14 shrink-0 items-center gap-3 px-5">
         <Icon name="rate_review" size={20} className="text-[var(--mg-accent)]" />
         <div className="min-w-0">
           <div className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-[var(--mg-muted)]">
@@ -115,6 +155,7 @@ export function ReviewScreen() {
                 <ThreadCard
                   key={thread.id}
                   thread={thread}
+                  where={whereOf(thread, blocksByFile.get(thread.file))}
                   active={thread.id === selected?.id}
                   onPick={() => setSelectedId(thread.id)}
                 />
@@ -137,22 +178,17 @@ export function ReviewScreen() {
 
 function ThreadCard({
   thread,
+  where,
   active,
   onPick,
 }: {
   thread: ReviewThread;
+  where: string;
   active: boolean;
   onPick: () => void;
 }) {
-  const where =
-    thread.section_path.length > 0
-      ? thread.section_path.join(" › ")
-      : "ファイル先頭";
   return (
-    <button
-      onClick={onPick}
-      className={`mg-thread-card ${active ? "is-active" : ""}`}
-    >
+    <button onClick={onPick} className={`mg-thread-card ${active ? "is-active" : ""}`}>
       <div className="mg-thread-where">{where}</div>
       <div className="mg-thread-quote">{thread.selection || thread.quote}</div>
       <div className="mg-thread-body">
@@ -180,7 +216,7 @@ function locate(thread: ReviewThread, head: Block[], baseText: string | null): A
     if (r.state === "removed") return { state: "removed", index, before: r.base.src };
   }
 
-  const plain: BlockChange[] = head.map((b) => ({ kind: "same", base: b, head: b }));
+  const plain = plainDiff(head);
   const index = targetIndex(plain, thread.quote, thread.selection);
   if (index >= 0) return { state: "unchanged", index };
 
@@ -200,6 +236,13 @@ const STATE_NOTE: Record<Anchor["state"], string> = {
   unknown: "指摘の文は今の本文に見当たりません。近そうな箇所に印を付けています。",
 };
 
+const when = new Intl.DateTimeFormat("ja-JP", {
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const store = useStore();
   const cache = useAtomValue(contentCacheAtom);
@@ -212,14 +255,10 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const rel = useMemo(() => {
-    if (!root) return null;
-    const prefix = `${root}/`;
-    return thread.file.startsWith(prefix) ? thread.file.slice(prefix.length) : null;
-  }, [root, thread.file]);
+  const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
 
   const currentBody = useMemo(() => {
-    const raw = rel ? cache.get(rel) : undefined;
+    const raw = rel === null ? undefined : cache.get(rel);
     return raw === undefined ? null : parseFrontmatter(raw).body;
   }, [cache, rel]);
 
@@ -237,7 +276,12 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const view = useMemo(() => {
     if (currentBody === null) return null;
     const blocks = splitBlocks(currentBody);
-    return { blocks, anchor: locate(thread, blocks, baseText) };
+    const anchor = locate(thread, blocks, baseText);
+    const crumbs =
+      anchor.state === "unknown"
+        ? thread.section_path
+        : sectionPathAt(blocks, Math.min(anchor.index, blocks.length - 1));
+    return { blocks, anchor, crumbs };
   }, [baseText, currentBody, thread]);
 
   const ctx = useMemo(
@@ -275,67 +319,19 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   }, [busy, thread.id, store]);
 
   const style = { fontFamily: fontStack(font) };
+  // 会話を左右に振る。指摘を出した人（＝最初の発言者）を右に置く。
+  const reviewer = thread.comments[0]?.author ?? REVIEW_AUTHOR;
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 pb-10">
-          <div className="mg-note-wrap">
-            <article className="mg-note">
-              <header className="mg-note-head">
-                <span className="min-w-0 flex-1 truncate">
-                  {thread.file.split("/").pop()}
-                  {thread.section_path.length > 0 &&
-                    ` › ${thread.section_path.join(" › ")}`}
-                </span>
-                {rel && (
-                  <button
-                    onClick={() => {
-                      openFile(rel);
-                      setScreen(false);
-                    }}
-                    className="mg-note-open"
-                  >
-                    <Icon name="open_in_new" size={13} />
-                    本文を開く
-                  </button>
-                )}
-              </header>
-
-              <blockquote className="mg-note-quote" style={style}>
-                {thread.selection || thread.quote}
-              </blockquote>
-
-              {thread.comments.map((c) => (
-                <div key={c.id} className="mg-note-comment">
-                  <span className="mg-avatar" data-author={c.author}>
-                    {[...c.author][0] ?? "?"}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="mg-note-author">{c.author}</div>
-                    <div className="mg-note-body">{c.body}</div>
-                  </div>
-                </div>
-              ))}
-
-              {view && (
-                <p className={`mg-note-state is-${view.anchor.state}`}>
-                  <Icon
-                    name={view.anchor.state === "unknown" ? "help" : "my_location"}
-                    size={13}
-                  />
-                  {STATE_NOTE[view.anchor.state]}
-                </p>
-              )}
-            </article>
-          </div>
-
+    <div className="flex min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-6 py-6">
           {currentBody === null ? (
-            <p className="mt-6 text-[12px] text-[var(--mg-muted)]">
+            <p className="text-[12px] text-[var(--mg-muted)]">
               このファイルは今開いているフォルダの中にないため、現在の本文を出せません。
             </p>
           ) : view === null ? (
-            <p className="mt-6 text-[12px] text-[var(--mg-muted)]">読み込んでいます…</p>
+            <p className="text-[12px] text-[var(--mg-muted)]">読み込んでいます…</p>
           ) : (
             <markdownContext.Provider value={ctx}>
               <DocumentView
@@ -349,8 +345,61 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-[var(--mg-border)] bg-[var(--mg-panel)] px-6 py-3">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
+      <aside className="mg-side">
+        <div className="mg-side-head">
+          <span className="min-w-0 flex-1 truncate">
+            {thread.file.split("/").pop()}
+          </span>
+          {rel && (
+            <button
+              onClick={() => {
+                openFile(rel);
+                setScreen(false);
+              }}
+              className="mg-side-open"
+            >
+              <Icon name="open_in_new" size={13} />
+              本文を開く
+            </button>
+          )}
+        </div>
+
+        <nav className="mg-crumbs">
+          {(view?.crumbs.length ? view.crumbs : ["見出しの外"]).map((name, i) => (
+            <span key={`${i}-${name}`}>
+              {i > 0 && <span className="sep">›&nbsp;</span>}
+              {name}
+            </span>
+          ))}
+        </nav>
+
+        <blockquote className="mg-side-quote" style={style}>
+          {thread.selection || thread.quote}
+        </blockquote>
+
+        <div className="mg-talk">
+          {thread.comments.map((c, i) => (
+            <Message
+              key={c.id}
+              comment={c}
+              mine={c.author === reviewer}
+              run={thread.comments[i - 1]?.author === c.author}
+            />
+          ))}
+        </div>
+
+        {view && (
+          <p className={`mg-side-state is-${view.anchor.state}`}>
+            <Icon
+              name={view.anchor.state === "unknown" ? "help" : "my_location"}
+              size={13}
+              className="mt-px shrink-0"
+            />
+            {STATE_NOTE[view.anchor.state]}
+          </p>
+        )}
+
+        <div className="mg-side-compose">
           <textarea
             value={reply}
             onChange={(e) => setReply(e.target.value)}
@@ -362,25 +411,46 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
             }}
             rows={2}
             placeholder="返信…（⌘Enter で送信）"
-            className="min-w-0 flex-1 resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-3 py-2 text-[13px] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
+            className="w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-3 py-2 text-[12.5px] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
           />
-          <button
-            onClick={() => void send()}
-            disabled={busy || !reply.trim()}
-            className="rounded-lg border border-[var(--mg-border)] px-3 py-2 text-[12px] font-medium text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)] disabled:opacity-40"
-          >
-            返信
-          </button>
-          <button
-            onClick={() => void finish()}
-            disabled={busy}
-            className="mg-resolve"
-          >
-            <Icon name="check_circle" size={16} fill />
-            解決にする
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void send()}
+              disabled={busy || !reply.trim()}
+              className="rounded-lg border border-[var(--mg-border)] px-3 py-1.5 text-[12px] font-medium text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)] disabled:opacity-40"
+            >
+              返信
+            </button>
+            <span className="flex-1" />
+            <button onClick={() => void finish()} disabled={busy} className="mg-resolve">
+              <Icon name="check_circle" size={15} fill />
+              解決にする
+            </button>
+          </div>
         </div>
-      </div>
+      </aside>
+    </div>
+  );
+}
+
+function Message({
+  comment,
+  mine,
+  run,
+}: {
+  comment: ReviewComment;
+  mine: boolean;
+  run: boolean;
+}) {
+  return (
+    <div className={`mg-msg ${mine ? "is-reviewer" : ""} ${run ? "is-run" : ""}`}>
+      {!run && (
+        <div className="mg-msg-meta">
+          <span className="mg-msg-name">{comment.author}</span>
+          <span>{when.format(comment.created_at)}</span>
+        </div>
+      )}
+      <div className="mg-bubble">{comment.body}</div>
     </div>
   );
 }
