@@ -11,6 +11,7 @@ import {
   readDragPayload,
   setDragPayload,
 } from "../lib/dnd";
+import { setFileDragImage } from "../lib/dragImage";
 import {
   availableApps,
   type ExternalApp,
@@ -138,6 +139,7 @@ function TreeItem({
   const startDrag = (e: React.DragEvent) => {
     setDragPayload(e.dataTransfer, { path: node.path });
     e.dataTransfer.effectAllowed = "copyMove";
+    setFileDragImage(e.dataTransfer, node.name);
   };
 
   if (node.kind === "dir") {

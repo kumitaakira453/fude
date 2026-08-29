@@ -8,6 +8,7 @@ import {
   readDragPayload,
   setDragPayload,
 } from "../lib/dnd";
+import { setFileDragImage } from "../lib/dragImage";
 import { displayName } from "../lib/fsAccess";
 import {
   activateTab,
@@ -83,6 +84,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
             onDragStart={(e) => {
               setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
               e.dataTransfer.effectAllowed = "move";
+              setFileDragImage(e.dataTransfer, displayName(path));
             }}
             // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す。
             // タブを消すのはウィンドウができてから。先に消すと、開くまでの間

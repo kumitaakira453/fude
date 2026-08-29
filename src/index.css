@@ -1434,6 +1434,23 @@ svg[id^="mmd-"] foreignObject p {
   background-clip: padding-box;
 }
 
+/* ドラッグ中にカーソルへ付いてくる札。画面外に置いて写しだけ使う。 */
+.mg-drag-chip {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  padding: 6px 12px;
+  border: 1px solid var(--mg-border);
+  border-radius: 8px;
+  background: var(--mg-panel);
+  color: var(--mg-fg);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+}
+
 /* タブの列は高さが狭く、スクロールバーがタブそのものに重なって読みにくい。
    横スクロールは残したまま、バーだけ隠す。 */
 .mg-tabbar {

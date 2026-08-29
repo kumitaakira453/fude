@@ -43,7 +43,8 @@ export function useUrlSync() {
           return;
         }
         if (store.get(A.activeFolderIdAtom) !== folderId) {
-          await openFolder(entry.path);
+          // 開くファイルが決まっているなら、ツリーの走査より先に出させる
+          await openFolder(entry.path, { file });
         }
         // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
         // 戻る/進む(popstate)では force で必ず切り替える。

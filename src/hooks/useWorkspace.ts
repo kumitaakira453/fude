@@ -71,6 +71,15 @@ function joinRel(a: string, b: string): string {
 // バックグラウンド索引の世代。新しい構築が始まると古い構築は中断する。
 let indexGen = 0;
 
+// 手が空いてから走らせる。requestIdleCallback が無ければ少し待つ。
+function whenIdle(run: () => void) {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 2000 });
+  } else {
+    setTimeout(run, 400);
+  }
+}
+
 export function useWorkspace() {
   const store = useStore();
 
@@ -135,9 +144,10 @@ export function useWorkspace() {
     const files = flattenFiles(tree);
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, files);
-    // インデックスはバックグラウンドで（await しない）
+    // インデックスは全ファイルを読むので、最初の描画と取り合いにならないよう
+    // 手が空いてから始める（await もしない）
     const gen = ++indexGen;
-    void indexContents(files, gen);
+    whenIdle(() => void indexContents(files, gen));
   }, [store, getRootPath, indexContents]);
 
   // ツリー構造だけ更新（全文再インデックスしない）。ファイル操作用。
@@ -193,8 +203,41 @@ export function useWorkspace() {
     store.set(A.foldersAtom, await loadFolders());
   }, [store]);
 
-  const openFolder = useCallback(
+  const reloadFile = useCallback(
     async (path: string) => {
+      // ツリーがまだ無くても読めるようにする。ウィンドウを開いた直後は
+      // フォルダ全体の走査が終わっておらず、待つと本文が出るのが遅れる。
+      const root = getRootPath();
+      const abs = getFileNode(path)?.abs ?? (root ? `${root}/${path}` : null);
+      if (!abs) return;
+      try {
+        const data = await readFile(abs);
+        const content = new Map(store.get(A.contentCacheAtom));
+        const mtime = new Map(store.get(A.mtimeCacheAtom));
+        content.set(path, data.text);
+        mtime.set(path, data.lastModified);
+        store.set(A.contentCacheAtom, content);
+        store.set(A.mtimeCacheAtom, mtime);
+      } catch {
+        /* noop */
+      }
+    },
+    [store, getFileNode, getRootPath],
+  );
+
+  const openFile = useCallback(
+    (path: string, paneId?: string) => {
+      const targetPane = paneId ?? store.get(A.activePaneIdAtom);
+      openInPane(store, targetPane, path);
+      if (!store.get(A.contentCacheAtom).has(path)) void reloadFile(path);
+    },
+    [store, reloadFile],
+  );
+
+  // フォルダを開く。file を渡すと、そのファイルはツリーの走査を待たずに出す。
+  // 走査は数百〜千のファイルを辿るので、待つと本文が出るまでが目に見えて遅い。
+  const openFolder = useCallback(
+    async (path: string, opts: { file?: string } = {}) => {
       const now = Math.floor(performance.timeOrigin + performance.now());
       const folders = await registerFolder(path, now);
       store.set(A.foldersAtom, folders);
@@ -210,6 +253,8 @@ export function useWorkspace() {
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化
       store.set(A.contentCacheAtom, new Map());
       store.set(A.mtimeCacheAtom, new Map());
+      // 保存レイアウトがあるとこの後それで置き換わるので、先出しは意味が無い
+      if (opts.file && !saved) openFile(opts.file);
       await refreshTree();
       if (saved) {
         const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
@@ -222,35 +267,7 @@ export function useWorkspace() {
         store.set(A.activePaneIdAtom, active);
       }
     },
-    [store, refreshTree],
-  );
-
-  const reloadFile = useCallback(
-    async (path: string) => {
-      const node = getFileNode(path);
-      if (!node) return;
-      try {
-        const data = await readFile(node.abs);
-        const content = new Map(store.get(A.contentCacheAtom));
-        const mtime = new Map(store.get(A.mtimeCacheAtom));
-        content.set(path, data.text);
-        mtime.set(path, data.lastModified);
-        store.set(A.contentCacheAtom, content);
-        store.set(A.mtimeCacheAtom, mtime);
-      } catch {
-        /* noop */
-      }
-    },
-    [store, getFileNode],
-  );
-
-  const openFile = useCallback(
-    (path: string, paneId?: string) => {
-      const targetPane = paneId ?? store.get(A.activePaneIdAtom);
-      openInPane(store, targetPane, path);
-      if (!store.get(A.contentCacheAtom).has(path)) void reloadFile(path);
-    },
-    [store, reloadFile],
+    [store, refreshTree, openFile],
   );
 
   // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
