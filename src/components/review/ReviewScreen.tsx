@@ -1,8 +1,16 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { splitBlocks } from "../../lib/blocks";
-import { diffBlocks, resolveInDiff, targetIndex, type BlockChange } from "../../lib/blockDiff";
+import { splitBlocks, type Block } from "../../lib/blocks";
+import {
+  diffBlocks,
+  headIndexAt,
+  probeOf,
+  rankByCoverage,
+  resolveInDiff,
+  targetIndex,
+  type BlockChange,
+} from "../../lib/blockDiff";
 import { fontStack } from "../../lib/fonts";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import {
@@ -27,11 +35,11 @@ import {
 } from "../../state/review";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
-import { DiffView } from "./DiffView";
+import { DocumentView, type Anchor } from "./DocumentView";
 
 // レビュー専用の画面。読書ビューに小窓を重ねる形では、スクロールで位置が崩れ、
 // 指摘がどのブロックのことかも並べて見せられない。
-// 指摘を主軸に置き、指摘した時点の版と現在の版の差分を文脈ごと出す。
+// 指摘を主役に置き、その箇所が今どうなっているかを本文の中で示す。
 
 export function ReviewScreen() {
   const ledger = useAtomValue(ledgerAtom);
@@ -67,13 +75,19 @@ export function ReviewScreen() {
   }, [threads]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--mg-border)] px-4">
-        <Icon name="rate_review" size={18} className="text-[var(--mg-accent)]" />
-        <span className="text-[13px] font-medium">レビュー</span>
-        <span className="text-[12px] text-[var(--mg-muted)]">
-          未解決 {threads.length} 件
-        </span>
+    <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
+      <header className="mg-review-head relative flex h-14 shrink-0 items-center gap-3 px-5">
+        <Icon name="rate_review" size={20} className="text-[var(--mg-accent)]" />
+        <div className="min-w-0">
+          <div className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-[var(--mg-muted)]">
+            Review
+          </div>
+          <div className="text-[13px] font-medium leading-tight">
+            {threads.length > 0
+              ? `未解決 ${threads.length} 件`
+              : "未解決の指摘はありません"}
+          </div>
+        </div>
         <span className="flex-1" />
         <button
           onClick={() => setScreen(false)}
@@ -85,36 +99,25 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-80 shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)] px-1.5 py-2">
+        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)] px-2 py-2">
           {groups.length === 0 && (
             <p className="px-2 py-4 text-[12px] text-[var(--mg-muted)]">
-              未解決の指摘はありません。
+              指摘が付くとここに並びます。
             </p>
           )}
           {groups.map(([file, list]) => (
-            <section key={file} className="mb-3">
-              <h2 className="truncate px-2 pb-1 text-[10.5px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
-                {file.split("/").pop()}
+            <section key={file} className="mb-4">
+              <h2 className="mg-review-group">
+                <span className="truncate">{file.split("/").pop()}</span>
+                <span className="mg-count">{list.length}</span>
               </h2>
               {list.map((thread) => (
-                <button
+                <ThreadCard
                   key={thread.id}
-                  onClick={() => setSelectedId(thread.id)}
-                  className={`mb-0.5 w-full rounded-lg px-2 py-1.5 text-left transition ${
-                    thread.id === selected?.id
-                      ? "bg-[var(--mg-accent-soft)]"
-                      : "hover:bg-[var(--mg-hover)]"
-                  }`}
-                >
-                  <div className="truncate text-[10.5px] text-[var(--mg-muted)]">
-                    {thread.section_path.length > 0
-                      ? thread.section_path.join(" › ")
-                      : "ファイル先頭"}
-                  </div>
-                  <div className="line-clamp-2 text-[12.5px] leading-snug">
-                    {thread.comments[0]?.body ?? thread.selection}
-                  </div>
-                </button>
+                  thread={thread}
+                  active={thread.id === selected?.id}
+                  onPick={() => setSelectedId(thread.id)}
+                />
               ))}
             </section>
           ))}
@@ -124,13 +127,78 @@ export function ReviewScreen() {
           <ThreadDetail key={selected.id} thread={selected} />
         ) : (
           <p className="p-8 text-[13px] text-[var(--mg-muted)]">
-            指摘を選ぶと、指摘した時点の本文と現在の本文を並べて表示します。
+            指摘を選ぶと、その箇所が今どうなっているかを本文の中で示します。
           </p>
         )}
       </div>
     </div>
   );
 }
+
+function ThreadCard({
+  thread,
+  active,
+  onPick,
+}: {
+  thread: ReviewThread;
+  active: boolean;
+  onPick: () => void;
+}) {
+  const where =
+    thread.section_path.length > 0
+      ? thread.section_path.join(" › ")
+      : "ファイル先頭";
+  return (
+    <button
+      onClick={onPick}
+      className={`mg-thread-card ${active ? "is-active" : ""}`}
+    >
+      <div className="mg-thread-where">{where}</div>
+      <div className="mg-thread-quote">{thread.selection || thread.quote}</div>
+      <div className="mg-thread-body">
+        {thread.comments[0]?.body ?? "（本文なし）"}
+      </div>
+      {thread.comments.length > 1 && (
+        <div className="mg-thread-more">
+          <Icon name="forum" size={12} />
+          {thread.comments.length}
+        </div>
+      )}
+    </button>
+  );
+}
+
+// 指摘の箇所が今どこにあるか。基準版があればそこから対応付け、
+// 無ければ現在の本文から探す。どちらも駄目なら候補だけ示す。
+function locate(thread: ReviewThread, head: Block[], baseText: string | null): Anchor {
+  if (baseText !== null) {
+    const diff = diffBlocks(splitBlocks(parseFrontmatter(baseText).body), head);
+    const r = resolveInDiff(diff, thread.quote, thread.selection);
+    const index = Math.min(headIndexAt(diff, r.index), head.length);
+    if (r.state === "unchanged") return { state: "unchanged", index };
+    if (r.state === "rewritten") return { state: "rewritten", index, before: r.base.src };
+    if (r.state === "removed") return { state: "removed", index, before: r.base.src };
+  }
+
+  const plain: BlockChange[] = head.map((b) => ({ kind: "same", base: b, head: b }));
+  const index = targetIndex(plain, thread.quote, thread.selection);
+  if (index >= 0) return { state: "unchanged", index };
+
+  // 特定できないときは、引用をいくらか含んでいるブロックを近い順に示す。
+  // 「分かりません」で終えると、読み手は文書全体を目で探すことになる。
+  const candidates = rankByCoverage(plain, probeOf(thread.quote, thread.selection))
+    .filter((c) => c.score >= 0.3)
+    .slice(0, 3)
+    .map((c) => c.index);
+  return { state: "unknown", candidates };
+}
+
+const STATE_NOTE: Record<Anchor["state"], string> = {
+  unchanged: "指摘の箇所はまだ書き換わっていません。",
+  rewritten: "指摘の箇所は書き換わっています。指摘した時点の文を上に並べています。",
+  removed: "指摘の箇所は今の本文から削除されています。",
+  unknown: "指摘の文は今の本文に見当たりません。近そうな箇所に印を付けています。",
+};
 
 function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const store = useStore();
@@ -166,40 +234,11 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
     };
   }, [thread.base_version]);
 
-  // 基準版に指摘の対象が見つかるときだけ差分を出す。見つからない基準版と
-  // 比べても、指摘とは関係ない版どうしの差分が大量に並ぶだけで読み手を惑わせる。
-  // 取り込んだ指摘では、対象の文が基準版にも現在の本文にも残っていないことが多い。
   const view = useMemo(() => {
     if (currentBody === null) return null;
-    const head = splitBlocks(currentBody);
-
-    if (baseText !== null) {
-      const diff = diffBlocks(splitBlocks(parseFrontmatter(baseText).body), head);
-      const resolution = resolveInDiff(diff, thread.quote, thread.selection);
-      if (resolution.state !== "unknown") {
-        const changed = diff.filter((c) => c.kind !== "same").length;
-        const where = changed === 0 ? "" : `この文書で変わった箇所は ${changed} 件。`;
-        const note =
-          resolution.state === "rewritten"
-            ? `${where}指摘した箇所は書き換わっています。印の位置に指摘した時点と現在を並べています。`
-            : resolution.state === "removed"
-              ? `${where}指摘した箇所は削除されています。`
-              : `${where}指摘した箇所は書き換わっていません。`;
-        return { diff, target: resolution.index, note };
-      }
-    }
-
-    const plain: BlockChange[] = head.map((b) => ({ kind: "same", base: b, head: b }));
-    const target = targetIndex(plain, thread.quote, thread.selection);
-    return {
-      diff: plain,
-      target,
-      note:
-        target >= 0
-          ? "指摘した時点の版が残っていないため、現在の本文を表示しています。対象の箇所に印を付けています。"
-          : "指摘した時点の版が残っておらず、対象の文も現在の本文には見当たりません。現在の本文を表示しています。",
-    };
-  }, [baseText, currentBody, thread.quote, thread.selection]);
+    const blocks = splitBlocks(currentBody);
+    return { blocks, anchor: locate(thread, blocks, baseText) };
+  }, [baseText, currentBody, thread]);
 
   const ctx = useMemo(
     () => ({
@@ -240,52 +279,68 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-5">
-          <div className="mb-4 flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
-              {thread.file.split("/").pop()}
-              {thread.section_path.length > 0 &&
-                ` › ${thread.section_path.join(" › ")}`}
-            </span>
-            {rel && (
-              <button
-                onClick={() => {
-                  openFile(rel);
-                  setScreen(false);
-                }}
-                className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--mg-border)] px-2.5 py-1 text-[12px] text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                <Icon name="open_in_new" size={14} />
-                本文を開く
-              </button>
-            )}
+        <div className="mx-auto max-w-3xl px-6 pb-10">
+          <div className="mg-note-wrap">
+            <article className="mg-note">
+              <header className="mg-note-head">
+                <span className="min-w-0 flex-1 truncate">
+                  {thread.file.split("/").pop()}
+                  {thread.section_path.length > 0 &&
+                    ` › ${thread.section_path.join(" › ")}`}
+                </span>
+                {rel && (
+                  <button
+                    onClick={() => {
+                      openFile(rel);
+                      setScreen(false);
+                    }}
+                    className="mg-note-open"
+                  >
+                    <Icon name="open_in_new" size={13} />
+                    本文を開く
+                  </button>
+                )}
+              </header>
+
+              <blockquote className="mg-note-quote" style={style}>
+                {thread.selection || thread.quote}
+              </blockquote>
+
+              {thread.comments.map((c) => (
+                <div key={c.id} className="mg-note-comment">
+                  <span className="mg-avatar" data-author={c.author}>
+                    {[...c.author][0] ?? "?"}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="mg-note-author">{c.author}</div>
+                    <div className="mg-note-body">{c.body}</div>
+                  </div>
+                </div>
+              ))}
+
+              {view && (
+                <p className={`mg-note-state is-${view.anchor.state}`}>
+                  <Icon
+                    name={view.anchor.state === "unknown" ? "help" : "my_location"}
+                    size={13}
+                  />
+                  {STATE_NOTE[view.anchor.state]}
+                </p>
+              )}
+            </article>
           </div>
 
-          <section className="mb-5 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] px-4 py-3">
-            {thread.comments.map((c) => (
-              <div key={c.id} className="mb-2.5 last:mb-0">
-                <div className="text-[10.5px] font-medium text-[var(--mg-muted)]">
-                  {c.author}
-                </div>
-                <div className="whitespace-pre-wrap text-[13px] leading-relaxed">
-                  {c.body}
-                </div>
-              </div>
-            ))}
-          </section>
-
           {currentBody === null ? (
-            <p className="text-[12px] text-[var(--mg-muted)]">
-              このファイルは今開いているフォルダの中にないため、現在の本文と比べられません。
+            <p className="mt-6 text-[12px] text-[var(--mg-muted)]">
+              このファイルは今開いているフォルダの中にないため、現在の本文を出せません。
             </p>
           ) : view === null ? (
-            <p className="text-[12px] text-[var(--mg-muted)]">差分を読み込んでいます…</p>
+            <p className="mt-6 text-[12px] text-[var(--mg-muted)]">読み込んでいます…</p>
           ) : (
             <markdownContext.Provider value={ctx}>
-              <DiffView
-                diff={view.diff}
-                targetIndex={view.target}
-                note={view.note}
+              <DocumentView
+                blocks={view.blocks}
+                anchor={view.anchor}
                 editorial={editorial}
                 style={style}
               />
@@ -319,7 +374,7 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
           <button
             onClick={() => void finish()}
             disabled={busy}
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--mg-accent)] px-3.5 py-2 text-[12px] font-semibold text-[var(--mg-bg)] shadow-sm transition hover:brightness-110 disabled:opacity-40"
+            className="mg-resolve"
           >
             <Icon name="check_circle" size={16} fill />
             解決にする

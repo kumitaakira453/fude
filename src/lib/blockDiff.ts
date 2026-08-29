@@ -103,10 +103,97 @@ export function targetIndex(diff: BlockChange[], quote: string, selection = ""):
   const probe = stripMarkup(text).slice(0, PROBE_LENGTH);
   if (!probe) return -1;
   const loose = indicesWhere(diff, (src) => stripMarkup(src).includes(probe));
-  return loose.length === 1 ? loose[0] : -1;
+  if (loose.length === 1) return loose[0];
+
+  return mostSimilar(diff, stripMarkup(text));
 }
 
 const PROBE_LENGTH = 24;
+
+// 引用が、その本文にどれだけ入っているか（0〜1）。文字の 2 字組で測るので、
+// 単語で区切らない日本語にもそのまま効き、途中の言い換えにも耐える。
+//
+// 「似ている度合い」ではなく「引用の側がどれだけ含まれているか」を測る。
+// 指摘の引用はブロックの一部を抜き出したものが多く、両側の長さを均す測り方だと
+// 長いブロックに短い引用が丸ごと入っていても低い値になってしまう。
+export function coverage(quote: string, text: string): number {
+  if (!quote || !text) return 0;
+  const left = bigrams(quote);
+  const right = bigrams(text);
+  const total = size(left);
+  if (total === 0 || right.size === 0) return quote === text ? 1 : 0;
+  let shared = 0;
+  for (const [gram, count] of left) {
+    shared += Math.min(count, right.get(gram) ?? 0);
+  }
+  return shared / total;
+}
+
+function bigrams(text: string): Map<string, number> {
+  const out = new Map<string, number>();
+  // サロゲートペアを割らないよう、コードポイントで区切る
+  const chars = [...text];
+  for (let i = 0; i + 1 < chars.length; i++) {
+    const gram = chars[i] + chars[i + 1];
+    out.set(gram, (out.get(gram) ?? 0) + 1);
+  }
+  return out;
+}
+
+function size(counts: Map<string, number>): number {
+  let n = 0;
+  for (const count of counts.values()) n += count;
+  return n;
+}
+
+// 引用をほぼ丸ごと含んでいれば、その引用はそこに在る。同じ文が複数箇所に
+// あるときは先頭を採る（逐語一致のときと同じ扱い）。
+const PRESENT = 0.9;
+// そこまで含んでいないときは、十分に含んでいて次点と差が付いているときだけ。
+// 僅差で選ぶと、言い回しの似た段落が並ぶ文書で確信をもって別の箇所を指す。
+const ENOUGH = 0.62;
+const MARGIN = 0.12;
+
+function mostSimilar(diff: BlockChange[], probe: string): number {
+  if (!probe) return -1;
+  const ranked = rankByCoverage(diff, probe);
+  const best = ranked[0];
+  if (!best || best.score < ENOUGH) return -1;
+  if (best.score >= PRESENT) return best.index;
+  const second = ranked[1]?.score ?? 0;
+  return best.score - second >= MARGIN ? best.index : -1;
+}
+
+// 引用を含んでいそうな順に並べる。位置を特定できなかったときに、
+// 「このあたりでは」と候補を示すためにも使う。
+export function rankByCoverage(
+  diff: BlockChange[],
+  probe: string,
+): { index: number; score: number }[] {
+  const scored: { index: number; score: number }[] = [];
+  for (let i = 0; i < diff.length; i++) {
+    const change = diff[i];
+    if (!("base" in change)) continue;
+    scored.push({ index: i, score: coverage(probe, stripMarkup(change.base.src)) });
+  }
+  // 同点なら先に出てくる方を上に置く
+  return scored.sort((a, b) => b.score - a.score || a.index - b.index);
+}
+
+// 指摘の引用を、突き合わせ用に均した形。候補探しでも同じ形を使う。
+export function probeOf(quote: string, selection = ""): string {
+  return stripMarkup((selection || quote).trim());
+}
+
+// 差分の位置を、現在の版のブロック番号に直す。削除されたブロックでは、
+// それが在った場所（次のブロックの番号）を返す。
+export function headIndexAt(diff: BlockChange[], index: number): number {
+  let n = 0;
+  for (let i = 0; i < index && i < diff.length; i++) {
+    if ("head" in diff[i]) n++;
+  }
+  return n;
+}
 
 function indicesWhere(diff: BlockChange[], match: (src: string) => boolean): number[] {
   const out: number[] = [];

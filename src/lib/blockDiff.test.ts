@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { splitBlocks } from "./blocks";
-import { diffBlocks, headOf, resolveInDiff, targetIndex } from "./blockDiff";
+import {
+  coverage,
+  diffBlocks,
+  headIndexAt,
+  headOf,
+  resolveInDiff,
+  targetIndex,
+} from "./blockDiff";
 
 const kinds = (body: string, next: string) =>
   diffBlocks(splitBlocks(body), splitBlocks(next)).map((c) => c.kind);
@@ -114,6 +121,74 @@ describe("targetIndex", () => {
   it("削除されたブロックの位置を引ける", () => {
     const d = diffBlocks(splitBlocks("段落A\n\n消える段落"), splitBlocks("段落A"));
     expect(d[targetIndex(d, "消える段落")].kind).toBe("removed");
+  });
+
+  it("書き換えられていても、いちばん似ている段落に寄せる", () => {
+    // 取り込んだ指摘は基準版が指摘当時のものとは限らず、逐語でも部分一致でも
+    // 当たらない。それでも「他と比べて明らかに似ている」段落は指せる。
+    const src = [
+      "生成AIの利用料金は、従来のSaaSと費用構造が根本的に異なる。",
+      "",
+      "ソフトウェアの利用状況はメンバーごとに集計できる。",
+      "",
+      "権限は管理者と一般ユーザーの2種類とする。",
+    ].join("\n");
+    const d = diffBlocks(splitBlocks(src), splitBlocks(src));
+    const i = targetIndex(d, "", "生成AIの料金は従来のSaaSとは費用の構造が異なります");
+    expect(i).toBe(0);
+  });
+
+  it("似ている段落が競り合うときは特定しない", () => {
+    const src = [
+      "権限は管理者と一般ユーザーの2種類とする。",
+      "",
+      "権限は管理者と一般ユーザーの3種類とする。",
+    ].join("\n");
+    const d = diffBlocks(splitBlocks(src), splitBlocks(src));
+    expect(targetIndex(d, "", "権限は管理者と一般ユーザーの4種類とする")).toBe(-1);
+  });
+
+  it("似ていない文は特定しない", () => {
+    const src = "生成AIの利用料金について\n\n権限の設計について";
+    const d = diffBlocks(splitBlocks(src), splitBlocks(src));
+    expect(targetIndex(d, "", "全く関係のない別の話題の文章です")).toBe(-1);
+  });
+});
+
+describe("coverage", () => {
+  it("同じなら 1、共通が無ければ 0", () => {
+    expect(coverage("あいうえお", "あいうえお")).toBe(1);
+    expect(coverage("あいうえお", "かきくけこ")).toBe(0);
+  });
+
+  it("長い本文に丸ごと入っていれば 1 になる", () => {
+    // 引用はブロックの一部を抜いたものが多い。両側の長さを均す測り方だと
+    // ここが低く出てしまい、入っているのに見つけられない
+    expect(coverage("費用構造", "生成AIの費用構造は従来と大きく異なる")).toBe(1);
+  });
+
+  it("言い換えられた分だけ下がる", () => {
+    const score = coverage("費用構造が異なる", "費用の構造が大きく異なる");
+    expect(score).toBeGreaterThan(0.4);
+    expect(score).toBeLessThan(1);
+  });
+
+  it("1 文字は 2 字組を作れないので、一致以外は 0", () => {
+    expect(coverage("あ", "あ")).toBe(1);
+    expect(coverage("あ", "あい")).toBe(0);
+  });
+});
+
+describe("headIndexAt", () => {
+  it("削除された分を飛ばして現在のブロック番号に直す", () => {
+    const d = diffBlocks(
+      splitBlocks("段落A\n\n消える段落\n\n段落C"),
+      splitBlocks("段落A\n\n段落C"),
+    );
+    // [same, removed, same] → removed が在った場所は現在の 1 番目
+    expect(headIndexAt(d, 0)).toBe(0);
+    expect(headIndexAt(d, 1)).toBe(1);
+    expect(headIndexAt(d, 2)).toBe(1);
   });
 });
 

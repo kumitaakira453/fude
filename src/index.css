@@ -1251,43 +1251,331 @@ svg[id^="mmd-"] foreignObject p {
   border-bottom-style: dashed;
 }
 
-/* 差分の枠。追加と削除は緑と赤で示す。この 2 色だけはアクセント色から
-   導出できないため固定値を使い、薄い着色にして明暗どちらの地色でも成立させる。 */
-.mg-diff {
-  border-left: 3px solid;
-  border-radius: 0.5rem;
-  padding: 0.35rem 0.85rem 0.1rem;
+/* ============================================================
+   レビュー画面
+   指摘を朱書きに、本文を校正紙に見立てる。指摘の箇所だけを本文の中で
+   際立たせ、それ以外は普段どおりの読み心地のまま残す。
+   ============================================================ */
+
+/* 見出し帯。細いアクセントの線を一本だけ引いて、通常画面と地続きにしない。 */
+.mg-review-head {
+  border-bottom: 1px solid var(--mg-border);
 }
-.mg-diff-add {
-  border-color: #10b981;
-  background: color-mix(in srgb, #10b981 8%, transparent);
+.mg-review-head::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--mg-accent),
+    var(--mg-accent2) 45%,
+    transparent 85%
+  );
 }
-.mg-diff-del {
-  border-color: #f43f5e;
-  background: color-mix(in srgb, #f43f5e 8%, transparent);
-}
-.mg-diff-label {
+
+/* 一覧のファイル見出し */
+.mg-review-group {
+  position: sticky;
+  top: -0.5rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--mg-panel);
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--mg-muted);
+}
+.mg-review-group .mg-count {
+  flex: none;
+  min-width: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--mg-hover);
+  color: var(--mg-fg-dim);
+  font-size: 10px;
+  line-height: 1.15rem;
+  text-align: center;
+}
+
+/* 一覧の 1 件。左端の細い線が選択の目印。 */
+.mg-thread-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin-bottom: 0.25rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.75rem;
+  border-radius: 0.6rem;
+  text-align: left;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+.mg-thread-card::before {
+  content: "";
+  position: absolute;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  left: 0.15rem;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--mg-border);
+  transition: background 0.15s;
+}
+.mg-thread-card:hover {
+  background: var(--mg-hover);
+}
+.mg-thread-card.is-active {
+  background: var(--mg-accent-soft);
+}
+.mg-thread-card.is-active::before {
+  background: var(--mg-accent);
+}
+.mg-thread-where {
+  overflow: hidden;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: var(--mg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-thread-quote {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  margin: 0.15rem 0;
+  font-family: var(--mg-font-serif);
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--mg-muted);
+}
+.mg-thread-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.mg-thread-more {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+  margin-top: 0.25rem;
+  font-size: 10px;
   color: var(--mg-muted);
 }
 
-/* 指摘の対象。差分の枠が左罫線なので印も左に揃える。囲みにすると
-   入力欄のように見えて本文から浮く。 */
-.mg-diff-target {
-  position: relative;
-  padding-left: 0.85rem;
+/* 朱書きの札。本文をたどっている間も見えているよう上に貼り付ける。 */
+.mg-note-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 1rem 0 0.75rem;
+  background: var(--mg-bg);
 }
-.mg-diff-target::before {
+/* 長い会話でも本文が隠れないよう高さを抑え、中だけをたどれるようにする */
+.mg-note {
+  max-height: 42vh;
+  overflow-y: auto;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.9rem;
+  background: var(--mg-panel);
+  box-shadow: 0 6px 18px -12px rgb(0 0 0 / 0.5);
+}
+.mg-note::before {
   content: "";
-  position: absolute;
-  top: 0.15rem;
-  bottom: 0.15rem;
-  left: 0;
-  width: 3px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--mg-accent), var(--mg-accent2));
+}
+.mg-note-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--mg-border);
+  font-size: 11px;
+  color: var(--mg-muted);
+}
+.mg-note-open {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.4rem;
+  color: var(--mg-fg-dim);
+  transition: background 0.15s;
+}
+.mg-note-open:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+
+/* 指摘された文そのもの。二重罫は校正の印を借りている。 */
+.mg-note-quote {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  margin: 0.9rem 0.9rem 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 3px double var(--mg-accent);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--mg-fg-dim);
+  white-space: pre-wrap;
+}
+
+.mg-note-comment {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0 0.9rem 0.7rem;
+}
+.mg-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
   border-radius: 999px;
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.mg-avatar[data-author="AI"] {
+  background: color-mix(in srgb, var(--mg-accent2) 18%, transparent);
+  color: var(--mg-accent2);
+}
+.mg-note-author {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--mg-muted);
+}
+.mg-note-body {
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+/* 箇所の状態。特定できたときは静かに、できなかったときだけ目を引かせる。 */
+.mg-note-state {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.45rem 0.9rem;
+  border-top: 1px solid var(--mg-border);
+  font-size: 11px;
+  color: var(--mg-muted);
+}
+.mg-note-state.is-unknown {
+  background: color-mix(in srgb, var(--mg-accent2) 10%, transparent);
+  color: var(--mg-fg-dim);
+}
+
+/* 本文。指摘の箇所だけ地色を敷き、上端に札を出す。 */
+.mg-doc {
+  padding-top: 0.5rem;
+}
+.mg-plain {
+  margin-bottom: 0.35rem;
+}
+.mg-spot,
+.mg-maybe {
+  position: relative;
+  margin: 1.35rem -1rem 0.85rem;
+  padding: 0.85rem 1rem 0.35rem;
+  border-radius: 0.75rem;
+}
+.mg-spot {
+  background: linear-gradient(
+    100deg,
+    var(--mg-accent-soft),
+    color-mix(in srgb, var(--mg-accent-soft) 25%, transparent)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
+}
+.mg-spot-gone {
+  margin-bottom: 0.35rem;
+  opacity: 0.72;
+}
+.mg-spot-gone .mg-prose {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--mg-danger) 55%, transparent);
+  text-decoration-thickness: 1px;
+}
+.mg-maybe {
+  box-shadow: inset 0 0 0 1px var(--mg-border);
+}
+.mg-spot::before,
+.mg-maybe::before {
+  content: attr(data-label);
+  position: absolute;
+  top: -0.65rem;
+  left: 0.9rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.3rem;
+  white-space: nowrap;
+}
+.mg-spot::before {
   background: var(--mg-accent);
+  color: var(--mg-bg);
+}
+.mg-maybe::before {
+  background: var(--mg-panel);
+  color: var(--mg-muted);
+  box-shadow: inset 0 0 0 1px var(--mg-border);
+}
+
+/* 指摘した時点の文。今の文のすぐ上に、控えめに置く。 */
+.mg-before {
+  margin: 1.35rem -1rem -0.5rem;
+  padding: 0.5rem 1rem 0.1rem;
+  border-left: 2px dashed var(--mg-border);
+  opacity: 0.7;
+}
+.mg-before-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--mg-muted);
+}
+
+/* 解決の確定。押した手応えが要るのでここだけ色を置く。 */
+.mg-resolve {
+  display: flex;
+  flex: none;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, var(--mg-accent), var(--mg-accent2));
+  color: var(--mg-bg);
+  font-size: 12px;
+  font-weight: 700;
+  transition: filter 0.15s;
+}
+.mg-resolve:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.mg-resolve:disabled {
+  opacity: 0.4;
 }
 
 /* 小窓に出す引用。長い表やリストでも小窓が伸びないように畳む。 */
