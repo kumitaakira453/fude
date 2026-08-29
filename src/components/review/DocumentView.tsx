@@ -39,11 +39,12 @@ export function DocumentView({
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
   const targetRef = useRef<HTMLDivElement>(null);
-  const scrolledRef = useRef(false);
+  // 自分でスクロールしたら、そこから先は勝手に動かさない
+  const touchedRef = useRef(false);
 
   useEffect(() => {
     setLimit(FIRST_CHUNK);
-    scrolledRef.current = false;
+    touchedRef.current = false;
   }, [blocks, anchor]);
 
   useEffect(() => {
@@ -55,10 +56,24 @@ export function DocumentView({
   }, [limit, blocks.length]);
 
   useEffect(() => {
-    if (scrolledRef.current || !targetRef.current) return;
-    scrolledRef.current = true;
-    targetRef.current.scrollIntoView({ block: "center" });
-  }, [limit]);
+    const mark = () => {
+      touchedRef.current = true;
+    };
+    window.addEventListener("wheel", mark, { passive: true });
+    window.addEventListener("keydown", mark);
+    return () => {
+      window.removeEventListener("wheel", mark);
+      window.removeEventListener("keydown", mark);
+    };
+  }, []);
+
+  // 描き足すたびに位置を合わせ直す。上にある画像や数式が遅れて入ると
+  // 対象が押し下げられるため、1 回きりだと狙った場所からずれる。
+  // 上の余白は CSS の scroll-margin-top（.mg-anchor）で取る。
+  useEffect(() => {
+    if (touchedRef.current) return;
+    targetRef.current?.scrollIntoView({ block: "start" });
+  }, [limit, blocks, anchor]);
 
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
@@ -75,7 +90,11 @@ export function DocumentView({
         const isSpot = i === spot;
         const rank = maybe.indexOf(i);
         return (
-          <div key={block.index} ref={i === scrollTo ? targetRef : undefined}>
+          <div
+            key={block.index}
+            ref={i === scrollTo ? targetRef : undefined}
+            className={i === scrollTo ? "mg-anchor" : undefined}
+          >
             {isSpot && anchor.state === "removed" && (
               <Gone src={anchor.before} editorial={editorial} style={style} />
             )}
@@ -113,7 +132,7 @@ export function DocumentView({
 
       {/* 末尾のブロックが消えていた場合は、続くブロックが無いのでここに出す */}
       {anchor.state === "removed" && spot >= blocks.length && (
-        <div ref={targetRef}>
+        <div ref={targetRef} className="mg-anchor">
           <Gone src={anchor.before} editorial={editorial} style={style} />
         </div>
       )}

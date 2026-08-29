@@ -49,6 +49,13 @@ function relativeTo(root: string | null, file: string): string | null {
   return file.startsWith(prefix) ? file.slice(prefix.length) : null;
 }
 
+// 一覧と見出しに出すファイルの道筋。開いているフォルダの中なら
+// そこからの相対パス、外なら絶対パスをそのまま出す。
+// 同じ名前のファイルが別の節に何枚もあるので、名前だけでは見分けられない。
+function pathLabel(root: string | null, file: string): string {
+  return relativeTo(root, file) ?? file;
+}
+
 function plainDiff(blocks: Block[]): BlockChange[] {
   return blocks.map((b) => ({ kind: "same", base: b, head: b }));
 }
@@ -148,7 +155,7 @@ export function ReviewScreen() {
           {groups.map(([file, list]) => (
             <section key={file} className="mb-4">
               <h2 className="mg-review-group">
-                <span className="truncate">{file.split("/").pop()}</span>
+                <span className="mg-review-path">{pathLabel(root, file)}</span>
                 <span className="mg-count">{list.length}</span>
               </h2>
               {list.map((thread) => (
@@ -348,8 +355,8 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
 
       <aside className="mg-side">
         <div className="mg-side-head">
-          <span className="min-w-0 flex-1 truncate">
-            {thread.file.split("/").pop()}
+          <span className="mg-review-path flex-1" title={thread.file}>
+            {pathLabel(root, thread.file)}
           </span>
           {rel && (
             <button

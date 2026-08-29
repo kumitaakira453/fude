@@ -1267,7 +1267,7 @@ svg[id^="mmd-"] foreignObject p {
   top: -0.5rem;
   z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   padding: 0.35rem 0.5rem;
   background: var(--mg-panel);
@@ -1275,6 +1275,13 @@ svg[id^="mmd-"] foreignObject p {
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--mg-muted);
+}
+/* 道筋は畳まずに折り返す。末尾を切ると、いちばん見分けたいファイル名が消える。 */
+.mg-review-path {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 .mg-review-group .mg-count {
   flex: none;
@@ -1532,6 +1539,11 @@ svg[id^="mmd-"] foreignObject p {
 /* 本文。指摘の箇所だけ地色を敷き、上端に札を出す。 */
 .mg-doc {
   padding-top: 0.5rem;
+}
+/* 指摘を選んだときに寄せる位置。真上に貼り付くと前の文脈が見えないので
+   上に余白を残す。 */
+.mg-anchor {
+  scroll-margin-top: 4.5rem;
 }
 .mg-plain {
   margin-bottom: 0.35rem;
