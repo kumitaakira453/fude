@@ -1,5 +1,11 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
@@ -63,7 +69,14 @@ function plainDiff(blocks: Block[]): BlockChange[] {
 // 見出しを辿った道筋。取り込んだ指摘は節の情報を持たないので、本文から組み立てる。
 function whereOf(thread: ReviewThread, blocks: Block[] | undefined): string {
   if (blocks) {
-    const index = targetIndex(plainDiff(blocks), thread.quote, thread.selection);
+    const diff = plainDiff(blocks);
+    let index = targetIndex(diff, thread.quote, thread.selection);
+    if (index < 0) {
+      // 箇所を確定できなくても、いちばん近い候補の節までは手掛かりになる。
+      // 節の名前が分かるだけで、指摘がどの話題のものかは掴める。
+      const best = rankByCoverage(diff, probeOf(thread.quote, thread.selection))[0];
+      if (best && best.score >= 0.3) index = best.index;
+    }
     if (index >= 0) {
       const path = sectionPathAt(blocks, index);
       if (path.length > 0) return path.join(" › ");
@@ -80,11 +93,25 @@ export function ReviewScreen() {
   const [selectedId, setSelectedId] = useAtom(reviewThreadAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
 
+  // 画面の枠を先に出してから解析に入る。文書をブロックへ割る処理は
+  // ファイル数ぶん走るので、同じ描画に混ぜるとボタンを押した手応えが遅れる。
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const threads = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
-  const selected = useMemo(
-    () => threads.find((t) => t.id === selectedId) ?? threads[0] ?? null,
-    [threads, selectedId],
+
+  // 選び直したときは、一覧の反応を先に返して本文の組み立ては後回しにする。
+  const shownId = useDeferredValue(selectedId);
+  const pick = useCallback(
+    (id: string | null) => threads.find((t) => t.id === id) ?? threads[0] ?? null,
+    [threads],
   );
+  const selected = useMemo(() => pick(selectedId), [pick, selectedId]);
+  const shown = useMemo(() => pick(shownId), [pick, shownId]);
+  const pending = !ready || selected?.id !== shown?.id;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -101,6 +128,7 @@ export function ReviewScreen() {
   // ファイルごとに 1 回だけブロックへ割る。一覧の全件で見出しを辿るため。
   const blocksByFile = useMemo(() => {
     const map = new Map<string, Block[]>();
+    if (!ready) return map;
     for (const t of threads) {
       if (map.has(t.file)) continue;
       const rel = relativeTo(root, t.file);
@@ -109,7 +137,7 @@ export function ReviewScreen() {
       map.set(t.file, splitBlocks(parseFrontmatter(raw).body));
     }
     return map;
-  }, [threads, cache, root]);
+  }, [ready, threads, cache, root]);
 
   const groups = useMemo(() => {
     const byFile = new Map<string, ReviewThread[]>();
@@ -146,9 +174,9 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)] px-2 py-2">
+        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)] py-2">
           {groups.length === 0 && (
-            <p className="px-2 py-4 text-[12px] text-[var(--mg-muted)]">
+            <p className="px-3 py-4 text-[12px] text-[var(--mg-muted)]">
               指摘が付くとここに並びます。
             </p>
           )}
@@ -171,14 +199,46 @@ export function ReviewScreen() {
           ))}
         </nav>
 
-        {selected ? (
-          <ThreadDetail key={selected.id} thread={selected} />
-        ) : (
+        {threads.length === 0 ? (
           <p className="p-8 text-[13px] text-[var(--mg-muted)]">
             指摘を選ぶと、その箇所が今どうなっているかを本文の中で示します。
           </p>
+        ) : pending || !shown ? (
+          <DetailSkeleton />
+        ) : (
+          <ThreadDetail key={shown.id} thread={shown} />
         )}
       </div>
+    </div>
+  );
+}
+
+// 本文を組み立てている間の骨組み。読む場所の形をそのまま出しておくと、
+// 中身が入ったときに視線が飛ばない。
+function DetailSkeleton() {
+  const widths = ["70%", "100%", "94%", "88%", "100%", "62%", "100%", "80%"];
+  return (
+    <div className="mg-loading flex min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="mx-auto max-w-3xl px-6 py-6">
+          <div className="mg-skeleton">
+            <div className="mg-skeleton-bar mg-skeleton-head" style={{ width: "45%" }} />
+            {widths.map((w, i) => (
+              <div key={i} className="mg-skeleton-bar" style={{ width: w }} />
+            ))}
+          </div>
+        </div>
+      </div>
+      <aside className="mg-side">
+        <div className="mg-side-head">読み込んでいます…</div>
+        <div className="mg-talk">
+          <div className="mg-skeleton w-full">
+            <div className="mg-skeleton-bar" style={{ width: "60%" }} />
+            <div className="mg-skeleton-bar" style={{ width: "85%" }} />
+            <div className="mg-skeleton-bar" style={{ width: "45%" }} />
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }
@@ -196,17 +256,24 @@ function ThreadCard({
 }) {
   return (
     <button onClick={onPick} className={`mg-thread-card ${active ? "is-active" : ""}`}>
-      <div className="mg-thread-where">{where}</div>
-      <div className="mg-thread-quote">{thread.selection || thread.quote}</div>
+      <div className="mg-thread-quote">
+        <span>{thread.selection || thread.quote}</span>
+      </div>
       <div className="mg-thread-body">
         {thread.comments[0]?.body ?? "（本文なし）"}
       </div>
-      {thread.comments.length > 1 && (
-        <div className="mg-thread-more">
-          <Icon name="forum" size={12} />
-          {thread.comments.length}
-        </div>
-      )}
+      <div className="mg-thread-foot">
+        {/* 幅が狭いので、いちばん細かい節だけを出す。全体は title で読める */}
+        <span className="mg-thread-where" title={where}>
+          {where.split(" › ").pop()}
+        </span>
+        {thread.comments.length > 1 && (
+          <span className="mg-thread-count">
+            <Icon name="forum" size={11} />
+            {thread.comments.length}
+          </span>
+        )}
+      </div>
     </button>
   );
 }

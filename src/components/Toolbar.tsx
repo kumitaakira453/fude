@@ -33,7 +33,9 @@ function IconButton({
       onClick={onClick}
       title={title}
       disabled={disabled}
-      className={`grid h-8 w-8 place-items-center rounded-lg transition ${
+      // 押した瞬間に縮める。押してから画面が変わるまでに間があるとき、
+      // 手応えが無いと反応していないように見える。
+      className={`grid h-8 w-8 place-items-center rounded-lg transition duration-100 active:scale-90 ${
         disabled
           ? "cursor-not-allowed text-[var(--mg-muted)] opacity-40"
           : active

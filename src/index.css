@@ -1269,7 +1269,7 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.5rem 0.8rem 0.35rem 0.9rem;
   background: var(--mg-panel);
   font-size: 10.5px;
   font-weight: 600;
@@ -1295,29 +1295,26 @@ svg[id^="mmd-"] foreignObject p {
   text-align: center;
 }
 
-/* 一覧の 1 件。左端の細い線が選択の目印。 */
+/* 一覧の 1 件。読む順は「何を指摘したか」が先、「どこの話か」は後ろに置く。
+   引用は手掛かりなので小さく上に添えるだけにする。 */
+/* 選択の地色は列の端まで届かせる。角を丸めて浮かせると、一覧の行ではなく
+   独立した札に見えて並びが読みにくい。 */
 .mg-thread-card {
   position: relative;
   display: block;
   width: 100%;
-  margin-bottom: 0.25rem;
-  padding: 0.5rem 0.6rem 0.5rem 0.75rem;
-  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem 0.5rem 0.9rem;
   text-align: left;
-  transition:
-    background 0.15s,
-    transform 0.15s;
+  transition: background 0.12s;
 }
 .mg-thread-card::before {
   content: "";
   position: absolute;
-  top: 0.55rem;
-  bottom: 0.55rem;
-  left: 0.15rem;
+  inset-block: 0;
+  left: 0;
   width: 2px;
-  border-radius: 999px;
-  background: var(--mg-border);
-  transition: background 0.15s;
+  background: transparent;
+  transition: background 0.12s;
 }
 .mg-thread-card:hover {
   background: var(--mg-hover);
@@ -1328,40 +1325,65 @@ svg[id^="mmd-"] foreignObject p {
 .mg-thread-card.is-active::before {
   background: var(--mg-accent);
 }
-.mg-thread-where {
+
+/* 引用は 1 行だけ。開き括弧を付けて、指摘の本文と取り違えないようにする。 */
+.mg-thread-quote {
+  display: flex;
+  gap: 0.3rem;
   overflow: hidden;
-  font-size: 10px;
-  letter-spacing: 0.03em;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--mg-muted);
+}
+.mg-thread-quote::before {
+  content: "❝";
+  flex: none;
+  font-size: 10px;
+  line-height: 1.5;
+  opacity: 0.6;
+}
+.mg-thread-quote span {
+  overflow: hidden;
+  font-family: var(--mg-font-serif);
+  font-style: italic;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mg-thread-quote {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  overflow: hidden;
-  margin: 0.15rem 0;
-  font-family: var(--mg-font-serif);
-  font-size: 11.5px;
-  font-style: italic;
-  color: var(--mg-muted);
-}
+
 .mg-thread-body {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  margin: 0.2rem 0 0.3rem;
   font-size: 12.5px;
-  line-height: 1.45;
+  line-height: 1.5;
+  color: var(--mg-fg);
 }
-.mg-thread-more {
+
+.mg-thread-foot {
   display: flex;
-  gap: 0.2rem;
+  gap: 0.4rem;
   align-items: center;
-  margin-top: 0.25rem;
   font-size: 10px;
   color: var(--mg-muted);
+}
+.mg-thread-where {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-thread-count {
+  display: flex;
+  flex: none;
+  gap: 0.15rem;
+  align-items: center;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 7%, transparent);
 }
 
 /* やり取りは本文の横に置く。本文に重ねると、読んでいる途中の段落が
@@ -1958,6 +1980,25 @@ svg[id^="mmd-"] foreignObject p {
   }
   100% {
     background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-skeleton-bar {
+    animation: none;
+  }
+}
+
+/* 読み込み中の骨組み。速く出そろったときに一瞬ちらつかないよう、
+   少し待ってから浮かび上がらせる。 */
+.mg-loading {
+  animation: mgLoadingIn 0.2s ease 0.14s both;
+}
+@keyframes mgLoadingIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
