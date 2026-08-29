@@ -154,6 +154,14 @@ export function closeTab(store: Store, paneId: string, index: number) {
   store.set(A.layoutAtom, updateLeaf(root, paneId, (t) => leaf(t.id, tabs, active)));
 }
 
+// ファイルを指して閉じる。閉じるまでに間が空く経路（別ウィンドウへ引き出す等）
+// では、掴んだ時点の位置が当てにならないため、その場で探し直す。
+export function closeTabAt(store: Store, paneId: string, path: string) {
+  const target = findLeaf(store.get(A.layoutAtom), paneId);
+  const index = target?.tabs.indexOf(path) ?? -1;
+  if (index >= 0) closeTab(store, paneId, index);
+}
+
 export interface TabRef {
   paneId: string;
   index: number;

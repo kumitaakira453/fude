@@ -124,8 +124,19 @@ fn cascade_from(app: &AppHandle) -> Option<(f64, f64)> {
     Some((pos.x + 32.0, pos.y + 32.0))
 }
 
+// 掴んでいた位置に窓の上端が来るようにずらす量。カーソルがタブの列の
+// あたりに乗るので、引き出したものがそのまま置かれたように見える。
+const GRAB_OFFSET: (f64, f64) = (-90.0, -14.0);
+
 #[tauri::command]
-pub fn open_doc_window(app: AppHandle, url: String, title: String) -> Result<String, String> {
+pub fn open_doc_window(
+    app: AppHandle,
+    url: String,
+    title: String,
+    // 引き出して開くときの、離した位置（画面座標）。無ければ既存の窓からずらす。
+    x: Option<f64>,
+    y: Option<f64>,
+) -> Result<String, String> {
     let label = next_label(&app);
     let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .title(title)
@@ -135,7 +146,10 @@ pub fn open_doc_window(app: AppHandle, url: String, title: String) -> Result<Str
         // OS のファイルドロップを掴ませない。掴ませると WebView 内の
         // HTML のドラッグ&ドロップ（タブの移動など）が届かなくなる。
         .disable_drag_drop_handler();
-    builder = match cascade_from(&app) {
+    let dropped_at = x
+        .zip(y)
+        .map(|(x, y)| (x + GRAB_OFFSET.0, y + GRAB_OFFSET.1));
+    builder = match dropped_at.or_else(|| cascade_from(&app)) {
         Some((x, y)) => builder.position(x, y),
         None => builder.center(),
     };
@@ -147,7 +161,13 @@ pub fn open_doc_window(app: AppHandle, url: String, title: String) -> Result<Str
 
 // Dock メニューなど、フロントを介さずにフォルダを開く経路。
 pub fn open_folder_window(app: &AppHandle, folder: &str) -> Result<String, String> {
-    open_doc_window(app.clone(), doc_url(folder, None), basename(folder))
+    open_doc_window(
+        app.clone(),
+        doc_url(folder, None),
+        basename(folder),
+        None,
+        None,
+    )
 }
 
 // ウィンドウのタイトルは Dock メニューのウィンドウ一覧にそのまま並ぶ。

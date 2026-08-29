@@ -37,15 +37,25 @@ export function windowScopedKey(key: string): string {
   return scopedKey(key, currentWindowLabel());
 }
 
+// 引き出して開くときに、離した位置（画面座標）。
+export interface DropPoint {
+  x: number;
+  y: number;
+}
+
 // フォルダ（と任意でファイル 1 つ）を新しいウィンドウで開く。
+// 位置を渡すとそこに出る。渡さなければ既存のウィンドウからずらして出る。
 export async function openDocWindow(
   folderId: string,
   file: string | null,
   title: string,
+  at?: DropPoint,
 ): Promise<void> {
   await invoke("open_doc_window", {
     url: `index.html${buildHash(folderId, file)}`,
     title,
+    x: at?.x ?? null,
+    y: at?.y ?? null,
   });
 }
 

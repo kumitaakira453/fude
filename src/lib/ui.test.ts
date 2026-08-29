@@ -5,6 +5,7 @@ import {
   activateTab,
   closePane,
   closeTab,
+  closeTabAt,
   dropOnPane,
   moveTab,
   openInPane,
@@ -85,6 +86,22 @@ describe("closeTab", () => {
     const side = store.get(A.activePaneIdAtom);
     closeTab(store, side, 0);
     expect(panes()).toHaveLength(1);
+    expect(first().tabs).toEqual(["a.md"]);
+  });
+});
+
+describe("closeTabAt", () => {
+  it("掴んだあと並びが変わっていても、そのファイルを閉じる", () => {
+    for (const f of ["a.md", "b.md", "c.md"]) openInPane(store, "p1", f);
+    // 引き出している間に手前のタブが閉じられ、位置が 1 つずれた状況
+    closeTab(store, "p1", 0);
+    closeTabAt(store, "p1", "c.md");
+    expect(first().tabs).toEqual(["b.md"]);
+  });
+
+  it("既に無いファイルなら何もしない", () => {
+    openInPane(store, "p1", "a.md");
+    closeTabAt(store, "p1", "gone.md");
     expect(first().tabs).toEqual(["a.md"]);
   });
 });

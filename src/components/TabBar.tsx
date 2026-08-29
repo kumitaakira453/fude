@@ -2,9 +2,20 @@ import { useStore } from "jotai";
 import { useState } from "react";
 import { useDragReset } from "../hooks/useDragReset";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { droppedOutside, readDragPayload, setDragPayload } from "../lib/dnd";
+import {
+  dropPoint,
+  droppedOutside,
+  readDragPayload,
+  setDragPayload,
+} from "../lib/dnd";
 import { displayName } from "../lib/fsAccess";
-import { activateTab, closeTab, moveTab, openInPane } from "../lib/ui";
+import {
+  activateTab,
+  closeTab,
+  closeTabAt,
+  moveTab,
+  openInPane,
+} from "../lib/ui";
 import type { LeafNode } from "../state/atoms";
 import { Icon } from "./Icon";
 
@@ -73,11 +84,14 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
               e.dataTransfer.effectAllowed = "move";
             }}
-            // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す
+            // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す。
+            // タブを消すのはウィンドウができてから。先に消すと、開くまでの間
+            // どちらにも無い状態が見えてしまう。
             onDragEnd={(e) => {
               if (!droppedOutside(e)) return;
-              openInNewWindow(path);
-              closeTab(store, pane.id, i);
+              void openInNewWindow(path, dropPoint(e)).then((opened) => {
+                if (opened) closeTabAt(store, pane.id, path);
+              });
             }}
             className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] transition ${
               selected

@@ -6,6 +6,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { openCountsAtom } from "../state/review";
 import {
   DND_MIME,
+  dropPoint,
   droppedOutside,
   readDragPayload,
   setDragPayload,
@@ -274,10 +275,10 @@ function TreeItem({
       onDragStart={startDrag}
       // ウィンドウの外へ引き出したら、そのファイルで新しいウィンドウを開く
       onDragEnd={(e) => {
-        if (droppedOutside(e)) openInNewWindow(node.path);
+        if (droppedOutside(e)) void openInNewWindow(node.path, dropPoint(e));
       }}
       onClick={(e) =>
-        e.metaKey ? openInNewWindow(node.path) : openFile(node.path)
+        e.metaKey ? void openInNewWindow(node.path) : openFile(node.path)
       }
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
@@ -423,7 +424,7 @@ function ContextMenu({
           {
             icon: "open_in_new",
             label: "新しいウィンドウで開く",
-            action: () => openInNewWindow(node.path),
+            action: () => void openInNewWindow(node.path),
           },
           ...commonItems,
         ]

@@ -17,7 +17,11 @@ import {
   type TreeNode,
 } from "../lib/fsAccess";
 import { folderDisplayName, loadFolders, registerFolder } from "../lib/idb";
-import { openDocWindow, recordRecentFolder } from "../lib/windows";
+import {
+  openDocWindow,
+  recordRecentFolder,
+  type DropPoint,
+} from "../lib/windows";
 import {
   remapLeafPaths,
   resetLayout,
@@ -252,17 +256,21 @@ export function useWorkspace() {
   // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
   // Dock メニューのウィンドウ一覧でどのフォルダか分かるようにする。
   const openInNewWindow = useCallback(
-    (path: string | null) => {
+    async (path: string | null, at?: DropPoint): Promise<boolean> => {
       const folderId = store.get(A.activeFolderIdAtom);
-      if (!folderId) return;
+      if (!folderId) return false;
       const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
       const title = entry ? folderDisplayName(entry) : "mdglow";
-      void openDocWindow(folderId, path, title).catch((e) => {
+      try {
+        await openDocWindow(folderId, path, title, at);
+        return true;
+      } catch (e) {
         void message(`新しいウィンドウを開けませんでした。\n${String(e)}`, {
           title: "mdglow",
           kind: "error",
         });
-      });
+        return false;
+      }
     },
     [store],
   );

@@ -107,6 +107,8 @@ extern "C-unwind" fn new_window(_this: &AnyObject, _cmd: Sel, _sender: *mut AnyO
         app.clone(),
         "index.html".to_string(),
         "mdglow".to_string(),
+        None,
+        None,
     ) {
         log::warn!("Dock メニューからウィンドウを開けません: {e}");
     }

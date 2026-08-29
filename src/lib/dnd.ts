@@ -5,6 +5,8 @@
 // パスだけだとタブを掴んだのかツリーから掴んだのか区別できないので、
 // タブのときだけ掴んだ位置を添える。
 
+import type { DropPoint } from "./windows";
+
 export const DND_MIME = "application/x-mdglow-path";
 
 export interface DragPayload {
@@ -29,6 +31,17 @@ export function droppedOutside(e: { dataTransfer: DataTransfer; clientX: number;
     e.clientX > window.innerWidth ||
     e.clientY > window.innerHeight
   );
+}
+
+// 離した位置（画面座標）。引き出して開いたウィンドウをそこに出すのに使う。
+// WebKit が位置を持たないことがあるので、その場合は指定なしにして
+// 既定の置き方（既存のウィンドウからずらす）に任せる。
+export function dropPoint(e: {
+  screenX: number;
+  screenY: number;
+}): DropPoint | undefined {
+  if (e.screenX === 0 && e.screenY === 0) return undefined;
+  return { x: e.screenX, y: e.screenY };
 }
 
 export function readDragPayload(data: DataTransfer): DragPayload | null {
