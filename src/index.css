@@ -1453,21 +1453,53 @@ svg[id^="mmd-"] foreignObject p {
   opacity: 0.5;
 }
 
-/* 指摘された文そのもの。二重罫は校正の印を借りている。 */
-.mg-side-quote {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
+/* 指摘した時点の本文。選ばれていた部分だけを出すと語の途中から始まって
+   読めないので、前後を添えて出す。二重罫は校正の印を借りている。 */
+.mg-quote-wrap {
+  display: flex;
   flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
   margin: 0.5rem 0.9rem 0;
+}
+.mg-quote {
+  max-height: 8.5rem;
+  overflow: hidden;
+  margin: 0;
   padding-left: 0.6rem;
   border-left: 3px double var(--mg-accent);
   font-size: 12px;
-  font-style: italic;
-  line-height: 1.55;
-  color: var(--mg-fg-dim);
+  line-height: 1.6;
+  color: var(--mg-muted);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mg-quote.is-open {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+/* 選ばれていた部分。周りは地の文として読ませ、ここだけを立てる。 */
+.mg-quote-hit {
+  border-radius: 0.2rem;
+  padding: 0.05rem 0.1rem;
+  background: color-mix(in srgb, var(--mg-accent) 22%, transparent);
+  color: var(--mg-fg);
+  font-weight: 500;
+}
+.mg-quote-cut {
+  opacity: 0.55;
+}
+.mg-quote-more {
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  color: var(--mg-muted);
+  font-size: 10px;
+  transition: background 0.15s;
+}
+.mg-quote-more:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
 }
 
 /* やり取りは会話として読ませる。指摘を出した側を右、答えた側を左に置くと
@@ -1599,6 +1631,10 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-accent-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
 }
+/* 中の一部まで絞れているときは、ブロック全体の地色を引いて印だけを立てる。 */
+.mg-spot.is-narrow {
+  background: color-mix(in srgb, var(--mg-accent) 5%, transparent);
+}
 .mg-spot-gone {
   margin-bottom: 0.35rem;
   opacity: 0.72;
@@ -1645,6 +1681,12 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-panel);
   color: var(--mg-muted);
   box-shadow: inset 0 0 0 1px var(--mg-border);
+}
+
+/* 選ばれていた文字列そのものへの印。表のように大きなブロックでは、
+   ブロック全体を塗ってもどのセルの話か分からない。 */
+::highlight(mg-review-selection) {
+  background-color: color-mix(in srgb, var(--mg-accent) 34%, transparent);
 }
 
 /* 指摘した時点の文。今の文のすぐ上に、控えめに置く。 */

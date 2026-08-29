@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "../../lib/blocks";
+import { readBlockText, rangeAt } from "../../lib/domText";
+import { findPlain, findPlainLoose } from "../../lib/projection";
 import { Markdown } from "../Markdown";
 
 // 指摘が付いた文書を、現在の姿のまま出す。
@@ -10,6 +12,9 @@ import { Markdown } from "../Markdown";
 //
 // 全ブロックを 1 回のペイントで描くと大きなファイルで固まるので、
 // 本文と同じく先頭から順に足していく。
+
+// 選ばれていた文字列に付ける印の名前。描画側は ::highlight() で拾う。
+const MARK = "mg-review-selection";
 
 // 最初の一塊は小さく取る。ここを大きくすると、指摘を選んでから何かが
 // 出るまでの間がそのまま伸びる。
@@ -35,6 +40,7 @@ export function DocumentView({
   style,
   focusNonce,
   focusAt,
+  selection,
 }: {
   blocks: Block[];
   anchor: Anchor;
@@ -44,11 +50,23 @@ export function DocumentView({
   focusNonce: number;
   // 候補が複数あるときに、今どれを見ているか
   focusAt: number;
+  // 指摘のときに選ばれていた文字列。ブロックの中のどこかを示すのに使う。
+  selection: string;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
   const targetRef = useRef<HTMLDivElement>(null);
+  // 選ばれていた文字列そのものに印を付けられたときの、その位置
+  const markRef = useRef<HTMLElement | null>(null);
+  const [marked, setMarked] = useState(false);
   // 自分でスクロールしたら、そこから先は勝手に動かさない
   const touchedRef = useRef(false);
+
+  // 印まで絞れているときはそこへ、絞れていなければブロックの頭へ寄せる。
+  const focus = useCallback((behavior: ScrollBehavior) => {
+    const mark = markRef.current;
+    if (mark) mark.scrollIntoView({ block: "center", behavior });
+    else targetRef.current?.scrollIntoView({ block: "start", behavior });
+  }, []);
 
   // 何を見ているかは中身で表す。配列やオブジェクトの同一性で見張ると、
   // 中身が同じでも作り直されるたびに先頭へ巻き戻ってしまう。
@@ -86,20 +104,49 @@ export function DocumentView({
     };
   }, []);
 
+  // 選ばれていた文字列そのものに印を付ける。表のように大きなブロックでは、
+  // ブロック全体を塗っても「どのセルの話か」が分からない。
+  // 本文の DOM は書き換えず、範囲だけを描画側に渡す。
+  useEffect(() => {
+    const registry = "highlights" in CSS ? CSS.highlights : null;
+    const block = targetRef.current;
+    markRef.current = null;
+    setMarked(false);
+    if (!registry) return;
+    registry.delete(MARK);
+    const needle = selection.trim();
+    if (!block || !needle) return;
+    const text = readBlockText(block);
+    const hit = findPlain(text.plain, needle) ?? findPlainLoose(text.plain, needle);
+    if (!hit) return;
+    const range = rangeAt(text, hit.start, hit.end);
+    if (!range) return;
+    registry.set(MARK, new Highlight(range));
+    markRef.current =
+      range.startContainer.parentElement instanceof HTMLElement
+        ? range.startContainer.parentElement
+        : null;
+    setMarked(true);
+    return () => {
+      registry.delete(MARK);
+    };
+  }, [selection, limit, anchorKey]);
+
   // 描き足すたびに位置を合わせ直す。上にある画像や数式が遅れて入ると
   // 対象が押し下げられるため、1 回きりだと狙った場所からずれる。
   // 上の余白は CSS の scroll-margin-top（.mg-anchor）で取る。
   useEffect(() => {
     if (touchedRef.current) return;
-    targetRef.current?.scrollIntoView({ block: "start" });
-  }, [limit, anchorKey]);
+    focus("auto");
+  }, [limit, anchorKey, marked, focus]);
 
   // 頼まれたら戻す。自分でスクロールしていても、このときだけは動かす。
   useEffect(() => {
     if (focusNonce === 0) return;
     touchedRef.current = true; // 戻したあとは、また自由にスクロールできる
-    targetRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, [focusNonce, focusAt]);
+    focus("smooth");
+  }, [focusNonce, focusAt, focus]);
+
 
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
@@ -148,7 +195,10 @@ export function DocumentView({
               }
               className={`${isSpot ? "mg-spot" : rank >= 0 ? "mg-maybe" : "mg-plain"}${
                 rank >= 0 && rank === focusAt ? " is-current" : ""
-              }${isTarget && !gone ? " mg-anchor" : ""}`}
+              }${isTarget && !gone ? " mg-anchor" : ""}${
+                // 選ばれていた文字列まで絞れたときは、ブロック全体の地色を弱める
+                isSpot && marked ? " is-narrow" : ""
+              }`}
             >
               <div className="mg-prose prose" style={style}>
                 <Markdown body={block.src} editorial={editorial} />

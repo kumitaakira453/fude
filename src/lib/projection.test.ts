@@ -7,7 +7,12 @@ import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { describe, expect, it } from "vitest";
 import { splitBlocks } from "./blocks";
-import { buildProjection, findPlain, plainToSrcRange } from "./projection";
+import {
+  buildProjection,
+  findPlain,
+  findPlainLoose,
+  plainToSrcRange,
+} from "./projection";
 
 // 射影が満たすべき不変条件。exact なブロックでは plain の 1 文字ごとに
 // 対応するソース位置の文字が一致し、オフセットは単調非減少になる。
@@ -206,3 +211,24 @@ function splitBlocksLikeRenderer(body: string): string[] {
     (n) => `${n.position?.start.offset ?? 0}:${n.position?.end.offset ?? body.length}`,
   );
 }
+
+describe("findPlainLoose", () => {
+  it("空白の入り方が違っても拾う", () => {
+    // 取り込んだ指摘は、表のセルの間にタブや改行が挟まった文字列を持っている
+    const plain = "定数名値EMAILemail";
+    expect(findPlainLoose(plain, "定数名 値")).toBeNull();
+    expect(findPlainLoose("定数名 値 EMAIL", "定数名\t値\nEMAIL")).toEqual({
+      start: 0,
+      end: "定数名 値 EMAIL".length,
+    });
+  });
+
+  it("前後の空白は無視する", () => {
+    expect(findPlainLoose("あいうえお", "  いう  ")).toEqual({ start: 1, end: 3 });
+  });
+
+  it("見つからなければ null", () => {
+    expect(findPlainLoose("あいうえお", "かき")).toBeNull();
+    expect(findPlainLoose("あいうえお", "   ")).toBeNull();
+  });
+});

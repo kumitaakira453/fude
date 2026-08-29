@@ -137,3 +137,32 @@ export function findPlain(
   }
   return best < 0 ? null : { start: best, end: best + needle.length };
 }
+
+// 空白の入り方が違っても拾う。別アプリから取り込んだ指摘の選択文字列は、
+// 表のセルの間にブラウザが差し込んだタブや改行を含んでいて逐語では当たらない。
+// 連続する空白を 1 つに畳んで探し、見つけた位置を元の文字列へ戻す。
+export function findPlainLoose(
+  plain: string,
+  needle: string,
+): { start: number; end: number } | null {
+  const probe = needle.replace(/\s+/g, " ").trim();
+  if (!probe) return null;
+
+  let flat = "";
+  const source: number[] = []; // flat の 1 文字ごとの、plain 上の位置
+  for (let i = 0; i < plain.length; i++) {
+    const ch = plain[i];
+    if (/\s/.test(ch)) {
+      if (flat.endsWith(" ")) continue;
+      flat += " ";
+    } else {
+      flat += ch;
+    }
+    source.push(i);
+  }
+
+  const at = flat.indexOf(probe);
+  if (at < 0) return null;
+  const last = source[at + probe.length - 1] ?? source[source.length - 1];
+  return { start: source[at], end: last + 1 };
+}

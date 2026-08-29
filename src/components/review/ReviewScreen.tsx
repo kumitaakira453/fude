@@ -37,6 +37,7 @@ import {
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
 import { DocumentView, type Anchor } from "./DocumentView";
+import { Quote } from "./Quote";
 
 // レビュー専用の画面。読書ビューに小窓を重ねる形では、スクロールで位置が崩れ、
 // 指摘がどのブロックのことかも並べて見せられない。
@@ -469,6 +470,7 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
                 style={style}
                 focusNonce={focus.nonce}
                 focusAt={focus.at}
+                selection={thread.selection}
               />
             </markdownContext.Provider>
           )}
@@ -523,9 +525,11 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
           ))}
         </nav>
 
-        <blockquote className="mg-side-quote" style={style}>
-          {thread.selection || thread.quote}
-        </blockquote>
+        <Quote
+          quote={thread.quote}
+          selection={thread.selection}
+          offset={thread.selection_offset}
+        />
 
         <div className="mg-talk">
           {thread.comments.map((c, i) => (
