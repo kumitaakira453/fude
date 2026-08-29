@@ -34,6 +34,7 @@ export function DocumentView({
   editorial,
   style,
   focusNonce,
+  focusAt,
 }: {
   blocks: Block[];
   anchor: Anchor;
@@ -41,6 +42,8 @@ export function DocumentView({
   style: React.CSSProperties;
   // 増えるたびに指摘の箇所へ戻す。読み進めて見失ったときのための合図。
   focusNonce: number;
+  // 候補が複数あるときに、今どれを見ているか
+  focusAt: number;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
   const targetRef = useRef<HTMLDivElement>(null);
@@ -96,7 +99,7 @@ export function DocumentView({
     if (focusNonce === 0) return;
     touchedRef.current = true; // 戻したあとは、また自由にスクロールできる
     targetRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, [focusNonce]);
+  }, [focusNonce, focusAt]);
 
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
@@ -104,22 +107,27 @@ export function DocumentView({
 
   const spot = anchor.state === "unknown" ? -1 : anchor.index;
   const maybe = anchor.state === "unknown" ? anchor.candidates : [];
-  const scrollTo = spot >= 0 ? spot : (maybe[0] ?? -1);
+  const scrollTo = spot >= 0 ? spot : (maybe[focusAt] ?? maybe[0] ?? -1);
   const shown = blocks.slice(0, limit);
 
   return (
     <div className="mg-doc">
       {shown.map((block, i) => {
-        const isSpot = i === spot;
+        const gone = i === spot && anchor.state === "removed";
+        const isSpot = i === spot && !gone;
         const rank = maybe.indexOf(i);
+        // 寄せる先は目印そのもの。「指摘した時点」の塊まで含めた外側に付けると、
+        // その塊が長いときに本体が画面の下へ押し出されてしまう。
+        const isTarget = i === scrollTo;
         return (
-          <div
-            key={block.index}
-            ref={i === scrollTo ? targetRef : undefined}
-            className={i === scrollTo ? "mg-anchor" : undefined}
-          >
-            {isSpot && anchor.state === "removed" && (
-              <Gone src={anchor.before} editorial={editorial} style={style} />
+          <div key={block.index}>
+            {gone && (
+              <div
+                ref={isTarget ? targetRef : undefined}
+                className={isTarget ? "mg-anchor" : undefined}
+              >
+                <Gone src={anchor.before} editorial={editorial} style={style} />
+              </div>
             )}
             {isSpot && anchor.state === "rewritten" && (
               <div className="mg-before">
@@ -130,20 +138,17 @@ export function DocumentView({
               </div>
             )}
             <div
+              ref={isTarget && !gone ? targetRef : undefined}
               data-label={
-                isSpot && anchor.state !== "removed"
+                isSpot
                   ? SPOT_LABEL[anchor.state]
                   : rank >= 0
-                    ? `このあたり ${rank + 1}`
+                    ? `候補 ${rank + 1} / ${maybe.length}`
                     : undefined
               }
-              className={
-                isSpot && anchor.state !== "removed"
-                  ? "mg-spot"
-                  : rank >= 0
-                    ? "mg-maybe"
-                    : "mg-plain"
-              }
+              className={`${isSpot ? "mg-spot" : rank >= 0 ? "mg-maybe" : "mg-plain"}${
+                rank >= 0 && rank === focusAt ? " is-current" : ""
+              }${isTarget && !gone ? " mg-anchor" : ""}`}
             >
               <div className="mg-prose prose" style={style}>
                 <Markdown body={block.src} editorial={editorial} />

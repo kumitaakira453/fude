@@ -1423,6 +1423,21 @@ svg[id^="mmd-"] foreignObject p {
 .mg-side-open:disabled {
   opacity: 0.35;
 }
+/* 見出しの帯ではボタンと並ぶので、道筋は 2 行までに畳む。 */
+.mg-side-head .mg-review-path {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* 候補が複数あるときの位置。検索の「3 件中 1 件目」と同じ読み方をさせる。 */
+.mg-side-of {
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 8%, transparent);
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+}
 
 /* 見出しを辿った道筋。どの節に付いた指摘かを名前で示す。 */
 .mg-crumbs {
@@ -1595,6 +1610,16 @@ svg[id^="mmd-"] foreignObject p {
 }
 .mg-maybe {
   box-shadow: inset 0 0 0 1px var(--mg-border);
+}
+/* いま見ている候補。他の候補より一段だけ強く出す。 */
+.mg-maybe.is-current {
+  background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 30%, transparent);
+}
+.mg-maybe.is-current::before {
+  background: var(--mg-accent-soft);
+  color: var(--mg-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 35%, transparent);
 }
 .mg-spot::before,
 .mg-maybe::before {

@@ -337,12 +337,20 @@ function locate(thread: ReviewThread, head: Block[], baseText: string | null): A
   return { state: "unknown", candidates };
 }
 
-const STATE_NOTE: Record<Anchor["state"], string> = {
-  unchanged: "指摘の箇所はまだ書き換わっていません。",
-  rewritten: "指摘の箇所は書き換わっています。指摘した時点の文を上に並べています。",
-  removed: "指摘の箇所は今の本文から削除されています。",
-  unknown: "指摘の文は今の本文に見当たりません。近そうな箇所に印を付けています。",
-};
+function stateNote(anchor: Anchor): string {
+  switch (anchor.state) {
+    case "unchanged":
+      return "指摘の箇所はまだ書き換わっていません。";
+    case "rewritten":
+      return "指摘の箇所は書き換わっています。指摘した時点の文を上に並べています。";
+    case "removed":
+      return "指摘の箇所は今の本文から削除されています。";
+    default:
+      return anchor.candidates.length === 0
+        ? "指摘の文は今の本文に見当たらず、近そうな箇所も見つかりませんでした。"
+        : `指摘の文は今の本文に見当たりません。近そうな箇所を ${anchor.candidates.length} つ挙げています。`;
+  }
+}
 
 const when = new Intl.DateTimeFormat("ja-JP", {
   month: "numeric",
@@ -362,8 +370,8 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const [baseText, setBaseText] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
-  // 押すたびに本文を指摘の箇所へ戻す
-  const [focusNonce, setFocusNonce] = useState(0);
+  // 押すたびに本文を指摘の箇所へ戻す。候補が複数あるときは次の候補へ送る。
+  const [focus, setFocus] = useState({ nonce: 0, at: 0 });
 
   const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
 
@@ -429,10 +437,15 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   }, [busy, thread.id, store]);
 
   const style = { fontFamily: fontStack(font) };
-  // 戻る先があるか。候補すら無いときは押しても何も起きない。
-  const hasTarget =
-    view !== null &&
-    (view.anchor.state !== "unknown" || view.anchor.candidates.length > 0);
+  // 候補が複数あるときは、今どれを見ているかを出しつつ次へ送れるようにする。
+  const candidates =
+    view?.anchor.state === "unknown" ? view.anchor.candidates.length : 0;
+  const hasTarget = view !== null && (view.anchor.state !== "unknown" || candidates > 0);
+  const jump = () =>
+    setFocus((f) => ({
+      nonce: f.nonce + 1,
+      at: candidates > 1 ? (f.at + 1) % candidates : 0,
+    }));
   // 会話を左右に振る。指摘を出した人（＝最初に発言した人）を右に置く。
   const reviewer =
     thread.comments.find((c) => !AGENT_AUTHORS.has(c.author))?.author ?? REVIEW_AUTHOR;
@@ -454,7 +467,8 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
                 anchor={view.anchor}
                 editorial={editorial}
                 style={style}
-                focusNonce={focusNonce}
+                focusNonce={focus.nonce}
+                focusAt={focus.at}
               />
             </markdownContext.Provider>
           )}
@@ -467,17 +481,24 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
             {pathLabel(root, thread.file)}
           </span>
           <button
-            onClick={() => setFocusNonce((n) => n + 1)}
+            onClick={jump}
             disabled={!hasTarget}
             title={
-              hasTarget
-                ? "本文の指摘の箇所へ戻る"
-                : "指摘の箇所を特定できていません"
+              !hasTarget
+                ? "指摘の箇所も、近そうな箇所も見つかっていません"
+                : candidates > 1
+                  ? "次の候補へ送る"
+                  : "本文の指摘の箇所へ戻る"
             }
             className="mg-side-open"
           >
             <Icon name="my_location" size={13} />
-            対象箇所へ
+            {candidates > 1 ? "次の候補へ" : "対象箇所へ"}
+            {candidates > 1 && (
+              <span className="mg-side-of">
+                {focus.at + 1}/{candidates}
+              </span>
+            )}
           </button>
           {rel && (
             <button
@@ -524,7 +545,7 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
               size={13}
               className="mt-px shrink-0"
             />
-            {STATE_NOTE[view.anchor.state]}
+            {stateNote(view.anchor)}
           </p>
         )}
 
