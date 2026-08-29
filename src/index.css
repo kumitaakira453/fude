@@ -1437,12 +1437,35 @@ svg[id^="mmd-"] foreignObject p {
 .mg-msg {
   display: flex;
   flex: none;
-  flex-direction: column;
+  gap: 0.45rem;
+  align-items: flex-start;
   max-width: 88%;
   align-self: flex-start;
 }
 .mg-msg.is-reviewer {
   align-self: flex-end;
+}
+.mg-msg-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+/* 答える側にだけ顔を出す。自分の発言に自分の顔は要らない。
+   続きの発言では場所だけ空けて、吹き出しの左端を揃える。 */
+.mg-msg-face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-accent2) 20%, transparent);
+  color: var(--mg-accent2);
+}
+.mg-msg.is-run .mg-msg-face {
+  margin-top: 0.15rem;
+  visibility: hidden;
 }
 /* 同じ人が続けて話しているときは名前を省いて詰める */
 .mg-msg.is-run {

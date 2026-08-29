@@ -319,8 +319,9 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   }, [busy, thread.id, store]);
 
   const style = { fontFamily: fontStack(font) };
-  // 会話を左右に振る。指摘を出した人（＝最初の発言者）を右に置く。
-  const reviewer = thread.comments[0]?.author ?? REVIEW_AUTHOR;
+  // 会話を左右に振る。指摘を出した人（＝最初に発言した人）を右に置く。
+  const reviewer =
+    thread.comments.find((c) => !AGENT_AUTHORS.has(c.author))?.author ?? REVIEW_AUTHOR;
 
   return (
     <div className="flex min-w-0 flex-1">
@@ -433,6 +434,9 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   );
 }
 
+// 答える側の顔。エージェントには機械らしい印を出し、人には人の印を出す。
+const AGENT_AUTHORS = new Set(["AI", "ai", "assistant", "claude"]);
+
 function Message({
   comment,
   mine,
@@ -442,15 +446,24 @@ function Message({
   mine: boolean;
   run: boolean;
 }) {
+  const agent = AGENT_AUTHORS.has(comment.author);
   return (
     <div className={`mg-msg ${mine ? "is-reviewer" : ""} ${run ? "is-run" : ""}`}>
-      {!run && (
-        <div className="mg-msg-meta">
-          <span className="mg-msg-name">{comment.author}</span>
-          <span>{when.format(comment.created_at)}</span>
-        </div>
+      {!mine && (
+        <span className="mg-msg-face">
+          <Icon name={agent ? "auto_awesome" : "person"} size={14} fill />
+        </span>
       )}
-      <div className="mg-bubble">{comment.body}</div>
+      <div className="mg-msg-main">
+        {!run && (
+          <div className="mg-msg-meta">
+            {/* 使っている本人の発言は、台帳に残る名前が何であれ「you」と呼ぶ */}
+            <span className="mg-msg-name">{mine ? "you" : comment.author}</span>
+            <span>{when.format(comment.created_at)}</span>
+          </div>
+        )}
+        <div className="mg-bubble">{comment.body}</div>
+      </div>
     </div>
   );
 }
