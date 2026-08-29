@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Block } from "../../lib/blocks";
 import { Markdown } from "../Markdown";
 
@@ -11,7 +11,9 @@ import { Markdown } from "../Markdown";
 // 全ブロックを 1 回のペイントで描くと大きなファイルで固まるので、
 // 本文と同じく先頭から順に足していく。
 
-const FIRST_CHUNK = 24;
+// 最初の一塊は小さく取る。ここを大きくすると、指摘を選んでから何かが
+// 出るまでの間がそのまま伸びる。
+const FIRST_CHUNK = 8;
 const NEXT_CHUNK = 40;
 
 export type Anchor =
@@ -47,11 +49,14 @@ export function DocumentView({
     touchedRef.current = false;
   }, [blocks, anchor]);
 
+  // 続きを 1 フレームずつ足す。ここは通常の更新にする。割り込み可能な更新に
+  // すると、周りで別の更新が起き続けるかぎり後回しにされ、いつまでも
+  // 「残り N ブロック」のまま止まってしまう。
   useEffect(() => {
     if (limit >= blocks.length) return;
-    const id = requestAnimationFrame(() => {
-      startTransition(() => setLimit((n) => Math.min(n + NEXT_CHUNK, blocks.length)));
-    });
+    const id = requestAnimationFrame(() =>
+      setLimit((n) => Math.min(n + NEXT_CHUNK, blocks.length)),
+    );
     return () => cancelAnimationFrame(id);
   }, [limit, blocks.length]);
 

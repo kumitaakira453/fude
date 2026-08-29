@@ -1957,41 +1957,73 @@ svg[id^="mmd-"] foreignObject p {
   flex-direction: column;
   gap: 0.85rem;
 }
+/* 光の帯は transform で動かす。背景位置を動かす書き方だと、重い処理で
+   本流が塞がっている間はアニメーションも止まってしまい、いちばん見せたい
+   場面で固まって見える。transform なら合成側で動き続ける。 */
 .mg-skeleton-bar {
+  position: relative;
+  overflow: hidden;
   height: 0.85rem;
   border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--mg-fg) 8%, transparent);
+}
+.mg-skeleton-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--mg-fg) 7%, transparent) 25%,
-    color-mix(in srgb, var(--mg-fg) 13%, transparent) 37%,
-    color-mix(in srgb, var(--mg-fg) 7%, transparent) 63%
+    transparent,
+    color-mix(in srgb, var(--mg-fg) 9%, transparent),
+    transparent
   );
-  background-size: 400% 100%;
-  animation: mgSkeleton 1.4s ease-in-out infinite;
+  transform: translateX(-100%);
+  animation: mgSweep 1.3s linear infinite;
 }
 .mg-skeleton-head {
   height: 1.6rem;
   margin-bottom: 0.6rem;
   border-radius: 0.4rem;
 }
-@keyframes mgSkeleton {
-  0% {
-    background-position: 100% 0;
+@keyframes mgSweep {
+  to {
+    transform: translateX(100%);
   }
-  100% {
-    background-position: 0 0;
+}
+
+/* 終わりの見えない待ちを示す帯。これも transform で動かす。 */
+.mg-progress {
+  overflow: hidden;
+  height: 2px;
+  background: color-mix(in srgb, var(--mg-fg) 6%, transparent);
+}
+.mg-progress::after {
+  content: "";
+  display: block;
+  width: 32%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mg-accent);
+  transform: translateX(-100%);
+  animation: mgProgress 1.15s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+@keyframes mgProgress {
+  to {
+    transform: translateX(413%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mg-skeleton-bar {
+  .mg-skeleton-bar::after,
+  .mg-progress::after {
     animation: none;
   }
 }
 
-/* 読み込み中の骨組み。速く出そろったときに一瞬ちらつかないよう、
-   少し待ってから浮かび上がらせる。 */
+/* 読み込み中の骨組み。ゆっくり浮かび上がらせることで、速く出そろったときは
+   薄いまま消えて目に留まらない。開始を遅らせる形にはしない。重い処理の間は
+   フレームが進まないので、待ってから出す指定だと結局いちども現れないため。 */
 .mg-loading {
-  animation: mgLoadingIn 0.2s ease 0.14s both;
+  animation: mgLoadingIn 0.35s ease both;
 }
 @keyframes mgLoadingIn {
   from {
@@ -2002,7 +2034,8 @@ svg[id^="mmd-"] foreignObject p {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mg-skeleton-bar {
+  .mg-skeleton-bar::after,
+  .mg-progress::after {
     animation: none;
   }
 }

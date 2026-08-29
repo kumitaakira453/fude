@@ -1,11 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
@@ -86,6 +80,29 @@ function whereOf(thread: ReviewThread, blocks: Block[] | undefined): string {
   return "見出しの外";
 }
 
+// 値を「画面を 1 枚描き切ってから」受け取る。
+//
+// requestAnimationFrame は次の描画の直前に呼ばれるので、1 回だけだと画面が
+// 出る前に重い処理が始まり、待っている表示が誰の目にも触れない。実際に描かれる
+// のを待つには 2 回いる。
+// React の割り込み可能な更新（startTransition / useDeferredValue）には頼らない。
+// 周りで別の更新が起き続けるかぎり後回しにされ、切り替わらないままになり得る。
+function useAfterPaint<T>(value: T): T | undefined {
+  const [shown, setShown] = useState<T | undefined>(undefined);
+  useEffect(() => {
+    if (shown === value) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setShown(value));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [value, shown]);
+  return shown;
+}
+
 export function ReviewScreen() {
   const ledger = useAtomValue(ledgerAtom);
   const cache = useAtomValue(contentCacheAtom);
@@ -93,25 +110,23 @@ export function ReviewScreen() {
   const [selectedId, setSelectedId] = useAtom(reviewThreadAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
 
-  // 画面の枠を先に出してから解析に入る。文書をブロックへ割る処理は
-  // ファイル数ぶん走るので、同じ描画に混ぜるとボタンを押した手応えが遅れる。
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setReady(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
   const threads = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
 
-  // 選び直したときは、一覧の反応を先に返して本文の組み立ては後回しにする。
-  const shownId = useDeferredValue(selectedId);
+  // 選んだ指摘を、画面を 1 枚描き切ってから受け取る。押した手応えと
+  // 待っている表示を先に出し、重い本文の組み立てはその後に回す。
+  const shownId = useAfterPaint(selectedId);
+  const ready = shownId !== undefined;
+  const pending = !ready || shownId !== selectedId;
+
   const pick = useCallback(
     (id: string | null) => threads.find((t) => t.id === id) ?? threads[0] ?? null,
     [threads],
   );
   const selected = useMemo(() => pick(selectedId), [pick, selectedId]);
-  const shown = useMemo(() => pick(shownId), [pick, shownId]);
-  const pending = !ready || selected?.id !== shown?.id;
+  const shown = useMemo(
+    () => (pending ? null : pick(shownId ?? null)),
+    [pending, pick, shownId],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -125,20 +140,6 @@ export function ReviewScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setScreen]);
 
-  // ファイルごとに 1 回だけブロックへ割る。一覧の全件で見出しを辿るため。
-  const blocksByFile = useMemo(() => {
-    const map = new Map<string, Block[]>();
-    if (!ready) return map;
-    for (const t of threads) {
-      if (map.has(t.file)) continue;
-      const rel = relativeTo(root, t.file);
-      const raw = rel === null ? undefined : cache.get(rel);
-      if (raw === undefined) continue;
-      map.set(t.file, splitBlocks(parseFrontmatter(raw).body));
-    }
-    return map;
-  }, [ready, threads, cache, root]);
-
   const groups = useMemo(() => {
     const byFile = new Map<string, ReviewThread[]>();
     for (const t of threads) {
@@ -148,6 +149,35 @@ export function ReviewScreen() {
     }
     return [...byFile.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [threads]);
+
+  // 一覧に出す「どこの話か」。文書をブロックへ割り、指摘ごとに見出しを辿る
+  // 重い処理なので、描画の中ではなくファイル 1 枚ずつフレームを分けて進める。
+  // まとめてやると数百ミリ秒画面が固まり、選択にも反応できなくなる。
+  const [whereById, setWhereById] = useState<Map<string, string>>(new Map());
+  // 索引づくりの途中は本文の控えが何度も差し替わる。それに引きずられて
+  // 辿り直しをやり直すと、いつまでも終わらないので参照だけ持っておく。
+  const cacheRef = useRef(cache);
+  cacheRef.current = cache;
+  useEffect(() => {
+    if (!ready) return;
+    const files = groups.map(([file]) => file);
+    const found = new Map<string, string>();
+    let i = 0;
+    let frame = 0;
+    const step = () => {
+      const file = files[i++];
+      const rel = relativeTo(root, file);
+      const raw = rel === null ? undefined : cacheRef.current.get(rel);
+      if (raw !== undefined) {
+        const blocks = splitBlocks(parseFrontmatter(raw).body);
+        for (const t of groups[i - 1][1]) found.set(t.id, whereOf(t, blocks));
+      }
+      if (i < files.length) frame = requestAnimationFrame(step);
+      else setWhereById(found);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [ready, groups, root]);
 
   return (
     <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
@@ -190,7 +220,9 @@ export function ReviewScreen() {
                 <ThreadCard
                   key={thread.id}
                   thread={thread}
-                  where={whereOf(thread, blocksByFile.get(thread.file))}
+                  where={
+                    whereById.get(thread.id) ?? thread.section_path.join(" › ")
+                  }
                   active={thread.id === selected?.id}
                   onPick={() => setSelectedId(thread.id)}
                 />
@@ -220,6 +252,7 @@ function DetailSkeleton() {
   return (
     <div className="mg-loading flex min-w-0 flex-1">
       <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="mg-progress" role="progressbar" aria-label="読み込み中" />
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="mg-skeleton">
             <div className="mg-skeleton-bar mg-skeleton-head" style={{ width: "45%" }} />
@@ -263,7 +296,8 @@ function ThreadCard({
         {thread.comments[0]?.body ?? "（本文なし）"}
       </div>
       <div className="mg-thread-foot">
-        {/* 幅が狭いので、いちばん細かい節だけを出す。全体は title で読める */}
+        {/* 幅が狭いので、いちばん細かい節だけを出す。全体は title で読める。
+            見出しを辿り終える前は何も出さない（後から入る） */}
         <span className="mg-thread-where" title={where}>
           {where.split(" › ").pop()}
         </span>
