@@ -1,6 +1,6 @@
 import { useStore } from "jotai";
 import { useEffect } from "react";
-import { splitPane } from "../lib/ui";
+import { closeTab, splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
 import { reviewScreenAtom } from "../state/review";
 
@@ -79,9 +79,14 @@ export function useHotkeys() {
         e.preventDefault();
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {
-      e.preventDefault();
-      store.set(reviewScreenAtom, true);
-    } else if (mod && e.key === "\\") {
+        e.preventDefault();
+        store.set(reviewScreenAtom, true);
+      } else if (mod && (e.key === "w" || e.key === "W")) {
+        e.preventDefault();
+        const paneId = store.get(A.activePaneIdAtom);
+        const pane = store.get(A.panesAtom).find((p) => p.id === paneId);
+        if (pane && pane.tabs.length > 0) closeTab(store, paneId, pane.active);
+      } else if (mod && e.key === "\\") {
         e.preventDefault();
         splitPane(store, "row");
       } else if (mod && e.key === "[") {

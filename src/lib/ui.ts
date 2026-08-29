@@ -15,6 +15,16 @@ function countLeaves(node: LayoutNode): number {
 
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
+// タブの並びと作用中の位置を整える。同じファイルは 1 つに畳み、作用中の位置は
+// 必ず範囲内に収める。タブを閉じたり移動したりしても壊れた状態にならないようにする。
+function leaf(id: string, tabs: string[], active: number): LeafNode {
+  const unique = tabs.filter((t, i) => tabs.indexOf(t) === i);
+  const at = unique.length === 0 ? 0 : Math.min(Math.max(active, 0), unique.length - 1);
+  return { kind: "leaf", id, tabs: unique, active: at };
+}
+
+const emptyLeaf = (id: string): LeafNode => leaf(id, [], 0);
+
 // 対象 leaf を dir 方向に分割する。before=true なら新ペインを手前に。
 function splitLeaf(
   node: LayoutNode,
@@ -35,21 +45,31 @@ function splitLeaf(
     const children = [...node.children.slice(0, at), newLeaf, ...node.children.slice(at)];
     return { ...node, children, sizes: equal(children.length) };
   }
-  return { ...node, children: node.children.map((c) => splitLeaf(c, targetId, dir, newLeaf, before)) };
+  return {
+    ...node,
+    children: node.children.map((c) => splitLeaf(c, targetId, dir, newLeaf, before)),
+  };
 }
 
-// leaf を削除。子が1つになった split は畳む。全消しなら空 leaf に。
+// leaf を削除。子が1つになった split は畳む。全消しなら null。
 function removeLeaf(node: LayoutNode, id: string): LayoutNode | null {
   if (node.kind === "leaf") return node.id === id ? null : node;
-  const children = node.children.map((c) => removeLeaf(c, id)).filter((c): c is LayoutNode => !!c);
+  const children = node.children
+    .map((c) => removeLeaf(c, id))
+    .filter((c): c is LayoutNode => !!c);
   if (children.length === 0) return null;
   if (children.length === 1) return children[0];
   return { ...node, children, sizes: equal(children.length) };
 }
 
-function setPath(node: LayoutNode, id: string, path: string | null): LayoutNode {
-  if (node.kind === "leaf") return node.id === id ? { ...node, path } : node;
-  return { ...node, children: node.children.map((c) => setPath(c, id, path)) };
+// 指定 leaf を書き換える。木の走査をここに集約する。
+function updateLeaf(
+  node: LayoutNode,
+  id: string,
+  change: (target: LeafNode) => LeafNode,
+): LayoutNode {
+  if (node.kind === "leaf") return node.id === id ? change(node) : node;
+  return { ...node, children: node.children.map((c) => updateLeaf(c, id, change)) };
 }
 
 function setSizes(node: LayoutNode, id: string, sizes: number[]): LayoutNode {
@@ -62,6 +82,15 @@ function firstLeafId(node: LayoutNode): string {
   return node.kind === "leaf" ? node.id : firstLeafId(node.children[0]);
 }
 
+function findLeaf(node: LayoutNode, id: string): LeafNode | null {
+  if (node.kind === "leaf") return node.id === id ? node : null;
+  for (const child of node.children) {
+    const hit = findLeaf(child, id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 // ---- 公開 API ----
 
 // アクティブペインを dir 方向に分割（新ペインは同じファイルを複製表示 or 指定パス）。
@@ -70,11 +99,8 @@ export function splitPane(store: Store, dir: "row" | "col", path?: string) {
   if (countLeaves(root) >= A.MAX_PANES) return;
   const activeId = store.get(A.activePaneIdAtom);
   const active = store.get(A.panesAtom).find((p) => p.id === activeId);
-  const newLeaf: LeafNode = {
-    kind: "leaf",
-    id: leafId(),
-    path: path !== undefined ? path : (active?.path ?? null),
-  };
+  const carry = path !== undefined ? path : A.activePath(active);
+  const newLeaf = leaf(leafId(), carry ? [carry] : [], 0);
   store.set(A.layoutAtom, splitLeaf(root, activeId, dir, newLeaf, false));
   store.set(A.activePaneIdAtom, newLeaf.id);
 }
@@ -85,23 +111,106 @@ export const splitInto = (store: Store, dir: "row" | "col") => splitPane(store, 
 // アクティブペインの右に、指定ファイルで新ペインを開く。
 export const openToSide = (store: Store, path: string) => splitPane(store, "row", path);
 
-// ドラッグ&ドロップ: 対象ペインのゾーンに応じて開く/分割する。
-export function dropOnPane(store: Store, targetId: string, zone: DropZone, path: string) {
-  if (zone === "center") {
-    store.set(A.layoutAtom, setPath(store.get(A.layoutAtom), targetId, path));
-    store.set(A.activePaneIdAtom, targetId);
+// 指定ペインでファイルを開く。既にタブがあればそれを選ぶだけ。
+export function openInPane(store: Store, paneId: string, path: string) {
+  store.set(
+    A.layoutAtom,
+    updateLeaf(store.get(A.layoutAtom), paneId, (target) => {
+      const at = target.tabs.indexOf(path);
+      if (at >= 0) return leaf(target.id, target.tabs, at);
+      // 作用中タブの直後に差し込む。関連するファイルが隣り合う。
+      const tabs = [
+        ...target.tabs.slice(0, target.active + 1),
+        path,
+        ...target.tabs.slice(target.active + 1),
+      ];
+      return leaf(target.id, tabs, Math.min(target.active + 1, tabs.length - 1));
+    }),
+  );
+  store.set(A.activePaneIdAtom, paneId);
+}
+
+export function activateTab(store: Store, paneId: string, index: number) {
+  store.set(
+    A.layoutAtom,
+    updateLeaf(store.get(A.layoutAtom), paneId, (target) => leaf(target.id, target.tabs, index)),
+  );
+  store.set(A.activePaneIdAtom, paneId);
+}
+
+// タブを閉じる。最後の 1 枚を閉じたときは、他にペインがあればペインごと閉じる。
+// 単一ペインのときは空のまま残す（画面が消えると戻る手段が無くなる）。
+export function closeTab(store: Store, paneId: string, index: number) {
+  const root = store.get(A.layoutAtom);
+  const target = findLeaf(root, paneId);
+  if (!target) return;
+  if (target.tabs.length <= 1 && countLeaves(root) > 1) {
+    closePane(store, paneId);
     return;
   }
-  if (countLeaves(store.get(A.layoutAtom)) >= A.MAX_PANES) {
-    store.set(A.layoutAtom, setPath(store.get(A.layoutAtom), targetId, path));
-    store.set(A.activePaneIdAtom, targetId);
+  const tabs = target.tabs.filter((_, i) => i !== index);
+  // 閉じたタブより後ろを見ていたなら 1 つ手前にずらす
+  const active = index < target.active ? target.active - 1 : target.active;
+  store.set(A.layoutAtom, updateLeaf(root, paneId, (t) => leaf(t.id, tabs, active)));
+}
+
+export interface TabRef {
+  paneId: string;
+  index: number;
+}
+
+// タブを別のペインへ移す（同じペイン内なら並べ替え）。
+export function moveTab(store: Store, from: TabRef, toPaneId: string, toIndex?: number) {
+  const root = store.get(A.layoutAtom);
+  const source = findLeaf(root, from.paneId);
+  const path = source?.tabs[from.index];
+  if (!path) return;
+
+  if (from.paneId === toPaneId) {
+    const rest = source.tabs.filter((_, i) => i !== from.index);
+    const at = Math.min(toIndex ?? rest.length, rest.length);
+    const tabs = [...rest.slice(0, at), path, ...rest.slice(at)];
+    store.set(A.layoutAtom, updateLeaf(root, toPaneId, (t) => leaf(t.id, tabs, at)));
+    store.set(A.activePaneIdAtom, toPaneId);
+    return;
+  }
+
+  // 先に受け側へ入れてから送り側を削る。送り側が空になってペインごと
+  // 閉じられても、移した先が残るようにするため。
+  const target = findLeaf(root, toPaneId);
+  if (!target) return;
+  const at = Math.min(toIndex ?? target.tabs.length, target.tabs.length);
+  const tabs = [...target.tabs.slice(0, at), path, ...target.tabs.slice(at)];
+  store.set(
+    A.layoutAtom,
+    updateLeaf(root, toPaneId, (t) => leaf(t.id, tabs, tabs.indexOf(path))),
+  );
+  closeTab(store, from.paneId, from.index);
+  store.set(A.activePaneIdAtom, toPaneId);
+}
+
+// ドラッグ&ドロップ: 対象ペインのゾーンに応じて開く/分割する。
+// from が付いていればタブの移動、無ければファイルツリーからの新規オープン。
+export function dropOnPane(
+  store: Store,
+  targetId: string,
+  zone: DropZone,
+  path: string,
+  from?: TabRef,
+) {
+  const canSplit = countLeaves(store.get(A.layoutAtom)) < A.MAX_PANES;
+  if (zone === "center" || !canSplit) {
+    if (from) moveTab(store, from, targetId);
+    else openInPane(store, targetId, path);
     return;
   }
   const dir: "row" | "col" = zone === "left" || zone === "right" ? "row" : "col";
   const before = zone === "left" || zone === "top";
-  const newLeaf: LeafNode = { kind: "leaf", id: leafId(), path };
+  const newLeaf = leaf(leafId(), [path], 0);
   store.set(A.layoutAtom, splitLeaf(store.get(A.layoutAtom), targetId, dir, newLeaf, before));
   store.set(A.activePaneIdAtom, newLeaf.id);
+  // 分割で新しいペインへ移した場合は、元のタブを取り除く
+  if (from) closeTab(store, from.paneId, from.index);
 }
 
 // split ノードのサイズ更新（リサイザー用）。
@@ -112,48 +221,68 @@ export function updateSplitSizes(store: Store, splitNodeId: string, sizes: numbe
 // ペインを閉じる。
 export function closePane(store: Store, id: string) {
   const next = removeLeaf(store.get(A.layoutAtom), id);
-  const root: LayoutNode = next ?? { kind: "leaf", id: "p1", path: null };
+  const root: LayoutNode = next ?? emptyLeaf("p1");
   store.set(A.layoutAtom, root);
   if (store.get(A.activePaneIdAtom) === id) store.set(A.activePaneIdAtom, firstLeafId(root));
 }
 
-// 指定ペインにファイルを開く（レイアウト内の leaf の path を更新）。
-export function setPanePath(store: Store, paneId: string, path: string) {
-  store.set(A.layoutAtom, setPath(store.get(A.layoutAtom), paneId, path));
-}
-
-// 全 leaf の path を写像で更新（rename/move/delete でペイン表示を追従）。
-// mapper が null を返すとそのペインは空になる。
-export function remapLeafPaths(store: Store, mapper: (path: string | null) => string | null) {
-  const walk = (n: LayoutNode): LayoutNode =>
-    n.kind === "leaf"
-      ? { ...n, path: mapper(n.path) }
-      : { ...n, children: n.children.map(walk) };
+// 全ペインのタブを写像で更新（rename/move/delete でペイン表示を追従）。
+// mapper が null を返したタブは取り除く。
+export function remapLeafPaths(store: Store, mapper: (path: string) => string | null) {
+  const walk = (n: LayoutNode): LayoutNode => {
+    if (n.kind !== "leaf") return { ...n, children: n.children.map(walk) };
+    const before = n.tabs[n.active];
+    const tabs = n.tabs.map(mapper).filter((p): p is string => !!p);
+    const moved = before ? mapper(before) : null;
+    const active = moved ? tabs.indexOf(moved) : n.active;
+    return leaf(n.id, tabs, active);
+  };
   store.set(A.layoutAtom, walk(store.get(A.layoutAtom)));
 }
 
 // レイアウトを単一空ペインにリセット（フォルダ切替時など）。
 export function resetLayout(store: Store) {
-  store.set(A.layoutAtom, { kind: "leaf", id: "p1", path: null });
+  store.set(A.layoutAtom, emptyLeaf("p1"));
   store.set(A.activePaneIdAtom, "p1");
 }
 
+// 保存されているレイアウト。タブを持たなかった頃の形も読めるようにしてある。
+export type StoredNode =
+  | {
+      kind: "leaf";
+      id: string;
+      path?: string | null; // 旧形式（1 ペイン 1 ファイル）
+      tabs?: string[];
+      active?: number;
+    }
+  | {
+      kind: "split";
+      id: string;
+      dir: "row" | "col";
+      sizes: number[];
+      children: StoredNode[];
+    };
+
 // 保存レイアウトを復元用に再生成する。
 // - id を振り直して既存 seq との衝突を防ぐ
-// - 存在しないファイルパスは null に落とす
+// - 存在しないファイルパスは取り除く
+// - タブが無かった頃に保存されたものは path を 1 枚のタブとして読む
 // 戻り値の active は旧アクティブ leaf に対応する新 id（無ければ先頭 leaf）。
 export function reviveLayout(
-  node: LayoutNode,
+  node: StoredNode,
   validPaths: Set<string>,
   oldActive: string,
 ): { layout: LayoutNode; active: string } {
   let newActive = "";
-  const walk = (n: LayoutNode): LayoutNode => {
+  const walk = (n: StoredNode): LayoutNode => {
     if (n.kind === "leaf") {
       const id = leafId();
       if (n.id === oldActive) newActive = id;
-      const path = n.path && validPaths.has(n.path) ? n.path : null;
-      return { kind: "leaf", id, path };
+      const stored = n.tabs ?? (n.path ? [n.path] : []);
+      const kept = stored.filter((p) => validPaths.has(p));
+      const before = stored[n.active ?? 0];
+      const at = before ? kept.indexOf(before) : 0;
+      return leaf(id, kept, at < 0 ? 0 : at);
     }
     const children = n.children.map(walk);
     return { kind: "split", id: splitId(), dir: n.dir, sizes: n.sizes, children };

@@ -21,15 +21,18 @@ export const contentCacheAtom = atom<Map<string, string>>(new Map());
 export const mtimeCacheAtom = atom<Map<string, number>>(new Map());
 
 // ---- ペイン（画面分割：二分木グリッド） ----
+// 1 つのペインは複数のファイルをタブとして持ち、そのうち 1 つを表示する。
 export interface Pane {
   id: string;
-  path: string | null;
+  tabs: string[]; // 開いているファイル（ルートからの相対パス）
+  active: number; // tabs 内の位置
 }
 // レイアウトツリー: leaf=ペイン, split=分割ノード（子を row/col で並べる）
 export interface LeafNode {
   kind: "leaf";
   id: string;
-  path: string | null;
+  tabs: string[];
+  active: number;
 }
 export interface SplitNode {
   kind: "split";
@@ -40,7 +43,7 @@ export interface SplitNode {
 }
 export type LayoutNode = LeafNode | SplitNode;
 
-export const layoutAtom = atom<LayoutNode>({ kind: "leaf", id: "p1", path: null });
+export const layoutAtom = atom<LayoutNode>({ kind: "leaf", id: "p1", tabs: [], active: 0 });
 export const activePaneIdAtom = atom<string>("p1");
 
 // フォルダごとに分割レイアウトを永続化（リロード/再オープンで復元）
@@ -64,6 +67,11 @@ export const activePaneAtom = atom((get) => {
   const id = get(activePaneIdAtom);
   return panes.find((p) => p.id === id) ?? panes[0];
 });
+
+// ペインが今表示しているファイル。タブが無ければ null。
+export function activePath(pane: Pane | LeafNode | undefined): string | null {
+  return pane?.tabs[pane.active] ?? null;
+}
 
 // ---- UI / テーマ（永続化） ----
 export const themeAtom = atomWithStorage<string>("mdglow:theme", "aurora");

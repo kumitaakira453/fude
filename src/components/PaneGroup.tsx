@@ -1,14 +1,17 @@
 import { useAtomValue, useStore } from "jotai";
 import { useCallback, useRef, useState } from "react";
-import { DND_MIME } from "../lib/dnd";
+import { DND_MIME, readDragPayload } from "../lib/dnd";
 import { dropOnPane, updateSplitSizes, type DropZone } from "../lib/ui";
 import {
+  activePaneIdAtom,
   layoutAtom,
   panesAtom,
   type LayoutNode,
+  type LeafNode,
   type SplitNode,
 } from "../state/atoms";
 import { DocPane } from "./DocPane";
+import { TabBar } from "./TabBar";
 
 export function PaneGroup() {
   const root = useAtomValue(layoutAtom);
@@ -137,19 +140,14 @@ function zoneOf(e: React.DragEvent): DropZone {
   );
 }
 
-function PaneCell({
-  leaf,
-  isSplit,
-}: {
-  leaf: { id: string; path: string | null };
-  isSplit: boolean;
-}) {
+function PaneCell({ leaf, isSplit }: { leaf: LeafNode; isSplit: boolean }) {
   const store = useStore();
+  const activeId = useAtomValue(activePaneIdAtom);
   const [zone, setZone] = useState<DropZone | null>(null);
 
   return (
     <div
-      className="relative flex min-h-0 min-w-0 flex-1"
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(DND_MIME)) return;
         e.preventDefault();
@@ -161,14 +159,15 @@ function PaneCell({
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setZone(null);
       }}
       onDrop={(e) => {
-        const path = e.dataTransfer.getData(DND_MIME);
+        const payload = readDragPayload(e.dataTransfer);
         const z = zoneOf(e);
         setZone(null);
-        if (!path) return;
+        if (!payload) return;
         e.preventDefault();
-        dropOnPane(store, leaf.id, z, path);
+        dropOnPane(store, leaf.id, z, payload.path, payload.from);
       }}
     >
+      <TabBar pane={leaf} isActive={leaf.id === activeId} />
       <DocPane pane={leaf} isSplit={isSplit} />
       {zone && (
         <div

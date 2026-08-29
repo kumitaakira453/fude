@@ -7,6 +7,7 @@ import { fontStack } from "../lib/fonts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { closePane } from "../lib/ui";
 import {
+  activePath,
   activePaneIdAtom,
   contentCacheAtom,
   editorialAtom,
@@ -78,7 +79,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   );
 
   const isActive = activeId === pane.id;
-  const path = pane.path;
+  const path = activePath(pane);
   const raw = path ? cache.get(path) : undefined;
 
   // 本文が未読込のあいだはローディングを出す。ただし一瞬で読める場合に

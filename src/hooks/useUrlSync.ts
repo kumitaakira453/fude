@@ -13,6 +13,7 @@ export function useUrlSync() {
   const { refreshFolders, openFolder, openFile } = useWorkspace();
   const activeFolderId = useAtomValue(A.activeFolderIdAtom);
   const activePane = useAtomValue(A.activePaneAtom);
+  const activeFile = A.activePath(activePane);
   const applyingRef = useRef(false);
   // 初期復元が完了するまで URL 書き込みを止める（マウント時のハッシュ上書き=クロバー防止）
   const readyRef = useRef(false);
@@ -46,7 +47,7 @@ export function useUrlSync() {
         }
         // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
         // 戻る/進む(popstate)では force で必ず切り替える。
-        if (file && (opts.force || !store.get(A.activePaneAtom)?.path))
+        if (file && (opts.force || !A.activePath(store.get(A.activePaneAtom))))
           openFile(file);
       } finally {
         applyingRef.current = false;
@@ -86,7 +87,7 @@ export function useUrlSync() {
   // 状態変化を URL へ反映
   useEffect(() => {
     if (!readyRef.current || applyingRef.current) return;
-    const desired = buildHash(activeFolderId, activePane?.path);
+    const desired = buildHash(activeFolderId, activeFile);
     if (
       location.hash !== desired &&
       !(location.hash === "" && desired === "#")
@@ -96,5 +97,5 @@ export function useUrlSync() {
       history.pushState({ mdglowIdx: navIdx.current }, "", desired);
       updateNav.current();
     }
-  }, [activeFolderId, activePane?.path]);
+  }, [activeFolderId, activeFile]);
 }

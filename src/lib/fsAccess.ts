@@ -15,6 +15,14 @@ import {
 
 export const MD_EXTENSIONS = [".md", ".markdown", ".mdx", ".mdown", ".mkd"];
 
+// 画面に出す名前。Markdown の拡張子は落とす。パスを渡してもよい。
+export function displayName(nameOrPath: string): string {
+  const base = nameOrPath.split("/").pop() ?? nameOrPath;
+  const lower = base.toLowerCase();
+  const ext = MD_EXTENSIONS.find((e) => lower.endsWith(e));
+  return ext ? base.slice(0, -ext.length) : base;
+}
+
 export interface TreeNode {
   name: string;
   path: string; // ルートからの相対パス（/ 区切り）

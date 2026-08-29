@@ -20,7 +20,7 @@ import {
   remapLeafPaths,
   resetLayout,
   reviveLayout,
-  setPanePath,
+  openInPane,
 } from "../lib/ui";
 import * as A from "../state/atoms";
 
@@ -237,8 +237,7 @@ export function useWorkspace() {
   const openFile = useCallback(
     (path: string, paneId?: string) => {
       const targetPane = paneId ?? store.get(A.activePaneIdAtom);
-      setPanePath(store, targetPane, path);
-      store.set(A.activePaneIdAtom, targetPane);
+      openInPane(store, targetPane, path);
       if (!store.get(A.contentCacheAtom).has(path)) void reloadFile(path);
     },
     [store, reloadFile],

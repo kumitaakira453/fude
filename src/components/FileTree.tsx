@@ -4,16 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { openCountsAtom } from "../state/review";
-import { DND_MIME } from "../lib/dnd";
+import { DND_MIME, readDragPayload, setDragPayload } from "../lib/dnd";
 import {
   availableApps,
   type ExternalApp,
   openWith,
   revealInFinder,
 } from "../lib/external";
-import type { TreeNode } from "../lib/fsAccess";
+import { displayName, type TreeNode } from "../lib/fsAccess";
 import { openToSide } from "../lib/ui";
 import {
+  activePath,
   activeFolderIdAtom,
   activePaneAtom,
   expandedByFolderAtom,
@@ -23,7 +24,6 @@ import {
 } from "../state/atoms";
 import { Icon } from "./Icon";
 
-const MD_EXT_RE = /\.(md|markdown|mdx|mdown|mkd)$/i;
 
 interface MenuState {
   x: number;
@@ -130,7 +130,7 @@ function TreeItem({
   const basePad = depth * 14 + 8;
 
   const startDrag = (e: React.DragEvent) => {
-    e.dataTransfer.setData(DND_MIME, node.path);
+    setDragPayload(e.dataTransfer, { path: node.path });
     e.dataTransfer.effectAllowed = "copyMove";
   };
 
@@ -260,7 +260,7 @@ function TreeItem({
     );
   }
 
-  const active = activePane?.path === node.path;
+  const active = activePath(activePane) === node.path;
   const reviewCount = openCounts.get(node.path) ?? 0;
   return (
     <button
@@ -290,7 +290,7 @@ function TreeItem({
             : "shrink-0 text-[var(--mg-muted)]"
         }
       />
-      <span className="truncate">{node.name.replace(MD_EXT_RE, "")}</span>
+      <span className="truncate">{displayName(node.name)}</span>
       {reviewCount > 0 && (
         <span
           title={`未解決の指摘 ${reviewCount} 件`}
@@ -580,11 +580,12 @@ export function FileTree() {
     dragOverPath,
     setDragOverPath,
     onMoveDrop: (destDir, e) => {
-      const src = e.dataTransfer.getData(DND_MIME);
+      // タブを掴んだものはファイルの移動として扱わない
+      const payload = readDragPayload(e.dataTransfer);
       setDragOverPath(null);
-      if (src) {
+      if (payload && !payload.from) {
         e.preventDefault();
-        void moveEntry(src, destDir);
+        void moveEntry(payload.path, destDir);
       }
     },
     onNewFile: (parentPath) => startCreate(parentPath, "file"),
@@ -602,9 +603,9 @@ export function FileTree() {
   const onRootDrop = (e: React.DragEvent) => {
     setRootDragOver(false);
     if (!e.dataTransfer.types.includes(DND_MIME)) return;
-    const src = e.dataTransfer.getData(DND_MIME);
+    const payload = readDragPayload(e.dataTransfer);
     e.preventDefault();
-    if (src) void moveEntry(src, ""); // ルートへ移動
+    if (payload && !payload.from) void moveEntry(payload.path, ""); // ルートへ移動
   };
 
   return (
