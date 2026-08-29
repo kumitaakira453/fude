@@ -50,7 +50,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
     <div
       role="tablist"
       data-mg-tabbar
-      className="flex shrink-0 items-stretch overflow-x-auto border-b border-[var(--mg-border)] bg-[var(--mg-panel)]"
+      className="mg-tabbar flex shrink-0 items-stretch overflow-x-auto border-b border-[var(--mg-border)] bg-[var(--mg-panel)]"
       onDragOver={(e) => {
         if (!accept(e)) return;
         e.preventDefault();

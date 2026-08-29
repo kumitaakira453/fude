@@ -1434,6 +1434,16 @@ svg[id^="mmd-"] foreignObject p {
   background-clip: padding-box;
 }
 
+/* タブの列は高さが狭く、スクロールバーがタブそのものに重なって読みにくい。
+   横スクロールは残したまま、バーだけ隠す。 */
+.mg-tabbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.mg-tabbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ============================================================
    ランディング
    ============================================================ */
