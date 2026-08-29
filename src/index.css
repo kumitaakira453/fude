@@ -1616,8 +1616,10 @@ svg[id^="mmd-"] foreignObject p {
   background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 30%, transparent);
 }
+/* 札は本文の上に重なるので、地を透かしてはいけない。
+   アクセント色を混ぜるときも、透明ではなくパネル色に混ぜる。 */
 .mg-maybe.is-current::before {
-  background: var(--mg-accent-soft);
+  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-panel));
   color: var(--mg-fg);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 35%, transparent);
 }
