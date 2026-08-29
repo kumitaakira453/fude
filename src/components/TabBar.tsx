@@ -1,5 +1,6 @@
 import { useStore } from "jotai";
 import { useState } from "react";
+import { useDragReset } from "../hooks/useDragReset";
 import { readDragPayload, setDragPayload } from "../lib/dnd";
 import { displayName } from "../lib/fsAccess";
 import { activateTab, closeTab, moveTab, openInPane } from "../lib/ui";
@@ -13,11 +14,23 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   const store = useStore();
   // ドロップで差し込む位置。null なら受け付けていない。
   const [insertAt, setInsertAt] = useState<number | null>(null);
+  useDragReset(() => setInsertAt(null));
 
   if (pane.tabs.length === 0) return null;
 
   const accept = (e: React.DragEvent) =>
     e.dataTransfer.types.includes("application/x-mdglow-path");
+
+  // 差し込み位置は子タブの矩形から決める。タブごとに handler を置くと、
+  // 伝播の順番でコンテナ側が上書きしてしまう。
+  const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
+    const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-mg-tab]"));
+    for (let i = 0; i < tabs.length; i++) {
+      const box = tabs[i].getBoundingClientRect();
+      if (e.clientX < box.left + box.width / 2) return i;
+    }
+    return tabs.length;
+  };
 
   const drop = (e: React.DragEvent) => {
     const at = insertAt;
@@ -34,13 +47,13 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   return (
     <div
       role="tablist"
+      data-mg-tabbar
       className="flex shrink-0 items-stretch overflow-x-auto border-b border-[var(--mg-border)] bg-[var(--mg-panel)]"
       onDragOver={(e) => {
         if (!accept(e)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        // タブの上に乗っていなければ末尾に差し込む
-        setInsertAt((at) => at ?? pane.tabs.length);
+        setInsertAt(indexAt(e));
       }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setInsertAt(null);
@@ -52,18 +65,11 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
         return (
           <div
             key={path}
+            data-mg-tab
             draggable
             onDragStart={(e) => {
               setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
               e.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={(e) => {
-              if (!accept(e)) return;
-              e.preventDefault();
-              e.stopPropagation();
-              // 中点より左なら手前、右なら後ろに差し込む
-              const box = e.currentTarget.getBoundingClientRect();
-              setInsertAt(e.clientX < box.left + box.width / 2 ? i : i + 1);
             }}
             className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] transition ${
               selected

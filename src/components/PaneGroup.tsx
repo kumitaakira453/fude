@@ -1,5 +1,6 @@
 import { useAtomValue, useStore } from "jotai";
 import { useCallback, useRef, useState } from "react";
+import { useDragReset } from "../hooks/useDragReset";
 import { DND_MIME, readDragPayload } from "../lib/dnd";
 import { dropOnPane, updateSplitSizes, type DropZone } from "../lib/ui";
 import {
@@ -144,12 +145,19 @@ function PaneCell({ leaf, isSplit }: { leaf: LeafNode; isSplit: boolean }) {
   const store = useStore();
   const activeId = useAtomValue(activePaneIdAtom);
   const [zone, setZone] = useState<DropZone | null>(null);
+  useDragReset(() => setZone(null));
 
   return (
     <div
       className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(DND_MIME)) return;
+        // タブバーの上ではタブの差し込み位置だけを見せる。ペインの枠も出すと
+        // 「ペインを増やす操作」に見えてしまう。
+        if ((e.target as HTMLElement).closest?.("[data-mg-tabbar]")) {
+          setZone(null);
+          return;
+        }
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
         setZone(zoneOf(e));
