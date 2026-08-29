@@ -33,32 +33,43 @@ export function DocumentView({
   anchor,
   editorial,
   style,
+  focusNonce,
 }: {
   blocks: Block[];
   anchor: Anchor;
   editorial: boolean;
   style: React.CSSProperties;
+  // 増えるたびに指摘の箇所へ戻す。読み進めて見失ったときのための合図。
+  focusNonce: number;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
   const targetRef = useRef<HTMLDivElement>(null);
   // 自分でスクロールしたら、そこから先は勝手に動かさない
   const touchedRef = useRef(false);
 
-  useEffect(() => {
-    setLimit(FIRST_CHUNK);
-    touchedRef.current = false;
-  }, [blocks, anchor]);
+  // 何を見ているかは中身で表す。配列やオブジェクトの同一性で見張ると、
+  // 中身が同じでも作り直されるたびに先頭へ巻き戻ってしまう。
+  const total = blocks.length;
+  const anchorKey =
+    anchor.state === "unknown"
+      ? `unknown:${anchor.candidates.join(",")}`
+      : `${anchor.state}:${anchor.index}`;
 
-  // 続きを 1 フレームずつ足す。ここは通常の更新にする。割り込み可能な更新に
-  // すると、周りで別の更新が起き続けるかぎり後回しにされ、いつまでも
-  // 「残り N ブロック」のまま止まってしまう。
+  // 先頭から順に足していく。始めから終わりまでを 1 つの effect が持つ。
+  // 「足す」と「先頭に戻す」を別々の effect に分けると、片方が進めた直後に
+  // もう片方が戻す並びが起こり得て、いつまでも先へ進まない。
   useEffect(() => {
-    if (limit >= blocks.length) return;
-    const id = requestAnimationFrame(() =>
-      setLimit((n) => Math.min(n + NEXT_CHUNK, blocks.length)),
-    );
-    return () => cancelAnimationFrame(id);
-  }, [limit, blocks.length]);
+    touchedRef.current = false;
+    setLimit(FIRST_CHUNK);
+    if (total <= FIRST_CHUNK) return;
+    let shownCount = FIRST_CHUNK;
+    let frame = requestAnimationFrame(function step() {
+      shownCount = Math.min(shownCount + NEXT_CHUNK, total);
+      setLimit(shownCount);
+      if (shownCount < total) frame = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [total, anchorKey]);
 
   useEffect(() => {
     const mark = () => {
@@ -78,7 +89,14 @@ export function DocumentView({
   useEffect(() => {
     if (touchedRef.current) return;
     targetRef.current?.scrollIntoView({ block: "start" });
-  }, [limit, blocks, anchor]);
+  }, [limit, anchorKey]);
+
+  // 頼まれたら戻す。自分でスクロールしていても、このときだけは動かす。
+  useEffect(() => {
+    if (focusNonce === 0) return;
+    touchedRef.current = true; // 戻したあとは、また自由にスクロールできる
+    targetRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [focusNonce]);
 
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;

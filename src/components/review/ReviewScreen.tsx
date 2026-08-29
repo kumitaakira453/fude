@@ -362,6 +362,8 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const [baseText, setBaseText] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  // 押すたびに本文を指摘の箇所へ戻す
+  const [focusNonce, setFocusNonce] = useState(0);
 
   const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
 
@@ -427,6 +429,10 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   }, [busy, thread.id, store]);
 
   const style = { fontFamily: fontStack(font) };
+  // 戻る先があるか。候補すら無いときは押しても何も起きない。
+  const hasTarget =
+    view !== null &&
+    (view.anchor.state !== "unknown" || view.anchor.candidates.length > 0);
   // 会話を左右に振る。指摘を出した人（＝最初に発言した人）を右に置く。
   const reviewer =
     thread.comments.find((c) => !AGENT_AUTHORS.has(c.author))?.author ?? REVIEW_AUTHOR;
@@ -448,6 +454,7 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
                 anchor={view.anchor}
                 editorial={editorial}
                 style={style}
+                focusNonce={focusNonce}
               />
             </markdownContext.Provider>
           )}
@@ -459,16 +466,29 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
           <span className="mg-review-path flex-1" title={thread.file}>
             {pathLabel(root, thread.file)}
           </span>
+          <button
+            onClick={() => setFocusNonce((n) => n + 1)}
+            disabled={!hasTarget}
+            title={
+              hasTarget
+                ? "本文の指摘の箇所へ戻る"
+                : "指摘の箇所を特定できていません"
+            }
+            className="mg-side-open"
+          >
+            <Icon name="my_location" size={13} />
+            対象箇所へ
+          </button>
           {rel && (
             <button
               onClick={() => {
                 openFile(rel);
                 setScreen(false);
               }}
+              title="読書ビューでこのファイルを開く"
               className="mg-side-open"
             >
               <Icon name="open_in_new" size={13} />
-              本文を開く
             </button>
           )}
         </div>

@@ -1416,9 +1416,12 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-fg-dim);
   transition: background 0.15s;
 }
-.mg-side-open:hover {
+.mg-side-open:hover:not(:disabled) {
   background: var(--mg-hover);
   color: var(--mg-fg);
+}
+.mg-side-open:disabled {
+  opacity: 0.35;
 }
 
 /* 見出しを辿った道筋。どの節に付いた指摘かを名前で示す。 */
