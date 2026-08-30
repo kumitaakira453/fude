@@ -239,6 +239,47 @@ pub fn resolve(thread_id: &str, by: &str) -> Result<(), String> {
     })
 }
 
+// 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
+// 既に解決済みのものは飛ばし、解決にした件数を返す。
+pub fn resolve_many(thread_ids: &[String], by: &str) -> Result<usize, String> {
+    store::update(|ledger: &mut Ledger| {
+        apply_resolve_many(ledger, thread_ids, by, store::now_millis())
+    })
+}
+
+// 台帳への適用だけを取り出したもの。1 件でも見つからなければ何も書き換えない。
+fn apply_resolve_many(
+    ledger: &mut Ledger,
+    thread_ids: &[String],
+    by: &str,
+    at: i64,
+) -> Result<usize, String> {
+    let missing: Vec<&str> = thread_ids
+        .iter()
+        .filter(|id| !ledger.threads.iter().any(|t| &t.id == *id))
+        .map(String::as_str)
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!("指摘 {} が見つかりません", missing.join(", ")));
+    }
+
+    let mut done = 0;
+    for id in thread_ids {
+        let Some(thread) = ledger.thread_mut(id) else {
+            continue;
+        };
+        if matches!(thread.status, Status::Resolved { .. }) {
+            continue;
+        }
+        thread.status = Status::Resolved {
+            by: by.to_string(),
+            at,
+        };
+        done += 1;
+    }
+    Ok(done)
+}
+
 // AI が「直した」を宣言する。現在のファイルの内容を版として記録する。
 pub fn commit(file: &Path, message: &str) -> Result<String, String> {
     let key = normalize(file)?;
@@ -363,5 +404,68 @@ mod tests {
         // 別ファイルの同一内容は別の版として持つ
         record_version(&mut ledger, "/b.md", "hash1", Origin::Comment, None, 40);
         assert_eq!(ledger.versions.len(), 2);
+    }
+    fn open_thread(id: &str) -> Thread {
+        Thread {
+            id: id.into(),
+            file: "/a.md".into(),
+            quote: "なにか".into(),
+            block_hash: "h".into(),
+            selection: String::new(),
+            selection_offset: 0,
+            section_path: vec![],
+            base_version: "v".into(),
+            status: Status::Open,
+            comments: vec![],
+            created_at: 0,
+            resolved: None,
+        }
+    }
+
+    fn ledger_of(ids: &[&str]) -> Ledger {
+        let mut ledger = Ledger::default();
+        ledger.threads = ids.iter().map(|id| open_thread(id)).collect();
+        ledger
+    }
+
+    fn is_resolved(ledger: &Ledger, id: &str) -> bool {
+        ledger
+            .threads
+            .iter()
+            .find(|t| t.id == id)
+            .is_some_and(|t| matches!(t.status, Status::Resolved { .. }))
+    }
+
+    #[test]
+    fn resolve_many_marks_every_open_thread() {
+        let mut ledger = ledger_of(&["a", "b", "c"]);
+        let ids = ["a".to_string(), "b".to_string(), "c".to_string()];
+        assert_eq!(apply_resolve_many(&mut ledger, &ids, "you", 99), Ok(3));
+        assert!(ids.iter().all(|id| is_resolved(&ledger, id)));
+    }
+
+    #[test]
+    fn resolve_many_skips_already_resolved() {
+        let mut ledger = ledger_of(&["a", "b", "c"]);
+        ledger.threads[1].status = Status::Resolved {
+            by: "AI".into(),
+            at: 5,
+        };
+        let ids = ["a".to_string(), "b".to_string(), "c".to_string()];
+        // 既に解決済みのものはエラーにせず飛ばし、数にも入れない
+        assert_eq!(apply_resolve_many(&mut ledger, &ids, "you", 99), Ok(2));
+        // 先に解決した記録は上書きしない
+        assert!(matches!(
+            &ledger.threads[1].status,
+            Status::Resolved { by, at } if by == "AI" && *at == 5
+        ));
+    }
+
+    #[test]
+    fn resolve_many_leaves_the_ledger_untouched_when_an_id_is_missing() {
+        let mut ledger = ledger_of(&["a", "b"]);
+        let ids = ["a".to_string(), "gone".to_string()];
+        assert!(apply_resolve_many(&mut ledger, &ids, "you", 99).is_err());
+        assert!(ledger.threads.iter().all(|t| matches!(t.status, Status::Open)));
     }
 }

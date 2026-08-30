@@ -96,6 +96,13 @@ async fn review_resolve(thread: String, by: String) -> Result<(), String> {
         .map_err(|e| format!("解決に失敗しました: {e}"))?
 }
 
+#[tauri::command]
+async fn review_resolve_many(threads: Vec<String>, by: String) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || review::resolve_many(&threads, &by))
+        .await
+        .map_err(|e| format!("解決に失敗しました: {e}"))?
+}
+
 // 外部エディタで開く。opener プラグイン経由だと detached 起動で終了コードが
 // 取れず、アプリ未インストール時に無反応になるため、自前で `open -a` を実行して
 // 結果を返す。
@@ -156,6 +163,7 @@ pub fn run() {
             review_set_resolved,
             review_reply,
             review_resolve,
+            review_resolve_many,
             windows::open_doc_window,
             windows::set_window_title,
             windows::record_recent_folder

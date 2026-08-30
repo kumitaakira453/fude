@@ -1,3 +1,4 @@
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -18,6 +19,7 @@ import {
   readVersion,
   replyToThread,
   resolveThread,
+  resolveThreads,
   REVIEW_AUTHOR,
   type ReviewComment,
   type ReviewThread,
@@ -110,6 +112,10 @@ export function ReviewScreen() {
   const root = useAtomValue(activeFolderIdAtom);
   const [selectedId, setSelectedId] = useAtom(reviewThreadAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
+  const store = useStore();
+  // 一括解決の最中のファイル。そのファイルの見出しだけを処理中の見た目にする。
+  const [bulkFile, setBulkFile] = useState<string | null>(null);
+  const bulkRunning = useRef(false);
 
   const threads = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
 
@@ -150,6 +156,32 @@ export function ReviewScreen() {
     }
     return [...byFile.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [threads]);
+
+  // 1 ファイル分の指摘をまとめて解決にする。解決を取り消す手段が無いので、
+  // 消えて困る操作として必ず確認を挟む。
+  const resolveFile = useCallback(
+    async (file: string, list: ReviewThread[]) => {
+      if (bulkRunning.current) return;
+      bulkRunning.current = true;
+      setBulkFile(file);
+      try {
+        const name = file.split("/").pop() ?? file;
+        const ok = await confirm(
+          `${name} の未解決 ${list.length} 件をすべて解決にします。\n取り消せません。`,
+          { title: "mdglow", kind: "warning" },
+        );
+        if (!ok) return;
+        const ids = list.map((t) => t.id);
+        if ((await resolveThreads(ids, REVIEW_AUTHOR)) !== null) {
+          await refreshLedger(store);
+        }
+      } finally {
+        bulkRunning.current = false;
+        setBulkFile(null);
+      }
+    },
+    [store],
+  );
 
   // 一覧に出す「どこの話か」。文書をブロックへ割り、指摘ごとに見出しを辿る
   // 重い処理なので、描画の中ではなくファイル 1 枚ずつフレームを分けて進める。
@@ -216,6 +248,18 @@ export function ReviewScreen() {
               <h2 className="mg-review-group">
                 <span className="mg-review-path">{pathLabel(root, file)}</span>
                 <span className="mg-count">{list.length}</span>
+                <button
+                  onClick={() => void resolveFile(file, list)}
+                  disabled={bulkFile !== null}
+                  title="このファイルの指摘をすべて解決にする"
+                  className="mg-bulk"
+                >
+                  <Icon
+                    name={bulkFile === file ? "progress_activity" : "done_all"}
+                    size={14}
+                    className={bulkFile === file ? "mg-spin" : undefined}
+                  />
+                </button>
               </h2>
               {list.map((thread) => (
                 <ThreadCard
@@ -370,7 +414,11 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
   const { openFile, resolveAsset, peekAsset } = useWorkspace();
   const [baseText, setBaseText] = useState<string | null>(null);
   const [reply, setReply] = useState("");
+  // 表示用。押した直後の 2 回目を弾くのは下の ref で、こちらは見た目だけを持つ。
   const [busy, setBusy] = useState(false);
+  // state は再描画されるまで更新されないので、素早い 2 回目のクリックが
+  // 同じ値を読んで通り抜けてしまう。同期的に読める ref で締め出す。
+  const running = useRef(false);
   // 押すたびに本文を指摘の箇所へ戻す。候補が複数あるときは次の候補へ送る。
   const [focus, setFocus] = useState({ nonce: 0, at: 0 });
 
@@ -415,7 +463,8 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
 
   const send = useCallback(async () => {
     const text = reply.trim();
-    if (!text || busy) return;
+    if (!text || running.current) return;
+    running.current = true;
     setBusy(true);
     try {
       if (await replyToThread(thread.id, REVIEW_AUTHOR, text)) {
@@ -423,19 +472,22 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
         await refreshLedger(store);
       }
     } finally {
+      running.current = false;
       setBusy(false);
     }
-  }, [reply, busy, thread.id, store]);
+  }, [reply, thread.id, store]);
 
   const finish = useCallback(async () => {
-    if (busy) return;
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     try {
       if (await resolveThread(thread.id, REVIEW_AUTHOR)) await refreshLedger(store);
     } finally {
+      running.current = false;
       setBusy(false);
     }
-  }, [busy, thread.id, store]);
+  }, [thread.id, store]);
 
   const style = { fontFamily: fontStack(font) };
   // 候補が複数あるときは、今どれを見ているかを出しつつ次へ送れるようにする。
@@ -577,8 +629,13 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
             </button>
             <span className="flex-1" />
             <button onClick={() => void finish()} disabled={busy} className="mg-resolve">
-              <Icon name="check_circle" size={15} fill />
-              解決にする
+              <Icon
+                name={busy ? "progress_activity" : "check_circle"}
+                size={15}
+                fill={!busy}
+                className={busy ? "mg-spin" : undefined}
+              />
+              {busy ? "解決にしています…" : "解決にする"}
             </button>
           </div>
         </div>

@@ -160,6 +160,16 @@ export async function resolveThread(thread: string, by: string): Promise<boolean
   return (await call(() => invoke("review_resolve", { thread, by }), "解決にできませんでした")) !== null;
 }
 
+// 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
+// 台帳のロックを 1 回しか取らないので、途中で止まって半端に終わることがない。
+// 戻り値は解決にした件数。失敗したときは null。
+export async function resolveThreads(threads: string[], by: string): Promise<number | null> {
+  return call(
+    () => invoke<number>("review_resolve_many", { threads, by }),
+    "まとめて解決にできませんでした",
+  );
+}
+
 // 失敗を握り潰さず理由を出す。押しても何も起きない状態を作らない。
 async function call<T>(run: () => Promise<T>, failure: string): Promise<T | null> {
   try {

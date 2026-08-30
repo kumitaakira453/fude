@@ -1276,6 +1276,50 @@ svg[id^="mmd-"] foreignObject p {
   letter-spacing: 0.06em;
   color: var(--mg-muted);
 }
+/* ファイル単位の一括解決。平時は伏せておき、その見出しに触れたときだけ出す。 */
+.mg-bulk {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  margin-top: -0.1rem;
+  border-radius: 0.35rem;
+  opacity: 0;
+  color: var(--mg-muted);
+  transition:
+    opacity 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+.mg-review-group:hover .mg-bulk,
+.mg-bulk:focus-visible {
+  opacity: 1;
+}
+.mg-bulk:hover:not(:disabled) {
+  background: var(--mg-hover);
+  color: var(--mg-accent);
+}
+.mg-bulk:disabled {
+  cursor: default;
+}
+/* 処理中の印は最中も止まらないよう transform で回す。background-position で
+   作るとメインスレッドが埋まった瞬間に固まり、壊れているように見える。 */
+.mg-spin {
+  animation: mgSpin 0.9s linear infinite;
+}
+@keyframes mgSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-spin {
+    animation-duration: 2.4s;
+  }
+}
+
 /* 道筋は畳まずに折り返す。末尾を切ると、いちばん見分けたいファイル名が消える。 */
 .mg-review-path {
   min-width: 0;
