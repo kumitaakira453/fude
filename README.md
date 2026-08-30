@@ -86,6 +86,30 @@ open -a mdglow
 
 > 注意: `npm run tauri:build` は初回、release プロファイルの Rust コンパイルに数分かかります。
 
+### CLI にパスを通す
+
+GUI と同じ実行ファイルが CLI も兼ねる。第 1 引数が `review` のときだけ、Tauri を
+初期化せずコマンドとして動く。レビュー機能をエージェントから使えるように、実行ファイルへの
+シンボリックリンクを PATH の通ったところに張る。
+
+```bash
+# ~/.local/bin に置く（sudo 不要。PATH に無ければ .zshrc 等で通す）
+mkdir -p ~/.local/bin
+ln -sfn "/Applications/mdglow.app/Contents/MacOS/app" ~/.local/bin/mdglow
+
+# 全ユーザーから使えるようにする場合
+sudo ln -sfn "/Applications/mdglow.app/Contents/MacOS/app" /usr/local/bin/mdglow
+```
+
+```bash
+mdglow review --help   # 通っていれば使い方が出る
+```
+
+バンドル内の実行ファイル名は `app` だが、リンク名が `mdglow` ならヘルプもそう表示される。
+アプリを更新してもリンク先のパスは変わらないので、張り直しは要らない。
+Windows / Linux は実行ファイルの置き場所が違うので、`npm run tauri:build` の生成物に含まれる
+実行ファイルへリンクを張る。
+
 ### 開発中のみ試す（インストール不要）
 
 ```bash
@@ -101,6 +125,42 @@ npm run tauri:dev      # 一時ウィンドウで起動（ビルド生成物は�
 | サイドバー切替 | `⌘B` |
 | 右に分割 | `⌘\` |
 | 閉じる | `Esc` |
+
+---
+
+## レビュー（人が指摘し、AI が直す）
+
+本文を選んで指摘を残すと台帳に溜まる。エージェントは CLI でそれを読み、直し、返信する。
+GUI が起動していなくても CLI だけで完結する。台帳は
+`~/Library/Application Support/com.mdglow.app/review/store.json` に置かれ、書き込みは
+ロックを取るので GUI と CLI が同時に触っても壊れない。
+
+指摘は**どこに付いたかを追い続ける**。指摘した時点の本文をスナップショットとして持ち、
+現在のファイルと突き合わせて、その箇所が「まだそのまま」「書き換わった」「削除された」の
+どれなのかを一覧に併記する。すでに直っている箇所を AI が直し直すことがない。
+
+### コマンド
+
+| コマンド | 内容 |
+|---|---|
+| `mdglow review list` | 指摘の一覧。`--project <dir>` / `--file <path>` で絞り込み、`--status open\|all`、`--format md\|json` |
+| `mdglow review reply --thread <id> --body <text>` | 指摘に返信する（`--author` 既定 `AI`） |
+| `mdglow review resolve --thread <id>` | 解決済みにする（`--by` 既定 `AI`） |
+| `mdglow review commit --file <path> --message <text>` | 対応完了を宣言し、その時点の本文を版として記録する |
+| `mdglow review versions --file <path>` | 版を新しい順に一覧する |
+
+```bash
+mdglow review list --project ~/docs --file ~/docs/spec.md
+```
+
+`list` の既定は未解決のみ・Markdown 形式。読み手が AI なので、JSON より字数が少なくて
+そのまま読める Markdown を既定にしている。機械的に扱うときは `--format json` を足す。
+
+### エージェント向けスキル
+
+Claude Code 用のスキルを [`skills/doc-review/SKILL.md`](./skills/doc-review/SKILL.md) に
+同梱している。プロジェクトの `.claude/skills/` に置くと、「レビュー対応して」の一言で
+一覧 → 修正 → 返信 → 解決 → 版の記録まで走る。
 
 ---
 
