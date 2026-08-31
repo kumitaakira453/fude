@@ -809,13 +809,30 @@ button.mg-task-check:hover {
   margin-top: 2.1em;
 }
 
-/* 通常の引用: 本文サイズのまま、左のアクセントバーだけ整える（拡大しない） */
+/* 引用: 位置は見出しと同じ左だが、線種を二重線にして見分ける。
+   見出しは一本の色帯、コールアウトは四辺を閉じた囲み、引用は二重線。
+   面と影は使わない（敷くと本文より前へ出て、囲みの多い画面で騒がしくなる）。 */
 .mg-prose.mg-editorial blockquote.mg-pull {
-  background: transparent;
-  border-left: 3px solid var(--mg-accent);
+  background: none;
   border-radius: 0;
-  padding: 0.15rem 0 0.15rem 1rem;
-  color: var(--mg-fg-dim);
+  /* border-style: double は太さを線・間・線の 3 等分に割る。
+     4px だと 1px の線が 1px 空けて 2 本並ぶ。 */
+  border-left: 4px double var(--mg-accent);
+  padding: 0.2rem 0 0.2rem 1.05rem;
+  margin: 1.7em 0;
+  line-height: 1.9;
+}
+/* 二重線の内側で字面を揃える。段落の余白が外へ出て線が伸び縮みするのを防ぐ。 */
+.mg-prose.mg-editorial blockquote.mg-pull > :first-child {
+  margin-top: 0;
+}
+.mg-prose.mg-editorial blockquote.mg-pull > :last-child {
+  margin-bottom: 0;
+}
+/* 入れ子は線をアクセント色から外し、内側に入ったことだけ分かるようにする。 */
+.mg-prose.mg-editorial blockquote.mg-pull blockquote.mg-pull {
+  border-left-color: var(--mg-muted);
+  margin: 1em 0;
 }
 
 /* コールアウト（> [!NOTE] など） */
