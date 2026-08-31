@@ -1,4 +1,4 @@
-import { confirm } from "@tauri-apps/plugin-dialog";
+import { confirm, message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -20,10 +20,12 @@ import {
   replyToThread,
   resolveThread,
   resolveThreads,
+  reviewPrompt,
   REVIEW_AUTHOR,
   type ReviewComment,
   type ReviewThread,
 } from "../../lib/review";
+import { notify } from "../../state/toast";
 import {
   activeFolderIdAtom,
   contentCacheAtom,
@@ -32,7 +34,7 @@ import {
 } from "../../state/atoms";
 import {
   ledgerAtom,
-  refreshLedger,
+  syncLedger,
   reviewScreenAtom,
   reviewThreadAtom,
 } from "../../state/review";
@@ -116,6 +118,12 @@ export function ReviewScreen() {
   // 一括解決の最中のファイル。そのファイルの見出しだけを処理中の見た目にする。
   const [bulkFile, setBulkFile] = useState<string | null>(null);
   const bulkRunning = useRef(false);
+  // プロンプトを写したファイル。少しの間だけ印を出して、押せたことを示す。
+  const [copiedFile, setCopiedFile] = useState<string | null>(null);
+  // 「どこの話か」の索引は下で作る。押した瞬間に最新を読むため参照で持つ。
+  const whereRef = useRef<Map<string, string>>(new Map());
+  const copyTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
   const threads = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
 
@@ -134,6 +142,13 @@ export function ReviewScreen() {
     () => (pending ? null : pick(shownId ?? null)),
     [pending, pick, shownId],
   );
+  // 解決した後に見せる指摘。決めておかないと、選択が暗黙で先頭へ倒れて
+  // 中央ペインが作り直され、一瞬ちらつく。
+  const nextId = useMemo(() => {
+    const i = threads.findIndex((t) => t.id === shown?.id);
+    if (i < 0) return null;
+    return threads[i + 1]?.id ?? threads[i - 1]?.id ?? null;
+  }, [threads, shown]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -172,8 +187,10 @@ export function ReviewScreen() {
         );
         if (!ok) return;
         const ids = list.map((t) => t.id);
-        if ((await resolveThreads(ids, REVIEW_AUTHOR)) !== null) {
-          await refreshLedger(store);
+        const done = await resolveThreads(ids, REVIEW_AUTHOR);
+        if (done !== null) {
+          await syncLedger(store);
+          notify(store, `${done} 件を解決にしました`);
         }
       } finally {
         bulkRunning.current = false;
@@ -183,10 +200,36 @@ export function ReviewScreen() {
     [store],
   );
 
+  // 1 ファイル分の指摘を短い文にして写す。台帳は画面が持っているので、
+  // 押した瞬間に組んでそのまま書き込む。await を挟むと WebKit が
+  // 「利用者の操作中」と見なさず、書き込みを拒否する。
+  const copyPrompt = useCallback(
+    (file: string, list: ReviewThread[]) => {
+      const text = reviewPrompt(file, list, (t) =>
+        whereRef.current.get(t.id) ?? t.section_path.join(" › "),
+      );
+      navigator.clipboard.writeText(text).then(
+        () => {
+          notify(store, "指摘を写しました");
+          setCopiedFile(file);
+          window.clearTimeout(copyTimer.current);
+          copyTimer.current = window.setTimeout(() => setCopiedFile(null), 1400);
+        },
+        (e: unknown) =>
+          void message(`クリップボードに写せませんでした\n${String(e)}`, {
+            title: "mdglow",
+            kind: "error",
+          }),
+      );
+    },
+    [store],
+  );
+
   // 一覧に出す「どこの話か」。文書をブロックへ割り、指摘ごとに見出しを辿る
   // 重い処理なので、描画の中ではなくファイル 1 枚ずつフレームを分けて進める。
   // まとめてやると数百ミリ秒画面が固まり、選択にも反応できなくなる。
   const [whereById, setWhereById] = useState<Map<string, string>>(new Map());
+  whereRef.current = whereById;
   // 索引づくりの途中は本文の控えが何度も差し替わる。それに引きずられて
   // 辿り直しをやり直すと、いつまでも終わらないので参照だけ持っておく。
   const cacheRef = useRef(cache);
@@ -249,6 +292,16 @@ export function ReviewScreen() {
                 <span className="mg-review-path">{pathLabel(root, file)}</span>
                 <span className="mg-count">{list.length}</span>
                 <button
+                  onClick={() => copyPrompt(file, list)}
+                  title="このファイルの指摘を AI 用のプロンプトとして写す"
+                  className="mg-bulk"
+                >
+                  <Icon
+                    name={copiedFile === file ? "check" : "content_copy"}
+                    size={14}
+                  />
+                </button>
+                <button
                   onClick={() => void resolveFile(file, list)}
                   disabled={bulkFile !== null}
                   title="このファイルの指摘をすべて解決にする"
@@ -283,7 +336,7 @@ export function ReviewScreen() {
         ) : pending || !shown ? (
           <DetailSkeleton />
         ) : (
-          <ThreadDetail key={shown.id} thread={shown} />
+          <ThreadDetail key={shown.id} thread={shown} nextId={nextId} />
         )}
       </div>
     </div>
@@ -404,8 +457,15 @@ const when = new Intl.DateTimeFormat("ja-JP", {
   minute: "2-digit",
 });
 
-function ThreadDetail({ thread }: { thread: ReviewThread }) {
+function ThreadDetail({
+  thread,
+  nextId,
+}: {
+  thread: ReviewThread;
+  nextId: string | null;
+}) {
   const store = useStore();
+  const setSelectedId = useSetAtom(reviewThreadAtom);
   const cache = useAtomValue(contentCacheAtom);
   const root = useAtomValue(activeFolderIdAtom);
   const editorial = useAtomValue(editorialAtom);
@@ -469,7 +529,8 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
     try {
       if (await replyToThread(thread.id, REVIEW_AUTHOR, text)) {
         setReply("");
-        await refreshLedger(store);
+        await syncLedger(store);
+        notify(store, "返信しました");
       }
     } finally {
       running.current = false;
@@ -482,12 +543,18 @@ function ThreadDetail({ thread }: { thread: ReviewThread }) {
     running.current = true;
     setBusy(true);
     try {
-      if (await resolveThread(thread.id, REVIEW_AUTHOR)) await refreshLedger(store);
+      if (await resolveThread(thread.id, REVIEW_AUTHOR)) {
+        // 次に見せる指摘へ先に移す。読み直しで一覧から消えるのを待つと、
+        // 選択が暗黙で倒れて中央ペインが作り直され、ちらついて見える。
+        setSelectedId(nextId);
+        await syncLedger(store);
+        notify(store, "解決にしました");
+      }
     } finally {
       running.current = false;
       setBusy(false);
     }
-  }, [thread.id, store]);
+  }, [thread.id, nextId, setSelectedId, store]);
 
   const style = { fontFamily: fontStack(font) };
   // 候補が複数あるときは、今どれを見ているかを出しつつ次へ送れるようにする。

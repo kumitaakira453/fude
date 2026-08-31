@@ -6,6 +6,7 @@ import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
 import { ReviewScreen } from "./components/review/ReviewScreen";
 import { Toolbar } from "./components/Toolbar";
+import { Toast } from "./components/Toast";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
@@ -103,6 +104,7 @@ export default function App() {
       <div className="h-screen w-screen bg-[var(--mg-bg)] text-[var(--mg-fg)]">
         <Landing />
         <UpdateBanner />
+        <Toast />
       </div>
     );
   }
@@ -113,6 +115,7 @@ export default function App() {
       <>
         <ReviewScreen />
         <UpdateBanner />
+        <Toast />
       </>
     );
   }
@@ -130,6 +133,7 @@ export default function App() {
       </div>
       <CommandPalette />
       <UpdateBanner />
+        <Toast />
     </div>
   );
 }

@@ -35,3 +35,23 @@ export const openTotalAtom = atom(
 export async function refreshLedger(store: Store): Promise<void> {
   store.set(ledgerAtom, await loadLedger());
 }
+
+// 台帳はマシンに 1 つで、どのウィンドウからでも書き換わる。書いた側が
+// 読み直すだけでは他のウィンドウが古い一覧を出し続けるので、書き込みのたびに
+// 印を置いて知らせる。localStorage の変更は同じアプリの他ウィンドウにだけ
+// storage として届き、書いた自分には届かないので、二重の読み直しにならない。
+const CHANGED_KEY = "mdglow:ledger-changed";
+
+export function announceLedgerChange(): void {
+  localStorage.setItem(CHANGED_KEY, String(Date.now()));
+}
+
+export function isLedgerChange(event: StorageEvent): boolean {
+  return event.key === CHANGED_KEY;
+}
+
+// 書き込みの後始末。自分で読み直し、他のウィンドウにも知らせる。
+export async function syncLedger(store: Store): Promise<void> {
+  await refreshLedger(store);
+  announceLedgerChange();
+}

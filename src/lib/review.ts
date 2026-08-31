@@ -153,11 +153,17 @@ export async function replyToThread(
   author: string,
   body: string,
 ): Promise<boolean> {
-  return (await call(() => invoke("review_reply", { thread, author, body }), "返信できませんでした")) !== null;
+  return attempt(
+    () => invoke("review_reply", { thread, author, body }),
+    "返信できませんでした",
+  );
 }
 
 export async function resolveThread(thread: string, by: string): Promise<boolean> {
-  return (await call(() => invoke("review_resolve", { thread, by }), "解決にできませんでした")) !== null;
+  return attempt(
+    () => invoke("review_resolve", { thread, by }),
+    "解決にできませんでした",
+  );
 }
 
 // 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
@@ -168,6 +174,54 @@ export async function resolveThreads(threads: string[], by: string): Promise<num
     () => invoke<number>("review_resolve_many", { threads, by }),
     "まとめて解決にできませんでした",
   );
+}
+
+// 指摘の書き手。エージェントの返信は指摘そのものではないので数えない。
+const AGENTS = new Set(["AI", "ai", "assistant", "claude"]);
+
+const QUOTE_LIMIT = 120;
+
+// 指摘と指摘の境目。指摘の本文が複数行に渡ると、空行だけでは切れ目が読めない。
+const SEPARATOR = "=".repeat(56);
+
+function oneLine(text: string, limit = QUOTE_LIMIT): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
+}
+
+// 指摘をそのまま人に渡せる短い文にする。ID や版、解決の手順は載せない。
+// どのファイルのどこに何を言われたか、それだけで軽い修正は足りる。
+export function reviewPrompt(
+  file: string,
+  threads: ReviewThread[],
+  where: (thread: ReviewThread) => string,
+): string {
+  const items = threads.map((t) => {
+    const spot = where(t).trim();
+    const target = oneLine(t.selection.trim() || t.quote);
+    const says = t.comments
+      .filter((c) => !AGENTS.has(c.author))
+      .map((c) => c.body.trim())
+      .filter(Boolean)
+      .join("\n    ");
+    const lines = [spot ? `- ${spot}` : "-"];
+    if (target) lines.push(`    該当箇所: ${target}`);
+    if (says) lines.push(`    指摘: ${says}`);
+    return lines.join("\n");
+  });
+  return `${file}\n\n${items.join(`\n\n${SEPARATOR}\n\n`)}\n`;
+}
+
+// 値を返さないコマンド用。Rust の Ok(()) は JS では null として届くので、
+// 戻り値の有無では成功と失敗を見分けられない。例外が出たかどうかで判定する。
+async function attempt(run: () => Promise<unknown>, failure: string): Promise<boolean> {
+  try {
+    await run();
+    return true;
+  } catch (e) {
+    await message(`${failure}\n${String(e)}`, { title: "mdglow", kind: "error" });
+    return false;
+  }
 }
 
 // 失敗を握り潰さず理由を出す。押しても何も起きない状態を作らない。

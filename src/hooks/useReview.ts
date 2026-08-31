@@ -10,6 +10,7 @@ import {
   type Resolution,
 } from "../lib/blockDiff";
 import { readSelection, type BlockSelection } from "../lib/domText";
+import { notify } from "../state/toast";
 import { parseFrontmatter } from "../lib/frontmatter";
 import {
   createThread,
@@ -21,7 +22,7 @@ import {
 } from "../lib/review";
 import {
   ledgerAtom,
-  refreshLedger,
+  syncLedger,
   reviewScreenAtom,
   reviewThreadAtom,
 } from "../state/review";
@@ -226,8 +227,10 @@ export function useReview({
           body: text,
         });
         if (id) {
-          await refreshLedger(store);
+          await syncLedger(store);
           setDraft(null);
+          // この操作はレビュー画面の外（本文の上）で行うので、右下でも何とも重ならない。
+          notify(store, "指摘しました", "right");
         }
       } finally {
         setBusy(false);
