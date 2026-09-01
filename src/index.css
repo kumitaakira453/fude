@@ -1321,6 +1321,40 @@ svg[id^="mmd-"] foreignObject p {
     transform: translate(-50%, 0);
   }
 }
+/* 「この指摘を解決にする」。返信とは別の行に、何をするか読める文言で置く。
+   触ればアクセント色で塗り潰して、押せることが分かるようにする。 */
+.mg-side-close {
+  flex: none;
+  padding: 0.6rem 0.9rem 0.8rem;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-done {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
+  color: var(--mg-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition:
+    background 0.14s,
+    color 0.14s,
+    border-color 0.14s;
+}
+.mg-done:hover:not(:disabled) {
+  border-color: var(--mg-accent);
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+}
+.mg-done:disabled {
+  opacity: 0.55;
+}
+
 /* 選択したときに出る操作。指摘するか、その場を編集するかを選ぶ。 */
 .mg-sel-menu {
   position: fixed;

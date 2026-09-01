@@ -497,11 +497,14 @@ function ThreadDetail({
   const { openFile, resolveAsset, peekAsset } = useWorkspace();
   const [baseText, setBaseText] = useState<string | null>(null);
   const [reply, setReply] = useState("");
-  // 表示用。押した直後の 2 回目を弾くのは下の ref で、こちらは見た目だけを持つ。
-  const [busy, setBusy] = useState(false);
+  // 表示用。返信と解決は別の操作なので別に持つ。1 つにすると、返信しただけで
+  // 解決のボタンまで処理中の見た目になる。
+  const [sending, setSending] = useState(false);
+  const [resolving, setResolving] = useState(false);
   // state は再描画されるまで更新されないので、素早い 2 回目のクリックが
   // 同じ値を読んで通り抜けてしまう。同期的に読める ref で締め出す。
-  const running = useRef(false);
+  const sendingRef = useRef(false);
+  const resolvingRef = useRef(false);
   // 押すたびに本文を指摘の箇所へ戻す。候補が複数あるときは次の候補へ送る。
   const [focus, setFocus] = useState({ nonce: 0, at: 0 });
 
@@ -552,9 +555,9 @@ function ThreadDetail({
 
   const send = useCallback(async () => {
     const text = reply.trim();
-    if (!text || running.current) return;
-    running.current = true;
-    setBusy(true);
+    if (!text || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
     try {
       if (await replyToThread(thread.id, REVIEW_AUTHOR, text)) {
         setReply("");
@@ -562,15 +565,15 @@ function ThreadDetail({
         notify(store, "返信しました");
       }
     } finally {
-      running.current = false;
-      setBusy(false);
+      sendingRef.current = false;
+      setSending(false);
     }
   }, [reply, thread.id, store]);
 
   const finish = useCallback(async () => {
-    if (running.current) return;
-    running.current = true;
-    setBusy(true);
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+    setResolving(true);
     try {
       if (await resolveThread(thread.id, REVIEW_AUTHOR)) {
         // 次に見せる指摘へ先に移す。読み直しで一覧から消えるのを待つと、
@@ -580,8 +583,8 @@ function ThreadDetail({
         notify(store, "解決にしました");
       }
     } finally {
-      running.current = false;
-      setBusy(false);
+      resolvingRef.current = false;
+      setResolving(false);
     }
   }, [thread.id, nextId, setSelectedId, store]);
 
@@ -663,6 +666,7 @@ function ThreadDetail({
               <Icon name="open_in_new" size={13} />
             </button>
           )}
+
         </div>
 
         <nav className="mg-crumbs">
@@ -717,24 +721,38 @@ function ThreadDetail({
             className="w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-3 py-2 text-[12.5px] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
           />
           <div className="flex items-center gap-2">
+            <span className="flex-1" />
             <button
               onClick={() => void send()}
-              disabled={busy || !reply.trim()}
-              className="rounded-lg border border-[var(--mg-border)] px-3 py-1.5 text-[12px] font-medium text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)] disabled:opacity-40"
+              disabled={sending || !reply.trim()}
+              className="mg-resolve"
             >
-              返信
-            </button>
-            <span className="flex-1" />
-            <button onClick={() => void finish()} disabled={busy} className="mg-resolve">
               <Icon
-                name={busy ? "progress_activity" : "check_circle"}
-                size={15}
-                fill={!busy}
-                className={busy ? "mg-spin" : undefined}
+                name={sending ? "progress_activity" : "send"}
+                size={14}
+                className={sending ? "mg-spin" : undefined}
               />
-              {busy ? "解決にしています…" : "解決にする"}
+              {sending ? "送っています…" : "返信"}
             </button>
           </div>
+        </div>
+
+        {/* 解決は返信と別の行に置く。返信は会話の続き、解決はこの指摘を閉じる
+            操作で、性質が違う。同じ行に並べると押し間違える。 */}
+        <div className="mg-side-close">
+          <button
+            onClick={() => void finish()}
+            disabled={resolving}
+            className="mg-done"
+          >
+            <Icon
+              name={resolving ? "progress_activity" : "check_circle"}
+              size={16}
+              fill={!resolving}
+              className={resolving ? "mg-spin" : undefined}
+            />
+            {resolving ? "解決にしています…" : "この指摘を解決にする"}
+          </button>
         </div>
       </aside>
     </div>
