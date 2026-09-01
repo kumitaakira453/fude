@@ -122,6 +122,9 @@ export function ReviewScreen() {
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
   // 「どこの話か」の索引は下で作る。押した瞬間に最新を読むため参照で持つ。
   const whereRef = useRef<Map<string, string>>(new Map());
+  // 対象へ寄せ終わった指摘。ここが今見せている指摘と一致するまで骨組みを出す。
+  const [settledId, setSettledId] = useState<string | null>(null);
+  const markSettled = useCallback((id: string) => setSettledId(id), []);
   const copyTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
@@ -333,10 +336,28 @@ export function ReviewScreen() {
           <p className="p-8 text-[13px] text-[var(--mg-muted)]">
             指摘を選ぶと、その箇所が今どうなっているかを本文の中で示します。
           </p>
-        ) : pending || !shown ? (
+        ) : !shown ? (
           <DetailSkeleton />
         ) : (
-          <ThreadDetail key={shown.id} thread={shown} nextId={nextId} />
+          // 骨組みは差し替えではなく上に重ねる。差し替えにすると、押した瞬間の
+          // 描画に前の本文の破棄が混ざり、左ペインの選択が切り替わる絵が
+          // そのぶん遅れて出る。重ねるだけなら押した瞬間に描き終わる。
+          //
+          // 外すのは「本文が出た瞬間」ではなく「対象へ寄せ終わった瞬間」。
+          // 先に外すと、本文が出てから対象へ動くまでの間が待たされて見える。
+          <div className="relative flex min-w-0 flex-1">
+            <ThreadDetail
+              key={shown.id}
+              thread={shown}
+              nextId={nextId}
+              onSettled={markSettled}
+            />
+            {(pending || settledId !== shown.id) && (
+              <div className="absolute inset-0 z-10 flex bg-[var(--mg-bg)]">
+                <DetailSkeleton />
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -460,9 +481,11 @@ const when = new Intl.DateTimeFormat("ja-JP", {
 function ThreadDetail({
   thread,
   nextId,
+  onSettled,
 }: {
   thread: ReviewThread;
   nextId: string | null;
+  onSettled: (id: string) => void;
 }) {
   const store = useStore();
   const setSelectedId = useSetAtom(reviewThreadAtom);
@@ -510,6 +533,12 @@ function ThreadDetail({
         : sectionPathAt(blocks, Math.min(anchor.index, blocks.length - 1));
     return { blocks, anchor, crumbs };
   }, [baseText, currentBody, thread]);
+
+  const settle = useCallback(() => onSettled(thread.id), [onSettled, thread.id]);
+  // 本文を出せないと分かったときは、寄せる先が無いので待たせない。
+  useEffect(() => {
+    if (currentBody === null) settle();
+  }, [currentBody, settle]);
 
   const ctx = useMemo(
     () => ({
@@ -590,6 +619,7 @@ function ThreadDetail({
                 focusNonce={focus.nonce}
                 focusAt={focus.at}
                 selection={thread.selection}
+                onSettled={settle}
               />
             </markdownContext.Provider>
           )}

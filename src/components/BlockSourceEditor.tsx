@@ -38,6 +38,7 @@ export function BlockSourceEditor({
   src,
   onCommit,
   onCancel,
+  onDelete,
   clickX,
   clickY,
 }: {
@@ -45,20 +46,27 @@ export function BlockSourceEditor({
   onCommit: (newSrc: string) => void;
   onCancel: () => void;
   // 編集開始時のダブルクリック座標（ビューポート）。カーソルをその近くに置く。
-  clickX?: number;
-  clickY?: number;
+  clickX?: number | null;
+  clickY?: number | null;
+  // ブロックごと消す。押したら確定を走らせずに閉じる。
+  onDelete?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onCommitRef = useRef(onCommit);
   const onCancelRef = useRef(onCancel);
   const clickRef = useRef({ x: clickX, y: clickY });
+  // 確定/取消済みフラグ。blur による二重確定・取消後の確定を防ぐ。
+  // 削除ボタンからも立てたいので、効果の外に置く。
+  const doneRef = useRef({ value: false });
   onCommitRef.current = onCommit;
   onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!ref.current) return;
-    // 確定/取消済みフラグ。blur による二重確定・取消後の確定を防ぐ。
+    // この回のフラグを作り直す。持ち回すと、前の回の片付けで立った値を
+    // 引き継いでしまい、本当の blur で確定できなくなる。
     const done = { value: false };
+    doneRef.current = done;
     const view = new EditorView({
       parent: ref.current,
       state: EditorState.create({
@@ -117,7 +125,12 @@ export function BlockSourceEditor({
     const pos =
       x != null && y != null ? view.posAtCoords({ x, y }) : null;
     view.dispatch({ selection: { anchor: pos ?? 0 } });
-    return () => view.destroy();
+    return () => {
+      // 片付けの blur は確定ではない。destroy() は blur を飛ばすので、
+      // ここで印を立てないと、開いた直後に確定して閉じてしまう。
+      done.value = true;
+      view.destroy();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -130,6 +143,24 @@ export function BlockSourceEditor({
         <span className="mg-block-hint-sep">·</span>
         <kbd>esc</kbd>
         <span>取消</span>
+        {onDelete && (
+          <>
+            <span className="flex-1" />
+            <button
+              type="button"
+              className="mg-block-delete"
+              // mousedown で処理する。click を待つと入力欄の blur が先に走り、
+              // 確定してこの部品が外れてしまう。
+              onMouseDown={(e) => {
+                e.preventDefault();
+                doneRef.current.value = true;
+                onDelete();
+              }}
+            >
+              削除
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

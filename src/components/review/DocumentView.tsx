@@ -19,7 +19,9 @@ const MARK = "mg-review-selection";
 // 最初の一塊は小さく取る。ここを大きくすると、指摘を選んでから何かが
 // 出るまでの間がそのまま伸びる。
 const FIRST_CHUNK = 8;
-const NEXT_CHUNK = 40;
+// 残りを足す 1 回分。小さく刻むと、そのたびに一覧全体の突き合わせが走るので
+// かえって遅い。対象へ着いたあとの穴埋めなので、大きく取る。
+const NEXT_CHUNK = 160;
 
 export type Anchor =
   | { state: "unchanged"; index: number }
@@ -40,6 +42,7 @@ export function DocumentView({
   style,
   focusNonce,
   focusAt,
+  onSettled,
   selection,
 }: {
   blocks: Block[];
@@ -52,6 +55,9 @@ export function DocumentView({
   focusAt: number;
   // 指摘のときに選ばれていた文字列。ブロックの中のどこかを示すのに使う。
   selection: string;
+  // 対象の箇所を描いて、そこへ寄せ終わったときに 1 度だけ呼ぶ。
+  // 読み込み中の表示を、移動が済むまで出しておくために使う。
+  onSettled?: () => void;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
   const targetRef = useRef<HTMLDivElement>(null);
@@ -60,6 +66,8 @@ export function DocumentView({
   const [marked, setMarked] = useState(false);
   // 自分でスクロールしたら、そこから先は勝手に動かさない
   const touchedRef = useRef(false);
+  // 対象へ寄せ終わったことを 1 度だけ知らせる
+  const settledRef = useRef(false);
 
   // 印まで絞れているときはそこへ、絞れていなければブロックの頭へ寄せる。
   const focus = useCallback((behavior: ScrollBehavior) => {
@@ -67,6 +75,11 @@ export function DocumentView({
     if (mark) mark.scrollIntoView({ block: "center", behavior });
     else targetRef.current?.scrollIntoView({ block: "start", behavior });
   }, []);
+
+  // 寄せ先。effect より前で決める（下の描画と、寄せ終わりの判定の両方で使う）。
+  const spot = anchor.state === "unknown" ? -1 : anchor.index;
+  const maybe = anchor.state === "unknown" ? anchor.candidates : [];
+  const scrollTo = spot >= 0 ? spot : (maybe[focusAt] ?? maybe[0] ?? -1);
 
   // 何を見ているかは中身で表す。配列やオブジェクトの同一性で見張ると、
   // 中身が同じでも作り直されるたびに先頭へ巻き戻ってしまう。
@@ -76,21 +89,30 @@ export function DocumentView({
       ? `unknown:${anchor.candidates.join(",")}`
       : `${anchor.state}:${anchor.index}`;
 
-  // 先頭から順に足していく。始めから終わりまでを 1 つの effect が持つ。
+  // 最初の描画に対象を含める。ブロックの位置は前にあるものの高さで決まるので、
+  // 対象へ寄せるには結局そこまで描くしかない。先頭から少しずつ足していくと、
+  // 対象が後半にあるほど到達が遅れ、待ち時間がそのぶん伸びる。1 回で描き切る。
+  const opening = Math.min(
+    total,
+    Math.max(FIRST_CHUNK, (spot >= 0 ? spot : (maybe[0] ?? -1)) + 1 + FIRST_CHUNK),
+  );
+
+  // 残りは後から足す。始めから終わりまでを 1 つの effect が持つ。
   // 「足す」と「先頭に戻す」を別々の effect に分けると、片方が進めた直後に
   // もう片方が戻す並びが起こり得て、いつまでも先へ進まない。
   useEffect(() => {
     touchedRef.current = false;
-    setLimit(FIRST_CHUNK);
-    if (total <= FIRST_CHUNK) return;
-    let shownCount = FIRST_CHUNK;
+    settledRef.current = false;
+    setLimit(opening);
+    if (total <= opening) return;
+    let shownCount = opening;
     let frame = requestAnimationFrame(function step() {
       shownCount = Math.min(shownCount + NEXT_CHUNK, total);
       setLimit(shownCount);
       if (shownCount < total) frame = requestAnimationFrame(step);
     });
     return () => cancelAnimationFrame(frame);
-  }, [total, anchorKey]);
+  }, [total, anchorKey, opening]);
 
   useEffect(() => {
     const mark = () => {
@@ -138,7 +160,14 @@ export function DocumentView({
   useEffect(() => {
     if (touchedRef.current) return;
     focus("auto");
-  }, [limit, anchorKey, marked, focus]);
+    // 対象がまだ描かれていないうちに知らせると、移動前に読み込み中の表示が
+    // 消えてしまう。描かれた回で初めて知らせる。対象が無いときは待たせない。
+    if (settledRef.current) return;
+    if (scrollTo < 0 || limit > scrollTo) {
+      settledRef.current = true;
+      onSettled?.();
+    }
+  }, [limit, anchorKey, marked, focus, scrollTo, onSettled]);
 
   // 頼まれたら戻す。自分でスクロールしていても、このときだけは動かす。
   useEffect(() => {
@@ -152,9 +181,6 @@ export function DocumentView({
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
   }
 
-  const spot = anchor.state === "unknown" ? -1 : anchor.index;
-  const maybe = anchor.state === "unknown" ? anchor.candidates : [];
-  const scrollTo = spot >= 0 ? spot : (maybe[focusAt] ?? maybe[0] ?? -1);
   const shown = blocks.slice(0, limit);
 
   return (
@@ -179,7 +205,7 @@ export function DocumentView({
             {isSpot && anchor.state === "rewritten" && (
               <div className="mg-before">
                 <div className="mg-before-label">指摘した時点</div>
-                <div className="mg-prose prose" style={style}>
+                <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
                   <Markdown body={anchor.before} editorial={editorial} />
                 </div>
               </div>
@@ -200,7 +226,7 @@ export function DocumentView({
                 isSpot && marked ? " is-narrow" : ""
               }`}
             >
-              <div className="mg-prose prose" style={style}>
+              <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
                 <Markdown body={block.src} editorial={editorial} />
               </div>
             </div>
@@ -236,7 +262,7 @@ function Gone({
 }) {
   return (
     <div className="mg-spot mg-spot-gone" data-label="ここに在った">
-      <div className="mg-prose prose" style={style}>
+      <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
         <Markdown body={src} editorial={editorial} />
       </div>
     </div>

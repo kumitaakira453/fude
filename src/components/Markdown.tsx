@@ -226,11 +226,9 @@ export const Markdown = memo(function Markdown({
   blockIndex,
   onToggleTask,
   editCell,
-  onEditCell,
   onCellCommit,
   onCellCancel,
   editItem,
-  onEditItem,
   onItemCommit,
   onItemCancel,
 }: {
@@ -241,12 +239,10 @@ export const Markdown = memo(function Markdown({
   onToggleTask?: (blockIndex: number, ordinal: number) => void;
   // テーブルのセル単位編集。編集対象セルは cellStart（ソース内オフセット）で特定。
   editCell?: { cellStart: number; value: string } | null;
-  onEditCell?: (info: CellEditInfo) => void;
   onCellCommit?: (v: string) => void;
   onCellCancel?: () => void;
   // 箇条書きの項目単位編集。編集対象は項目の開始オフセットで特定。
   editItem?: { anchor: number; value: string } | null;
-  onEditItem?: (info: ItemEditInfo) => void;
   onItemCommit?: (v: string) => void;
   onItemCancel?: () => void;
 }) {
@@ -264,12 +260,7 @@ export const Markdown = memo(function Markdown({
     const Tag = tag;
     const start = (node as { position?: { start?: { offset?: number } } })
       ?.position?.start?.offset;
-    if (
-      onEditCell &&
-      editCell &&
-      start !== undefined &&
-      editCell.cellStart === start
-    ) {
+    if (editCell && start !== undefined && editCell.cellStart === start) {
       return (
         <Tag {...rest}>
           <div className="mg-cell mg-cell-editing">
@@ -282,28 +273,10 @@ export const Markdown = memo(function Markdown({
         </Tag>
       );
     }
-    const editable = !!onEditCell && start !== undefined;
     return (
-      <Tag
-        {...rest}
-        onDoubleClick={
-          editable
-            ? (e) => {
-                e.stopPropagation();
-                const cell = e.currentTarget as HTMLTableCellElement;
-                const tr = cell.parentElement as HTMLTableRowElement;
-                const section = tr.parentElement as HTMLTableSectionElement;
-                onEditCell!({
-                  blockIndex: blockIndex ?? 0,
-                  cellStart: start!,
-                  colIndex: cell.cellIndex,
-                  rowKind: section.tagName === "THEAD" ? "head" : "body",
-                  rowIndex: Array.prototype.indexOf.call(section.rows, tr),
-                });
-              }
-            : undefined
-        }
-      >
+      // 選択からこのセルを特定するための目印。値は描画側が持っている
+      // 正確なソースオフセットで、セル編集の照合にそのまま使える。
+      <Tag {...rest} data-mg-cell={start}>
         <div className="mg-cell">{children}</div>
       </Tag>
     );
@@ -383,18 +356,8 @@ export const Markdown = memo(function Markdown({
             );
           }
           return (
-            <li
-              {...rest}
-              onDoubleClick={
-                onEditItem && anchor !== null
-                  ? (e) => {
-                      // ネストの内側を優先し、ブロック全体編集にも渡さない
-                      e.stopPropagation();
-                      onEditItem({ blockIndex: blockIndex ?? 0, anchor });
-                    }
-                  : undefined
-              }
-            >
+            // 選択からこの項目を特定するための目印（ソースオフセット）。
+            <li {...rest} data-mg-item={anchor ?? undefined}>
               {children}
             </li>
           );

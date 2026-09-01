@@ -1,7 +1,15 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import { replaceBlock, splitBlocks } from "../lib/blocks";
+import {
+  isMermaidBlock,
+  itemTextRange,
+  partIndexOf,
+  replaceBlock,
+  splitBlocks,
+  splitRow,
+  unitAt,
+} from "../lib/blocks";
 import { BlockSourceEditor } from "./BlockSourceEditor";
-import { type CellEditInfo, type ItemEditInfo, Markdown } from "./Markdown";
+import { Markdown } from "./Markdown";
 
 // タスク行（- [ ] / 1. [x] など）
 const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
@@ -9,46 +17,6 @@ const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
 // 漸進描画の粒度。最初のひと塊は 1 画面を埋める程度、以降はフレームごとに足す。
 const FIRST_CHUNK = 24;
 const NEXT_CHUNK = 40;
-
-// mermaid コードフェンスのブロックか（インライン編集の対象外にする）
-const isMermaidBlock = (src: string) => /^\s*`{3,}\s*mermaid\b/i.test(src);
-
-// GFM テーブルのブロックか（2 行目が区切り行 `| --- | --- |`）
-const isTableBlock = (src: string) => {
-  const lines = src.split("\n");
-  return (
-    lines.length >= 2 &&
-    /^[\s|:-]+$/.test(lines[1]) &&
-    lines[1].includes("-") &&
-    lines[1].includes("|")
-  );
-};
-
-// 1 行を「エスケープされていない `|`」で分割する（`\|` は区切りにしない）
-function splitRow(line: string): string[] {
-  const parts: string[] = [];
-  let cur = "";
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === "\\" && i + 1 < line.length) {
-      cur += ch + line[i + 1];
-      i++;
-      continue;
-    }
-    if (ch === "|") {
-      parts.push(cur);
-      cur = "";
-      continue;
-    }
-    cur += ch;
-  }
-  parts.push(cur);
-  return parts;
-}
-
-// DOM 列 index を分割済み parts の index に変換（先頭 `|` があれば +1）
-const partIndexOf = (line: string, colIndex: number) =>
-  colIndex + (/^\s*\|/.test(line) ? 1 : 0);
 
 const getCellValue = (src: string, lineIndex: number, colIndex: number) => {
   const line = src.split("\n")[lineIndex] ?? "";
@@ -89,38 +57,28 @@ interface EditingItem {
   value: string;
 }
 
-// 箇条書き項目のマーカー（インデント + - / 1. + 任意の [ ] チェックボックス）
-const ITEM_MARKER_RE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/;
-
-// anchor を含む 1 行から、マーカーを除いた「項目の本文」の範囲を求める。
-// 子リストは別の行なので範囲に入らず、マーカーも保たれる。
-function itemTextRange(
-  src: string,
-  anchor: number,
-): { start: number; end: number } | null {
-  const at = Math.max(0, Math.min(anchor, src.length));
-  const lineStart = src.lastIndexOf("\n", at - 1) + 1;
-  const nl = src.indexOf("\n", lineStart);
-  const lineEnd = nl === -1 ? src.length : nl;
-  const line = src.slice(lineStart, lineEnd);
-  const marker = ITEM_MARKER_RE.exec(line);
-  if (!marker) return null;
-  let start = lineStart + marker[0].length;
-  let end = lineEnd;
-  while (end > start && /\s/.test(src[end - 1])) end--;
-  return start < end ? { start, end } : null;
-}
-
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
 // 生ソース編集にする。編集対象以外は一切動かない（目線を動かさない）。
 export function EditableBody({
   body,
   editorial,
   onSaveBody,
+  editRequest,
+  onDeleted,
 }: {
   body: string;
   editorial: boolean;
   onSaveBody: (newBody: string) => void;
+  // 外から編集を始める頼み。選択メニューの「編集する」が立てる。
+  // nonce が変わるたびに読み直すので、同じ場所を続けて頼んでも効く。
+  editRequest?: {
+    blockIndex: number;
+    cellStart?: number;
+    itemAnchor?: number;
+    nonce: number;
+  } | null;
+  // 削除したときに、消す前の本文を渡す（取り消しに使う）。
+  onDeleted?: (previousBody: string) => void;
 }) {
   const blocks = useMemo(() => splitBlocks(body), [body]);
 
@@ -142,36 +100,16 @@ export function EditableBody({
   }, [limit, blocks.length]);
   const shown = limit >= blocks.length ? blocks : blocks.slice(0, limit);
   // 編集対象ブロックと、開始時のダブルクリック座標（カーソル配置に使う）
+  // 座標はカーソルの初期位置に使う。選択メニューから開いたときは持たない。
   const [editing, setEditing] = useState<{
     index: number;
-    x: number;
-    y: number;
+    x: number | null;
+    y: number | null;
   } | null>(null);
   // 編集中のテーブルセル（ブロック全体ではなく 1 セルだけ）
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   // 編集中の箇条書き項目（リスト全体ではなく 1 項目の本文だけ）
   const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
-
-  const handleEditItem = useCallback(
-    (info: ItemEditInfo) => {
-      const block = blocks[info.blockIndex];
-      if (!block) return;
-      const range = itemTextRange(block.src, info.anchor);
-      // 行からマーカーが読めない（継続行など）場合は項目編集にせず、
-      // ブロック全体編集へのフォールバックに任せる。
-      if (!range) return;
-      setEditing(null);
-      setEditingCell(null);
-      setEditingItem({
-        blockIndex: info.blockIndex,
-        anchor: info.anchor,
-        start: range.start,
-        end: range.end,
-        value: block.src.slice(range.start, range.end),
-      });
-    },
-    [blocks],
-  );
 
   const commitItem = useCallback(
     (v: string) => {
@@ -189,25 +127,6 @@ export function EditableBody({
   );
 
   const cancelItem = useCallback(() => setEditingItem(null), []);
-
-  // ダブルクリックされたセルの位置から編集対象を確定する
-  const handleEditCell = useCallback(
-    (info: CellEditInfo) => {
-      const block = blocks[info.blockIndex];
-      if (!block) return;
-      const lineIndex = info.rowKind === "head" ? 0 : 2 + info.rowIndex;
-      setEditing(null);
-      setEditingItem(null);
-      setEditingCell({
-        blockIndex: info.blockIndex,
-        cellStart: info.cellStart,
-        lineIndex,
-        colIndex: info.colIndex,
-        value: getCellValue(block.src, lineIndex, info.colIndex),
-      });
-    },
-    [blocks],
-  );
 
   const commitCell = useCallback(
     (v: string) => {
@@ -264,6 +183,67 @@ export function EditableBody({
     [blocks, body, onSaveBody],
   );
 
+  // 外からの頼みを受けて編集を始める。どの単位で開くかは選択された位置から
+  // 決める（表ならセル、箇条書きなら項目、それ以外はブロック全体）。
+  // mermaid は生ソースを編集させない（図が壊れる）。
+  useEffect(() => {
+    if (!editRequest) return;
+    const block = blocks[editRequest.blockIndex];
+    if (!block || isMermaidBlock(block.src)) return;
+    setEditing(null);
+    setEditingCell(null);
+    setEditingItem(null);
+
+    // 表のセル。目印は描画側が持っているソースオフセットなので、行と列は
+    // そこから数え直せる。画面に出ている文字の位置から数えると、表では
+    // 区切りがソースにしか無いぶんだけずれる。
+    if (editRequest.cellStart !== undefined) {
+      const unit = unitAt(block.src, editRequest.cellStart);
+      if (unit.kind === "cell") {
+        setEditingCell({
+          blockIndex: block.index,
+          cellStart: editRequest.cellStart,
+          lineIndex: unit.lineIndex,
+          colIndex: unit.colIndex,
+          value: getCellValue(block.src, unit.lineIndex, unit.colIndex),
+        });
+        return;
+      }
+    }
+
+    // 箇条書きの項目。マーカーが読めない行（継続行）はブロック全体に落ちる。
+    if (editRequest.itemAnchor !== undefined) {
+      const range = itemTextRange(block.src, editRequest.itemAnchor);
+      if (range) {
+        setEditingItem({
+          blockIndex: block.index,
+          anchor: editRequest.itemAnchor,
+          start: range.start,
+          end: range.end,
+          value: block.src.slice(range.start, range.end),
+        });
+        return;
+      }
+    }
+
+    setEditing({ index: block.index, x: null, y: null });
+    // nonce だけを見る。同じ場所を続けて頼んでも開き直せる。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequest?.nonce]);
+
+  // ブロックごと削除する。消す前の本文を渡して、取り消せるようにする。
+  const remove = useCallback(
+    (index: number) => {
+      setEditing(null);
+      const block = blocks[index];
+      if (!block) return;
+      const previous = body;
+      onSaveBody(replaceBlock(body, block, ""));
+      onDeleted?.(previous);
+    },
+    [blocks, body, onSaveBody, onDeleted],
+  );
+
   // 内容ベースの安定 key。ブロックの追加/削除で index がずれても、内容が
   // 変わらないブロックは同じ key を保ち再マウントしない（削除時のちらつき防止）。
   const seen = new Map<string, number>();
@@ -277,7 +257,6 @@ export function EditableBody({
     <>
       {shown.map((b) => {
         const key = keyOf(b.src);
-        const isTable = isTableBlock(b.src);
         return editing?.index === b.index ? (
           <BlockSourceEditor
             key={key}
@@ -286,6 +265,7 @@ export function EditableBody({
             clickY={editing.y}
             onCommit={(s) => commit(b.index, s)}
             onCancel={() => setEditing(null)}
+            onDelete={() => remove(b.index)}
           />
         ) : (
           // display:contents で余白（prose の縦リズム）を崩さずに
@@ -296,23 +276,13 @@ export function EditableBody({
             // 選択範囲からどのブロックかを辿るための目印。display:contents でも
             // 属性は残るので、キーボードでの選択でもブロックを特定できる。
             data-mg-block={b.index}
-            onDoubleClick={
-              // mermaid・テーブルはブロック全体編集の対象外（テーブルはセル単位）。
-              // 箇条書きは項目単位で編集するが、項目の範囲が取れない場合は li 側が
-              // イベントを止めないので、ここに落ちてリスト全体の編集になる。
-              isMermaidBlock(b.src) || isTable
-                ? undefined
-                : (e) =>
-                    setEditing({ index: b.index, x: e.clientX, y: e.clientY })
-            }
           >
             <Markdown
               body={b.src}
               editorial={editorial}
               blockIndex={b.index}
               onToggleTask={toggleTask}
-              onEditCell={isTable ? handleEditCell : undefined}
-              editCell={
+                editCell={
                 editingCell?.blockIndex === b.index
                   ? {
                       cellStart: editingCell.cellStart,
@@ -326,8 +296,7 @@ export function EditableBody({
               onCellCancel={
                 editingCell?.blockIndex === b.index ? cancelCell : undefined
               }
-              onEditItem={handleEditItem}
-              editItem={
+                editItem={
                 editingItem?.blockIndex === b.index
                   ? { anchor: editingItem.anchor, value: editingItem.value }
                   : undefined

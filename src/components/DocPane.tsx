@@ -6,6 +6,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { closePane } from "../lib/ui";
+import { notify } from "../state/toast";
 import {
   activePath,
   activePaneIdAtom,
@@ -74,6 +75,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
+  // 選択メニューの「編集する」から立てる編集の頼み。
+  const [editRequest, setEditRequest] = useState<{
+    blockIndex: number;
+    // 表のセル・箇条書きの項目を選んでいるときは、その要素のソースオフセット。
+    // どちらでもなければ両方 undefined で、ブロック全体の編集になる。
+    cellStart?: number;
+    itemAnchor?: number;
+    nonce: number;
+  } | null>(null);
   const [editingFm, setEditingFm] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -177,6 +187,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       void saveFile(p, prefix + newBody);
     },
     [saveFile],
+  );
+
+  // 削除の取り消し。消す前の本文を受け取って書き戻す。
+  const undoDelete = useCallback(
+    (previousBody: string) => {
+      notify(store, "ブロックを削除しました", "right", {
+        label: "元に戻す",
+        run: () => saveBody(previousBody),
+      });
+    },
+    [store, saveBody],
   );
 
   // フロントマター（本文の前にある --- ブロック）の生ソース
@@ -423,6 +444,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       body={body}
                       editorial={editorial}
                       onSaveBody={saveBody}
+                      editRequest={editRequest}
+                      onDeleted={undoDelete}
                     />
                   </markdownContext.Provider>
                 </article>
@@ -452,24 +475,48 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
 
         {!editing && review.selection && !review.draft && (
-          <button
-            type="button"
-            // mousedown で処理する。click を待つと、押した時点でブラウザが選択を
-            // 解除し selectionchange でこのボタン自身が消えるため mouseup が
-            // どこにも届かない。preventDefault で選択の解除も止める。
-            onMouseDown={(e) => {
-              e.preventDefault();
-              review.startDraft();
-            }}
+          // 選択したときの操作。mousedown で処理する。click を待つと、押した時点で
+          // ブラウザが選択を解除し selectionchange でこのメニュー自身が消えるため
+          // mouseup がどこにも届かない。preventDefault で選択の解除も止める。
+          <div
             style={{
               top: review.selection.rect.bottom + 6,
               left: review.selection.rect.left,
             }}
-            className="fixed z-30 flex items-center gap-1 rounded-lg border border-[var(--mg-border)] bg-[var(--mg-panel)] px-2 py-1 text-[12px] font-medium shadow-lg transition hover:border-[var(--mg-accent)] hover:text-[var(--mg-accent)]"
+            className="mg-sel-menu"
           >
-            <Icon name="add_comment" size={14} />
-            指摘する
-          </button>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                review.startDraft();
+              }}
+            >
+              <Icon name="add_comment" size={14} />
+              指摘する
+            </button>
+            <span className="mg-sel-menu-sep" />
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const sel = review.selection;
+                if (!sel) return;
+                setEditRequest((r) => ({
+                  blockIndex: sel.blockIndex,
+                  cellStart: sel.cellStart,
+                  itemAnchor: sel.itemAnchor,
+                  nonce: (r?.nonce ?? 0) + 1,
+                }));
+                // 選択を解いてメニューを閉じる。useReview は selectionchange を
+                // 見ているので、これで selection が null になる。
+                window.getSelection()?.removeAllRanges();
+              }}
+            >
+              <Icon name="edit" size={14} />
+              編集する
+            </button>
+          </div>
         )}
 
         {!editing && review.draft && (

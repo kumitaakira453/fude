@@ -8,10 +8,17 @@ type Store = ReturnType<typeof getDefaultStore>;
 // 重なるので、その画面から出す知らせは中央に置く。
 export type ToastPlace = "center" | "right";
 
+// 取り消しのように、知らせから 1 回だけ実行させたい操作。
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface Toast {
   id: number;
   text: string;
   place: ToastPlace;
+  action?: ToastAction;
 }
 
 export const toastAtom = atom<Toast | null>(null);
@@ -23,7 +30,8 @@ export function notify(
   store: Store,
   text: string,
   place: ToastPlace = "center",
+  action?: ToastAction,
 ): void {
   seq += 1;
-  store.set(toastAtom, { id: seq, text, place });
+  store.set(toastAtom, { id: seq, text, place, action });
 }

@@ -1321,6 +1321,71 @@ svg[id^="mmd-"] foreignObject p {
     transform: translate(-50%, 0);
   }
 }
+/* 選択したときに出る操作。指摘するか、その場を編集するかを選ぶ。 */
+.mg-sel-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  background: var(--mg-panel);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  font-weight: 500;
+}
+.mg-sel-menu > button {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.3rem 0.6rem;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.mg-sel-menu > button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-accent);
+}
+.mg-sel-menu-sep {
+  width: 1px;
+  background: var(--mg-border);
+}
+
+/* 操作が付いた知らせだけ押せるようにする。素の知らせは押す対象を持たない。 */
+.mg-toast.has-action {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding-right: 0.5rem;
+  pointer-events: auto;
+}
+.mg-toast-action {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--mg-accent);
+  transition: background 0.12s;
+}
+.mg-toast-action:hover {
+  background: var(--mg-hover);
+}
+
+/* ブロック編集の削除。確定・取消のヒントと同じ帯の右端に置く。 */
+.mg-block-delete {
+  padding: 0 0.35rem;
+  border-radius: 0.3rem;
+  color: var(--mg-muted);
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.mg-block-delete:hover {
+  background: var(--mg-hover);
+  color: var(--mg-danger, #e5484d);
+}
+
 /* 中央ペインの上に操作ボタンが無い画面では右下に置く。 */
 .mg-toast.is-right {
   left: auto;

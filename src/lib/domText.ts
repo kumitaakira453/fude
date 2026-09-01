@@ -27,6 +27,11 @@ export interface BlockSelection {
   end: number; // ブロック内の文字位置（終端・排他）
   text: string;
   rect: DOMRect;
+  // 表のセル・箇条書きの項目の中を選んでいるときの、その要素のソースオフセット。
+  // start は画面に出ている文字の数え方なので、表では並びがソースと合わない。
+  // 描画側が持っている正確な値を目印として読む。
+  cellStart?: number;
+  itemAnchor?: number;
 }
 
 export function blockIndexOf(el: HTMLElement): number | null {
@@ -114,5 +119,29 @@ export function readSelection(root: HTMLElement): BlockSelection | null {
   const text = bt.plain.slice(start, end);
   if (!text.trim()) return null;
 
-  return { blockIndex, start, end, text, rect: range.getBoundingClientRect() };
+  const cellStart = numberFrom(startEl, "[data-mg-cell]", "mgCell");
+  const itemAnchor = numberFrom(startEl, "[data-mg-item]", "mgItem");
+
+  return {
+    blockIndex,
+    start,
+    end,
+    text,
+    rect: range.getBoundingClientRect(),
+    ...(cellStart === null ? {} : { cellStart }),
+    ...(itemAnchor === null ? {} : { itemAnchor }),
+  };
+}
+
+// 選択の起点から最も近い目印を辿って数値を読む。
+function numberFrom(
+  from: Element | null | undefined,
+  selector: string,
+  key: string,
+): number | null {
+  const el = from?.closest<HTMLElement>(selector);
+  const raw = el?.dataset[key];
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
