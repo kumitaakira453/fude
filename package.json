@@ -1,7 +1,7 @@
 {
   "name": "mdglow",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.4.0",
   "type": "module",
   "description": "ブラウザだけで動く、ローカル Markdown フォルダのビューア。数式・コード・図・全文検索・リアルタイム反映。",
   "scripts": {
