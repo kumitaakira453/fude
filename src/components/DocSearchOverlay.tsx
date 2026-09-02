@@ -7,6 +7,7 @@ import {
   highlightAtom,
   searchActiveHitAtom,
 } from "../state/atoms";
+import { clipRects, scrollBoxOf } from "../lib/domText";
 import { buildMatcher } from "../lib/search";
 import { Icon } from "./Icon";
 
@@ -43,6 +44,44 @@ export function DocSearchOverlay({
   const [open, setOpen] = useAtom(docFindOpenAtom);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 見つけた範囲を測って矩形にする。探し直しは伴わないので、枠の中を
+  // スクロールしただけのときはこちらだけを呼ぶ。
+  const measure = useCallback(
+    (ranges: Range[]) => {
+      if (!content) return;
+      const base = content.getBoundingClientRect();
+      // ピル感を出すため各矩形を少しだけ外側に広げる
+      const PX = 3;
+      const PY = 2;
+      setMatches(
+        ranges.map((r) => {
+          const box = scrollBoxOf(r.startContainer);
+          const padded = Array.from(r.getClientRects()).map(
+            (rc) =>
+              new DOMRect(
+                rc.left - PX,
+                rc.top - PY,
+                rc.width + PX * 2,
+                rc.height + PY * 2,
+              ),
+          );
+          return {
+            rects: clipRects(
+              padded,
+              box ? box.getBoundingClientRect() : null,
+            ).map((rc) => ({
+              top: rc.top - base.top,
+              left: rc.left - base.left,
+              width: rc.width,
+              height: rc.height,
+            })),
+          };
+        }),
+      );
+    },
+    [content],
+  );
 
   const compute = useCallback(() => {
     if (!content || !isActive || !highlight?.term) {
@@ -83,21 +122,9 @@ export function DocSearchOverlay({
         if (m.index === re.lastIndex) re.lastIndex++;
       }
     }
-    const base = content.getBoundingClientRect();
-    // ピル感を出すため各矩形を少しだけ外側に広げる
-    const PX = 3;
-    const PY = 2;
-    const next: Match[] = ranges.map((r) => ({
-      rects: Array.from(r.getClientRects()).map((rc) => ({
-        top: rc.top - base.top - PY,
-        left: rc.left - base.left - PX,
-        width: rc.width + PX * 2,
-        height: rc.height + PY * 2,
-      })),
-    }));
     rangesRef.current = ranges;
-    setMatches(next);
-  }, [content, isActive, highlight]);
+    measure(ranges);
+  }, [content, isActive, highlight, measure]);
 
   // 新しい検索語（nonce 変化）で先頭ヒットへ
   useLayoutEffect(() => {
@@ -116,12 +143,26 @@ export function DocSearchOverlay({
     const ro = new ResizeObserver(schedule);
     ro.observe(content);
     window.addEventListener("resize", schedule);
+    // 表やコードは枠の中で横にスクロールする。印は文字の上に重ねているだけで
+    // 一緒には動かないので、枠が動いたら測り直す。scroll は上がって来ないが、
+    // 捕まえる向き（capture）なら親でも受け取れる。
+    let scrollRaf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(scrollRaf);
+      scrollRaf = requestAnimationFrame(() => measure(rangesRef.current));
+    };
+    content.addEventListener("scroll", onScroll, {
+      capture: true,
+      passive: true,
+    });
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(scrollRaf);
       ro.disconnect();
       window.removeEventListener("resize", schedule);
+      content.removeEventListener("scroll", onScroll, { capture: true });
     };
-  }, [compute, content, docKey]);
+  }, [compute, measure, content, docKey]);
 
   // 検索結果リストのナビゲーションから「このファイルの N 番目のヒットへ」の指定が来たら、
   // 描画済みヒットの該当インデックスをアクティブにする（範囲外はクランプ）。

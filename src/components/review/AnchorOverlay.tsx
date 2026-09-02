@@ -8,7 +8,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { headOf, type Resolution } from "../../lib/blockDiff";
-import { blockRect, readBlockText, rangeAt } from "../../lib/domText";
+import {
+  blockRect,
+  clipRects,
+  rangeAt,
+  readBlockText,
+  scrollBoxOf,
+} from "../../lib/domText";
 import { findPlain } from "../../lib/projection";
 import { answeredByAgent, type AnchorHit, type ReviewThread } from "../../lib/review";
 import { Icon } from "../Icon";
@@ -114,22 +120,6 @@ function cellOf(range: Range): Element | null {
   return full.length > 0 && text === full ? start : null;
 }
 
-// 横に溢れる表は枠の中でスクロールする。印も見えている範囲で切る。
-function clipTo(rects: DOMRect[], clip: DOMRect | null): DOMRect[] {
-  if (!clip) return rects;
-  const out: DOMRect[] = [];
-  for (const rc of rects) {
-    const left = Math.max(rc.left, clip.left);
-    const right = Math.min(rc.right, clip.right);
-    const top = Math.max(rc.top, clip.top);
-    const bottom = Math.min(rc.bottom, clip.bottom);
-    if (right - left > 1 && bottom - top > 1) {
-      out.push(new DOMRect(left, top, right - left, bottom - top));
-    }
-  }
-  return out;
-}
-
 export function AnchorOverlay({
   content,
   threads,
@@ -210,17 +200,21 @@ export function AnchorOverlay({
 
       const wrap = el.querySelector(".mg-table-wrap");
       const clip = wrap ? wrap.getBoundingClientRect() : null;
+      // 箇所の印は、その文字が入っている枠で切る（表だけでなくコードや数式も
+      // 枠の中で横にスクロールする）。
+      const inBox = inner ? scrollBoxOf(inner.startContainer) : null;
+      const spotClip = inBox ? inBox.getBoundingClientRect() : clip;
       // ブロック全体の印は箱で測る。文字の範囲だと、コールアウトのように
       // 内側に余白を持つブロックで枠より内側に縮む。
       const boxed = blockRect(el) ?? whole.getBoundingClientRect();
-      const areas = clipTo([boxed], clip);
+      const areas = clipRects([boxed], clip);
       const cell = inner ? cellOf(inner) : null;
       const spots = inner
-        ? clipTo(
+        ? clipRects(
             cell
               ? [cell.getBoundingClientRect()]
               : mergeRects(Array.from(inner.getClientRects())),
-            clip,
+            spotClip,
           )
         : [];
       // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
@@ -283,7 +277,8 @@ export function AnchorOverlay({
     const clip = wrap ? wrap.getBoundingClientRect() : null;
     const cell = range ? cellOf(range) : null;
     const boxed = draft.whole ? blockRect(el) : null;
-    const rects = clipTo(
+    const inBox = range ? scrollBoxOf(range.startContainer) : null;
+    const rects = clipRects(
       boxed
         ? [boxed]
         : cell
@@ -291,7 +286,7 @@ export function AnchorOverlay({
           : range
             ? mergeRects(Array.from(range.getClientRects()))
             : [],
-      clip,
+      boxed ? clip : inBox ? inBox.getBoundingClientRect() : clip,
     );
     setPending(
       rects.map((rc) => ({
@@ -317,11 +312,19 @@ export function AnchorOverlay({
     const mo = new MutationObserver(schedule);
     mo.observe(content, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
+    // 表やコードは枠の中で横にスクロールする。印は重ねているだけなので、
+    // 枠が動いたら測り直す。scroll は上がって来ないが、捕まえる向き
+    // （capture）なら親でも受け取れる。
+    content.addEventListener("scroll", schedule, {
+      capture: true,
+      passive: true,
+    });
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       mo.disconnect();
       window.removeEventListener("resize", schedule);
+      content.removeEventListener("scroll", schedule, { capture: true });
     };
   }, [compute, content, contentKey]);
 

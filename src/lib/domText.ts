@@ -67,6 +67,32 @@ export function blockRect(el: Element): DOMRect | null {
   return r.height > 0 ? r : null;
 }
 
+// 本文の中で、枠の内側だけをスクロールする入れ物（横に溢れる表・コード・数式）。
+const SCROLL_BOX = ".mg-table-wrap, pre, .katex-display";
+
+// その文字が入っているスクロールする枠。重ねる印はこの枠で切らないと、
+// 横にスクロールして隠れた文字の分まで枠の外へ描かれる。
+export function scrollBoxOf(node: Node | null): HTMLElement | null {
+  const el = node instanceof Element ? node : (node?.parentElement ?? null);
+  return el?.closest<HTMLElement>(SCROLL_BOX) ?? null;
+}
+
+// 重ねる印を、スクロールする枠の見えている範囲で切る。
+export function clipRects(rects: DOMRect[], clip: DOMRect | null): DOMRect[] {
+  if (!clip) return rects;
+  const out: DOMRect[] = [];
+  for (const rc of rects) {
+    const left = Math.max(rc.left, clip.left);
+    const right = Math.min(rc.right, clip.right);
+    const top = Math.max(rc.top, clip.top);
+    const bottom = Math.min(rc.bottom, clip.bottom);
+    if (right - left > 1 && bottom - top > 1) {
+      out.push(new DOMRect(left, top, right - left, bottom - top));
+    }
+  }
+  return out;
+}
+
 // 画面の上端に一番近いブロックを二分探索で探す。全部を測ると重いので、
 // 1 つ目の子要素の矩形（並びは必ず上から下）で当たりを付ける。
 export function topmostBlock(
