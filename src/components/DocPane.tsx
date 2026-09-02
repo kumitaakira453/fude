@@ -6,7 +6,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
 import { selectTextIn } from "../lib/domText";
 import { parseFrontmatter } from "../lib/frontmatter";
-import { closePane } from "../lib/ui";
+import { closePane, inEditable } from "../lib/ui";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
   activePath,
@@ -14,7 +14,10 @@ import {
   contentCacheAtom,
   editorialAtom,
   fontAtom,
+  paletteOpenAtom,
   readingWidthAtom,
+  settingsOpenAtom,
+  shortcutsOpenAtom,
   tocOpenAtom,
   watchModeAtom,
   type Pane,
@@ -45,6 +48,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const tocOpen = useAtomValue(tocOpenAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
+  // 重ねた画面が出ているか。本文向けのキー操作をそこへ効かせないための判定。
+  const settingsOpen = useAtomValue(settingsOpenAtom);
+  const shortcutsOpen = useAtomValue(shortcutsOpenAtom);
+  const paletteOpen = useAtomValue(paletteOpenAtom);
+  const overlayOpen = settingsOpen || shortcutsOpen || paletteOpen;
   const store = useStore();
   const {
     absOf,
@@ -76,6 +84,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
   // 選択メニューの「編集する」から立てる編集の頼み。
   const [editRequest, setEditRequest] = useState<{
+    // どのファイルへの頼みか。ファイルを切り替えると本文の中身も番号も
+    // 変わるので、別のファイルに残った頼みは効かせない。
+    path: string;
     blockIndex: number;
     // 表のセル・箇条書きの項目を選んでいるときは、その要素のソースオフセット。
     // どちらでもなければ両方 undefined で、ブロック全体の編集になる。
@@ -231,29 +242,76 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     reviewRef.current?.startDraft();
   }, [content]);
 
+  // 選択したところを消す頼み。ソースのどこを切るかは EditableBody が出す。
+  const [deleteRequest, setDeleteRequest] = useState<{
+    path: string;
+    blockIndex: number;
+    start: number;
+    text: string;
+    cellStart?: number;
+    itemAnchor?: number;
+    nonce: number;
+  } | null>(null);
+
+  const deleteSelection = useCallback(() => {
+    const sel = reviewRef.current?.selection;
+    const p = pathRef.current;
+    if (!sel || !p) return;
+    setDeleteRequest((r) => ({
+      path: p,
+      blockIndex: sel.blockIndex,
+      start: sel.start,
+      text: sel.text,
+      cellStart: sel.cellStart,
+      itemAnchor: sel.itemAnchor,
+      nonce: (r?.nonce ?? 0) + 1,
+    }));
+    window.getSelection()?.removeAllRanges();
+    reviewRef.current?.clearSelection();
+  }, []);
+
   // 選択したところに対する 2 つの操作。メニューとキーの両方から呼ぶ。
   const startEdit = useCallback(() => {
     const sel = reviewRef.current?.selection;
-    if (!sel) return;
+    const p = pathRef.current;
+    if (!sel || !p) return;
     setEditRequest((r) => ({
+      path: p,
       blockIndex: sel.blockIndex,
       cellStart: sel.cellStart,
       itemAnchor: sel.itemAnchor,
       nonce: (r?.nonce ?? 0) + 1,
     }));
-    // 選択を解いてメニューを閉じる。useReview は selectionchange を
-    // 見ているので、これで selection が null になる。
+    // 選択を解いてメニューを閉じる。selectionchange は 1 フレーム遅れて
+    // 届くので、控えの方も同時に落として待たせない。
     window.getSelection()?.removeAllRanges();
+    reviewRef.current?.clearSelection();
   }, []);
 
   // 選択したところへのキー操作。メニューを出さずに同じことができる。
   useEffect(() => {
     if (!isActive) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const current = reviewRef.current;
       const sel = current?.selection;
       if (!current || !sel || current.draft) return;
+      // 選択したところを消す。入力欄の中の削除はそのまま入力欄に任せる。
+      // ⌫ の既定動作（WKWebView の「戻る」）は useHotkeys が止めている。
+      // 重ねた画面（設定・一覧・パレット）が出ているあいだは、本文に残った
+      // 選択へ効かせない。
+      if (
+        (e.key === "Backspace" || e.key === "Delete") &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !inEditable(e.target) &&
+        !overlayOpen
+      ) {
+        e.preventDefault();
+        deleteSelection();
+        return;
+      }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "i" && !e.shiftKey) {
         e.preventDefault();
@@ -270,15 +328,26 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isActive, startEdit, commentOnCell, commentOnBlock]);
+  }, [
+    isActive,
+    startEdit,
+    commentOnCell,
+    commentOnBlock,
+    deleteSelection,
+    overlayOpen,
+  ]);
 
-  // 削除の取り消し。消す前の本文を受け取って書き戻す。
+  // 削除の知らせ。消す前の本文を受け取ったときだけ取り消しを出す。
   const undoDelete = useCallback(
-    (previousBody: string) => {
-      notify(store, "ブロックを削除しました", "right", {
-        label: "元に戻す",
-        run: () => saveBody(previousBody),
-      });
+    (previousBody: string | null, text: string) => {
+      notify(
+        store,
+        text,
+        "right",
+        previousBody === null
+          ? undefined
+          : { label: "元に戻す", run: () => saveBody(previousBody) },
+      );
     },
     [store, saveBody],
   );
@@ -503,6 +572,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       editorial={editorial}
                       onSaveBody={saveBody}
                       editRequest={editRequest}
+                      deleteRequest={deleteRequest}
                       onDeleted={undoDelete}
                       content={content}
                       scroller={scroller}
@@ -592,6 +662,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             >
               <Icon name="edit" size={14} />
               編集する
+            </button>
+            <span className="mg-sel-menu-sep" />
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                deleteSelection();
+              }}
+            >
+              <Icon name="backspace" size={14} />
+              削除
             </button>
           </div>
         )}

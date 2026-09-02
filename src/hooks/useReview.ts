@@ -176,6 +176,10 @@ export function useReview({
 
   const close = useCallback(() => setDraft(null), []);
 
+  // 選択の控えを即座に落とす。selectionchange は 1 フレーム遅れて届くので、
+  // 選択を解いた操作の側からも落として、メニューを残さない。
+  const clearSelection = useCallback(() => setSelection(null), []);
+
   // 本文に付いている印を押したら、その指摘をレビュー画面で開く。
   const inspect = useCallback(
     (hit: AnchorHit) => {
@@ -274,5 +278,6 @@ export function useReview({
     inspect,
     submit,
     close,
+    clearSelection,
   };
 }

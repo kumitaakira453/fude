@@ -381,3 +381,17 @@ export function reviveLayout(
 }
 
 export type { SplitNode };
+
+// フォーカスが編集可能な要素（入力欄・CodeMirror 等）にあるか。
+// 本文向けのキー操作を、入力中に横取りさせないための判定。
+export function inEditable(target: EventTarget | null): boolean {
+  const el = (target as HTMLElement | null) ?? null;
+  const ae = document.activeElement as HTMLElement | null;
+  const editable = (n: HTMLElement | null) =>
+    !!n &&
+    (n.tagName === "INPUT" ||
+      n.tagName === "TEXTAREA" ||
+      n.isContentEditable ||
+      !!n.closest?.(".cm-editor"));
+  return editable(el) || editable(ae);
+}

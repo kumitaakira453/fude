@@ -1,21 +1,8 @@
 import { useStore } from "jotai";
 import { useEffect } from "react";
-import { closeTab, reopenTab, splitPane } from "../lib/ui";
+import { closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
 import { reviewScreenAtom } from "../state/review";
-
-// フォーカスが編集可能な要素（入力欄・CodeMirror 等）にあるか
-function inEditable(target: EventTarget | null): boolean {
-  const el = (target as HTMLElement | null) ?? null;
-  const ae = document.activeElement as HTMLElement | null;
-  const editable = (n: HTMLElement | null) =>
-    !!n &&
-    (n.tagName === "INPUT" ||
-      n.tagName === "TEXTAREA" ||
-      n.isContentEditable ||
-      !!n.closest?.(".cm-editor"));
-  return editable(el) || editable(ae);
-}
 
 // 入力欄以外で選択中のテキストを検索語プリフィル用に取得する
 function selectionText(): string {

@@ -1,6 +1,12 @@
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import {
+  buildProjection,
+  findPlain,
+  findPlainLoose,
+  plainToSrcRange,
+} from "./projection";
 
 // 本文をトップレベルのブロック（段落・見出し・リスト・表・コードフェンス等）に
 // 分割する。編集は「クリックした極小のブロックだけ」を生ソース化するために使う。
@@ -696,4 +702,182 @@ function cellAt(src: string, at: number): Unit | null {
   const pipe = pipes[part - 1];
   const cellStart = lineStart + (pipe === undefined ? 0 : pipe);
   return { kind: "cell", lineIndex, colIndex, cellStart };
+}
+
+// 行の中のセルの文字。前後の余白は落とす。
+export function cellValueAt(
+  src: string,
+  lineIndex: number,
+  colIndex: number,
+): string {
+  const line = src.split("\n")[lineIndex] ?? "";
+  return (splitRow(line)[partIndexOf(line, colIndex)] ?? "").trim();
+}
+
+// セルの文字を差し替える。区切りの内側に余白を残して読みやすさを保つ。
+export function setCellValue(
+  src: string,
+  lineIndex: number,
+  colIndex: number,
+  value: string,
+): string {
+  const lines = src.split("\n");
+  const line = lines[lineIndex];
+  if (line === undefined) return src;
+  const parts = splitRow(line);
+  const idx = partIndexOf(line, colIndex);
+  if (idx < 0 || idx >= parts.length) return src;
+  const t = value.trim();
+  parts[idx] = t ? ` ${t} ` : "  ";
+  lines[lineIndex] = parts.join("|");
+  return lines.join("\n");
+}
+
+// ---- 画面で選択した箇所を消す ----
+//
+// 画面に出ている文字とソースの対応表（projection）で位置を出し、ソースから
+// 取り除く。単位の中身が残らなくなったら、器（`## ` や空のコールアウト）は
+// 残さずその単位ごと取り除く。
+
+// 中身を丸ごと覆ったときに一緒に落とす囲み。長い順に見る（`**` を `*` として
+// 読むと片方だけ残る）。
+const WRAPS = ["***", "**", "__", "~~", "*", "_", "`"];
+
+// 行の書き出しの記号だけ（見出し・箇条書き・引用）。
+const SYNTAX_ONLY = /^[ \t]*(?:#{1,6}|[-*+]|\d+[.)]|>)?[ \t]*$/;
+
+// src の [start, end) を取り除く。囲みで挟まれているあいだは外へ広げる。
+function cutRange(src: string, start: number, end: number): string {
+  let from = start;
+  let to = end;
+  for (;;) {
+    const wrap = WRAPS.find(
+      (w) =>
+        from >= w.length &&
+        src.startsWith(w, from - w.length) &&
+        src.startsWith(w, to),
+    );
+    if (wrap) {
+      from -= wrap.length;
+      to += wrap.length;
+      continue;
+    }
+    // リンクの文字を丸ごと覆っていたら宛先ごと落とす（`[](url)` を残さない）。
+    if (from > 0 && src[from - 1] === "[" && src.startsWith("](", to)) {
+      const close = src.indexOf(")", to + 2);
+      if (close > to) {
+        from -= 1;
+        to = close + 1;
+        if (from > 0 && src[from - 1] === "!") from -= 1;
+        continue;
+      }
+    }
+    break;
+  }
+  // 両側を空白で挟まれていたら片方も落とす（二重の空きを残さない）。
+  if (from > 0 && /[ \t]/.test(src[from - 1]) && /[ \t]/.test(src[to] ?? "")) {
+    to += 1;
+  }
+  // 行末に取り残される空白も落とす。ただし記号だけが残る行では、記号との
+  // 間の空白を保つ（`## ` を `##` にすると見出しでなくなる）。
+  if (to >= src.length || src[to] === "\n") {
+    const lineStart = src.lastIndexOf("\n", from - 1) + 1;
+    let trimmed = from;
+    while (trimmed > lineStart && /[ \t]/.test(src[trimmed - 1])) trimmed--;
+    if (!SYNTAX_ONLY.test(src.slice(lineStart, trimmed))) from = trimmed;
+  }
+  return src.slice(0, from) + src.slice(to);
+}
+
+// hint に近い出現を選ぶ。同じ文字列が複数あっても選んだ場所の方を拾う。
+function nearestIndexOf(src: string, text: string, hint: number): number {
+  let best = -1;
+  for (let at = src.indexOf(text); at >= 0; at = src.indexOf(text, at + 1)) {
+    if (best < 0 || Math.abs(at - hint) < Math.abs(best - hint)) best = at;
+  }
+  return best;
+}
+
+// 画面に出ている文字列を、ソースから 1 か所取り除く。
+function cutText(src: string, text: string, hint: number): string | null {
+  const p = buildProjection(src);
+  if (p.exact) {
+    const at = findPlain(p.plain, text, hint) ?? findPlainLoose(p.plain, text);
+    if (at) {
+      const range = plainToSrcRange(p, at.start, at.end);
+      return cutRange(src, range.start, range.end);
+    }
+  }
+  // 対応表に文字が出ない塊（生 HTML など）は、ソースを直に探す。
+  const raw = nearestIndexOf(src, text, hint);
+  return raw < 0 ? null : cutRange(src, raw, raw + text.length);
+}
+
+// 文字が残っているか。生 HTML の塊は対応表に中身が出ないのでタグを外して見る。
+function hasText(src: string): boolean {
+  if (/^\s*</.test(src)) return src.replace(/<[^>]*>/g, "").trim() !== "";
+  return buildProjection(src).plain.trim() !== "";
+}
+
+export interface Cut {
+  body: string;
+  // ブロックが 1 つ減ったか（以降のブロック番号がずれる）。
+  shift: boolean;
+}
+
+// 書き換えたブロックを本文へ戻す。文字が残らなくなったら器ごと取り除く。
+function settle(body: string, block: Block, next: string): Cut | null {
+  if (next === block.src) return null;
+  if (hasText(block.src) && !hasText(next)) {
+    return { body: cutBlock(body, block), shift: true };
+  }
+  return { body: replaceBlock(body, block, next), shift: false };
+}
+
+export function cutSelection(
+  body: string,
+  block: Block,
+  sel: {
+    start: number;
+    text: string;
+    cellStart?: number;
+    itemAnchor?: number;
+  },
+): Cut | null {
+  const src = block.src;
+  // 図は生ソースを触らせない（描けなくなる）。
+  if (isMermaidBlock(src)) return null;
+
+  // 表はセルの中身だけ。行と列はつまみから消せる。ソースを直に切ると
+  // `|` まで消えて表が崩れるので、セルをまたぐ選択は受け取らない。
+  if (isTableBlock(src)) {
+    if (sel.cellStart === undefined) return null;
+    const cell = cellFromStart(src, sel.cellStart);
+    if (!cell) return null;
+    const value = cellValueAt(src, cell.lineIndex, cell.colIndex);
+    const next = cutText(value, sel.text, 0);
+    if (next === null || next === value) return null;
+    const src2 = setCellValue(src, cell.lineIndex, cell.colIndex, next);
+    return src2 === src ? null : { body: replaceBlock(body, block, src2), shift: false };
+  }
+
+  // 箇条書きは項目の中で消す。中身が空になった項目は記号だけ残さない。
+  if (sel.itemAnchor !== undefined) {
+    const range = itemTextRange(src, sel.itemAnchor);
+    if (range) {
+      const text = src.slice(range.start, range.end);
+      const next = cutText(text, sel.text, 0);
+      if (next === null) return null;
+      const spliced = src.slice(0, range.start) + next + src.slice(range.end);
+      if (next.trim() !== "") return settle(body, block, spliced);
+      const item = listItemAt(src, sel.itemAnchor);
+      const dropped = item ? deleteListItem(src, item.from) : src;
+      // 項目が 1 つだけのリストは取り除けない。そのときは空の項目のまま
+      // 渡して、リストごと消える方に任せる。
+      return settle(body, block, dropped === src ? spliced : dropped);
+    }
+  }
+
+  const next = cutText(src, sel.text, sel.start);
+  return next === null ? null : settle(body, block, next);
 }

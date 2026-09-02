@@ -13,6 +13,8 @@ import {
   appendTableRow,
   cellFromStart,
   cellStartAt,
+  cellValueAt,
+  cutSelection,
   clearTableColumn,
   clearTableRow,
   cutBlock,
@@ -36,10 +38,10 @@ import {
   moveListItem,
   moveTableColumn,
   moveTableRow,
-  partIndexOf,
   remapAfterMove,
   replaceBlock,
   resplitBlocks,
+  setCellValue,
   splitBlocks,
   splitRow,
   type Block,
@@ -70,29 +72,6 @@ const cellsInRow = (line: string) => {
   return parts.length - lead - tail;
 };
 
-const getCellValue = (src: string, lineIndex: number, colIndex: number) => {
-  const line = src.split("\n")[lineIndex] ?? "";
-  return (splitRow(line)[partIndexOf(line, colIndex)] ?? "").trim();
-};
-
-const setCellValue = (
-  src: string,
-  lineIndex: number,
-  colIndex: number,
-  value: string,
-) => {
-  const lines = src.split("\n");
-  const line = lines[lineIndex];
-  if (line === undefined) return src;
-  const parts = splitRow(line);
-  const idx = partIndexOf(line, colIndex);
-  if (idx < 0 || idx >= parts.length) return src;
-  const t = value.trim();
-  parts[idx] = t ? ` ${t} ` : "  ";
-  lines[lineIndex] = parts.join("|");
-  return lines.join("\n");
-};
-
 interface EditingCell {
   blockIndex: number;
   cellStart: number;
@@ -116,6 +95,7 @@ export function EditableBody({
   editorial,
   onSaveBody,
   editRequest,
+  deleteRequest,
   onDeleted,
   content,
   scroller,
@@ -134,13 +114,26 @@ export function EditableBody({
   // 外から編集を始める頼み。選択メニューの「編集する」が立てる。
   // nonce が変わるたびに読み直すので、同じ場所を続けて頼んでも効く。
   editRequest?: {
+    path: string;
     blockIndex: number;
     cellStart?: number;
     itemAnchor?: number;
     nonce: number;
   } | null;
-  // 削除したときに、消す前の本文を渡す（取り消しに使う）。
-  onDeleted?: (previousBody: string) => void;
+  // 選択したところを消す頼み。選択メニューと ⌫ / Delete が立てる。
+  // 位置と文字は画面に出ているものなので、ソースのどこを切るかは受けた側で出す。
+  deleteRequest?: {
+    path: string;
+    blockIndex: number;
+    start: number;
+    text: string;
+    cellStart?: number;
+    itemAnchor?: number;
+    nonce: number;
+  } | null;
+  // 削除したときに、消す前の本文と知らせの文を渡す（取り消しに使う）。
+  // 消せなかったときは本文を渡さない（戻すものが無い）。
+  onDeleted?: (previousBody: string | null, text: string) => void;
 }) {
   // ブロック割り。全文 parse は 65,000 字で 200ms 超かかるので、2 回目以降は
   // 直前の割り方を土台に、書き換わったところの周りだけ parse し直す。
@@ -320,8 +313,12 @@ export function EditableBody({
   // 外からの頼みを受けて編集を始める。どの単位で開くかは選択された位置から
   // 決める（表ならセル、箇条書きなら項目、それ以外はブロック全体）。
   // mermaid は生ソースを編集させない（図が壊れる）。
-  useEffect(() => {
-    if (!editRequest) return;
+  // 描き終わる前に処理する。ここで待つと、頼みを受けた描画とエディタが乗る
+  // 描画が別のフレームになり、押してから入力できるまでに 1 拍おく。
+  useLayoutEffect(() => {
+    // 別のファイルへの頼みは捨てる。ファイルを切り替えるとこの入れ物ごと
+    // 作り直されるので、切り替え前の頼みがそのまま届く。
+    if (!editRequest || editRequest.path !== contentKey) return;
     const block = blocks[editRequest.blockIndex];
     if (!block || isMermaidBlock(block.src)) return;
     setEditing(null);
@@ -339,7 +336,7 @@ export function EditableBody({
           cellStart: editRequest.cellStart,
           lineIndex: unit.lineIndex,
           colIndex: unit.colIndex,
-          value: getCellValue(block.src, unit.lineIndex, unit.colIndex),
+          value: cellValueAt(block.src, unit.lineIndex, unit.colIndex),
         });
         return;
       }
@@ -373,10 +370,37 @@ export function EditableBody({
       if (!block) return;
       const previous = body;
       apply(cutBlock(body, block), (i) => (i > index ? i - 1 : i));
-      onDeleted?.(previous);
+      onDeleted?.(previous, "ブロックを削除しました");
     },
     [blocks, body, apply, onDeleted],
   );
+
+  // 選択したところを消す。画面に出ている文字からソースの位置を出すので、
+  // 消せない形（表のセルをまたぐ選択など）もある。そのときは知らせで返す。
+  useLayoutEffect(() => {
+    if (!deleteRequest || deleteRequest.path !== contentKey) return;
+    const { blocks, body, apply } = latest.current;
+    const block = blocks[deleteRequest.blockIndex];
+    if (!block) return;
+    const cut = cutSelection(body, block, deleteRequest);
+    if (!cut) {
+      onDeleted?.(
+        null,
+        isTableBlock(block.src)
+          ? "表は 1 つのセルの中だけ消せます"
+          : "選択したところは消せませんでした",
+      );
+      return;
+    }
+    setEditing(null);
+    setEditingCell(null);
+    setEditingItem(null);
+    const index = block.index;
+    apply(cut.body, cut.shift ? (i) => (i > index ? i - 1 : i) : keep);
+    onDeleted?.(body, "選択したところを削除しました");
+    // nonce だけを見る。同じ場所を続けて頼んでも効く。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteRequest?.nonce]);
 
   // つまみで動かす。to は「動かす前の並びで、どのブロックの前に置くか」。
   const move = useCallback(
