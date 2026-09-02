@@ -64,6 +64,7 @@ export function splitBlocks(body: string): Block[] {
 // ブロックごと parse し直す（隣を見ずに切ると分かれ方が変わる）。
 function mergeable(block: Block): boolean {
   if (block.type === "list" || block.type === "html") return true;
+  if (block.type === "footnoteDefinition") return true;
   return block.type === "code" && !/^[ \t]{0,3}(?:`{3,}|~{3,})/.test(block.src);
 }
 
@@ -82,6 +83,16 @@ function blankBefore(body: string, at: number): boolean {
 function fencesBalanced(text: string): boolean {
   const opens = text.match(/^[ \t]{0,3}(?:`{3,}|~{3,})/gm);
   return !opens || opens.length % 2 === 0;
+}
+
+// 隣り合う 2 つのブロックが、繋げて読んでも 2 つに割れるか。
+function seamHolds(
+  body: string,
+  a: Block | undefined,
+  b: Block | undefined,
+): boolean {
+  if (!a || !b) return true;
+  return splitBlocks(body.slice(a.start, b.end)).length === 2;
 }
 
 export function resplitBlocks(
@@ -136,12 +147,27 @@ export function resplitBlocks(
 
   const blocks: Block[] = [];
   for (let i = 0; i < before; i++) blocks.push(oldBlocks[i]);
-  for (const b of splitBlocks(window)) {
+  const middle = splitBlocks(window);
+  for (const b of middle) {
     blocks.push({ ...b, index: blocks.length, start: b.start + from, end: b.end + from });
   }
   for (let i = after; i < oldBlocks.length; i++) {
     const b = oldBlocks[i];
     blocks.push({ ...b, index: blocks.length, start: b.start + delta, end: b.end + delta });
+  }
+
+  // 継ぎ目を実際に読ませて確かめる。繋げると 1 つになる形（空行を挟んでも
+  // 続くリストなど）を跨いで使い回すと、全文 parse と割り方が変わる。
+  // 割り方が変わると、指摘が別のブロックを指す。
+  const beforeSeam = blocks[before - 1];
+  const firstInWindow = blocks[before];
+  const lastInWindow = blocks[before + middle.length - 1];
+  const afterSeam = blocks[before + middle.length];
+  if (
+    !seamHolds(newBody, beforeSeam, firstInWindow) ||
+    !seamHolds(newBody, lastInWindow, afterSeam)
+  ) {
+    return splitBlocks(newBody);
   }
 
   // 位置が食い違っていたら使い回しを捨てる（切り出しがずれた指摘や編集は
@@ -151,6 +177,24 @@ export function resplitBlocks(
       return splitBlocks(newBody);
     }
   }
+  return blocks;
+}
+
+// 本文の割り方は 1 か所で持つ。読む側ごとに割り直すと、表示（DOM のブロック
+// 番号）と指摘の保存（どのブロックの生ソースか）で割り方が食い違い、指摘が
+// 別の場所を指すことがある。同じ本文には必ず同じ配列を返す。
+const recent: { body: string; blocks: Block[] }[] = [];
+const KEEP = 4;
+
+export function blocksOf(body: string): Block[] {
+  const hit = recent.find((r) => r.body === body);
+  if (hit) return hit.blocks;
+  const base = recent[0];
+  const blocks = base
+    ? resplitBlocks(base.body, base.blocks, body)
+    : splitBlocks(body);
+  recent.unshift({ body, blocks });
+  if (recent.length > KEEP) recent.pop();
   return blocks;
 }
 

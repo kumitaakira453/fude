@@ -2,7 +2,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  resplitBlocks,
+  blocksOf,
   sectionPathAt,
   splitBlocks,
   type Block,
@@ -75,20 +75,7 @@ export function useReview({
 
   // ブロック分割は指摘があるファイルと、指摘を付ける瞬間だけ行う。
   // 大半のファイルには指摘が無いので、開くときの負荷を増やさない。
-  const blocksRef = useRef<{ body: string; blocks: Block[] } | null>(null);
-  const getBlocks = useCallback((): Block[] => {
-    const prev = blocksRef.current;
-    if (prev?.body !== body) {
-      // 2 回目以降は、直前の割り方を土台に書き換わった周りだけ parse し直す。
-      // 指摘があるファイルでは本文が変わるたびに通るので、全文 parse は重い。
-      const blocks = prev
-        ? resplitBlocks(prev.body, prev.blocks, body)
-        : splitBlocks(body);
-      blocksRef.current = { body, blocks };
-      return blocks;
-    }
-    return prev.blocks;
-  }, [body]);
+  const getBlocks = useCallback((): Block[] => blocksOf(body), [body]);
 
   // 指摘の現在位置は、基準版のブロックから対応付けで導出する。現在の本文から
   // 引用文字列を探す方法は、指摘に応えて本文が書き換えられた瞬間に失敗する。

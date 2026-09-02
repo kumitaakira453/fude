@@ -11,6 +11,7 @@ import {
 import {
   appendTableColumn,
   appendTableRow,
+  blocksOf,
   cellFromStart,
   cellStartAt,
   cellValueAt,
@@ -40,11 +41,8 @@ import {
   moveTableRow,
   remapAfterMove,
   replaceBlock,
-  resplitBlocks,
   setCellValue,
-  splitBlocks,
   splitRow,
-  type Block,
 } from "../lib/blocks";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
 import { setCalloutIcon } from "../lib/htmlBlocks";
@@ -135,17 +133,10 @@ export function EditableBody({
   // 消せなかったときは本文を渡さない（戻すものが無い）。
   onDeleted?: (previousBody: string | null, text: string) => void;
 }) {
-  // ブロック割り。全文 parse は 65,000 字で 200ms 超かかるので、2 回目以降は
-  // 直前の割り方を土台に、書き換わったところの周りだけ parse し直す。
-  const split = useRef<{ body: string; blocks: Block[] } | null>(null);
-  const blocks = useMemo(() => {
-    const prev = split.current;
-    const next = prev
-      ? resplitBlocks(prev.body, prev.blocks, body)
-      : splitBlocks(body);
-    split.current = { body, blocks: next };
-    return next;
-  }, [body]);
+  // ブロック割り。指摘を読む側と同じものを使う（割り方が食い違うと、指摘が
+  // 別のブロックを指す）。全文 parse は 65,000 字で 200ms 超かかるので、
+  // 中では書き換わった周りだけ parse し直している。
+  const blocks = useMemo(() => blocksOf(body), [body]);
 
   // 本文は先頭から順に描画する。全ブロックを 1 回のペイントで描くと、
   // 400 ブロックのファイルで初回描画に 900ms 以上かかって固まって見えるため、

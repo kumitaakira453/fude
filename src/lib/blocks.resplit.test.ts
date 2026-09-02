@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blocksOf,
   cutBlock,
   insertAfter,
   insertBefore,
@@ -181,5 +182,31 @@ describe("resplitBlocks", () => {
       body = next;
       expect(blocks).toEqual(truth(body));
     }
+  });
+});
+
+// 割り方は 1 か所で持つ。読む側ごとに割り直すと、表示と指摘の保存で
+// 割り方が食い違い、指摘が別のブロックを指す。
+describe("blocksOf", () => {
+  it("同じ本文には同じ配列を返す", () => {
+    expect(blocksOf(DOC)).toBe(blocksOf(DOC));
+  });
+
+  it("書き換えを重ねても全文 parse と一致する", () => {
+    let body = DOC;
+    let blocks = blocksOf(body);
+    for (let i = 0; i < 5; i++) {
+      const next = cutBlock(body, blocks[2]);
+      blocks = blocksOf(next);
+      expect(blocks).toEqual(truth(next));
+      body = next;
+    }
+  });
+
+  it("行き来しても全文 parse と一致する", () => {
+    const other = LIST_DOC;
+    expect(blocksOf(DOC)).toEqual(truth(DOC));
+    expect(blocksOf(other)).toEqual(truth(other));
+    expect(blocksOf(DOC)).toEqual(truth(DOC));
   });
 });
