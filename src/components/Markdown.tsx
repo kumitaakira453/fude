@@ -100,7 +100,10 @@ function TaskCheck({
   onToggle,
 }: {
   checked: boolean;
-  onToggle?: () => void;
+  // 押されたボタンを渡す。どのブロックのタスクかは、呼ばれた側が
+  // この要素から辿る（ブロック番号を props で配ると、番号がずれるたびに
+  // 全ブロックの再描画になる）。
+  onToggle?: (el: HTMLElement) => void;
 }) {
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
   const on = optimistic ?? checked;
@@ -117,9 +120,9 @@ function TaskCheck({
       type="button"
       className="mg-task-check"
       aria-label={on ? "未完了に戻す" : "完了にする"}
-      onClick={() => {
+      onClick={(e) => {
         setOptimistic(!on);
-        onToggle();
+        onToggle(e.currentTarget);
       }}
     >
       <Icon name={icon} size={20} fill={on} />
@@ -225,7 +228,6 @@ function itemAnchor(node: unknown): number | null {
 export const Markdown = memo(function Markdown({
   body,
   editorial,
-  blockIndex,
   onToggleTask,
   editCell,
   onCellCommit,
@@ -236,9 +238,9 @@ export const Markdown = memo(function Markdown({
 }: {
   body: string;
   editorial: boolean;
-  // タスクチェックボックスのトグル用（ブロック内の何番目のタスクかで特定）
-  blockIndex?: number;
-  onToggleTask?: (blockIndex: number, ordinal: number) => void;
+  // タスクチェックボックスのトグル用（ブロック内の何番目のタスクかと、
+  // 押されたボタン）。渡されないときはチェックボックスを押せなくする。
+  onToggleTask?: (ordinal: number, el: HTMLElement) => void;
   // テーブルのセル単位編集。編集対象セルは cellStart（ソース内オフセット）で特定。
   editCell?: { cellStart: number; value: string } | null;
   onCellCommit?: (v: string) => void;
@@ -393,14 +395,11 @@ export const Markdown = memo(function Markdown({
           }
           // ネイティブ checkbox を Material アイコンに統一。クリックでトグル。
           const ordinal = taskSeq.n++;
-          const bi = blockIndex;
           return (
             <TaskCheck
               checked={!!checked}
               onToggle={
-                onToggleTask && typeof bi === "number"
-                  ? () => onToggleTask(bi, ordinal)
-                  : undefined
+                onToggleTask ? (el) => onToggleTask(ordinal, el) : undefined
               }
             />
           );

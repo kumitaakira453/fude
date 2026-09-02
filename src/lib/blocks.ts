@@ -44,6 +44,110 @@ export function splitBlocks(body: string): Block[] {
   return blocks;
 }
 
+// ---- 書き換わった周りだけ parse し直す ----
+//
+// body 全体の parse は 65,000 字で 200ms 超かかる。1 ブロック消すたびに
+// これを払うと、消えるまでに間があく。変わっていない範囲のブロックは
+// そのまま使い回し、書き換わったところの周りだけ parse する。
+//
+// 局所 parse が全文 parse と食い違う形（境界の取り方で結果が変わる形）では
+// 使い回しをやめて全文 parse に落とす。速さのために結果を変えない。
+
+// 空行を挟んでも次の塊と 1 つに繋がりうるブロック。緩いリスト・字下げの
+// コードブロック・閉じタグまで続く HTML が該当する。境界に来たら、その
+// ブロックごと parse し直す（隣を見ずに切ると分かれ方が変わる）。
+function mergeable(block: Block): boolean {
+  if (block.type === "list" || block.type === "html") return true;
+  return block.type === "code" && !/^[ \t]{0,3}(?:`{3,}|~{3,})/.test(block.src);
+}
+
+// その位置の直後が空行で始まっているか（そこから後ろを別の塊として読めるか）。
+function blankAfter(body: string, at: number): boolean {
+  return /^[ \t]*\r?\n[ \t]*\r?\n/.test(body.slice(at, at + 64));
+}
+
+// その位置の直前が空行で終わっているか。
+function blankBefore(body: string, at: number): boolean {
+  return /\r?\n[ \t]*\r?\n[ \t]*$/.test(body.slice(Math.max(0, at - 64), at));
+}
+
+// 閉じていないコードフェンスは空行では終わらず、後ろの塊まで飲み込む。
+// 窓の中でフェンスの数が合わないときは、窓の外まで影響するので落とす。
+function fencesBalanced(text: string): boolean {
+  const opens = text.match(/^[ \t]{0,3}(?:`{3,}|~{3,})/gm);
+  return !opens || opens.length % 2 === 0;
+}
+
+export function resplitBlocks(
+  oldBody: string,
+  oldBlocks: Block[],
+  newBody: string,
+): Block[] {
+  if (oldBody === newBody) return oldBlocks;
+  if (oldBlocks.length === 0) return splitBlocks(newBody);
+
+  // 変わっていない前後の長さ
+  const shorter = Math.min(oldBody.length, newBody.length);
+  let head = 0;
+  while (head < shorter && oldBody[head] === newBody[head]) head++;
+  let tail = 0;
+  while (
+    tail < shorter - head &&
+    oldBody[oldBody.length - 1 - tail] === newBody[newBody.length - 1 - tail]
+  )
+    tail++;
+
+  const delta = newBody.length - oldBody.length;
+  const changedEnd = oldBody.length - tail;
+
+  // 使い回す候補。前は書き換わりより手前で終わるもの、後は書き換わりより
+  // 後ろで始まるもの。前側は位置が変わらず、後側は差分だけずれる。
+  let before = 0;
+  while (before < oldBlocks.length && oldBlocks[before].end <= head) before++;
+  let after = oldBlocks.length;
+  while (after > before && oldBlocks[after - 1].start >= changedEnd) after--;
+
+  // 境界を安全なところまで下げる。空行で切れていない、または繋がりうる形の
+  // ブロックが境界に来ているあいだ、窓を広げる。
+  while (before > 0) {
+    const edge = oldBlocks[before - 1];
+    if (!mergeable(edge) && blankAfter(newBody, edge.end)) break;
+    before--;
+  }
+  while (after < oldBlocks.length) {
+    const edge = oldBlocks[after];
+    if (!mergeable(edge) && blankBefore(newBody, edge.start + delta)) break;
+    after++;
+  }
+  if (after < before) return splitBlocks(newBody);
+
+  const from = before > 0 ? oldBlocks[before - 1].end : 0;
+  const to = after < oldBlocks.length ? oldBlocks[after].start + delta : newBody.length;
+  if (to < from) return splitBlocks(newBody);
+
+  const window = newBody.slice(from, to);
+  if (!fencesBalanced(window)) return splitBlocks(newBody);
+
+  const blocks: Block[] = [];
+  for (let i = 0; i < before; i++) blocks.push(oldBlocks[i]);
+  for (const b of splitBlocks(window)) {
+    blocks.push({ ...b, index: blocks.length, start: b.start + from, end: b.end + from });
+  }
+  for (let i = after; i < oldBlocks.length; i++) {
+    const b = oldBlocks[i];
+    blocks.push({ ...b, index: blocks.length, start: b.start + delta, end: b.end + delta });
+  }
+
+  // 位置が食い違っていたら使い回しを捨てる（切り出しがずれた指摘や編集は
+  // 別の場所を書き換えてしまう）。
+  for (const b of blocks) {
+    if (b.start > b.end || newBody.slice(b.start, b.end) !== b.src) {
+      return splitBlocks(newBody);
+    }
+  }
+  return blocks;
+}
+
 // 指定したブロックが属する見出しの階層を、上位から順に返す。
 // レビューの指摘に「どのセクションに対するものか」を持たせるために使う。
 export function sectionPathAt(blocks: Block[], blockIndex: number): string[] {

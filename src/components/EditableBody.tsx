@@ -39,8 +39,10 @@ import {
   partIndexOf,
   remapAfterMove,
   replaceBlock,
+  resplitBlocks,
   splitBlocks,
   splitRow,
+  type Block,
 } from "../lib/blocks";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
 import { setCalloutIcon } from "../lib/htmlBlocks";
@@ -140,7 +142,17 @@ export function EditableBody({
   // 削除したときに、消す前の本文を渡す（取り消しに使う）。
   onDeleted?: (previousBody: string) => void;
 }) {
-  const blocks = useMemo(() => splitBlocks(body), [body]);
+  // ブロック割り。全文 parse は 65,000 字で 200ms 超かかるので、2 回目以降は
+  // 直前の割り方を土台に、書き換わったところの周りだけ parse し直す。
+  const split = useRef<{ body: string; blocks: Block[] } | null>(null);
+  const blocks = useMemo(() => {
+    const prev = split.current;
+    const next = prev
+      ? resplitBlocks(prev.body, prev.blocks, body)
+      : splitBlocks(body);
+    split.current = { body, blocks: next };
+    return next;
+  }, [body]);
 
   // 本文は先頭から順に描画する。全ブロックを 1 回のペイントで描くと、
   // 400 ブロックのファイルで初回描画に 900ms 以上かかって固まって見えるため、
@@ -204,6 +216,11 @@ export function EditableBody({
     },
     [body, content, scroller, onSaveBody],
   );
+
+  // 恒久的に同じ関数から最新の状態を読むための控え。描画のたびに別関数を
+  // 配ると、memo 済みの Markdown が 1 つも止まらず全ブロック描き直しになる。
+  const latest = useRef({ blocks, body, apply });
+  latest.current = { blocks, body, apply };
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
@@ -276,27 +293,29 @@ export function EditableBody({
     apply(replaceBlock(body, block, newSrc), keep);
   };
 
-  // ブロック内 ordinal 番目のタスクの [ ]↔[x] をトグルして保存
-  const toggleTask = useCallback(
-    (blockIndex: number, ordinal: number) => {
-      const block = blocks[blockIndex];
-      if (!block) return;
-      const lines = block.src.split("\n");
-      let count = -1;
-      for (let i = 0; i < lines.length; i++) {
-        if (!TASK_RE.test(lines[i])) continue;
-        count++;
-        if (count !== ordinal) continue;
-        lines[i] = lines[i].replace(
-          TASK_RE,
-          (_m, a, c, b) => a + (c === " " ? "x" : " ") + b,
-        );
-        apply(replaceBlock(body, block, lines.join("\n")), keep);
-        return;
-      }
-    },
-    [blocks, body, apply],
-  );
+  // ブロック内 ordinal 番目のタスクの [ ]↔[x] をトグルして保存。
+  // どのブロックかは押されたボタンから辿る。番号を渡す形にすると、
+  // ブロックを 1 つ消しただけで以降の番号がずれ、全部が描き直しになる。
+  const toggleTask = useCallback((ordinal: number, el: HTMLElement) => {
+    const wrap = el.closest<HTMLElement>("[data-mg-block]");
+    const at = wrap ? Number(wrap.dataset.mgBlock) : NaN;
+    const { blocks, body, apply } = latest.current;
+    const block = Number.isInteger(at) ? blocks[at] : undefined;
+    if (!block) return;
+    const lines = block.src.split("\n");
+    let count = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (!TASK_RE.test(lines[i])) continue;
+      count++;
+      if (count !== ordinal) continue;
+      lines[i] = lines[i].replace(
+        TASK_RE,
+        (_m, a, c, b) => a + (c === " " ? "x" : " ") + b,
+      );
+      apply(replaceBlock(body, block, lines.join("\n")), keep);
+      return;
+    }
+  }, []);
 
   // 外からの頼みを受けて編集を始める。どの単位で開くかは選択された位置から
   // 決める（表ならセル、箇条書きなら項目、それ以外はブロック全体）。
@@ -613,7 +632,6 @@ export function EditableBody({
           <Markdown
             body={b.src}
             editorial={editorial}
-            blockIndex={b.index}
             onToggleTask={toggleTask}
             editCell={
               editingCell?.blockIndex === b.index
