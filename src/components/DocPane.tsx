@@ -92,6 +92,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // どちらでもなければ両方 undefined で、ブロック全体の編集になる。
     cellStart?: number;
     itemAnchor?: number;
+    // 選択がブロックをまたいでいるときの最後のブロック。ここまでを 1 枚の
+    // エディタで直す。
+    endBlockIndex?: number;
     nonce: number;
   } | null>(null);
   const [editingFm, setEditingFm] = useState<{ x: number; y: number } | null>(
@@ -172,11 +175,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [isActive, path, undoFile, redoFile, store]);
 
-  // ⌘E で編集/プレビュー切替（アクティブペインのみ）
+  // ⌘E で編集/プレビュー切替（アクティブペインのみ）。
+  // 本文を選んでいるときは「選んだところを編集する」に譲る。同じキーで
+  // 両方が走ると、その場編集と全文編集が同時に開く。
   useEffect(() => {
     if (!isActive) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
+        if (reviewRef.current?.selection) return;
         e.preventDefault();
         toggleEdit();
       }
@@ -280,6 +286,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       blockIndex: sel.blockIndex,
       cellStart: sel.cellStart,
       itemAnchor: sel.itemAnchor,
+      endBlockIndex: sel.endBlockIndex,
       nonce: (r?.nonce ?? 0) + 1,
     }));
     // 選択を解いてメニューを閉じる。selectionchange は 1 フレーム遅れて

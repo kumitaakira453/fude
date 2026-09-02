@@ -242,11 +242,33 @@ export function remapAfterMove(i: number, from: number, to: number): number {
   return i;
 }
 
-// ブロックを取り除く。継ぎ目の空行を畳んで、跡地に大きな隙間を残さない。
-export function cutBlock(body: string, block: Block): string {
-  const before = body.slice(0, block.start).replace(/\n+$/, "");
-  const after = body.slice(block.end).replace(/^\n+/, "");
+// 範囲を取り除く。継ぎ目の空行を畳んで、跡地に大きな隙間を残さない。
+function cutSpan(body: string, start: number, end: number): string {
+  const before = body.slice(0, start).replace(/\n+$/, "");
+  const after = body.slice(end).replace(/^\n+/, "");
   return before && after ? `${before}\n\n${after}` : before + after;
+}
+
+// ブロックを取り除く。
+export function cutBlock(body: string, block: Block): string {
+  return cutSpan(body, block.start, block.end);
+}
+
+// 複数のブロックにまたがる範囲の生ソース。選択がまたいだときは、この範囲を
+// 1 枚のエディタで直す（ブロックごとに開くと、またいだ選択と食い違う）。
+export function spanSrc(body: string, from: Block, to: Block): string {
+  return body.slice(from.start, to.end);
+}
+
+// その範囲を書き換えた結果を本文へ戻す。空にしたら範囲ごと取り除く。
+export function replaceSpan(
+  body: string,
+  from: Block,
+  to: Block,
+  newSrc: string,
+): string {
+  if (newSrc.trim() === "") return cutSpan(body, from.start, to.end);
+  return body.slice(0, from.start) + newSrc + body.slice(to.end);
 }
 
 export function insertAfter(body: string, block: Block, src: string): string {

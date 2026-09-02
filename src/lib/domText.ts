@@ -32,6 +32,11 @@ export interface BlockSelection {
   // 描画側が持っている正確な値を目印として読む。
   cellStart?: number;
   itemAnchor?: number;
+  // ブロックをまたいで選んでいるときの、最後のブロックの番号とその中の
+  // 終わりの位置。start / end は先頭ブロックの中の数え方なので、
+  // またいでいるかどうかはここで見る。
+  endBlockIndex?: number;
+  endOffset?: number;
 }
 
 export function blockIndexOf(el: HTMLElement): number | null {
@@ -220,6 +225,7 @@ export function readSelection(root: HTMLElement): BlockSelection | null {
 
   const cellStart = numberFrom(startEl, "[data-mg-cell]", "mgCell");
   const itemAnchor = numberFrom(startEl, "[data-mg-item]", "mgItem");
+  const span = spanEnd(root, range, blockIndex);
 
   return {
     blockIndex,
@@ -229,7 +235,34 @@ export function readSelection(root: HTMLElement): BlockSelection | null {
     rect: range.getBoundingClientRect(),
     ...(cellStart === null ? {} : { cellStart }),
     ...(itemAnchor === null ? {} : { itemAnchor }),
+    ...span,
   };
+}
+
+// ブロックをまたいでいるときの、最後のブロックと、その中の終わりの位置。
+// またいでいなければ空を返す。
+function spanEnd(
+  root: HTMLElement,
+  range: Range,
+  blockIndex: number,
+): { endBlockIndex?: number; endOffset?: number } {
+  if (!root.contains(range.endContainer)) return {};
+  const endEl =
+    range.endContainer instanceof Element
+      ? range.endContainer
+      : range.endContainer.parentElement;
+  const endBlock = endEl?.closest<HTMLElement>("[data-mg-block]");
+  const at = endBlock ? blockIndexOf(endBlock) : null;
+  if (!endBlock || at === null || at <= blockIndex) return {};
+  const bt = readBlockText(endBlock);
+  const offset = offsetOf(bt, range.endContainer, range.endOffset);
+  // 位置が読めない終わり方（要素そのものが終端など）でも、またいでいる事実は
+  // 残す。末尾まで選んだものとして扱う。
+  if (offset === null) return { endBlockIndex: at, endOffset: bt.plain.length };
+  // 最後のブロックの文字を 1 つも含まない終わり方は、またぎとして扱わない。
+  // 段落の行末より少し下まで引いただけで次のブロックを巻き込んでしまう。
+  if (offset <= 0) return {};
+  return { endBlockIndex: at, endOffset: offset };
 }
 
 // 選択の起点から最も近い目印を辿って数値を読む。

@@ -17,7 +17,6 @@ import {
   cutSelection,
   clearTableColumn,
   clearTableRow,
-  cutBlock,
   deleteTableColumn,
   deleteTableRow,
   deleteListItem,
@@ -40,8 +39,10 @@ import {
   moveTableRow,
   remapAfterMove,
   replaceBlock,
+  replaceSpan,
   resplitBlocks,
   setCellValue,
+  spanSrc,
   splitBlocks,
   splitRow,
   type Block,
@@ -118,6 +119,8 @@ export function EditableBody({
     blockIndex: number;
     cellStart?: number;
     itemAnchor?: number;
+    // 選択がブロックをまたいでいたときの最後のブロック。
+    endBlockIndex?: number;
     nonce: number;
   } | null;
   // 選択したところを消す頼み。選択メニューと ⌫ / Delete が立てる。
@@ -173,6 +176,9 @@ export function EditableBody({
   // 座標はカーソルの初期位置に使う。選択メニューから開いたときは持たない。
   const [editing, setEditing] = useState<{
     index: number;
+    // 選択がブロックをまたいでいたときの最後のブロック。1 枚のエディタで
+    // ここまでの生ソースをまとめて直す。
+    until: number;
     x: number | null;
     y: number | null;
   } | null>(null);
@@ -275,15 +281,20 @@ export function EditableBody({
 
   const cancelCell = useCallback(() => setEditingCell(null), []);
 
-  const commit = (index: number, newSrc: string) => {
+  const commit = (index: number, until: number, newSrc: string) => {
     setEditing(null);
-    const block = blocks[index];
-    if (!block || newSrc === block.src) return;
-    if (newSrc.trim() === "") {
-      apply(cutBlock(body, block), (i) => (i > index ? i - 1 : i));
-      return;
-    }
-    apply(replaceBlock(body, block, newSrc), keep);
+    const from = blocks[index];
+    const to = blocks[until] ?? from;
+    if (!from || !to) return;
+    if (newSrc === spanSrc(body, from, to)) return;
+    // 何ブロックに割れ直すかで、後ろのブロックの番号がずれる。範囲は
+    // 短いので、ここだけ数え直す。
+    const was = to.index - from.index + 1;
+    const now = newSrc.trim() === "" ? 0 : splitBlocks(newSrc).length;
+    const delta = now - was;
+    apply(replaceSpan(body, from, to, newSrc), (i) =>
+      i > until ? i + delta : Math.min(i, index),
+    );
   };
 
   // ブロック内 ordinal 番目のタスクの [ ]↔[x] をトグルして保存。
@@ -325,6 +336,14 @@ export function EditableBody({
     setEditingCell(null);
     setEditingItem(null);
 
+    // ブロックをまたいだ選択は、その範囲をまとめて 1 枚で直す。セルや項目の
+    // 単位で開くと、選んだ範囲と直す範囲が食い違う。
+    const until = editRequest.endBlockIndex;
+    if (until !== undefined && until > block.index && blocks[until]) {
+      setEditing({ index: block.index, until, x: null, y: null });
+      return;
+    }
+
     // 表のセル。目印は描画側が持っているソースオフセットなので、行と列は
     // そこから数え直せる。画面に出ている文字の位置から数えると、表では
     // 区切りがソースにしか無いぶんだけずれる。
@@ -357,20 +376,29 @@ export function EditableBody({
       }
     }
 
-    setEditing({ index: block.index, x: null, y: null });
+    setEditing({ index: block.index, until: block.index, x: null, y: null });
     // nonce だけを見る。同じ場所を続けて頼んでも開き直せる。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editRequest?.nonce]);
 
   // ブロックごと削除する。消す前の本文を渡して、取り消せるようにする。
   const remove = useCallback(
-    (index: number) => {
+    (index: number, until = index) => {
       setEditing(null);
-      const block = blocks[index];
-      if (!block) return;
+      const from = blocks[index];
+      const to = blocks[until] ?? from;
+      if (!from || !to) return;
       const previous = body;
-      apply(cutBlock(body, block), (i) => (i > index ? i - 1 : i));
-      onDeleted?.(previous, "ブロックを削除しました");
+      const gone = to.index - from.index + 1;
+      apply(replaceSpan(body, from, to, ""), (i) =>
+        i > to.index ? i - gone : Math.min(i, index),
+      );
+      onDeleted?.(
+        previous,
+        gone > 1
+          ? `${gone} つのブロックを削除しました`
+          : "ブロックを削除しました",
+      );
     },
     [blocks, body, apply, onDeleted],
   );
@@ -629,6 +657,8 @@ export function EditableBody({
   const rows: ReactNode[] = [];
   for (const b of shown) {
     const key = keyOf(b.src);
+    // 範囲編集のあいだ、2 つ目以降のブロックは 1 枚のエディタに含まれる。
+    if (editing && b.index > editing.index && b.index <= editing.until) continue;
     if (pending?.index === b.index && pending.side === "before") {
       rows.push(inserting);
     }
@@ -636,12 +666,12 @@ export function EditableBody({
       editing?.index === b.index ? (
         <BlockSourceEditor
           key={key}
-          src={b.src}
+          src={spanSrc(body, b, blocks[editing.until] ?? b)}
           clickX={editing.x}
           clickY={editing.y}
-          onCommit={(src) => commit(b.index, src)}
+          onCommit={(src) => commit(b.index, editing.until, src)}
           onCancel={() => setEditing(null)}
-          onDelete={() => remove(b.index)}
+          onDelete={() => remove(b.index, editing.until)}
         />
       ) : (
         // display:contents で余白（prose の縦リズム）を崩さずに、
@@ -711,7 +741,7 @@ export function EditableBody({
           // mermaid は生ソースを編集させない（図が壊れる）。
           if (!block || isMermaidBlock(block.src)) return;
           setPending(null);
-          setEditing({ index, x: null, y: null });
+          setEditing({ index, until: index, x: null, y: null });
         }}
         onMove={move}
         onInsert={(index, side) => {
