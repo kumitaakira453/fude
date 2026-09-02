@@ -21,6 +21,10 @@ interface Match {
   rects: RectBox[];
 }
 
+// 本文が変わってから探し直すまでの待ち。編集で次々に変わるあいだは
+// 走査をまとめる。
+const RESCAN_WAIT = 150;
+
 // 本文 DOM を書き換えず、検索ヒットを角丸の矩形として重ねるオーバーレイ。
 // ヒット総数・次/前移動・アクティブ強調を提供する。
 export function DocSearchOverlay({
@@ -135,14 +139,24 @@ export function DocSearchOverlay({
   useLayoutEffect(() => {
     compute();
     if (!content) return;
+    // 高さや幅が変わっただけなら測り直すだけ。本文を探し直すと、ヒットの数だけ
+    // 矩形を測る走査が、エディタの開閉やブロックの削除に乗ってしまう。
     let raf = 0;
-    const schedule = () => {
+    const remeasure = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(compute);
+      raf = requestAnimationFrame(() => measure(rangesRef.current));
     };
-    const ro = new ResizeObserver(schedule);
+    const ro = new ResizeObserver(remeasure);
     ro.observe(content);
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", remeasure);
+    // 本文の作りが変わったときだけ探し直す。まとめて 1 回にする。
+    let rescan = 0;
+    const scheduleScan = () => {
+      window.clearTimeout(rescan);
+      rescan = window.setTimeout(compute, RESCAN_WAIT);
+    };
+    const mo = new MutationObserver(scheduleScan);
+    mo.observe(content, { childList: true, subtree: true, characterData: true });
     // 表やコードは枠の中で横にスクロールする。印は文字の上に重ねているだけで
     // 一緒には動かないので、枠が動いたら測り直す。scroll は上がって来ないが、
     // 捕まえる向き（capture）なら親でも受け取れる。
@@ -158,8 +172,10 @@ export function DocSearchOverlay({
     return () => {
       cancelAnimationFrame(raf);
       cancelAnimationFrame(scrollRaf);
+      window.clearTimeout(rescan);
       ro.disconnect();
-      window.removeEventListener("resize", schedule);
+      mo.disconnect();
+      window.removeEventListener("resize", remeasure);
       content.removeEventListener("scroll", onScroll, { capture: true });
     };
   }, [compute, measure, content, docKey]);
