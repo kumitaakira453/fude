@@ -99,6 +99,16 @@ function guessBlock(
 // 印を離れてからカードを閉じるまでの猶予。印とカードの間を指が渡れる長さ。
 const HOVER_GRACE = 160;
 
+// 重ねた矩形の中に居るか。位置は本文の左上からの座標で持っている。
+function inside(rc: Rect, x: number, y: number): boolean {
+  return (
+    x >= rc.left &&
+    x <= rc.left + rc.width &&
+    y >= rc.top &&
+    y <= rc.top + rc.height
+  );
+}
+
 // 指摘が付いてからの経過。細かい数字は要らないので桁が分かる粒度で出す。
 function ago(at: number): string {
   const min = (Date.now() - at) / 60000;
@@ -193,9 +203,6 @@ export function AnchorOverlay({
   // 印は本文の上に重ねた飾りで、押せる箱にはしない（箱にすると、その上から
   // 文字を選べず、クリックもすべて指摘へ吸われる）。ホバーは重ねた矩形との
   // 当たり判定で見る。
-  const inside = (rc: Rect, x: number, y: number) =>
-    x >= rc.left && x <= rc.left + rc.width && y >= rc.top && y <= rc.top + rc.height;
-
   const hitAt = useCallback(
     (x: number, y: number): { mark: Mark; rc: Rect } | null => {
       for (const mark of marksRef.current) {
