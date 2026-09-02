@@ -240,6 +240,24 @@ export function readSelection(root: HTMLElement): BlockSelection | null {
   };
 }
 
+// またいで選んだ範囲の、画面に出ている文字を全部つなげる。台帳は 1 ブロックを
+// 指す作りなので、指摘には「先頭のブロック」と「選んだ全文」を持たせる。
+// 断片だけを記録すると、選んだ範囲と記録が食い違う。
+export function spanText(root: HTMLElement, sel: BlockSelection): string {
+  const last = sel.endBlockIndex;
+  if (last === undefined) return sel.text;
+  const parts: string[] = [];
+  for (let i = sel.blockIndex; i <= last; i++) {
+    const el = root.querySelector<HTMLElement>(`[data-mg-block="${i}"]`);
+    if (!el) continue;
+    const { plain } = readBlockText(el);
+    if (i === sel.blockIndex) parts.push(plain.slice(sel.start));
+    else if (i === last) parts.push(plain.slice(0, sel.endOffset ?? plain.length));
+    else parts.push(plain);
+  }
+  return parts.filter((t) => t.trim() !== "").join("\n\n");
+}
+
 // ブロックをまたいでいるときの、最後のブロックと、その中の終わりの位置。
 // またいでいなければ空を返す。
 function spanEnd(

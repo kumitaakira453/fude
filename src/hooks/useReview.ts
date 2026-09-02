@@ -14,7 +14,11 @@ import {
   type BlockChange,
   type Resolution,
 } from "../lib/blockDiff";
-import { readSelection, type BlockSelection } from "../lib/domText";
+import {
+  readSelection,
+  spanText,
+  type BlockSelection,
+} from "../lib/domText";
 import { notify } from "../state/toast";
 import { parseFrontmatter } from "../lib/frontmatter";
 import {
@@ -45,6 +49,8 @@ interface Draft {
   sectionPath: string[];
   // ブロック全体への指摘。箇所を持たないので、保存する選択は空にする。
   whole?: boolean;
+  // ブロックをまたいだ指摘。選んだ全文を記録し、印は先頭のブロックの枠で出す。
+  spanning?: boolean;
 }
 
 export function useReview({
@@ -228,6 +234,9 @@ export function useReview({
       );
       return;
     }
+    // またいだ選択は、選んだ全文を記録して先頭のブロックに紐付ける。
+    // 断片だけを残すと、選んだ範囲と記録が食い違う。
+    const spanning = picked.endBlockIndex !== undefined;
     setDraft({
       hit: {
         id: "",
@@ -237,10 +246,12 @@ export function useReview({
       },
       blockIndex: picked.blockIndex,
       offset: picked.start,
-      text: picked.text,
+      text:
+        spanning && content ? spanText(content, picked) : picked.text,
       quote: block.src,
       sectionPath: sectionPathAt(all, picked.blockIndex),
       whole: opts?.whole,
+      spanning,
     });
     setSelection(null);
   }, [selection, content, absPath, getBlocks]);
