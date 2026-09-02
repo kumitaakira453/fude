@@ -1432,6 +1432,14 @@ button.mg-task-check:hover {
   inset: 0;
   pointer-events: none;
 }
+/* 選択を引いているあいだ、本文に重ねたものは触れない板にする。押せるものが
+   途中で下に出ると、ドラッグの行き先をそれが奪い、選択が本文の端まで飛ぶ。 */
+body.mg-dragging .mg-block-layer *,
+body.mg-dragging .mg-review-layer *,
+body.mg-dragging .mg-hl-layer *,
+body.mg-dragging .mg-sel-menu {
+  pointer-events: none;
+}
 /* ブロックのつまみは 2 つ並ぶ。表のときは左上の角に 1 つだけ出す。 */
 .mg-gutter {
   position: absolute;

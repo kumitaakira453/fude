@@ -222,6 +222,13 @@ export function AnchorOverlay({
     if (!content) return;
     let raf = 0;
     const onMove = (e: MouseEvent) => {
+      // 選択を引いているあいだは出さない。カードが下に出ると、ドラッグの
+      // 行き先をそれが奪って選択が飛ぶ。
+      if (e.buttons !== 0) {
+        keep();
+        if (peekRef.current) setPeek(null);
+        return;
+      }
       // カードの上ではカードの都合を優先する（触れているあいだは閉じない）。
       if ((e.target as Element | null)?.closest?.(".mg-review-peek")) {
         keep();

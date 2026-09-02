@@ -10,6 +10,7 @@ import { ReviewScreen } from "./components/review/ReviewScreen";
 import { Toolbar } from "./components/Toolbar";
 import { Toast } from "./components/Toast";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
@@ -39,6 +40,7 @@ export default function App() {
   const store = useStore();
 
   useHotkeys();
+  useDragging();
   useWatcher();
   useUrlSync();
   useReviewLedger();

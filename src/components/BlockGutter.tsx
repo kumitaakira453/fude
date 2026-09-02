@@ -330,6 +330,9 @@ export function BlockGutter({
 
     const onMouseMove = (e: MouseEvent) => {
       if (heldRef.current || menuRef.current) return;
+      // 選択を引いているあいだは出さない。押せるものが下に出ると、ドラッグの
+      // 行き先をそれが奪って選択が飛ぶ。
+      if (e.buttons !== 0) return;
       // つまみの上に来ても保つ。消えると押せない。
       if (layerRef.current?.contains(e.target as Node)) return;
       const hit = blockAtY(content, e.clientY);
