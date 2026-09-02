@@ -90,6 +90,24 @@ async fn review_reply(thread: String, author: String, body: String) -> Result<()
 }
 
 #[tauri::command]
+async fn review_remove(thread: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || review::remove(&thread))
+        .await
+        .map_err(|e| format!("指摘の取り消しに失敗しました: {e}"))?
+}
+
+#[tauri::command]
+async fn review_edit_comment(
+    thread: String,
+    comment: String,
+    body: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || review::edit_comment(&thread, &comment, &body))
+        .await
+        .map_err(|e| format!("書き込みの書き直しに失敗しました: {e}"))?
+}
+
+#[tauri::command]
 async fn review_resolve(thread: String, by: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::resolve(&thread, &by))
         .await
@@ -127,6 +145,74 @@ async fn open_in_app(app: String, path: String) -> Result<(), String> {
     }
 }
 
+// フォルダ配下の Markdown の更新時刻を、1 回の呼び出しでまとめて返す。
+// ファイルごとに stat を投げると、数百ファイルで往復が積み上がってフォルダを
+// 開くのが目に見えて遅くなる。走査は Rust 側で完結させる。
+#[derive(serde::Serialize)]
+struct FileStamp {
+    // フォルダからの相対パス（/ 区切り）
+    path: String,
+    // 更新時刻（エポックからのミリ秒）
+    mtime: u64,
+}
+
+const SKIP_DIRS: [&str; 6] = [
+    "node_modules",
+    ".obsidian",
+    ".trash",
+    ".vscode",
+    ".idea",
+    "dist",
+];
+
+fn is_markdown(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [".md", ".markdown", ".mdx", ".mdown", ".mkd"]
+        .iter()
+        .any(|ext| lower.ends_with(ext))
+}
+
+fn stamps_in(dir: &std::path::Path, prefix: &str, out: &mut Vec<FileStamp>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let rel = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let Ok(kind) = entry.file_type() else { continue };
+        if kind.is_dir() {
+            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+                continue;
+            }
+            stamps_in(&entry.path(), &rel, out);
+        } else if kind.is_file() && is_markdown(&name) {
+            let mtime = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            out.push(FileStamp { path: rel, mtime });
+        }
+    }
+}
+
+#[tauri::command]
+async fn folder_mtimes(root: String) -> Vec<FileStamp> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut out = Vec::new();
+        stamps_in(std::path::Path::new(&root), "", &mut out);
+        out
+    })
+    .await
+    .unwrap_or_default()
+}
+
 // 指定したアプリ名のうち、実際にインストールされているものを返す。
 // メニューに出す項目を実在するアプリだけに絞るために使う。
 #[tauri::command]
@@ -157,6 +243,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_in_app,
             installed_apps,
+            folder_mtimes,
             review_store_path,
             review_create_thread,
             review_version_text,
@@ -164,6 +251,8 @@ pub fn run() {
             review_reply,
             review_resolve,
             review_resolve_many,
+            review_remove,
+            review_edit_comment,
             windows::open_doc_window,
             windows::set_window_title,
             windows::record_recent_folder

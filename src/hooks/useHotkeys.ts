@@ -1,6 +1,6 @@
 import { useStore } from "jotai";
 import { useEffect } from "react";
-import { closeTab, splitPane } from "../lib/ui";
+import { closeTab, reopenTab, splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
 import { reviewScreenAtom } from "../state/review";
 
@@ -81,11 +81,20 @@ export function useHotkeys() {
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {
         e.preventDefault();
         store.set(reviewScreenAtom, true);
+      } else if (mod && e.shiftKey && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        reopenTab(store);
       } else if (mod && (e.key === "w" || e.key === "W")) {
         e.preventDefault();
         const paneId = store.get(A.activePaneIdAtom);
         const pane = store.get(A.panesAtom).find((p) => p.id === paneId);
         if (pane && pane.tabs.length > 0) closeTab(store, paneId, pane.active);
+      } else if (mod && e.key === "/") {
+        e.preventDefault();
+        store.set(A.shortcutsOpenAtom, !store.get(A.shortcutsOpenAtom));
+      } else if (mod && e.key === ",") {
+        e.preventDefault();
+        store.set(A.settingsOpenAtom, !store.get(A.settingsOpenAtom));
       } else if (mod && e.key === "\\") {
         e.preventDefault();
         splitPane(store, "row");
@@ -97,6 +106,8 @@ export function useHotkeys() {
         history.forward();
       } else if (e.key === "Escape") {
         store.set(A.paletteOpenAtom, false);
+        store.set(A.shortcutsOpenAtom, false);
+        store.set(A.settingsOpenAtom, false);
         store.set(A.highlightAtom, null);
       }
     };

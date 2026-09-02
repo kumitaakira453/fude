@@ -4,6 +4,7 @@ import {
   isValidElement,
   memo,
   useContext,
+  useMemo,
   useState,
   type ReactElement,
   type ReactNode,
@@ -22,6 +23,7 @@ import { CellEditor } from "./CellEditor";
 import { CodeBlock } from "./CodeBlock";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
+import { openHtmlContainers } from "../lib/htmlBlocks";
 import { MdImage } from "./MdImage";
 import { Mermaid } from "./Mermaid";
 
@@ -250,6 +252,13 @@ export const Markdown = memo(function Markdown({
   // レンダーごとにリセットされるチェックボックスの通し番号
   const taskSeq = { n: 0 };
 
+  // 行だけのタグで囲まれた塊は、そのままでは中の markdown が読まれない。
+  // 描画にはほどいた文字列を渡す。
+  const source = useMemo(() => openHtmlContainers(body), [body]);
+  // ほどくと文字数が動く。ソース上の位置を頼りにする目印（セル・項目）は
+  // 付けない。位置がずれた目印で編集すると、別の場所を書き換えてしまう。
+  const shifted = source !== body;
+
   // td/th 共通のレンダリング。編集対象セルはインラインエディタに差し替える。
   const renderCell = (
     tag: "td" | "th",
@@ -260,7 +269,12 @@ export const Markdown = memo(function Markdown({
     const Tag = tag;
     const start = (node as { position?: { start?: { offset?: number } } })
       ?.position?.start?.offset;
-    if (editCell && start !== undefined && editCell.cellStart === start) {
+    if (
+      !shifted &&
+      editCell &&
+      start !== undefined &&
+      editCell.cellStart === start
+    ) {
       return (
         <Tag {...rest}>
           <div className="mg-cell mg-cell-editing">
@@ -276,7 +290,7 @@ export const Markdown = memo(function Markdown({
     return (
       // 選択からこのセルを特定するための目印。値は描画側が持っている
       // 正確なソースオフセットで、セル編集の照合にそのまま使える。
-      <Tag {...rest} data-mg-cell={start}>
+      <Tag {...rest} data-mg-cell={shifted ? undefined : start}>
         <div className="mg-cell">{children}</div>
       </Tag>
     );
@@ -343,7 +357,7 @@ export const Markdown = memo(function Markdown({
         },
         // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
         li({ node, children, ...rest }) {
-          const anchor = itemAnchor(node);
+          const anchor = shifted ? null : itemAnchor(node);
           if (editItem && anchor !== null && editItem.anchor === anchor) {
             return (
               <li {...rest}>
@@ -456,7 +470,7 @@ export const Markdown = memo(function Markdown({
         },
       }}
     >
-      {body}
+      {source}
     </ReactMarkdown>
   );
 });

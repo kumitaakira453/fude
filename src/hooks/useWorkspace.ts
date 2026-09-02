@@ -5,6 +5,8 @@ import {
   buildTree,
   createDir,
   flattenFiles,
+  ancestorPaths,
+  folderMtimes,
   imageUrl,
   isMarkdown,
   pathExists,
@@ -140,10 +142,25 @@ export function useWorkspace() {
   const refreshTree = useCallback(async () => {
     const root = getRootPath();
     if (!root) return;
+    // 走査の間も何か出しておく。数百のフォルダを辿るので、無言で止まると
+    // 固まったように見える。
+    store.set(A.loadingAtom, {
+      active: true,
+      message: "フォルダを読み込み中",
+      done: 0,
+      total: 0,
+    });
     const tree = await buildTree(root);
     const files = flattenFiles(tree);
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, files);
+    // 更新時刻は並び順にしか使わないので、待たずに後から入れる。
+    void folderMtimes(root).then(
+      (m) => store.set(A.touchedAtom, m),
+      (e: unknown) => {
+        console.error("更新時刻を読めません", e);
+      },
+    );
     // インデックスは全ファイルを読むので、最初の描画と取り合いにならないよう
     // 手が空いてから始める（await もしない）
     const gen = ++indexGen;
@@ -234,6 +251,27 @@ export function useWorkspace() {
     [store, reloadFile],
   );
 
+  // 復元したタブの置き場所をツリーで開いておく。タブだけ戻して閉じたままだと、
+  // 開いているファイルが木のどこにあるのか辿り直すことになる。
+  const revealTabs = useCallback(
+    (folderId: string, layout: A.LayoutNode) => {
+      const paths: string[] = [];
+      const walk = (node: A.LayoutNode) => {
+        if (node.kind === "leaf") paths.push(...node.tabs);
+        else node.children.forEach(walk);
+      };
+      walk(layout);
+      if (paths.length === 0) return;
+      const open = new Set(store.get(A.expandedByFolderAtom)[folderId] ?? []);
+      for (const path of paths) for (const dir of ancestorPaths(path)) open.add(dir);
+      store.set(A.expandedByFolderAtom, (prev) => ({
+        ...prev,
+        [folderId]: [...open],
+      }));
+    },
+    [store],
+  );
+
   // フォルダを開く。file を渡すと、そのファイルはツリーの走査を待たずに出す。
   // 走査は数百〜千のファイルを辿るので、待つと本文が出るまでが目に見えて遅い。
   const openFolder = useCallback(
@@ -246,8 +284,11 @@ export function useWorkspace() {
       void recordRecentFolder(path, now).catch((e: unknown) => {
         console.error("最近開いたフォルダを記録できません", e);
       });
-      // 永続化 effect に上書きされる前に保存レイアウトを先読みしておく
-      const saved = store.get(A.savedLayoutsAtom)[activeId];
+      // 永続化 effect に上書きされる前に保存レイアウトを先読みしておく。
+      // このウィンドウでの控えが無ければ、ウィンドウを問わない控えを使う。
+      const saved =
+        store.get(A.savedLayoutsAtom)[activeId] ??
+        store.get(A.sessionLayoutsAtom)[activeId];
       store.set(A.activeFolderIdAtom, activeId);
       resetLayout(store);
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化
@@ -265,9 +306,10 @@ export function useWorkspace() {
         );
         store.set(A.layoutAtom, layout);
         store.set(A.activePaneIdAtom, active);
+        revealTabs(activeId, layout);
       }
     },
-    [store, refreshTree, openFile],
+    [store, refreshTree, openFile, revealTabs],
   );
 
   // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
@@ -290,6 +332,23 @@ export function useWorkspace() {
       }
     },
     [store],
+  );
+
+  // 登録フォルダを別のウィンドウで開く。作用中のフォルダとは関係なく開ける。
+  const openFolderInNewWindow = useCallback(
+    async (folderId: string, title: string): Promise<boolean> => {
+      try {
+        await openDocWindow(folderId, null, title);
+        return true;
+      } catch (e) {
+        void message(`新しいウィンドウを開けませんでした。\n${String(e)}`, {
+          title: "mdglow",
+          kind: "error",
+        });
+        return false;
+      }
+    },
+    [],
   );
 
   const navigate = useCallback(
@@ -519,6 +578,7 @@ export function useWorkspace() {
     reloadFile,
     openFile,
     openInNewWindow,
+    openFolderInNewWindow,
     navigate,
     resolveAsset,
     peekAsset,

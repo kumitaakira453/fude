@@ -64,7 +64,14 @@ export function useUrlSync() {
       const state = parseHash();
       await refreshFolders();
       if (cancelled) return;
-      if (state.folderId) await applyUrl.current(state);
+      if (state.folderId) {
+        await applyUrl.current(state);
+      } else {
+        // 起動直後は最後に開いていたフォルダへ戻す。履歴は新しい順なので
+        // 先頭がそれ。保存レイアウトからタブもそのまま復元される。
+        const last = store.get(A.foldersAtom)[0];
+        if (last) await openFolder(last.path);
+      }
       readyRef.current = true;
     })();
     return () => {

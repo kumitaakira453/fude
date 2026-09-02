@@ -1,6 +1,7 @@
 import { useAtom } from "jotai";
 import { useEffect } from "react";
 import { toastAtom } from "../state/toast";
+import { Icon } from "./Icon";
 
 const LINGER = 1900;
 // 操作が付いているときは、押す間があるように長めに出す。
@@ -13,6 +14,8 @@ export function Toast() {
 
   useEffect(() => {
     if (!toast) return;
+    // 進行中は自分で消えない。終わったときに差し替えて消える。
+    if (toast.busy) return;
     const timer = window.setTimeout(
       () => setToast(null),
       toast.action ? LINGER_WITH_ACTION : LINGER,
@@ -31,6 +34,10 @@ export function Toast() {
       aria-live="polite"
       key={toast.id}
     >
+      {toast.busy && (
+        <Icon name="progress_activity" size={14} className="mg-spin" />
+      )}
+      {toast.done && <Icon name="check" size={15} />}
       <span>{toast.text}</span>
       {toast.action && (
         <button

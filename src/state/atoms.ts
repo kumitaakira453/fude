@@ -20,6 +20,9 @@ export const loadingAtom = atom<{ active: boolean; message: string; done: number
 export const contentCacheAtom = atom<Map<string, string>>(new Map());
 // path -> lastModified（ポーリング差分検出用）
 export const mtimeCacheAtom = atom<Map<string, number>>(new Map());
+// path -> 最後に触られた時刻。フォルダを開いたときにまとめて読み、監視で
+// 変更を拾うたびに更新する。クイックオープンの並び順に使う。
+export const touchedAtom = atom<Map<string, number>>(new Map());
 
 // ---- ペイン（画面分割：二分木グリッド） ----
 // 1 つのペインは複数のファイルをタブとして持ち、そのうち 1 つを表示する。
@@ -54,6 +57,13 @@ export const activePaneIdAtom = atom<string>("p1");
 export const savedLayoutsAtom = atomWithStorage<
   Record<string, { layout: LayoutNode; active: string }>
 >(windowScopedKey("mdglow:layouts"), {}, undefined, { getOnInit: true });
+
+// ウィンドウを跨いだ控え。上のキーはウィンドウごとに分かれているので、
+// 新しいウィンドウで同じフォルダを開くと復元先が無い。フォルダを開いた
+// ときに最後の状態へ戻れるよう、ウィンドウを問わない控えも持っておく。
+export const sessionLayoutsAtom = atomWithStorage<
+  Record<string, { layout: LayoutNode; active: string }>
+>("mdglow:sessions", {}, undefined, { getOnInit: true });
 
 // ペイン（leaf）の最大数
 export const MAX_PANES = 6;
@@ -107,6 +117,16 @@ export type UpdateStatus =
   | "error";
 export const updateStatusAtom = atom<UpdateStatus>("idle");
 
+// ---- 閉じたタブの控え（⌘⇧T で開き直す） ----
+// 別のペインやウィンドウへ移したものは「閉じた」ではないので積まない。
+// フォルダを切り替えたら破棄する（別のフォルダのパスを開き直しても意味が無い）。
+export interface ClosedTab {
+  path: string;
+  paneId: string;
+  index: number;
+}
+export const closedTabsAtom = atom<ClosedTab[]>([]);
+
 // ---- ファイルツリー開閉状態（フォルダ ID ごとに永続化・ウィンドウごと） ----
 export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(
   windowScopedKey("mdglow:expanded"),
@@ -114,15 +134,22 @@ export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(
 );
 
 // ---- ツリーで対象を表示（パンくずクリック等） ----
-// path のフォルダ/ファイルをツリー上で展開・スクロール・強調するための信号
-export const revealInTreeAtom = atom<{ path: string; nonce: number } | null>(
-  null,
-);
+// path のフォルダ/ファイルをツリー上で展開・スクロール・強調するための信号。
+// edit を立てると、その行をそのまま名前の変更に入れる。
+export const revealInTreeAtom = atom<{
+  path: string;
+  nonce: number;
+  edit?: boolean;
+} | null>(null);
 
 // ---- 検索・パレット ----
 export const treeFilterAtom = atom<string>("");
 export const sidebarTabAtom = atom<"files" | "search">("files");
 export const paletteOpenAtom = atom<boolean>(false);
+// ⌘/ で開くキー操作の一覧
+export const shortcutsOpenAtom = atom<boolean>(false);
+// ⌘, で開く表示設定
+export const settingsOpenAtom = atom<boolean>(false);
 
 // ---- 監視状態 ----
 export const watchModeAtom = atom<"observer" | "polling" | "off">("off");

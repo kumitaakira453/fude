@@ -32,10 +32,14 @@ import {
 
 interface Draft {
   hit: AnchorHit;
+  // 下書き中の対象を本文に印で出すための位置。
+  blockIndex: number;
   offset: number;
   text: string;
   quote: string;
   sectionPath: string[];
+  // ブロック全体への指摘。箇所を持たないので、保存する選択は空にする。
+  whole?: boolean;
 }
 
 export function useReview({
@@ -170,8 +174,13 @@ export function useReview({
   );
 
   // 押しても何も起きない状態を作らない。進めない理由はその場で出す。
-  const startDraft = useCallback(() => {
-    if (!selection) {
+  const startDraft = useCallback((opts?: { whole?: boolean }) => {
+    // 読むのは DOM が今持っている選択。控え（selection）は selectionchange
+    // 経由で 1 フレーム遅れて届くので、セルやブロック全体へ選択を広げた直後に
+    // これを先に見ると、広げる前の一部分だけを対象にしてしまう。
+    // 押した拍子に選択が解けている場合だけ控えに戻る。
+    const picked = (content ? readSelection(content) : null) ?? selection;
+    if (!picked) {
       void message("本文を選択してから押してください。", {
         title: "mdglow",
         kind: "info",
@@ -186,10 +195,10 @@ export function useReview({
       return;
     }
     const all = getBlocks();
-    const block = all.find((b) => b.index === selection.blockIndex);
+    const block = all.find((b) => b.index === picked.blockIndex);
     if (!block) {
       void message(
-        `選択された箇所（ブロック ${selection.blockIndex} / 全 ${all.length}）を本文の中で特定できませんでした。`,
+        `選択された箇所（ブロック ${picked.blockIndex} / 全 ${all.length}）を本文の中で特定できませんでした。`,
         { title: "mdglow", kind: "error" },
       );
       return;
@@ -197,17 +206,19 @@ export function useReview({
     setDraft({
       hit: {
         id: "",
-        top: selection.rect.top,
-        bottom: selection.rect.bottom,
-        left: selection.rect.left,
+        top: picked.rect.top,
+        bottom: picked.rect.bottom,
+        left: picked.rect.left,
       },
-      offset: selection.start,
-      text: selection.text,
+      blockIndex: picked.blockIndex,
+      offset: picked.start,
+      text: picked.text,
       quote: block.src,
-      sectionPath: sectionPathAt(all, selection.blockIndex),
+      sectionPath: sectionPathAt(all, picked.blockIndex),
+      whole: opts?.whole,
     });
     setSelection(null);
-  }, [selection, absPath, getBlocks]);
+  }, [selection, content, absPath, getBlocks]);
 
   const submit = useCallback(
     async (text: string) => {
@@ -217,8 +228,10 @@ export function useReview({
         const id = await createThread({
           file: absPath,
           quote: draft.quote,
-          selection: draft.text,
-          selectionOffset: draft.offset,
+          // ブロック全体への指摘は箇所を持たない。空で保存すると、印は
+          // ブロックの外枠だけになる（塗り潰さない）。
+          selection: draft.whole ? "" : draft.text,
+          selectionOffset: draft.whole ? 0 : draft.offset,
           sectionPath: draft.sectionPath,
           // 画面に出ていた全文を版として残す。ディスクの内容ではなくこれを
           // 渡すので、指摘とその基準版が食い違わない。

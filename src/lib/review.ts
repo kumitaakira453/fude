@@ -159,6 +159,32 @@ export async function replyToThread(
   );
 }
 
+// 指摘そのものを取り消す。解決（片付いた記録が残る）とは別の意味の操作。
+export async function removeThread(thread: string): Promise<boolean> {
+  return attempt(
+    () => invoke("review_remove", { thread }),
+    "指摘を取り消せませんでした",
+  );
+}
+
+// 書き込みを書き直す。
+export async function editComment(
+  thread: string,
+  comment: string,
+  body: string,
+): Promise<boolean> {
+  return attempt(
+    () => invoke("review_edit_comment", { thread, comment, body }),
+    "書き込みを直せませんでした",
+  );
+}
+
+// 最後の書き込みが AI かどうか。一覧で返信が来ているかを示すのに使う。
+export function answeredByAgent(thread: ReviewThread): boolean {
+  const last = thread.comments[thread.comments.length - 1];
+  return !!last && AGENTS.has(last.author);
+}
+
 export async function resolveThread(thread: string, by: string): Promise<boolean> {
   return attempt(
     () => invoke("review_resolve", { thread, by }),

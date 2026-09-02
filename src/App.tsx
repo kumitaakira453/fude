@@ -1,6 +1,8 @@
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
 import { CommandPalette } from "./components/CommandPalette";
+import { Settings } from "./components/Settings";
+import { Shortcuts } from "./components/Shortcuts";
 import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
@@ -20,6 +22,7 @@ import {
   foldersAtom,
   layoutAtom,
   savedLayoutsAtom,
+  sessionLayoutsAtom,
   sidebarOpenAtom,
   themeAtom,
 } from "./state/atoms";
@@ -80,13 +83,14 @@ export default function App() {
     return () => window.removeEventListener("click", onClick);
   }, []);
 
-  // 分割レイアウトをフォルダごとに永続化（保存先はウィンドウごとに分かれている）
+  // 分割レイアウトをフォルダごとに永続化（保存先はウィンドウごとに分かれている）。
+  // ウィンドウを問わない控えにも同じものを書く。新しいウィンドウで同じフォルダを
+  // 開いたときや、ウィンドウの名前が変わったときの戻り先になる。
   useEffect(() => {
     if (!activeFolderId) return;
-    store.set(savedLayoutsAtom, (prev) => ({
-      ...prev,
-      [activeFolderId]: { layout, active: activePaneId },
-    }));
+    const entry = { layout, active: activePaneId };
+    store.set(savedLayoutsAtom, (prev) => ({ ...prev, [activeFolderId]: entry }));
+    store.set(sessionLayoutsAtom, (prev) => ({ ...prev, [activeFolderId]: entry }));
   }, [layout, activePaneId, activeFolderId, store]);
 
   // ウィンドウのタイトルは開いているフォルダ名。macOS はこれを Dock メニューの
@@ -132,6 +136,8 @@ export default function App() {
         <PaneGroup />
       </div>
       <CommandPalette />
+      <Shortcuts />
+      <Settings />
       <UpdateBanner />
         <Toast />
     </div>

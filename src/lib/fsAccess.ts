@@ -70,18 +70,33 @@ export async function buildTree(
     return [];
   }
   const nodes: TreeNode[] = [];
+  const dirs: typeof entries = [];
   for (const e of entries) {
     const rel = parentRel ? `${parentRel}/${e.name}` : e.name;
     const abs = `${rootAbs}/${rel}`;
     if (e.isDirectory) {
       if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
-      const children = await buildTree(rootAbs, rel);
-      // 空フォルダも表示する（新規作成フォルダや構成用フォルダのため）
-      nodes.push({ name: e.name, path: rel, abs, kind: "dir", children });
+      dirs.push(e);
     } else if (e.isFile && isMarkdown(e.name)) {
       nodes.push({ name: e.name, path: rel, abs, kind: "file" });
     }
   }
+  // 同じ階層のフォルダは並べて読む。1 つずつ待つと、フォルダの数だけ
+  // 往復が直列に積み上がり、開くまでに何秒もかかる。
+  const walked = await Promise.all(
+    dirs.map(async (e) => {
+      const rel = parentRel ? `${parentRel}/${e.name}` : e.name;
+      // 空フォルダも表示する（新規作成フォルダや構成用フォルダのため）
+      return {
+        name: e.name,
+        path: rel,
+        abs: `${rootAbs}/${rel}`,
+        kind: "dir" as const,
+        children: await buildTree(rootAbs, rel),
+      };
+    }),
+  );
+  nodes.push(...walked);
   nodes.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name, "ja", { numeric: true });
@@ -99,6 +114,60 @@ export function flattenFiles(nodes: TreeNode[]): TreeNode[] {
   };
   walk(nodes);
   return out;
+}
+
+// 名前かパスに文字列を含むファイルだけを残す。中身が残ったフォルダだけを通す。
+export function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
+  if (!q) return nodes;
+  const lower = q.toLowerCase();
+  const out: TreeNode[] = [];
+  for (const n of nodes) {
+    if (n.kind === "file") {
+      if (
+        n.name.toLowerCase().includes(lower) ||
+        n.path.toLowerCase().includes(lower)
+      )
+        out.push(n);
+    } else if (n.children) {
+      const children = filterTree(n.children, q);
+      if (children.length) out.push({ ...n, children });
+    }
+  }
+  return out;
+}
+
+// 相対パスで 1 つ引く。
+export function findNode(nodes: TreeNode[], path: string): TreeNode | null {
+  for (const n of nodes) {
+    if (n.path === path) return n;
+    if (n.kind === "dir" && n.children && path.startsWith(`${n.path}/`)) {
+      const hit = findNode(n.children, path);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+// フォルダの中身。空文字はルートを指す。フォルダ以外を渡したら空。
+export function childrenAt(nodes: TreeNode[], dirPath: string): TreeNode[] {
+  if (!dirPath) return nodes;
+  const node = findNode(nodes, dirPath);
+  if (!node || node.kind !== "dir") return [];
+  return node.children ?? [];
+}
+
+// 祖先のパスを浅い方から並べる。自分自身は含めない。
+export function ancestorPaths(path: string): string[] {
+  const segs = path.split("/").filter(Boolean);
+  const out: string[] = [];
+  for (let i = 1; i < segs.length; i++) out.push(segs.slice(0, i).join("/"));
+  return out;
+}
+
+// パスの 1 つ上のフォルダ。ルート直下なら空文字。
+export function parentPath(path: string): string {
+  const at = path.lastIndexOf("/");
+  return at < 0 ? "" : path.slice(0, at);
 }
 
 export interface FileData {
@@ -131,6 +200,16 @@ export async function pathExists(abs: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// フォルダ配下の Markdown の更新時刻。走査は Rust 側で完結し、1 回の呼び出しで
+// 全部返る。ファイルごとに stat を投げると、数百ファイルで往復が積み上がる。
+export async function folderMtimes(rootAbs: string): Promise<Map<string, number>> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const list = await invoke<{ path: string; mtime: number }[]>("folder_mtimes", {
+    root: rootAbs,
+  });
+  return new Map(list.map((f) => [f.path, f.mtime]));
 }
 
 // 全文検索インデックス用。mtime を使わない経路では stat を省いて IPC を半減させる。

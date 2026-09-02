@@ -1,12 +1,13 @@
-import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtom, useAtomValue, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useReview } from "../hooks/useReview";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
+import { selectTextIn } from "../lib/domText";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { closePane } from "../lib/ui";
-import { notify } from "../state/toast";
+import { notify, notifyBusy, settle } from "../state/toast";
 import {
   activePath,
   activePaneIdAtom,
@@ -14,14 +15,12 @@ import {
   editorialAtom,
   fontAtom,
   readingWidthAtom,
-  revealInTreeAtom,
-  sidebarOpenAtom,
-  sidebarTabAtom,
   tocOpenAtom,
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
 import { BlockSourceEditor } from "./BlockSourceEditor";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
@@ -141,12 +140,26 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         return;
       if (!path) return;
       e.preventDefault();
-      if (e.shiftKey) void redoFile(path);
-      else void undoFile(path);
+      // 本文全体を読み直すので間があく。何が起きているかを知らせで出す。
+      const back = !e.shiftKey;
+      const id = notifyBusy(store, back ? "戻しています" : "やり直しています", "right");
+      void (back ? undoFile(path) : redoFile(path)).then((ok) => {
+        settle(
+          store,
+          id,
+          ok
+            ? back
+              ? "戻しました"
+              : "やり直しました"
+            : back
+              ? "これ以上戻せません"
+              : "やり直せる変更がありません",
+        );
+      });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isActive, path, undoFile, redoFile]);
+  }, [isActive, path, undoFile, redoFile, store]);
 
   // ⌘E で編集/プレビュー切替（アクティブペインのみ）
   useEffect(() => {
@@ -165,6 +178,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
   const review = useReview({ absPath, body, raw, content, isActive });
+  // キー操作から今の選択を読むための控え。毎描画で作り直さずに済む。
+  const reviewRef = useRef(review);
+  reviewRef.current = review;
 
   // 最新の raw/body/path を ref で参照し、saveBody を安定な関数に保つ。
   // （背景索引などで再レンダーしても Markdown のメモ化が壊れず、Mermaid の
@@ -188,6 +204,73 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     },
     [saveFile],
   );
+
+  // ブロック全体への指摘。つまみのメニューから呼ぶ。選択を持たない操作なので、
+  // そのブロックの中身を選んでから通常の指摘の流れに乗せる。
+  const commentOnBlock = useCallback(
+    (index: number) => {
+      if (!content) return;
+      const el = content.querySelector<HTMLElement>(
+        `[data-mg-block="${index}"]`,
+      );
+      if (!el || !selectTextIn(el)) return;
+      reviewRef.current?.startDraft({ whole: true });
+    },
+    [content],
+  );
+
+  // セル全体への指摘。セルの中を選んでいるときだけ使える。選択をセルの
+  // 中身へ広げてから通常の流れに乗せるので、印はセルの箱で出る。
+  const commentOnCell = useCallback(() => {
+    const sel = reviewRef.current?.selection;
+    if (!content || !sel || sel.cellStart === undefined) return;
+    const cell = content.querySelector<HTMLElement>(
+      `[data-mg-block="${sel.blockIndex}"] [data-mg-cell="${sel.cellStart}"]`,
+    );
+    if (!cell || !selectTextIn(cell)) return;
+    reviewRef.current?.startDraft();
+  }, [content]);
+
+  // 選択したところに対する 2 つの操作。メニューとキーの両方から呼ぶ。
+  const startEdit = useCallback(() => {
+    const sel = reviewRef.current?.selection;
+    if (!sel) return;
+    setEditRequest((r) => ({
+      blockIndex: sel.blockIndex,
+      cellStart: sel.cellStart,
+      itemAnchor: sel.itemAnchor,
+      nonce: (r?.nonce ?? 0) + 1,
+    }));
+    // 選択を解いてメニューを閉じる。useReview は selectionchange を
+    // 見ているので、これで selection が null になる。
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  // 選択したところへのキー操作。メニューを出さずに同じことができる。
+  useEffect(() => {
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const current = reviewRef.current;
+      const sel = current?.selection;
+      if (!current || !sel || current.draft) return;
+      const key = e.key.toLowerCase();
+      if (key === "i" && !e.shiftKey) {
+        e.preventDefault();
+        current.startDraft();
+      } else if (key === "i" && e.shiftKey) {
+        // 範囲を広げた指摘。セルの中ならそのセル、それ以外はブロック全体。
+        e.preventDefault();
+        if (sel.cellStart !== undefined) commentOnCell();
+        else commentOnBlock(sel.blockIndex);
+      } else if (key === "e" && !e.shiftKey) {
+        e.preventDefault();
+        startEdit();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, startEdit, commentOnCell, commentOnBlock]);
 
   // 削除の取り消し。消す前の本文を受け取って書き戻す。
   const undoDelete = useCallback(
@@ -279,16 +362,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const doClosePane = () => closePane(store, pane.id);
 
-  // パンくずのセグメントをクリック → サイドバーを開き、ツリーで対象を展開/強調
-  const setSidebarOpen = useSetAtom(sidebarOpenAtom);
-  const setSidebarTab = useSetAtom(sidebarTabAtom);
-  const setReveal = useSetAtom(revealInTreeAtom);
-  const revealInTree = (target: string) => {
-    setSidebarOpen(true);
-    setSidebarTab("files");
-    setReveal({ path: target, nonce: Date.now() });
-  };
-
   return (
     <section
       onMouseDown={() => !isActive && setActiveId(pane.id)}
@@ -301,22 +374,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* ヘッダー */}
       <header className="flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
-          {path ? (
-            path.split("/").map((seg, i, arr) => (
-              <span key={i}>
-                {i > 0 && <span className="mx-1.5 opacity-60">›</span>}
-                <button
-                  onClick={() => revealInTree(arr.slice(0, i + 1).join("/"))}
-                  title="ツリーで表示"
-                  className="rounded hover:text-[var(--mg-accent)] hover:underline"
-                >
-                  {seg}
-                </button>
-              </span>
-            ))
-          ) : (
-            <span>ファイル未選択</span>
-          )}
+          <Breadcrumbs path={path} paneId={pane.id} />
         </div>
         <Tooltip
           align="end"
@@ -398,7 +456,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
           >
             {path && !loaded ? (
-              <div className="px-6 py-8 sm:px-10">
+              <div className="px-10 py-8 sm:px-16">
                 {showLoading && (
                   <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                     <LoadingBody />
@@ -406,7 +464,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 )}
               </div>
             ) : path ? (
-              <div className="px-6 py-8 sm:px-10">
+              <div className="px-10 py-8 sm:px-16">
                 <article
                   ref={setContent}
                   style={{ fontFamily: fontStack(font) }}
@@ -437,7 +495,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       </div>
                     ))}
                   <markdownContext.Provider value={ctx}>
-                    {/* ダブルクリックしたブロックだけをその場で生ソース編集 */}
+                    {/* 選択メニューやつまみから、そのブロックだけを生ソース編集 */}
                     {/* key でファイルごとに貼り替え、漸進描画を先頭からやり直す */}
                     <EditableBody
                       key={path}
@@ -446,6 +504,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       onSaveBody={saveBody}
                       editRequest={editRequest}
                       onDeleted={undoDelete}
+                      content={content}
+                      scroller={scroller}
+                      contentKey={path}
+                      onComment={commentOnBlock}
                     />
                   </markdownContext.Provider>
                 </article>
@@ -470,6 +532,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             threads={review.threads}
             resolutions={review.resolutions}
             contentKey={path + (raw?.length ?? 0)}
+            draft={
+              review.draft
+                ? {
+                    blockIndex: review.draft.blockIndex,
+                    offset: review.draft.offset,
+                    length: review.draft.text.length,
+                    whole: review.draft.whole,
+                  }
+                : null
+            }
             onPick={review.inspect}
           />
         )}
@@ -495,22 +567,27 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               <Icon name="add_comment" size={14} />
               指摘する
             </button>
+            {review.selection.cellStart !== undefined && (
+              <>
+                <span className="mg-sel-menu-sep" />
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    commentOnCell();
+                  }}
+                >
+                  <Icon name="table" size={14} />
+                  セルに指摘
+                </button>
+              </>
+            )}
             <span className="mg-sel-menu-sep" />
             <button
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                const sel = review.selection;
-                if (!sel) return;
-                setEditRequest((r) => ({
-                  blockIndex: sel.blockIndex,
-                  cellStart: sel.cellStart,
-                  itemAnchor: sel.itemAnchor,
-                  nonce: (r?.nonce ?? 0) + 1,
-                }));
-                // 選択を解いてメニューを閉じる。useReview は selectionchange を
-                // 見ているので、これで selection が null になる。
-                window.getSelection()?.removeAllRanges();
+                startEdit();
               }}
             >
               <Icon name="edit" size={14} />

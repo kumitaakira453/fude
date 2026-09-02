@@ -1,8 +1,11 @@
 import { useAtomValue } from "jotai";
+import { useMemo } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { pickDirectory } from "../lib/fsAccess";
 import { folderDisplayName } from "../lib/idb";
+import { isOpen } from "../lib/review";
 import { foldersAtom } from "../state/atoms";
+import { ledgerAtom } from "../state/review";
 import { Icon } from "./Icon";
 
 function timeAgo(ts: number): string {
@@ -33,7 +36,24 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 export function Landing() {
   const folders = useAtomValue(foldersAtom);
+  const ledger = useAtomValue(ledgerAtom);
   const { openFolder } = useWorkspace();
+
+  // フォルダごとの未解決の指摘の数。台帳は絶対パスで持っているので、
+  // フォルダの道筋で前方一致を数える。開く前に「読むものがある」と
+  // 分かると、どのフォルダに戻ればよいかを迷わない。
+  const counts = useMemo(() => {
+    const open = ledger.threads.filter(isOpen);
+    const map = new Map<string, number>();
+    for (const folder of folders) {
+      const prefix = `${folder.path}/`;
+      map.set(
+        folder.id,
+        open.reduce((n, t) => n + (t.file.startsWith(prefix) ? 1 : 0), 0),
+      );
+    }
+    return map;
+  }, [ledger, folders]);
 
   const open = async () => {
     const path = await pickDirectory();
@@ -98,6 +118,15 @@ export function Landing() {
                     >
                       {folderDisplayName(f)}
                     </span>
+                    {(counts.get(f.id) ?? 0) > 0 && (
+                      <span
+                        className="mg-landing-count"
+                        title={`未解決の指摘 ${counts.get(f.id)} 件`}
+                      >
+                        <Icon name="chat_bubble" size={11} fill />
+                        {counts.get(f.id)}
+                      </span>
+                    )}
                     <span className="ml-auto shrink-0 text-[11px] text-[var(--mg-muted)]">
                       {timeAgo(f.lastOpened)}
                     </span>

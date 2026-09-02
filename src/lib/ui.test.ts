@@ -10,6 +10,7 @@ import {
   moveTab,
   openInPane,
   remapLeafPaths,
+  reopenTab,
   reviveLayout,
   splitPane,
   type StoredNode,
@@ -103,6 +104,57 @@ describe("closeTabAt", () => {
     openInPane(store, "p1", "a.md");
     closeTabAt(store, "p1", "gone.md");
     expect(first().tabs).toEqual(["a.md"]);
+  });
+});
+
+describe("reopenTab", () => {
+  it("閉じた位置に戻す", () => {
+    for (const f of ["a.md", "b.md", "c.md"]) openInPane(store, "p1", f);
+    closeTab(store, "p1", 1);
+    expect(first().tabs).toEqual(["a.md", "c.md"]);
+    expect(reopenTab(store)).toBe("b.md");
+    expect(first().tabs).toEqual(["a.md", "b.md", "c.md"]);
+    expect(A.activePath(first())).toBe("b.md");
+  });
+
+  it("閉じた順に戻す", () => {
+    for (const f of ["a.md", "b.md"]) openInPane(store, "p1", f);
+    closeTab(store, "p1", 0);
+    closeTab(store, "p1", 0);
+    expect(reopenTab(store)).toBe("b.md");
+    expect(reopenTab(store)).toBe("a.md");
+    expect(first().tabs).toEqual(["a.md", "b.md"]);
+  });
+
+  it("控えが無ければ何もしない", () => {
+    openInPane(store, "p1", "a.md");
+    expect(reopenTab(store)).toBeNull();
+    expect(first().tabs).toEqual(["a.md"]);
+  });
+
+  it("移動したタブは控えない", () => {
+    for (const f of ["a.md", "b.md"]) openInPane(store, "p1", f);
+    splitPane(store, "row");
+    const side = store.get(A.activePaneIdAtom);
+    moveTab(store, { paneId: "p1", index: 0 }, side);
+    expect(reopenTab(store)).toBeNull();
+  });
+
+  it("既に開き直されていれば次の控えへ進む", () => {
+    for (const f of ["a.md", "b.md"]) openInPane(store, "p1", f);
+    closeTab(store, "p1", 1); // b.md
+    closeTab(store, "p1", 0); // a.md
+    openInPane(store, "p1", "a.md");
+    expect(reopenTab(store)).toBe("b.md");
+  });
+
+  it("ペインごと閉じた分もまとめて控える", () => {
+    openInPane(store, "p1", "a.md");
+    splitPane(store, "row");
+    const side = store.get(A.activePaneIdAtom);
+    openInPane(store, side, "b.md");
+    closePane(store, side);
+    expect(reopenTab(store)).toBe("b.md");
   });
 });
 

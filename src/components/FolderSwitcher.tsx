@@ -11,7 +11,7 @@ export function FolderSwitcher() {
   const folders = useAtomValue(foldersAtom);
   const setFolders = useSetAtom(foldersAtom);
   const [activeId, setActiveId] = useAtom(activeFolderIdAtom);
-  const { openFolder, refreshFolders } = useWorkspace();
+  const { openFolder, openFolderInNewWindow, refreshFolders } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -115,6 +115,16 @@ export function FolderSwitcher() {
                         {folderDisplayName(f)}
                       </span>
                       <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void openFolderInNewWindow(f.id, folderDisplayName(f));
+                          }}
+                          title="新しいウィンドウで開く"
+                          className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-accent)]"
+                        >
+                          <Icon name="open_in_new" size={14} />
+                        </button>
                         <button
                           onClick={(e) => startRename(e, f.id, folderDisplayName(f))}
                           title="表示名を変更"

@@ -1,5 +1,4 @@
-import { confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
-import { useAtom, useAtomValue, useStore } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -11,15 +10,13 @@ import {
   readDragPayload,
   setDragPayload,
 } from "../lib/dnd";
-import { setFileDragImage } from "../lib/dragImage";
+import { setDragChip } from "../lib/dragImage";
 import {
-  availableApps,
-  type ExternalApp,
-  openWith,
-  revealInFinder,
-} from "../lib/external";
-import { displayName, type TreeNode } from "../lib/fsAccess";
-import { openToSide } from "../lib/ui";
+  ancestorPaths,
+  displayName,
+  filterTree,
+  type TreeNode,
+} from "../lib/fsAccess";
 import {
   activePath,
   activeFolderIdAtom,
@@ -29,36 +26,12 @@ import {
   treeAtom,
   treeFilterAtom,
 } from "../state/atoms";
+import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
 
-
-interface MenuState {
-  x: number;
-  y: number;
-  node: TreeNode;
-}
 interface Creating {
   parentPath: string;
   kind: "file" | "dir";
-}
-
-function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
-  if (!q) return nodes;
-  const lower = q.toLowerCase();
-  const out: TreeNode[] = [];
-  for (const n of nodes) {
-    if (n.kind === "file") {
-      if (
-        n.name.toLowerCase().includes(lower) ||
-        n.path.toLowerCase().includes(lower)
-      )
-        out.push(n);
-    } else if (n.children) {
-      const children = filterTree(n.children, q);
-      if (children.length) out.push({ ...n, children });
-    }
-  }
-  return out;
 }
 
 interface ItemCtx {
@@ -139,7 +112,7 @@ function TreeItem({
   const startDrag = (e: React.DragEvent) => {
     setDragPayload(e.dataTransfer, { path: node.path });
     e.dataTransfer.effectAllowed = "copyMove";
-    setFileDragImage(e.dataTransfer, node.name);
+    setDragChip(e.dataTransfer, node.name);
   };
 
   if (node.kind === "dir") {
@@ -184,7 +157,7 @@ function TreeItem({
             }}
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
-            className={`group flex h-7 w-full cursor-pointer items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none transition ${
+            className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none transition ${
               isDropTarget
                 ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]"
                 : "hover:bg-[var(--mg-hover)]"
@@ -284,7 +257,7 @@ function TreeItem({
       }
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
-      className={`group relative flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[13px] transition ${
+      className={`group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] transition ${
         active
           ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
           : "text-[var(--mg-fg-dim)] hover:bg-[var(--mg-hover)]"
@@ -317,191 +290,25 @@ function TreeItem({
   );
 }
 
-function ContextMenu({
-  menu,
-  onClose,
-  onNewFile,
-  onNewFolder,
-  onRename,
-  onDelete,
-}: {
-  menu: MenuState;
-  onClose: () => void;
-  onNewFile: (n: TreeNode) => void;
-  onNewFolder: (n: TreeNode) => void;
-  onRename: (n: TreeNode) => void;
-  onDelete: (n: TreeNode) => void;
-}) {
-  const { openFile, openInNewWindow, getRootPath } = useWorkspace();
-  const store = useStore();
-  const { node } = menu;
-  const root = getRootPath();
-  const absPath = root ? `${root}/${node.path}` : node.path;
-  // 実在するエディタだけを項目に出す（押しても無反応になるのを避ける）
-  const [editors, setEditors] = useState<ExternalApp[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void availableApps().then((a) => {
-      if (alive) setEditors(a);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const close = () => onClose();
-    window.addEventListener("click", close);
-    window.addEventListener("resize", close);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  const copy = (t: string) =>
-    void navigator.clipboard.writeText(t).catch(() => {});
-  type MI =
-    | { icon: string; label: string; action: () => void; danger?: boolean }
-    | "sep";
-  // Finder / 外部エディタで開く（ファイル・フォルダ共通）
-  const externalItems: MI[] = [
-    {
-      icon: "folder_open",
-      label: "Finder で表示",
-      action: () => revealInFinder(absPath),
-    },
-    ...editors.map((a) => ({
-      icon: a.icon,
-      label: a.label,
-      action: () => openWith(absPath, a.app),
-    })),
-  ];
-  const pathItems: MI[] = [
-    {
-      icon: "content_copy",
-      label: "相対パスをコピー",
-      action: () => copy(node.path),
-    },
-    {
-      icon: "file_copy",
-      label: "絶対パスをコピー",
-      action: () => copy(absPath),
-    },
-  ];
-  const commonItems: MI[] = [
-    "sep",
-    {
-      icon: "drive_file_rename_outline",
-      label: "名前を変更",
-      action: () => onRename(node),
-    },
-    {
-      icon: "delete",
-      label: "削除",
-      action: () => onDelete(node),
-      danger: true,
-    },
-    "sep",
-    ...externalItems,
-    "sep",
-    ...pathItems,
-  ];
-  const items: MI[] =
-    node.kind === "file"
-      ? [
-          {
-            icon: "markdown",
-            label: "開く",
-            action: () => openFile(node.path),
-          },
-          {
-            icon: "vertical_split",
-            label: "横に開く",
-            action: () => openToSide(store, node.path),
-          },
-          {
-            icon: "open_in_new",
-            label: "新しいウィンドウで開く",
-            action: () => void openInNewWindow(node.path),
-          },
-          ...commonItems,
-        ]
-      : [
-          {
-            icon: "note_add",
-            label: "新規ファイル",
-            action: () => onNewFile(node),
-          },
-          {
-            icon: "create_new_folder",
-            label: "新規フォルダ",
-            action: () => onNewFolder(node),
-          },
-          ...commonItems,
-        ];
-
-  const rows = items.length;
-  const style: React.CSSProperties = {
-    left: Math.min(menu.x, window.innerWidth - 220),
-    top: Math.min(menu.y, window.innerHeight - (rows * 30 + 16)),
-  };
-
-  return (
-    <div
-      style={style}
-      onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 w-52 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
-    >
-      {items.map((it, i) =>
-        it === "sep" ? (
-          <div key={i} className="my-1 h-px bg-[var(--mg-border)]" />
-        ) : (
-          <button
-            key={i}
-            onClick={() => {
-              it.action();
-              onClose();
-            }}
-            className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
-              it.danger ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
-            }`}
-          >
-            <Icon
-              name={it.icon}
-              size={16}
-              className={it.danger ? "" : "text-[var(--mg-muted)]"}
-            />
-            {it.label}
-          </button>
-        ),
-      )}
-    </div>
-  );
-}
-
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
   const filter = useAtomValue(treeFilterAtom);
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
-  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [menu, setMenu] = useState<EntryMenuState | null>(null);
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [creating, setCreating] = useState<Creating | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
-  const { createFile, createFolder, renameEntry, deleteEntry, moveEntry } =
-    useWorkspace();
+  const { createFile, createFolder, renameEntry, moveEntry } = useWorkspace();
   const filtered = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
+  // 初回は畳んだ状態で出す。1,000 ファイル規模のフォルダで最上位を全部
+  // 開くと、最初の描画で数百行を一度に組むことになり画面が固まる。
   useEffect(() => {
     if (!activeFolderId || tree.length === 0) return;
     if (activeFolderId in expandedByFolder) return;
-    const topDirs = tree.filter((n) => n.kind === "dir").map((n) => n.path);
-    setExpandedByFolder((prev) => ({ ...prev, [activeFolderId]: topDirs }));
+    setExpandedByFolder((prev) => ({ ...prev, [activeFolderId]: [] }));
   }, [activeFolderId, tree, expandedByFolder, setExpandedByFolder]);
 
   const expanded = useMemo(
@@ -535,17 +342,19 @@ export function FileTree() {
   useEffect(() => {
     if (!reveal || !activeFolderId) return;
     const target = reveal.path;
-    const segs = target.split("/");
-    const ancestors: string[] = [];
-    for (let i = 1; i < segs.length; i++) {
-      ancestors.push(segs.slice(0, i).join("/"));
-    }
+    const ancestors = ancestorPaths(target);
     if (ancestors.length) {
       setExpandedByFolder((prev) => {
         const set = new Set(prev[activeFolderId] ?? []);
         ancestors.forEach((a) => set.add(a));
         return { ...prev, [activeFolderId]: [...set] };
       });
+    }
+    // 名前の変更に入るときは入力欄が行と入れ替わる。探す相手が居なくなるので、
+    // スクロールと強調は行わない（入力欄が焦点を取って見える位置まで動く）。
+    if (reveal.edit) {
+      setEditingPath(target);
+      return;
     }
     // 展開が反映されてから対象行を探してスクロール＆強調
     let raf2 = 0;
@@ -609,14 +418,6 @@ export function FileTree() {
     },
     onNewFile: (parentPath) => startCreate(parentPath, "file"),
     onNewFolder: (parentPath) => startCreate(parentPath, "dir"),
-  };
-
-  const askDelete = async (node: TreeNode) => {
-    const ok = await dialogConfirm(
-      `「${node.name}」を削除しますか？${node.kind === "dir" ? "\n中身ごと削除されます。" : ""}`,
-      { title: "削除の確認", kind: "warning" },
-    );
-    if (ok) void deleteEntry(node.path, node.kind === "dir");
   };
 
   const onRootDrop = (e: React.DragEvent) => {
@@ -693,13 +494,12 @@ export function FileTree() {
       </div>
 
       {menu && (
-        <ContextMenu
+        <EntryMenu
           menu={menu}
           onClose={() => setMenu(null)}
           onNewFile={(n) => startCreate(n.path, "file")}
           onNewFolder={(n) => startCreate(n.path, "dir")}
           onRename={(n) => setEditingPath(n.path)}
-          onDelete={askDelete}
         />
       )}
     </div>

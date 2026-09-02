@@ -13,7 +13,7 @@ import {
 } from "../state/atoms";
 import { openTotalAtom, reviewScreenAtom } from "../state/review";
 import { Icon } from "./Icon";
-import { ThemeSwitcher } from "./ThemeSwitcher";
+import { SettingsButton } from "./SettingsButton";
 
 function IconButton({
   onClick,
@@ -149,7 +149,7 @@ export function Toolbar() {
           )}
         </button>
         <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
-        <ThemeSwitcher />
+        <SettingsButton />
       </div>
     </div>
   );

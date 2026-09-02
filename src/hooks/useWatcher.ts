@@ -30,12 +30,16 @@ export function useWatcher() {
       (event) => {
         if (disposed) return;
         const known = new Set(store.get(A.filesAtom).map((f) => f.path));
+        const touched = new Map(store.get(A.touchedAtom));
         let structural = false;
         let imageChanged = false;
         for (const abs of event.paths) {
           if (!abs.startsWith(root)) continue;
           const rel = abs.slice(root.length + 1);
           if (isMarkdown(rel)) {
+            // 触られた時刻を今にしておく。クイックオープンの並び順が、
+            // 外から書き換わった分（エージェントの編集など）も追いかける。
+            touched.set(rel, Date.now());
             if (known.has(rel)) void reloadFile(rel);
             else structural = true; // 新規 md
           } else if (isImage(rel)) {
@@ -46,6 +50,7 @@ export function useWatcher() {
             structural = true; // ディレクトリ変化など
           }
         }
+        store.set(A.touchedAtom, touched);
         if (imageChanged) {
           store.set(A.assetVersionAtom, store.get(A.assetVersionAtom) + 1);
         }

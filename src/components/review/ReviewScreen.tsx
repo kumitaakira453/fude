@@ -18,6 +18,9 @@ import {
   isOpen,
   readVersion,
   replyToThread,
+  answeredByAgent,
+  editComment,
+  removeThread,
   resolveThread,
   resolveThreads,
   reviewPrompt,
@@ -38,6 +41,7 @@ import {
   reviewScreenAtom,
   reviewThreadAtom,
 } from "../../state/review";
+import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
 import { DocumentView, type Anchor } from "./DocumentView";
@@ -59,6 +63,30 @@ function relativeTo(root: string | null, file: string): string | null {
 // 同じ名前のファイルが別の節に何枚もあるので、名前だけでは見分けられない。
 function pathLabel(root: string | null, file: string): string {
   return relativeTo(root, file) ?? file;
+}
+
+// 一覧の見出しに出す名前と場所。絶対パスを丸ごと 1 行に流すと 4 行に折り返して
+// 一覧そのものが読めなくなるので、ファイル名と「その手前の 2 階層」に分ける。
+// 全体は title で読める。
+const DIR_TAIL = 2;
+
+function fileLabel(root: string | null, file: string): { name: string; dir: string } {
+  const path = pathLabel(root, file);
+  const parts = path.split("/");
+  const name = parts.pop() ?? path;
+  const tail = parts.filter(Boolean).slice(-DIR_TAIL);
+  const cut = parts.filter(Boolean).length > tail.length;
+  return { name, dir: tail.length === 0 ? "" : `${cut ? "…/" : ""}${tail.join("/")}` };
+}
+
+// 「いつ言われたか」。日付だけを出すより、古い指摘が古いと一目で分かる。
+function ago(at: number): string {
+  const min = (Date.now() - at) / 60000;
+  if (min < 1) return "たった今";
+  if (min < 60) return `${Math.floor(min)} 分前`;
+  if (min < 60 * 24) return `${Math.floor(min / 60)} 時間前`;
+  if (min < 60 * 24 * 7) return `${Math.floor(min / 60 / 24)} 日前`;
+  return when.format(at);
 }
 
 function plainDiff(blocks: Block[]): BlockChange[] {
@@ -128,7 +156,18 @@ export function ReviewScreen() {
   const copyTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
-  const threads = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
+  // 出すのは今開いているフォルダの中のファイルに付いた指摘だけ。外のものは
+  // 本文を読めないので、どこへの指摘かを示せず、返信も解決も当て推量になる。
+  // 数だけは伝える（消えたのではなく、そのフォルダを開けば出ると分かるように）。
+  const all = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
+  const threads = useMemo(
+    () =>
+      root === null
+        ? all
+        : all.filter((t) => relativeTo(root, t.file) !== null),
+    [all, root],
+  );
+  const elsewhere = all.length - threads.length;
 
   // 選んだ指摘を、画面を 1 枚描き切ってから受け取る。押した手応えと
   // 待っている表示を先に出し、重い本文の組み立てはその後に回す。
@@ -269,7 +308,12 @@ export function ReviewScreen() {
           <div className="text-[13px] font-medium leading-tight">
             {threads.length > 0
               ? `未解決 ${threads.length} 件`
-              : "未解決の指摘はありません"}
+              : "このフォルダに未解決の指摘はありません"}
+            {elsewhere > 0 && (
+              <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">
+                他のフォルダに {elsewhere} 件
+              </span>
+            )}
           </div>
         </div>
         <span className="flex-1" />
@@ -283,53 +327,62 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)] py-2">
+        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
           {groups.length === 0 && (
             <p className="px-3 py-4 text-[12px] text-[var(--mg-muted)]">
-              指摘が付くとここに並びます。
+              {elsewhere > 0
+                ? "このフォルダには未解決の指摘がありません。他のフォルダの指摘は、そのフォルダを開くと出ます。"
+                : "指摘が付くとここに並びます。"}
             </p>
           )}
-          {groups.map(([file, list]) => (
-            <section key={file} className="mb-4">
-              <h2 className="mg-review-group">
-                <span className="mg-review-path">{pathLabel(root, file)}</span>
-                <span className="mg-count">{list.length}</span>
-                <button
-                  onClick={() => copyPrompt(file, list)}
-                  title="このファイルの指摘を AI 用のプロンプトとして写す"
-                  className="mg-bulk"
-                >
-                  <Icon
-                    name={copiedFile === file ? "check" : "content_copy"}
-                    size={14}
+          {groups.map(([file, list]) => {
+            const where = fileLabel(root, file);
+            return (
+              <section key={file} className="mg-review-set">
+                <h2 className="mg-review-group">
+                  <Icon name="description" size={14} className="mg-review-ico" />
+                  <span className="mg-review-place" title={file}>
+                    <span className="mg-review-name">{where.name}</span>
+                    {where.dir && <span className="mg-review-dir">{where.dir}</span>}
+                  </span>
+                  <span className="mg-count">{list.length}</span>
+                  <button
+                    onClick={() => copyPrompt(file, list)}
+                    title="このファイルの指摘を AI 用のプロンプトとして写す"
+                    className="mg-bulk"
+                  >
+                    <Icon
+                      name={copiedFile === file ? "check" : "content_copy"}
+                      size={14}
+                    />
+                  </button>
+                  <button
+                    onClick={() => void resolveFile(file, list)}
+                    disabled={bulkFile !== null}
+                    title="このファイルの指摘をすべて解決にする"
+                    className="mg-bulk"
+                  >
+                    <Icon
+                      name={bulkFile === file ? "progress_activity" : "done_all"}
+                      size={14}
+                      className={bulkFile === file ? "mg-spin" : undefined}
+                    />
+                  </button>
+                </h2>
+                {list.map((thread) => (
+                  <ThreadCard
+                    key={thread.id}
+                    thread={thread}
+                    where={
+                      whereById.get(thread.id) ?? thread.section_path.join(" › ")
+                    }
+                    active={thread.id === selected?.id}
+                    onPick={() => setSelectedId(thread.id)}
                   />
-                </button>
-                <button
-                  onClick={() => void resolveFile(file, list)}
-                  disabled={bulkFile !== null}
-                  title="このファイルの指摘をすべて解決にする"
-                  className="mg-bulk"
-                >
-                  <Icon
-                    name={bulkFile === file ? "progress_activity" : "done_all"}
-                    size={14}
-                    className={bulkFile === file ? "mg-spin" : undefined}
-                  />
-                </button>
-              </h2>
-              {list.map((thread) => (
-                <ThreadCard
-                  key={thread.id}
-                  thread={thread}
-                  where={
-                    whereById.get(thread.id) ?? thread.section_path.join(" › ")
-                  }
-                  active={thread.id === selected?.id}
-                  onPick={() => setSelectedId(thread.id)}
-                />
-              ))}
-            </section>
-          ))}
+                ))}
+              </section>
+            );
+          })}
         </nav>
 
         {threads.length === 0 ? (
@@ -420,6 +473,15 @@ function ThreadCard({
         <span className="mg-thread-where" title={where}>
           {where.split(" › ").pop()}
         </span>
+        <span className="mg-thread-when" title={when.format(thread.created_at)}>
+          {ago(thread.created_at)}
+        </span>
+        {answeredByAgent(thread) && (
+          <span className="mg-thread-answered" title="AI からの返信が届いています">
+            <Icon name="auto_awesome" size={11} fill />
+            返信
+          </span>
+        )}
         {thread.comments.length > 1 && (
           <span className="mg-thread-count">
             <Icon name="forum" size={11} />
@@ -501,14 +563,17 @@ function ThreadDetail({
   // 解決のボタンまで処理中の見た目になる。
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [removing, setRemoving] = useState(false);
   // state は再描画されるまで更新されないので、素早い 2 回目のクリックが
   // 同じ値を読んで通り抜けてしまう。同期的に読める ref で締め出す。
   const sendingRef = useRef(false);
   const resolvingRef = useRef(false);
+  const removingRef = useRef(false);
   // 押すたびに本文を指摘の箇所へ戻す。候補が複数あるときは次の候補へ送る。
   const [focus, setFocus] = useState({ nonce: 0, at: 0 });
 
   const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
+  const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
 
   const currentBody = useMemo(() => {
     const raw = rel === null ? undefined : cache.get(rel);
@@ -588,6 +653,39 @@ function ThreadDetail({
     }
   }, [thread.id, nextId, setSelectedId, store]);
 
+  // 解決とは意味が違う操作。片付いた記録ではなく、指摘そのものを取り消す。
+  const drop = useCallback(async () => {
+    if (removingRef.current) return;
+    const ok = await confirm(
+      "この指摘を削除しますか？\n解決の記録は残らず、台帳から消えます。",
+      { title: "削除の確認", kind: "warning" },
+    );
+    if (!ok) return;
+    removingRef.current = true;
+    setRemoving(true);
+    try {
+      if (await removeThread(thread.id)) {
+        setSelectedId(nextId);
+        await syncLedger(store);
+        notify(store, "指摘を削除しました");
+      }
+    } finally {
+      removingRef.current = false;
+      setRemoving(false);
+    }
+  }, [thread.id, nextId, setSelectedId, store]);
+
+  // --- 書き込みの書き直し
+  const rewrite = useCallback(
+    async (comment: string, body: string) => {
+      if (await editComment(thread.id, comment, body)) {
+        await syncLedger(store);
+        notify(store, "書き込みを直しました");
+      }
+    },
+    [thread.id, store],
+  );
+
   const style = { fontFamily: fontStack(font) };
   // 候補が複数あるときは、今どれを見ているかを出しつつ次へ送れるようにする。
   const candidates =
@@ -631,8 +729,9 @@ function ThreadDetail({
 
       <aside className="mg-side">
         <div className="mg-side-head">
-          <span className="mg-review-path flex-1" title={thread.file}>
-            {pathLabel(root, thread.file)}
+          <span className="mg-review-place flex-1" title={thread.file}>
+            <span className="mg-review-name">{where.name}</span>
+            {where.dir && <span className="mg-review-dir">{where.dir}</span>}
           </span>
           <button
             onClick={jump}
@@ -691,6 +790,7 @@ function ThreadDetail({
               comment={c}
               mine={c.author === reviewer}
               run={thread.comments[i - 1]?.author === c.author}
+              onRewrite={(body) => void rewrite(c.id, body)}
             />
           ))}
         </div>
@@ -707,7 +807,7 @@ function ThreadDetail({
         )}
 
         <div className="mg-side-compose">
-          <textarea
+          <AutoTextarea
             value={reply}
             onChange={(e) => setReply(e.target.value)}
             onKeyDown={(e) => {
@@ -716,20 +816,23 @@ function ThreadDetail({
                 void send();
               }
             }}
-            rows={2}
-            placeholder="返信…（⌘Enter で送信）"
-            className="w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-3 py-2 text-[12.5px] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
+            minRows={2}
+            maxRows={10}
+            placeholder="返信を書く…"
+            className="mg-field"
           />
-          <div className="flex items-center gap-2">
-            <span className="flex-1" />
+          {/* 送り方の案内は入力欄の外に置く。プレースホルダに混ぜると、
+              書き始めたとたんに読めなくなる。 */}
+          <div className="mg-side-row">
+            <span className="mg-side-hint">⌘Enter で送信</span>
             <button
               onClick={() => void send()}
               disabled={sending || !reply.trim()}
-              className="mg-resolve"
+              className="mg-send"
             >
               <Icon
                 name={sending ? "progress_activity" : "send"}
-                size={14}
+                size={13}
                 className={sending ? "mg-spin" : undefined}
               />
               {sending ? "送っています…" : "返信"}
@@ -737,21 +840,36 @@ function ThreadDetail({
           </div>
         </div>
 
-        {/* 解決は返信と別の行に置く。返信は会話の続き、解決はこの指摘を閉じる
-            操作で、性質が違う。同じ行に並べると押し間違える。 */}
+        {/* この指摘の始末。返信は会話の続きで、こちらは終わらせる操作。
+            塗った箱を並べると同じ強さの矩形が 4 つになって読めないので、
+            目立つ操作は返信ひとつに絞り、ここは文字だけで置く。 */}
         <div className="mg-side-close">
           <button
             onClick={() => void finish()}
             disabled={resolving}
-            className="mg-done"
+            className="mg-act is-done"
           >
             <Icon
               name={resolving ? "progress_activity" : "check_circle"}
-              size={16}
+              size={15}
               fill={!resolving}
               className={resolving ? "mg-spin" : undefined}
             />
-            {resolving ? "解決にしています…" : "この指摘を解決にする"}
+            {resolving ? "解決にしています…" : "解決にする"}
+          </button>
+          <span className="flex-1" />
+          <button
+            onClick={() => void drop()}
+            disabled={removing}
+            title="指摘そのものを取り消す（解決の記録は残らない）"
+            className="mg-act is-drop"
+          >
+            <Icon
+              name={removing ? "progress_activity" : "delete"}
+              size={14}
+              className={removing ? "mg-spin" : undefined}
+            />
+            削除
           </button>
         </div>
       </aside>
@@ -766,12 +884,31 @@ function Message({
   comment,
   mine,
   run,
+  onRewrite,
 }: {
   comment: ReviewComment;
   mine: boolean;
   run: boolean;
+  onRewrite: (body: string) => void;
 }) {
   const agent = AGENT_AUTHORS.has(comment.author);
+  // 書き直しは自分の書き込みだけ。相手の言葉を書き換えられるようにはしない。
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(comment.body);
+  // 吹き出しの幅。書き直しに入った瞬間に横幅が変わると、同じ発言が別の形に
+  // 見えてしまうので、入る直前の幅をそのまま引き継ぐ。
+  const [width, setWidth] = useState<number | undefined>(undefined);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const changed = text.trim().length > 0 && text.trim() !== comment.body;
+  const save = () => {
+    setEditing(false);
+    if (changed) onRewrite(text.trim());
+  };
+  const startEditing = () => {
+    setWidth(bubbleRef.current?.getBoundingClientRect().width);
+    setText(comment.body);
+    setEditing(true);
+  };
   return (
     <div className={`mg-msg ${mine ? "is-reviewer" : ""} ${run ? "is-run" : ""}`}>
       {!mine && (
@@ -787,7 +924,68 @@ function Message({
             <span>{when.format(comment.created_at)}</span>
           </div>
         )}
-        <div className="mg-bubble">{comment.body}</div>
+        {editing ? (
+          <div className="mg-bubble-edit" style={{ width }}>
+            <AutoTextarea
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setEditing(false);
+                } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  save();
+                }
+              }}
+              minRows={2}
+              maxRows={12}
+              className="mg-bubble-input"
+            />
+            {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
+                入力欄から焦点が外れる拍子に押下がどこにも届かないことがある。
+                書き換えていないときの保存は、何も書かずに閉じるだけにする。
+                押せないボタンにすると、反応しないのと区別が付かない。 */}
+            <div className="mg-bubble-edit-foot">
+              <span className="mg-side-hint">⌘Enter で保存</span>
+              <button
+                type="button"
+                className="mg-small"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setEditing(false);
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="mg-small is-go"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  save();
+                }}
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mg-bubble" ref={bubbleRef}>
+            {comment.body}
+            {mine && (
+              <button
+                type="button"
+                title="書き直す"
+                className="mg-bubble-pen"
+                onClick={startEditing}
+              >
+                <Icon name="edit" size={13} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

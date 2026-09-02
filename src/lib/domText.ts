@@ -41,6 +41,59 @@ export function blockIndexOf(el: HTMLElement): number | null {
   return Number.isInteger(n) ? n : null;
 }
 
+// ブロックの外枠。display:contents の入れ物は箱を持たないので、中の要素の
+// 箱をまとめて測る。文字の範囲で測ると、コールアウトのように内側に余白を持つ
+// ブロックで枠より内側に縮んでしまう。
+export function blockRect(el: Element): DOMRect | null {
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const kid of el.children) {
+    const r = kid.getBoundingClientRect();
+    if (r.height <= 0) continue;
+    left = Math.min(left, r.left);
+    top = Math.min(top, r.top);
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom);
+  }
+  if (right > left && bottom > top) {
+    return new DOMRect(left, top, right - left, bottom - top);
+  }
+  // 要素を持たないブロック（文字だけ）は範囲から測る。
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const r = range.getBoundingClientRect();
+  return r.height > 0 ? r : null;
+}
+
+// 画面の上端に一番近いブロックを二分探索で探す。全部を測ると重いので、
+// 1 つ目の子要素の矩形（並びは必ず上から下）で当たりを付ける。
+export function topmostBlock(
+  content: HTMLElement,
+  viewportTop: number,
+): HTMLElement | null {
+  const els = content.querySelectorAll<HTMLElement>("[data-mg-block]");
+  let lo = 0;
+  let hi = els.length - 1;
+  let hit: HTMLElement | null = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const box = els[mid].firstElementChild?.getBoundingClientRect();
+    if (!box) {
+      lo = mid + 1;
+      continue;
+    }
+    if (box.bottom >= viewportTop) {
+      hit = els[mid];
+      hi = mid - 1;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return hit;
+}
+
 export function readBlockText(block: HTMLElement): BlockText {
   const runs: { node: Text; start: number }[] = [];
   let plain = "";
@@ -93,6 +146,26 @@ function locate(bt: BlockText, offset: number): { node: Text; offset: number } |
 
 // 現在の選択範囲を、ブロック内の文字位置として読む。
 // ブロックをまたぐ選択は、選択が始まったブロックの末尾までに丸める。
+// 要素の中の文字を丸ごと選ぶ。要素そのものを範囲にすると選択の起点が
+// 要素になり、文字位置へ変換できない（readSelection が読めない）。
+export function selectTextIn(el: Element): boolean {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const first = walker.nextNode() as Text | null;
+  if (!first) return false;
+  let last = first;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    last = node as Text;
+  }
+  const selection = window.getSelection();
+  if (!selection) return false;
+  const range = document.createRange();
+  range.setStart(first, 0);
+  range.setEnd(last, (last.nodeValue ?? "").length);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
 export function readSelection(root: HTMLElement): BlockSelection | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;

@@ -223,6 +223,35 @@ pub fn reply(thread_id: &str, author: &str, body: &str) -> Result<(), String> {
     })
 }
 
+// 指摘そのものを取り消す。解決は「片付いた」記録が残るが、こちらは
+// 「そもそも要らなかった」ときに使うので何も残さない。
+pub fn remove(thread_id: &str) -> Result<(), String> {
+    store::update(|ledger: &mut Ledger| {
+        let before = ledger.threads.len();
+        ledger.threads.retain(|t| t.id != thread_id);
+        if ledger.threads.len() == before {
+            return Err(format!("指摘 {thread_id} が見つかりません"));
+        }
+        Ok(())
+    })
+}
+
+// 書き込みを書き直す。書いた時刻はそのまま残す。
+pub fn edit_comment(thread_id: &str, comment_id: &str, body: &str) -> Result<(), String> {
+    store::update(|ledger: &mut Ledger| {
+        let thread = ledger
+            .thread_mut(thread_id)
+            .ok_or_else(|| format!("指摘 {thread_id} が見つかりません"))?;
+        let comment = thread
+            .comments
+            .iter_mut()
+            .find(|c| c.id == comment_id)
+            .ok_or_else(|| format!("書き込み {comment_id} が見つかりません"))?;
+        comment.body = body.to_string();
+        Ok(())
+    })
+}
+
 pub fn resolve(thread_id: &str, by: &str) -> Result<(), String> {
     store::update(|ledger: &mut Ledger| {
         let thread = ledger

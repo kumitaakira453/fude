@@ -31,13 +31,53 @@ export function fuzzyMatch(query: string, target: string): { score: number; matc
   return { score, matches };
 }
 
-export function quickOpen(files: TreeNode[], query: string, limit = 40): FuzzyResult[] {
+// 触った新しさの加点。今なら 1 割で、そこから 1 日ごとに半分になる。
+// 加点は「その一致の強さ」に比例させる。固定の点数にすると、名前が弱く
+// 引っかかっただけのものが、新しいという理由で正確な一致を追い抜く。
+const RECENT_RATE = 0.1;
+const HALF_LIFE = 24 * 60 * 60 * 1000;
+
+export function recencyBonus(
+  score: number,
+  mtime: number | undefined,
+  now: number,
+): number {
+  if (!mtime) return 0;
+  const decay = 0.5 ** (Math.max(0, now - mtime) / HALF_LIFE);
+  return Math.max(1, Math.abs(score)) * RECENT_RATE * decay;
+}
+
+export interface QuickOpenOpts {
+  // path -> 最後に触られた時刻。無ければ名前の一致だけで並ぶ。
+  touched?: Map<string, number>;
+  now?: number;
+  limit?: number;
+}
+
+// 絞り込みが空のときは新しく触ったものから並べる。開いた直後に出るのは
+// 「さっきまで書いていたファイル」であってほしい。
+// 絞り込みがあるときは名前の一致を主に、新しさを添えて順を決める。
+export function quickOpen(
+  files: TreeNode[],
+  query: string,
+  opts: QuickOpenOpts = {},
+): FuzzyResult[] {
+  const { touched, now = Date.now(), limit = 40 } = opts;
   const results: FuzzyResult[] = [];
   for (const node of files) {
     const m = fuzzyMatch(query, node.path);
-    if (m) results.push({ node, score: m.score, matches: m.matches });
+    if (!m) continue;
+    const bonus = query ? recencyBonus(m.score, touched?.get(node.path), now) : 0;
+    results.push({ node, score: m.score + bonus, matches: m.matches });
   }
-  results.sort((a, b) => b.score - a.score);
+  if (query) {
+    results.sort((a, b) => b.score - a.score);
+  } else {
+    results.sort(
+      (a, b) =>
+        (touched?.get(b.node.path) ?? 0) - (touched?.get(a.node.path) ?? 0),
+    );
+  }
   return results.slice(0, limit);
 }
 

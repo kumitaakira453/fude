@@ -2,7 +2,12 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { describe, expect, it } from "vitest";
-import { itemTextRange, unitAt } from "./blocks";
+import {
+  cellFromStart,
+  cellStartAt,
+  itemTextRange,
+  unitAt,
+} from "./blocks";
 
 // セルの座標だけを見る（cellStart は別の試験でパーサと突き合わせる）
 const coords = (src: string, offset: number) => {
@@ -175,5 +180,74 @@ describe("itemTextRange", () => {
 
   it("本文が空の項目は範囲を返さない", () => {
     expect(itemTextRange("-   ", 2)).toBeNull();
+  });
+});
+
+// 描画側が目印に載せるのはパーサが付ける開始位置（直前の | の位置）。
+// その値から同じセルへ戻れないと、選んだ場所と違うセルが編集される。
+describe("cellFromStart（目印からの往復）", () => {
+  const TABLES = [
+    TABLE,
+    ["a | b | c", "--- | --- | ---", "1 | 2 | 3"].join("\n"),
+    ["| 空 |  | 埋 |", "|---|---|---|", "| 1 |  | 3 |"].join("\n"),
+  ];
+
+  it("パーサの開始位置から元のセルへ戻れる", () => {
+    for (const src of TABLES) {
+      const starts = parsedCellStarts(src);
+      expect(starts.length).toBeGreaterThan(0);
+      for (const start of starts) {
+        const unit = cellFromStart(src, start);
+        expect(unit).not.toBeNull();
+        if (!unit || unit.kind !== "cell") continue;
+        // 戻った行と列から作り直した開始位置が、元の値と一致する
+        expect(unit.cellStart).toBe(start);
+      }
+    }
+  });
+
+  it("表でない文字列では null", () => {
+    expect(cellFromStart("ただの段落。", 2)).toBeNull();
+  });
+});
+
+// 空のセルは選ぶ文字が無いので、行番号と列番号から開く必要がある。
+describe("cellStartAt", () => {
+  it("パーサが付ける開始位置と一致する", () => {
+    const starts = parsedCellStarts(TABLE);
+    const got: number[] = [];
+    for (const line of [0, 2, 3]) {
+      for (const col of [0, 1, 2]) {
+        const at = cellStartAt(TABLE, line, col);
+        if (at !== null) got.push(at);
+      }
+    }
+    expect(got).toEqual(starts);
+  });
+
+  it("先頭の | が無い表でも一致する", () => {
+    const bare = ["a | b", "--- | ---", "1 | 2"].join("\n");
+    const starts = parsedCellStarts(bare);
+    const got = [
+      cellStartAt(bare, 0, 0),
+      cellStartAt(bare, 0, 1),
+      cellStartAt(bare, 2, 0),
+      cellStartAt(bare, 2, 1),
+    ];
+    expect(got).toEqual(starts);
+  });
+
+  it("空のセルでも位置が出る", () => {
+    const src = ["| a | b |", "|---|---|", "|  |  |"].join("\n");
+    const at = cellStartAt(src, 2, 0);
+    expect(at).not.toBeNull();
+    const unit = at === null ? null : cellFromStart(src, at);
+    expect(unit?.colIndex).toBe(0);
+    expect(unit?.lineIndex).toBe(2);
+  });
+
+  it("範囲外では null", () => {
+    expect(cellStartAt(TABLE, 9, 0)).toBeNull();
+    expect(cellStartAt(TABLE, 0, 9)).toBeNull();
   });
 });

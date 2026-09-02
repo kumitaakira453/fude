@@ -111,6 +111,22 @@ export const splitInto = (store: Store, dir: "row" | "col") => splitPane(store, 
 // アクティブペインの右に、指定ファイルで新ペインを開く。
 export const openToSide = (store: Store, path: string) => splitPane(store, "row", path);
 
+// サイドバーのツリーで対象を出す。閉じていれば開き、ファイルの面に切り替える。
+// edit を立てると、その行をそのまま名前の変更に入れる。
+export function revealInTree(
+  store: Store,
+  path: string,
+  opts?: { edit?: boolean },
+) {
+  store.set(A.sidebarOpenAtom, true);
+  store.set(A.sidebarTabAtom, "files");
+  store.set(A.revealInTreeAtom, {
+    path,
+    nonce: Date.now(),
+    edit: opts?.edit,
+  });
+}
+
 // 指定ペインでファイルを開く。既にタブがあればそれを選ぶだけ。
 export function openInPane(store: Store, paneId: string, path: string) {
   store.set(
@@ -138,12 +154,34 @@ export function activateTab(store: Store, paneId: string, index: number) {
   store.set(A.activePaneIdAtom, paneId);
 }
 
+// 閉じたタブの控え。開き直せるのは直近のいくつかで足りる。
+const CLOSED_MAX = 12;
+
+// 閉じた 1 枚を控える。別のペインやウィンドウへ移したものは「閉じた」では
+// ないので、移動の経路からは remember を落として呼ぶ。
+function remember(store: Store, tab: A.ClosedTab) {
+  const rest = store.get(A.closedTabsAtom).filter((t) => t.path !== tab.path);
+  store.set(A.closedTabsAtom, [tab, ...rest].slice(0, CLOSED_MAX));
+}
+
+export interface CloseOpts {
+  // 既定は控える。⌘⇧T で開き直せるようにするため。
+  remember?: boolean;
+}
+
 // タブを閉じる。最後の 1 枚を閉じたときは、他にペインがあればペインごと閉じる。
 // 単一ペインのときは空のまま残す（画面が消えると戻る手段が無くなる）。
-export function closeTab(store: Store, paneId: string, index: number) {
+export function closeTab(
+  store: Store,
+  paneId: string,
+  index: number,
+  opts: CloseOpts = {},
+) {
   const root = store.get(A.layoutAtom);
   const target = findLeaf(root, paneId);
   if (!target) return;
+  const path = target.tabs[index];
+  if (path && opts.remember !== false) remember(store, { path, paneId, index });
   if (target.tabs.length <= 1 && countLeaves(root) > 1) {
     closePane(store, paneId);
     return;
@@ -156,10 +194,41 @@ export function closeTab(store: Store, paneId: string, index: number) {
 
 // ファイルを指して閉じる。閉じるまでに間が空く経路（別ウィンドウへ引き出す等）
 // では、掴んだ時点の位置が当てにならないため、その場で探し直す。
-export function closeTabAt(store: Store, paneId: string, path: string) {
+export function closeTabAt(
+  store: Store,
+  paneId: string,
+  path: string,
+  opts: CloseOpts = {},
+) {
   const target = findLeaf(store.get(A.layoutAtom), paneId);
   const index = target?.tabs.indexOf(path) ?? -1;
-  if (index >= 0) closeTab(store, paneId, index);
+  if (index >= 0) closeTab(store, paneId, index, opts);
+}
+
+// 閉じたタブを開き直す（⌘⇧T）。閉じたときのペインと位置に戻す。
+// そのペインが無くなっていれば今のペインへ。既に開いていれば次の控えへ進む。
+// 戻り値は開き直したパス。控えが空なら null。
+export function reopenTab(store: Store): string | null {
+  const stack = [...store.get(A.closedTabsAtom)];
+  while (stack.length > 0) {
+    const tab = stack.shift() as A.ClosedTab;
+    const root = store.get(A.layoutAtom);
+    const pane = findLeaf(root, tab.paneId);
+    const paneId = pane ? tab.paneId : store.get(A.activePaneIdAtom);
+    const target = pane ?? findLeaf(root, paneId);
+    if (!target || target.tabs.includes(tab.path)) continue;
+    const at = Math.min(tab.index, target.tabs.length);
+    const tabs = [...target.tabs.slice(0, at), tab.path, ...target.tabs.slice(at)];
+    store.set(
+      A.layoutAtom,
+      updateLeaf(root, paneId, (t) => leaf(t.id, tabs, at)),
+    );
+    store.set(A.activePaneIdAtom, paneId);
+    store.set(A.closedTabsAtom, stack);
+    return tab.path;
+  }
+  store.set(A.closedTabsAtom, stack);
+  return null;
 }
 
 export interface TabRef {
@@ -193,7 +262,7 @@ export function moveTab(store: Store, from: TabRef, toPaneId: string, toIndex?: 
     A.layoutAtom,
     updateLeaf(root, toPaneId, (t) => leaf(t.id, tabs, tabs.indexOf(path))),
   );
-  closeTab(store, from.paneId, from.index);
+  closeTab(store, from.paneId, from.index, { remember: false });
   store.set(A.activePaneIdAtom, toPaneId);
 }
 
@@ -228,6 +297,16 @@ export function updateSplitSizes(store: Store, splitNodeId: string, sizes: numbe
 
 // ペインを閉じる。
 export function closePane(store: Store, id: string) {
+  // ペインごと閉じるときは、載っていたタブをまとめて控える。作用中のものが
+  // 先に戻るよう、後ろから積む。
+  const pane = findLeaf(store.get(A.layoutAtom), id);
+  if (pane) {
+    for (let i = pane.tabs.length - 1; i >= 0; i--) {
+      if (i !== pane.active) remember(store, { path: pane.tabs[i], paneId: id, index: i });
+    }
+    const path = pane.tabs[pane.active];
+    if (path) remember(store, { path, paneId: id, index: pane.active });
+  }
   const next = removeLeaf(store.get(A.layoutAtom), id);
   const root: LayoutNode = next ?? emptyLeaf("p1");
   store.set(A.layoutAtom, root);
@@ -252,6 +331,8 @@ export function remapLeafPaths(store: Store, mapper: (path: string) => string | 
 export function resetLayout(store: Store) {
   store.set(A.layoutAtom, emptyLeaf("p1"));
   store.set(A.activePaneIdAtom, "p1");
+  // 別のフォルダのパスを開き直しても意味が無い
+  store.set(A.closedTabsAtom, []);
 }
 
 // 保存されているレイアウト。タブを持たなかった頃の形も読めるようにしてある。

@@ -1,4 +1,4 @@
-import { useStore } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { useState } from "react";
 import { useDragReset } from "../hooks/useDragReset";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -8,16 +8,18 @@ import {
   readDragPayload,
   setDragPayload,
 } from "../lib/dnd";
-import { setFileDragImage } from "../lib/dragImage";
-import { displayName } from "../lib/fsAccess";
+import { setDragChip } from "../lib/dragImage";
+import { displayName, findNode, type TreeNode } from "../lib/fsAccess";
 import {
   activateTab,
   closeTab,
   closeTabAt,
   moveTab,
   openInPane,
+  revealInTree,
 } from "../lib/ui";
-import type { LeafNode } from "../state/atoms";
+import { type LeafNode, treeAtom } from "../state/atoms";
+import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
 
 // ペインが持つタブの並び。分割の各ペインがそれぞれ持つ。
@@ -25,10 +27,25 @@ import { Icon } from "./Icon";
 
 export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }) {
   const store = useStore();
-  const { openInNewWindow } = useWorkspace();
+  const { openInNewWindow, getRootPath } = useWorkspace();
+  const tree = useAtomValue(treeAtom);
   // ドロップで差し込む位置。null なら受け付けていない。
   const [insertAt, setInsertAt] = useState<number | null>(null);
+  const [menu, setMenu] = useState<EntryMenuState | null>(null);
   useDragReset(() => setInsertAt(null));
+
+  // 右クリックの相手。ツリーに見つからないファイルでも操作できるように組み立てる。
+  const nodeFor = (path: string): TreeNode => {
+    const hit = findNode(tree, path);
+    if (hit) return hit;
+    const root = getRootPath();
+    return {
+      name: path.split("/").pop() ?? path,
+      path,
+      abs: root ? `${root}/${path}` : path,
+      kind: "file",
+    };
+  };
 
   if (pane.tabs.length === 0) return null;
 
@@ -59,82 +76,99 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   };
 
   return (
-    <div
-      role="tablist"
-      data-mg-tabbar
-      className="mg-tabbar flex shrink-0 items-stretch overflow-x-auto border-b border-[var(--mg-border)] bg-[var(--mg-panel)]"
-      onDragOver={(e) => {
-        if (!accept(e)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        setInsertAt(indexAt(e));
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setInsertAt(null);
-      }}
-      onDrop={drop}
-    >
-      {pane.tabs.map((path, i) => {
-        const selected = i === pane.active;
-        return (
-          <div
-            key={path}
-            data-mg-tab
-            draggable
-            onDragStart={(e) => {
-              setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
-              e.dataTransfer.effectAllowed = "move";
-              setFileDragImage(e.dataTransfer, displayName(path));
-            }}
-            // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す。
-            // タブを消すのはウィンドウができてから。先に消すと、開くまでの間
-            // どちらにも無い状態が見えてしまう。
-            onDragEnd={(e) => {
-              if (!droppedOutside(e)) return;
-              void openInNewWindow(path, dropPoint(e)).then((opened) => {
-                if (opened) closeTabAt(store, pane.id, path);
-              });
-            }}
-            className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] transition ${
-              selected
-                ? "bg-[var(--mg-bg)] text-[var(--mg-fg)]"
-                : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)]"
-            }`}
-          >
-            {selected && isActive && (
-              <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--mg-accent)]" />
-            )}
-            <button
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              title={path}
-              onClick={() => activateTab(store, pane.id, i)}
-              // 中クリックで閉じる（タブの慣習）
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  closeTab(store, pane.id, i);
-                }
+    <>
+      <div
+        role="tablist"
+        data-mg-tabbar
+        className="mg-tabbar flex shrink-0 items-stretch overflow-x-auto border-b border-[var(--mg-border)] bg-[var(--mg-panel)]"
+        onDragOver={(e) => {
+          if (!accept(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setInsertAt(indexAt(e));
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setInsertAt(null);
+        }}
+        onDrop={drop}
+      >
+        {pane.tabs.map((path, i) => {
+          const selected = i === pane.active;
+          return (
+            <div
+              key={path}
+              data-mg-tab
+              draggable
+              onDragStart={(e) => {
+                setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
+                e.dataTransfer.effectAllowed = "move";
+                setDragChip(e.dataTransfer, displayName(path));
               }}
-              className="truncate py-1.5"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, node: nodeFor(path) });
+              }}
+              // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す。
+              // タブを消すのはウィンドウができてから。先に消すと、開くまでの間
+              // どちらにも無い状態が見えてしまう。
+              onDragEnd={(e) => {
+                if (!droppedOutside(e)) return;
+                void openInNewWindow(path, dropPoint(e)).then((opened) => {
+                  // 別のウィンドウへ移しただけなので、閉じた控えには積まない
+                  if (opened) closeTabAt(store, pane.id, path, { remember: false });
+                });
+              }}
+              className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] transition ${
+                selected
+                  ? "bg-[var(--mg-bg)] text-[var(--mg-fg)]"
+                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)]"
+              }`}
             >
-              {displayName(path)}
-            </button>
-            <button
-              type="button"
-              title="閉じる"
-              onClick={() => closeTab(store, pane.id, i)}
-              className="rounded p-0.5 opacity-0 transition hover:bg-[var(--mg-hover)] group-hover:opacity-100"
-            >
-              <Icon name="close" size={13} />
-            </button>
-            {insertAt === i && <Marker side="left" />}
-            {insertAt === i + 1 && <Marker side="right" />}
-          </div>
-        );
-      })}
-    </div>
+              {selected && isActive && (
+                <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--mg-accent)]" />
+              )}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                title={path}
+                onClick={() => activateTab(store, pane.id, i)}
+                // 中クリックで閉じる（タブの慣習）
+                onAuxClick={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    closeTab(store, pane.id, i);
+                  }
+                }}
+                className="select-none truncate py-1.5"
+              >
+                {displayName(path)}
+              </button>
+              {/* 閉じるボタンは常に出す。ホバーで現れる作りだと、閉じられる
+                  ことに気付けないうえ、狙って触るまで的が見えない。
+                  普段は色を落として、名前より前に出ないようにする。 */}
+              <button
+                type="button"
+                title="閉じる"
+                onClick={() => closeTab(store, pane.id, i)}
+                className="mg-tab-x"
+              >
+                <Icon name="close" size={13} />
+              </button>
+              {insertAt === i && <Marker side="left" />}
+              {insertAt === i + 1 && <Marker side="right" />}
+            </div>
+          );
+        })}
+      </div>
+      {menu && (
+        <EntryMenu
+          menu={menu}
+          onClose={() => setMenu(null)}
+          onRename={(n) => revealInTree(store, n.path, { edit: true })}
+        />
+      )}
+    </>
   );
 }
 
