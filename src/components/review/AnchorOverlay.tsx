@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { headOf, type Resolution } from "../../lib/blockDiff";
+import { headOf, quoteBlocks, type Resolution } from "../../lib/blockDiff";
 import {
   blockRect,
   clipRects,
@@ -36,8 +36,9 @@ interface Mark {
   id: string;
   moved: boolean; // 対象が書き換わっている
   guess: boolean; // 位置が特定できず、近いブロックに出している
-  // ブロック全体の外枠。どのブロックへの指摘かを示す。
-  area: Rect | null;
+  // ブロック全体の外枠。どのブロックへの指摘かを示す。またいだ指摘では
+  // 覆っているブロックの数だけ並ぶ。
+  areas: Rect[];
   // 指摘した箇所そのもの。書き換わっていても見つかれば出す。
   spots: Rect[];
   hit: AnchorHit;
@@ -148,6 +149,8 @@ export function AnchorOverlay({
     offset: number;
     length: number;
     whole?: boolean;
+    // ブロックをまたいで選んでいるときの、最後のブロックの番号。
+    until?: number;
   } | null;
   onPick: (hit: AnchorHit) => void;
 }) {
@@ -211,7 +214,7 @@ export function AnchorOverlay({
         for (const rc of mark.spots) if (inside(rc, x, y)) return { mark, rc };
       }
       for (const mark of marksRef.current) {
-        if (mark.area && inside(mark.area, x, y)) return { mark, rc: mark.area };
+        for (const rc of mark.areas) if (inside(rc, x, y)) return { mark, rc };
       }
       return null;
     },
@@ -281,11 +284,15 @@ export function AnchorOverlay({
       const guess = placed === null;
 
       const bt = readBlockText(el);
+      // またいだ指摘は引用に複数のブロックが入っている。箇所の線ではなく、
+      // 覆っているブロックの枠で示す。
+      const covered = quoteBlocks(thread.quote).length;
       // 書き換わっていても、指摘した文字列が残っていれば場所は出せる。
       // 見つかった箇所は塗り、ブロック全体は枠で示す（2 段で見せる）。
-      const span = thread.selection
-        ? findPlain(bt.plain, thread.selection, thread.selection_offset)
-        : null;
+      const span =
+        covered > 1 || !thread.selection
+          ? null
+          : findPlain(bt.plain, thread.selection, thread.selection_offset);
       const whole = rangeAt(bt, 0, bt.plain.length);
       if (!whole) continue;
       const inner = span ? rangeAt(bt, span.start, span.end) : null;
@@ -298,8 +305,22 @@ export function AnchorOverlay({
       const spotClip = inBox ? inBox.getBoundingClientRect() : clip;
       // ブロック全体の印は箱で測る。文字の範囲だと、コールアウトのように
       // 内側に余白を持つブロックで枠より内側に縮む。
-      const boxed = blockRect(el) ?? whole.getBoundingClientRect();
-      const areas = clipRects([boxed], clip);
+      const boxes: DOMRect[] = [];
+      for (let i = 0; i < covered; i++) {
+        const part =
+          i === 0
+            ? el
+            : content.querySelector<HTMLElement>(
+                `[data-mg-block="${(head?.index ?? -1) + i}"]`,
+              );
+        const box = part ? blockRect(part) : null;
+        if (box) boxes.push(box);
+      }
+      if (boxes.length === 0) {
+        const fallback = blockRect(el) ?? whole.getBoundingClientRect();
+        boxes.push(fallback);
+      }
+      const areas = clipRects(boxes, clip);
       const cell = inner ? cellOf(inner) : null;
       const spots = inner
         ? clipRects(
@@ -312,8 +333,8 @@ export function AnchorOverlay({
       // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
       // いつも二重に出すと、どこへの指摘か読み取りにくい。
       const moved = guess || resolution.state === "rewritten";
-      const area = spots.length === 0 || moved ? (areas[0] ?? null) : null;
-      if (!area && spots.length === 0) continue;
+      const shown = spots.length === 0 || moved ? areas : [];
+      if (shown.length === 0 && spots.length === 0) continue;
 
       const rel = (rc: DOMRect): Rect => ({
         top: rc.top - base.top,
@@ -328,7 +349,7 @@ export function AnchorOverlay({
         id: thread.id,
         moved,
         guess,
-        area: area ? rel(area) : null,
+        areas: shown.map(rel),
         spots: spots.map(rel),
         note: first ? first.body : "",
         more: Math.max(0, thread.comments.length - 1),
@@ -368,17 +389,29 @@ export function AnchorOverlay({
     const wrap = el.querySelector(".mg-table-wrap");
     const clip = wrap ? wrap.getBoundingClientRect() : null;
     const cell = range ? cellOf(range) : null;
-    const boxed = draft.whole ? blockRect(el) : null;
+    // またいで選んでいるときは、覆っているブロックの枠を並べる。
+    const boxes: DOMRect[] = [];
+    if (draft.whole) {
+      const until = Math.max(draft.until ?? draft.blockIndex, draft.blockIndex);
+      for (let i = draft.blockIndex; i <= until; i++) {
+        const part =
+          i === draft.blockIndex
+            ? el
+            : content.querySelector<HTMLElement>(`[data-mg-block="${i}"]`);
+        const box = part ? blockRect(part) : null;
+        if (box) boxes.push(box);
+      }
+    }
     const inBox = range ? scrollBoxOf(range.startContainer) : null;
     const rects = clipRects(
-      boxed
-        ? [boxed]
+      boxes.length > 0
+        ? boxes
         : cell
           ? [cell.getBoundingClientRect()]
           : range
             ? mergeRects(Array.from(range.getClientRects()))
             : [],
-      boxed ? clip : inBox ? inBox.getBoundingClientRect() : clip,
+      boxes.length > 0 ? clip : inBox ? inBox.getBoundingClientRect() : clip,
     );
     setPending(
       rects.map((rc) => ({
@@ -434,14 +467,15 @@ export function AnchorOverlay({
         const hot = peek?.id === mark.id ? " mg-review-mark-active" : "";
         return (
           <Fragment key={mark.id}>
-            {mark.area && (
+            {mark.areas.map((rc, i) => (
               <div
+                key={`a:${i}`}
                 className={`mg-review-mark mg-review-mark-area${
                   mark.moved ? " mg-review-mark-moved" : ""
                 }${hot}`}
-                style={mark.area}
+                style={rc}
               />
-            )}
+            ))}
             {mark.spots.map((rc, i) => (
               <div key={i} className={`mg-review-mark${hot}`} style={rc} />
             ))}

@@ -622,9 +622,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     blockIndex: review.draft.blockIndex,
                     offset: review.draft.offset,
                     length: review.draft.text.length,
-                    // またいだ指摘は箇所を線で示せないので、先頭のブロックの
-                    // 枠で出す（ブロック全体への指摘と同じ見せ方）。
-                    whole: review.draft.whole || review.draft.spanning,
+                    // またいだ指摘は箇所を線で示せないので、覆っている
+                    // ブロックの枠で出す。
+                    whole:
+                      review.draft.whole || review.draft.until !== undefined,
+                    until: review.draft.until,
                   }
                 : null
             }

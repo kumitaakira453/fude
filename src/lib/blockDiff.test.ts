@@ -5,6 +5,7 @@ import {
   diffBlocks,
   headIndexAt,
   headOf,
+  quoteBlocks,
   resolveInDiff,
   targetIndex,
 } from "./blockDiff";
@@ -152,6 +153,28 @@ describe("targetIndex", () => {
     const src = "生成AIの利用料金について\n\n権限の設計について";
     const d = diffBlocks(splitBlocks(src), splitBlocks(src));
     expect(targetIndex(d, "", "全く関係のない別の話題の文章です")).toBe(-1);
+  });
+});
+
+describe("またいだ指摘の引用", () => {
+  const body = "# 表題\n\n段落 1。\n\n段落 2。\n\n段落 3。";
+
+  it("引用に入っているブロックを数える", () => {
+    expect(quoteBlocks("段落 1。\n\n段落 2。")).toHaveLength(2);
+    expect(quoteBlocks("段落 1。")).toHaveLength(1);
+  });
+
+  it("先頭のブロックで位置を決める", () => {
+    const diff = diffBlocks(splitBlocks(body), splitBlocks(body));
+    expect(targetIndex(diff, "段落 1。\n\n段落 2。")).toBe(1);
+  });
+
+  it("先頭のブロックが書き換わっていても位置を保つ", () => {
+    const next = body.replace("段落 1。", "段落 1。追記。");
+    const diff = diffBlocks(splitBlocks(body), splitBlocks(next));
+    const resolution = resolveInDiff(diff, "段落 1。\n\n段落 2。");
+    expect(resolution.state).toBe("rewritten");
+    expect(headOf(resolution)?.src).toBe("段落 1。追記。");
   });
 });
 

@@ -1,4 +1,9 @@
-import type { Block } from "./blocks";
+import { splitBlocks, type Block } from "./blocks";
+
+// 引用に入っているブロックの生ソース。またいだ指摘では複数になる。
+export function quoteBlocks(quote: string): string[] {
+  return splitBlocks(quote).map((b) => b.src);
+}
 
 // 2 つの版をトップレベルのブロック単位で突き合わせる。
 //
@@ -90,6 +95,10 @@ export function headOf(resolution: Resolution): Block | null {
 // 緩い照合では、候補が一意に決まらなければ特定できなかったものとして扱う。
 // 短い文はどの文書にも複数現れるので、無理に当てると別の箇所を指してしまう。
 export function targetIndex(diff: BlockChange[], quote: string, selection = ""): number {
+  // またいだ指摘の引用には複数のブロックが入っている。位置は先頭のブロックで
+  // 決める（続くブロック数は引用の割り方から読む側が出す）。
+  const head = quoteBlocks(quote);
+  if (head.length > 1) quote = head[0];
   const exact = indicesWhere(diff, (src) => src === quote);
   // 内容が同じブロックが複数あるときは先頭を採る。逐語一致なのでどれでも同じ本文
   if (exact.length > 0) return exact[0];

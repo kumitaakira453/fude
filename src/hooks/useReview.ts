@@ -49,8 +49,8 @@ interface Draft {
   sectionPath: string[];
   // ブロック全体への指摘。箇所を持たないので、保存する選択は空にする。
   whole?: boolean;
-  // ブロックをまたいだ指摘。選んだ全文を記録し、印は先頭のブロックの枠で出す。
-  spanning?: boolean;
+  // ブロックをまたいだ指摘。覆っている最後のブロックの番号。
+  until?: number;
 }
 
 export function useReview({
@@ -234,9 +234,17 @@ export function useReview({
       );
       return;
     }
-    // またいだ選択は、選んだ全文を記録して先頭のブロックに紐付ける。
-    // 断片だけを残すと、選んだ範囲と記録が食い違う。
+    // またいだ選択は、範囲そのものを対象にする。引用にはまたいだ分の生ソースを
+    // 入れる（読む側は先頭のブロックで位置を出し、続くブロック数はこの引用の
+    // 割り方から分かる）。断片だけを残すと、選んだ範囲と記録が食い違う。
     const spanning = picked.endBlockIndex !== undefined;
+    const lastBlock = spanning
+      ? all.find((b) => b.index === picked.endBlockIndex)
+      : undefined;
+    const quote =
+      lastBlock && lastBlock.end > block.end
+        ? body.slice(block.start, lastBlock.end)
+        : block.src;
     setDraft({
       hit: {
         id: "",
@@ -248,13 +256,13 @@ export function useReview({
       offset: picked.start,
       text:
         spanning && content ? spanText(content, picked) : picked.text,
-      quote: block.src,
+      quote,
       sectionPath: sectionPathAt(all, picked.blockIndex),
       whole: opts?.whole,
-      spanning,
+      until: picked.endBlockIndex,
     });
     setSelection(null);
-  }, [selection, content, absPath, getBlocks]);
+  }, [selection, content, absPath, body, getBlocks]);
 
   const submit = useCallback(
     async (text: string) => {
