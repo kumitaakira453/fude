@@ -6,16 +6,15 @@ import {
   redo,
   undo,
 } from "@codemirror/commands";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import {
-  defaultHighlightStyle,
-  indentUnit,
-  syntaxHighlighting,
-} from "@codemirror/language";
+import { indentUnit } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef } from "react";
-import { continueList } from "./MarkdownEditor";
+import {
+  continueList,
+  markdownHighlight,
+  markdownLang,
+} from "./MarkdownEditor";
 
 const theme = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "var(--mg-fg)" },
@@ -102,8 +101,8 @@ export function BlockSourceEditor({
             ...historyKeymap,
           ]),
           indentUnit.of("    "),
-          markdown({ base: markdownLanguage }),
-          syntaxHighlighting(defaultHighlightStyle),
+          markdownLang,
+          markdownHighlight,
           EditorView.lineWrapping,
           EditorView.domEventHandlers({
             blur: () => {

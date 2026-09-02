@@ -18,6 +18,12 @@ import { useEffect, useRef } from "react";
 import { livePreview } from "../lib/livePreview";
 
 // リスト行で Enter: 同じインデント/マーカーを継続。空項目ならマーカーを消して抜ける。
+// 見た目と文法解析に関わる拡張は 1 回だけ作り、どのエディタからも同じものを
+// 使う。開くたびに作り直すと、そのたびにスタイルモジュールが差し込まれ、
+// 本文全体のスタイル再計算（65,000 字で 235ms）が走る。
+export const markdownLang = markdown({ base: markdownLanguage });
+export const markdownHighlight = syntaxHighlighting(defaultHighlightStyle);
+
 export function continueList(view: EditorView): boolean {
   const { state } = view;
   const range = state.selection.main;
@@ -129,8 +135,8 @@ export function MarkdownEditor({
             ...historyKeymap,
           ]),
           indentUnit.of("    "), // インデント幅 = 半角スペース4
-          markdown({ base: markdownLanguage }),
-          syntaxHighlighting(defaultHighlightStyle),
+          markdownLang,
+          markdownHighlight,
           livePreview,
           EditorView.lineWrapping,
           EditorView.updateListener.of((u) => {

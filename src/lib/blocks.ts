@@ -254,22 +254,6 @@ export function cutBlock(body: string, block: Block): string {
   return cutSpan(body, block.start, block.end);
 }
 
-// 複数のブロックにまたがる範囲の生ソース。選択がまたいだときは、この範囲を
-// 1 枚のエディタで直す（ブロックごとに開くと、またいだ選択と食い違う）。
-export function spanSrc(body: string, from: Block, to: Block): string {
-  return body.slice(from.start, to.end);
-}
-
-// その範囲を書き換えた結果を本文へ戻す。空にしたら範囲ごと取り除く。
-export function replaceSpan(
-  body: string,
-  from: Block,
-  to: Block,
-  newSrc: string,
-): string {
-  if (newSrc.trim() === "") return cutSpan(body, from.start, to.end);
-  return body.slice(0, from.start) + newSrc + body.slice(to.end);
-}
 
 export function insertAfter(body: string, block: Block, src: string): string {
   return `${body.slice(0, block.end)}\n\n${src}${body.slice(block.end)}`;

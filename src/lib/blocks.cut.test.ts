@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  cutSelection,
-  replaceSpan,
-  spanSrc,
-  splitBlocks,
-} from "./blocks";
+import { cutSelection, splitBlocks } from "./blocks";
 import { buildProjection } from "./projection";
 
 // 画面で選択した箇所を消す。選択は「画面に出ている文字」で来るので、
@@ -180,37 +175,3 @@ describe("cutSelection", () => {
   });
 });
 
-// またいだ選択は、その範囲の生ソースを 1 枚で直す。
-describe("spanSrc / replaceSpan", () => {
-  const body = "# 表題\n\n段落 1。\n\n段落 2。\n\n段落 3。";
-  const blocks = () => splitBlocks(body);
-
-  it("範囲の生ソースを切り出す", () => {
-    const b = blocks();
-    expect(spanSrc(body, b[1], b[2])).toBe("段落 1。\n\n段落 2。");
-  });
-
-  it("範囲を差し替える", () => {
-    const b = blocks();
-    expect(replaceSpan(body, b[1], b[2], "まとめた段落。")).toBe(
-      "# 表題\n\nまとめた段落。\n\n段落 3。",
-    );
-  });
-
-  it("空にしたら範囲ごと取り除く", () => {
-    const b = blocks();
-    expect(replaceSpan(body, b[1], b[2], "  \n")).toBe("# 表題\n\n段落 3。");
-  });
-
-  it("先頭から末尾までを空にしたら本文が空になる", () => {
-    const b = blocks();
-    expect(replaceSpan(body, b[0], b[3], "")).toBe("");
-  });
-
-  it("1 ブロックだけの範囲は差し替えと同じ", () => {
-    const b = blocks();
-    expect(replaceSpan(body, b[2], b[2], "書き換え。")).toBe(
-      "# 表題\n\n段落 1。\n\n書き換え。\n\n段落 3。",
-    );
-  });
-});

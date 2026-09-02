@@ -12,6 +12,7 @@ const SYNTHETIC = [
   ".mg-hr", // editorial の「· · ·」区切り
   ".mg-lc-t > span", // リンクカードのドメイン
   ".mg-cell-editor", // 編集中の入力欄
+  ".cm-editor", // その場編集で開いている生ソース
   ".katex", // 数式は別の字形に置き換わる
   "svg", // Mermaid の図
 ].join(",");

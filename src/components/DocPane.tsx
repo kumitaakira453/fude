@@ -92,9 +92,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // どちらでもなければ両方 undefined で、ブロック全体の編集になる。
     cellStart?: number;
     itemAnchor?: number;
-    // 選択がブロックをまたいでいるときの最後のブロック。ここまでを 1 枚の
-    // エディタで直す。
-    endBlockIndex?: number;
     nonce: number;
   } | null>(null);
   const [editingFm, setEditingFm] = useState<{ x: number; y: number } | null>(
@@ -263,6 +260,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const sel = reviewRef.current?.selection;
     const p = pathRef.current;
     if (!sel || !p) return;
+    // またいだ選択は扱わない。見えている選択と消える範囲が食い違う。
+    if (sel.endBlockIndex !== undefined) {
+      notify(store, "ブロックをまたいだ選択は消せません", "right");
+      return;
+    }
     setDeleteRequest((r) => ({
       path: p,
       blockIndex: sel.blockIndex,
@@ -274,26 +276,31 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     }));
     window.getSelection()?.removeAllRanges();
     reviewRef.current?.clearSelection();
-  }, []);
+  }, [store]);
 
   // 選択したところに対する 2 つの操作。メニューとキーの両方から呼ぶ。
   const startEdit = useCallback(() => {
     const sel = reviewRef.current?.selection;
     const p = pathRef.current;
     if (!sel || !p) return;
+    // またいだ選択は扱わない。先頭のブロックだけを開くと、選んだ範囲と
+    // 直す範囲が食い違う。
+    if (sel.endBlockIndex !== undefined) {
+      notify(store, "ブロックをまたいだ選択は編集できません", "right");
+      return;
+    }
     setEditRequest((r) => ({
       path: p,
       blockIndex: sel.blockIndex,
       cellStart: sel.cellStart,
       itemAnchor: sel.itemAnchor,
-      endBlockIndex: sel.endBlockIndex,
       nonce: (r?.nonce ?? 0) + 1,
     }));
     // 選択を解いてメニューを閉じる。selectionchange は 1 フレーム遅れて
     // 届くので、控えの方も同時に落として待たせない。
     window.getSelection()?.removeAllRanges();
     reviewRef.current?.clearSelection();
-  }, []);
+  }, [store]);
 
   // 選択したところへのキー操作。メニューを出さずに同じことができる。
   useEffect(() => {
@@ -659,28 +666,34 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 </button>
               </>
             )}
-            <span className="mg-sel-menu-sep" />
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                startEdit();
-              }}
-            >
-              <Icon name="edit" size={14} />
-              編集する
-            </button>
-            <span className="mg-sel-menu-sep" />
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                deleteSelection();
-              }}
-            >
-              <Icon name="backspace" size={14} />
-              削除
-            </button>
+            {/* またいだ選択では出さない。先頭のブロックだけに効くと、
+                選んだ範囲と食い違う。 */}
+            {review.selection.endBlockIndex === undefined && (
+              <>
+                <span className="mg-sel-menu-sep" />
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    startEdit();
+                  }}
+                >
+                  <Icon name="edit" size={14} />
+                  編集する
+                </button>
+                <span className="mg-sel-menu-sep" />
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    deleteSelection();
+                  }}
+                >
+                  <Icon name="backspace" size={14} />
+                  削除
+                </button>
+              </>
+            )}
           </div>
         )}
 
