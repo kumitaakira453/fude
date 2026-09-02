@@ -2065,22 +2065,22 @@ svg[id^="mmd-"] foreignObject p {
   pointer-events: none;
 }
 /* 蛍光ペンのように地を敷く。下線は文字の足元に線が重なって読みにくいので、
-   薄い地で囲む。文字の上に重ねる層なので、濃さは字が沈まない範囲に留める。 */
+   薄い地で囲む。文字の上に重ねる層なので、濃さは字が沈まない範囲に留める。
+   押せる箱にはしない。押せるようにすると、その上から選択を始められず、
+   クリックも全部指摘へ吸われる。開くのはホバーで出るカードから。 */
 .mg-review-mark {
   position: absolute;
   padding: 0;
   border: 0;
   border-radius: 0.2em;
   background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
-  cursor: pointer;
-  pointer-events: auto;
+  pointer-events: none;
   transition:
     background 0.12s ease,
     box-shadow 0.12s ease;
 }
-.mg-review-mark:hover {
-  background: color-mix(in srgb, var(--mg-accent) 26%, transparent);
-}
+/* 指しているあいだの印。ホバーは重ねた矩形との当たり判定で見ているので、
+   :hover ではなくこの印を付け替える。 */
 .mg-review-mark-active {
   background: color-mix(in srgb, var(--mg-accent) 30%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 45%, transparent);

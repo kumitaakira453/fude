@@ -158,14 +158,36 @@ export function useReview({
       return;
     }
     let raf = 0;
-    const onChange = () => {
+    // 引いているあいだは控えを更新しない。伸ばしている選択のすぐ下に
+    // メニューが出ると、そのままドラッグの行き先を奪って選択が飛ぶ。
+    let drawing = false;
+    const read = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => setSelection(readSelection(content)));
     };
+    const onChange = () => {
+      if (drawing) return;
+      read();
+    };
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      drawing = true;
+      cancelAnimationFrame(raf);
+      setSelection(null);
+    };
+    const onUp = () => {
+      if (!drawing) return;
+      drawing = false;
+      read();
+    };
     document.addEventListener("selectionchange", onChange);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("mouseup", onUp);
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("selectionchange", onChange);
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mouseup", onUp);
     };
   }, [content, isActive]);
 
