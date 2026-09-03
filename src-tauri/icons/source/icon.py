@@ -3,17 +3,17 @@
 #   python3 src-tauri/icons/source/icon.py /tmp/mdglow-icon
 #   npx tauri icon /tmp/mdglow-icon.png
 #
-# 図案は栞。暗がりに沈んだ地から浮かび、切り欠きの奥に光が溜まる。
-# 読むための道具であること、開いた場所を覚えていることを表す。
+# 図案は、向き合う二つの面と、その間から差す光。人が指摘し AI が返す往復から
+# 文書が仕上がっていくことを表す。何かの絵ではないので、名前を変えても効く。
+# 退くのは片方の面だけにしてある（左右対称にすると目に見える）。
 # 書き出しには rsvg-convert（brew install librsvg）が必要。
 import math
 import subprocess
 import sys
 
-# 1024 の中に 824 の角丸正方形（macOS の作法）。角丸は superellipse で近似する。
 CANVAS = 1024
 BOX = 824
-N = 5.0  # 5 前後が Apple の squircle に近い
+N = 5.0
 
 
 def squircle(cx: float, cy: float, half: float, steps: int = 720) -> str:
@@ -27,69 +27,78 @@ def squircle(cx: float, cy: float, half: float, steps: int = 720) -> str:
     return "M" + "L".join(pts) + "Z"
 
 
-# 栞。上は角丸、下は V に切る。切り欠きは 16px でも残る深さにする。
-RW, RH, NOTCH = 322.0, 516.0, 148.0
-RX = (CANVAS - RW) / 2
-RY = 262.0
-TOP_R = 26.0
+SHAPE = squircle(CANVAS / 2, CANVAS / 2, BOX / 2)
+
+SEAM = CANVAS * 0.5
+GAP = 0.0  # 端では閉じる
+BULGE = 104.0  # 中ほどで退く量（左の面だけ）
+MID = CANVAS * 0.5
 
 
-def ribbon() -> str:
-    l, r = RX, RX + RW
-    t, b = RY, RY + RH
-    mid = (l + r) / 2
+# 面の縁。端では閉じ、中ほどで互いに退いて光が通る。
+def down(x0: float, bulge: float) -> str:
     return (
-        f"M{l:.1f},{t + TOP_R:.1f}"
-        f"Q{l:.1f},{t:.1f} {l + TOP_R:.1f},{t:.1f}"
-        f"L{r - TOP_R:.1f},{t:.1f}"
-        f"Q{r:.1f},{t:.1f} {r:.1f},{t + TOP_R:.1f}"
-        f"L{r:.1f},{b:.1f}"
-        f"L{mid:.1f},{b - NOTCH:.1f}"
-        f"L{l:.1f},{b:.1f}"
-        "Z"
+        f"L{x0:.1f},0 "
+        f"C{x0:.1f},{MID * 0.55:.1f} {x0 + bulge:.1f},{MID * 0.62:.1f} {x0 + bulge:.1f},{MID:.1f} "
+        f"C{x0 + bulge:.1f},{MID * 1.38:.1f} {x0:.1f},{MID * 1.45:.1f} {x0:.1f},{CANVAS:.1f} "
     )
 
 
+def up(x0: float, bulge: float) -> str:
+    return (
+        f"L{x0:.1f},{CANVAS:.1f} "
+        f"C{x0:.1f},{MID * 1.45:.1f} {x0 + bulge:.1f},{MID * 1.38:.1f} {x0 + bulge:.1f},{MID:.1f} "
+        f"C{x0 + bulge:.1f},{MID * 0.62:.1f} {x0:.1f},{MID * 0.55:.1f} {x0:.1f},0 "
+    )
+
+
+XL = SEAM - GAP
+XR = SEAM + GAP
+
+LEFT = f"M0,0 " + down(XL, -BULGE) + f"L0,{CANVAS} Z"
+RIGHT = f"M{CANVAS},{CANVAS} " + up(XR, 0.0) + f"L{CANVAS},0 Z"
+LENS = f"M{XL:.1f},0 " + down(XL, -BULGE)[len(f"L{XL:.1f},0 "):] + up(XR, 0.0) + "Z"
+
 SVG = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{CANVAS}" height="{CANVAS}" viewBox="0 0 {CANVAS} {CANVAS}">
   <defs>
-    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#121a1d"/>
-      <stop offset="0.55" stop-color="#0b1113"/>
-      <stop offset="1" stop-color="#06090a"/>
+    <linearGradient id="left" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#1a2429"/>
+      <stop offset="1" stop-color="#0b1113"/>
     </linearGradient>
-    <linearGradient id="ink" x1="0" y1="1" x2="0" y2="0">
-      <stop offset="0" stop-color="#8ffbef"/>
-      <stop offset="0.22" stop-color="#4fd1c5"/>
-      <stop offset="0.62" stop-color="#1f8b86"/>
-      <stop offset="1" stop-color="#1c5450"/>
+    <linearGradient id="right" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#101719"/>
+      <stop offset="1" stop-color="#05080a"/>
     </linearGradient>
-    <radialGradient id="bloom" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#7ff0e4" stop-opacity="0.85"/>
-      <stop offset="0.45" stop-color="#4fd1c5" stop-opacity="0.26"/>
+    <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2aa89c" stop-opacity="0"/>
+      <stop offset="0.16" stop-color="#4fd1c5" stop-opacity="0.35"/>
+      <stop offset="0.38" stop-color="#9ff6ea" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#f6fffd" stop-opacity="1"/>
+      <stop offset="0.64" stop-color="#9ff6ea" stop-opacity="0.95"/>
+      <stop offset="0.86" stop-color="#4fd1c5" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#2aa89c" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4fd1c5" stop-opacity="0.5"/>
+      <stop offset="0.5" stop-color="#4fd1c5" stop-opacity="0.14"/>
       <stop offset="1" stop-color="#4fd1c5" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.02"/>
-      <stop offset="0.7" stop-color="#ffffff" stop-opacity="0.34"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.16"/>
-    </linearGradient>
-    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="46"/>
+    <filter id="soft" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="44"/>
     </filter>
-    <clipPath id="shape">
-      <path d="{squircle(CANVAS / 2, CANVAS / 2, BOX / 2)}"/>
-    </clipPath>
+    <filter id="near" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <clipPath id="shape"><path d="{SHAPE}"/></clipPath>
   </defs>
-
   <g clip-path="url(#shape)">
-    <path d="{squircle(CANVAS / 2, CANVAS / 2, BOX / 2)}" fill="url(#ground)"/>
-    <!-- 光は切り欠きの奥に一箇所だけ溜める -->
-    <ellipse cx="{CANVAS / 2}" cy="{RY + RH - NOTCH / 2:.1f}" rx="290" ry="215"
-             fill="url(#bloom)" filter="url(#soft)"/>
-    <path d="{ribbon()}" fill="url(#ink)"/>
-    <!-- 左の稜線。面がマットなままでも縁が立つ -->
-    <path d="M{RX + 3:.1f},{RY + TOP_R:.1f} L{RX + 3:.1f},{RY + RH - 6:.1f}"
-          stroke="url(#edge)" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="{LEFT}" fill="url(#left)"/>
+    <path d="{RIGHT}" fill="url(#right)"/>
+    <ellipse cx="{SEAM}" cy="{MID}" rx="220" ry="290" fill="url(#halo)" filter="url(#soft)"/>
+    <path d="{LENS}" fill="url(#core)" filter="url(#near)" opacity="0.85"/>
+    <path d="{LENS}" fill="url(#core)"/>
+    <path d="M{XR:.1f},{MID * 0.28:.1f} L{XR:.1f},{MID * 1.72:.1f}"
+          stroke="url(#core)" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.75"/>
   </g>
 </svg>
 """
