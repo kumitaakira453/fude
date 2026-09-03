@@ -379,6 +379,18 @@ pub fn resolve(thread_id: &str, by: &str) -> Result<(), String> {
     })
 }
 
+// 消した指摘をそのまま戻す。id も書き込みも時刻も元のままにするので、
+// 戻したあとの印と会話が消す前と変わらない。
+pub fn put_thread(thread: Thread) -> Result<(), String> {
+    store::update(|ledger: &mut Ledger| {
+        if ledger.thread(&thread.id).is_some() {
+            return Err(format!("指摘 {} は既にあります", thread.id));
+        }
+        ledger.threads.push(thread);
+        Ok(())
+    })
+}
+
 // 解決を取り消して未解決に戻す。本文の上から解決にできるようにした分、
 // 押し間違いをその場で戻せるようにしておく。
 pub fn reopen(thread_id: &str) -> Result<(), String> {

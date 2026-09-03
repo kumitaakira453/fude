@@ -192,6 +192,15 @@ export async function resolveThread(thread: string, by: string): Promise<boolean
   );
 }
 
+// 消した指摘をそのまま戻す。id も会話も時刻も元のままなので、戻したあとの
+// 印と並びが消す前と変わらない。
+export async function restoreThread(thread: ReviewThread): Promise<boolean> {
+  return attempt(
+    () => invoke("review_put_thread", { thread }),
+    "指摘を戻せませんでした",
+  );
+}
+
 // 解決を取り消して未解決に戻す。
 export async function reopenThread(thread: string): Promise<boolean> {
   return attempt(

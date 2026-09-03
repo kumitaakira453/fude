@@ -13,6 +13,7 @@ import {
   type BlockChange,
 } from "../../lib/blockDiff";
 import { fontStack } from "../../lib/fonts";
+import { inEditable } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import {
   isOpen,
@@ -21,13 +22,16 @@ import {
   answeredByAgent,
   editComment,
   removeThread,
+  reopenThread,
   resolveThread,
   resolveThreads,
+  restoreThread,
   reviewPrompt,
   REVIEW_AUTHOR,
   type ReviewComment,
   type ReviewThread,
 } from "../../lib/review";
+import { runReviewUndo, setReviewUndo } from "../../lib/reviewUndo";
 import { notify } from "../../state/toast";
 import {
   activeFolderIdAtom,
@@ -156,6 +160,18 @@ export function ReviewScreen() {
   const copyTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
+  // 削除と解決を ⌘Z で戻す。返信を書いている途中は、入力欄自身の undo に譲る。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+      if (e.key !== "z" && e.key !== "Z") return;
+      if (inEditable(e.target)) return;
+      if (runReviewUndo()) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // 出すのは今開いているフォルダの中のファイルに付いた指摘だけ。外のものは
   // 本文を読めないので、どこへの指摘かを示せず、返信も解決も当て推量になる。
   // 数だけは伝える（消えたのではなく、そのフォルダを開けば出ると分かるように）。
@@ -224,7 +240,7 @@ export function ReviewScreen() {
       try {
         const name = file.split("/").pop() ?? file;
         const ok = await confirm(
-          `${name} の未解決 ${list.length} 件をすべて解決にします。\n取り消せません。`,
+          `${name} の未解決 ${list.length} 件をすべて解決にします。`,
           { title: "mdglow", kind: "warning" },
         );
         if (!ok) return;
@@ -232,7 +248,17 @@ export function ReviewScreen() {
         const done = await resolveThreads(ids, REVIEW_AUTHOR);
         if (done !== null) {
           await syncLedger(store);
-          notify(store, `${done} 件を解決にしました`);
+          const restore = async () => {
+            setReviewUndo(null);
+            for (const id of ids) await reopenThread(id);
+            await syncLedger(store);
+            notify(store, `${ids.length} 件を未解決に戻しました`);
+          };
+          setReviewUndo(restore);
+          notify(store, `${done} 件を解決にしました`, "center", {
+            label: "元に戻す",
+            run: () => void restore(),
+          });
         }
       } finally {
         bulkRunning.current = false;
@@ -643,9 +669,21 @@ function ThreadDetail({
       if (await resolveThread(thread.id, REVIEW_AUTHOR)) {
         // 次に見せる指摘へ先に移す。読み直しで一覧から消えるのを待つと、
         // 選択が暗黙で倒れて中央ペインが作り直され、ちらついて見える。
+        const back = thread.id;
         setSelectedId(nextId);
         await syncLedger(store);
-        notify(store, "解決にしました");
+        const restore = async () => {
+          setReviewUndo(null);
+          if (!(await reopenThread(back))) return;
+          setSelectedId(back);
+          await syncLedger(store);
+          notify(store, "未解決に戻しました");
+        };
+        setReviewUndo(restore);
+        notify(store, "解決にしました", "center", {
+          label: "元に戻す",
+          run: () => void restore(),
+        });
       }
     } finally {
       resolvingRef.current = false;
@@ -654,26 +692,34 @@ function ThreadDetail({
   }, [thread.id, nextId, setSelectedId, store]);
 
   // 解決とは意味が違う操作。片付いた記録ではなく、指摘そのものを取り消す。
+  // 確認は出さず、戻せるようにする（消す前の姿をそのまま台帳へ戻す）。
   const drop = useCallback(async () => {
     if (removingRef.current) return;
-    const ok = await confirm(
-      "この指摘を削除しますか？\n解決の記録は残らず、台帳から消えます。",
-      { title: "削除の確認", kind: "warning" },
-    );
-    if (!ok) return;
     removingRef.current = true;
     setRemoving(true);
     try {
+      const before = thread;
       if (await removeThread(thread.id)) {
         setSelectedId(nextId);
         await syncLedger(store);
-        notify(store, "指摘を削除しました");
+        const restore = async () => {
+          setReviewUndo(null);
+          if (!(await restoreThread(before))) return;
+          setSelectedId(before.id);
+          await syncLedger(store);
+          notify(store, "指摘を戻しました");
+        };
+        setReviewUndo(restore);
+        notify(store, "指摘を削除しました", "center", {
+          label: "元に戻す",
+          run: () => void restore(),
+        });
       }
     } finally {
       removingRef.current = false;
       setRemoving(false);
     }
-  }, [thread.id, nextId, setSelectedId, store]);
+  }, [thread, nextId, setSelectedId, store]);
 
   // --- 書き込みの書き直し
   const rewrite = useCallback(

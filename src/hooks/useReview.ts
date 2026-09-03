@@ -19,6 +19,7 @@ import {
   spanText,
   type BlockSelection,
 } from "../lib/domText";
+import { runReviewUndo, setReviewUndo } from "../lib/reviewUndo";
 import { notify } from "../state/toast";
 import { parseFrontmatter } from "../lib/frontmatter";
 import {
@@ -26,8 +27,8 @@ import {
   isOpen,
   removeThread,
   reopenThread,
-  replyToThread,
   resolveThread,
+  restoreThread,
   readVersion,
   REVIEW_AUTHOR,
   setResolved,
@@ -200,45 +201,26 @@ export function useReview({
 
   const close = useCallback(() => setDraft(null), []);
 
-  // 直前の操作を戻す手。⌘Z と知らせの「元に戻す」から呼ぶ。
-  const undoRef = useRef<null | (() => Promise<void>)>(null);
-
   // 指摘そのものを取り消す。付け間違いはその場で消したいので確認は出さず、
-  // 代わりに戻せるようにする。戻すときは同じ文言で作り直す（台帳の id は
-  // 新しくなる）。
+  // 代わりに戻せるようにする。
   const remove = useCallback(
     async (id: string) => {
       const thread = store.get(ledgerAtom).threads.find((t) => t.id === id);
       if (!thread || !(await removeThread(id))) return;
       await syncLedger(store);
       const restore = async () => {
-        undoRef.current = null;
-        const first = thread.comments[0];
-        const made = await createThread({
-          file: thread.file,
-          quote: thread.quote,
-          selection: thread.selection,
-          selectionOffset: thread.selection_offset,
-          sectionPath: thread.section_path,
-          source: raw ?? body,
-          author: first?.author ?? REVIEW_AUTHOR,
-          body: first?.body ?? "",
-        });
-        if (!made) return;
-        // 返信も並びのまま戻す。
-        for (const reply of thread.comments.slice(1)) {
-          await replyToThread(made, reply.author, reply.body);
-        }
+        setReviewUndo(null);
+        if (!(await restoreThread(thread))) return;
         await syncLedger(store);
         notify(store, "指摘を戻しました", "right");
       };
-      undoRef.current = restore;
+      setReviewUndo(restore);
       notify(store, "指摘を削除しました", "right", {
         label: "元に戻す",
         run: () => void restore(),
       });
     },
-    [store, raw, body],
+    [store],
   );
 
   // 本文の上から解決にする。レビュー画面まで行かずに片付けられるようにする。
@@ -248,12 +230,12 @@ export function useReview({
       if (!(await resolveThread(id, REVIEW_AUTHOR))) return;
       await syncLedger(store);
       const restore = async () => {
-        undoRef.current = null;
+        setReviewUndo(null);
         if (!(await reopenThread(id))) return;
         await syncLedger(store);
         notify(store, "未解決に戻しました", "right");
       };
-      undoRef.current = restore;
+      setReviewUndo(restore);
       notify(store, "解決にしました", "right", {
         label: "元に戻す",
         run: () => void restore(),
@@ -263,12 +245,7 @@ export function useReview({
   );
 
   // 直後の ⌘Z で戻す。戻すものが無ければ本文の undo に譲る。
-  const undoRemove = useCallback((): boolean => {
-    const restore = undoRef.current;
-    if (!restore) return false;
-    void restore();
-    return true;
-  }, []);
+  const undoRemove = useCallback((): boolean => runReviewUndo(), []);
 
   // 選択の控えを即座に落とす。selectionchange は 1 フレーム遅れて届くので、
   // 選択を解いた操作の側からも落として、メニューを残さない。

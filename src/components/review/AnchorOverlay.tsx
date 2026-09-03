@@ -53,27 +53,49 @@ interface Mark {
 
 // 同じ行に並ぶ細切れの矩形を 1 本に畳む。文字ノードの切れ目でばらばらに
 // 出ると継ぎ目が見えてしまう。表のセルの間（広く空く）は畳まない。
-const GAP = 6;
+const GAP = 8;
+
+// 同じ行に載っているか。`コード` や数式の囲みは上端も高さも本文と揃わないので、
+// 一致で見ると同じ行が別の行として残り、印が細切れになる。上下の重なりで見る。
+function sameLine(a: { top: number; bottom: number }, b: DOMRect): boolean {
+  const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  return overlap > Math.min(a.bottom - a.top, b.height) * 0.5;
+}
 
 function mergeRects(rects: DOMRect[]): DOMRect[] {
-  const sorted = [...rects].sort((a, b) => a.top - b.top || a.left - b.left);
-  const out: DOMRect[] = [];
-  for (const rc of sorted) {
-    const last = out[out.length - 1];
-    const sameLine =
-      last &&
-      Math.abs(last.top - rc.top) < 2 &&
-      Math.abs(last.height - rc.height) < 2;
-    if (sameLine && rc.left - last.right <= GAP) {
-      out[out.length - 1] = new DOMRect(
-        last.left,
-        last.top,
-        Math.max(last.right, rc.right) - last.left,
-        Math.max(last.height, rc.height),
-      );
+  // まず行に分ける。左右の並び替えは行ごとに行う（先に上端で並べると、
+  // 囲みの分だけずれた矩形が行をまたいで前後する）。
+  const lines: { top: number; bottom: number; parts: DOMRect[] }[] = [];
+  for (const rc of [...rects].sort((a, b) => a.top - b.top)) {
+    const line = lines[lines.length - 1];
+    if (line && sameLine(line, rc)) {
+      line.parts.push(rc);
+      line.top = Math.min(line.top, rc.top);
+      line.bottom = Math.max(line.bottom, rc.bottom);
       continue;
     }
-    out.push(rc);
+    lines.push({ top: rc.top, bottom: rc.bottom, parts: [rc] });
+  }
+
+  const out: DOMRect[] = [];
+  for (const line of lines) {
+    let cur: DOMRect | null = null;
+    for (const rc of line.parts.sort((a, b) => a.left - b.left)) {
+      if (cur && rc.left - cur.right <= GAP) {
+        const top = Math.min(cur.top, rc.top);
+        const bottom = Math.max(cur.bottom, rc.bottom);
+        cur = new DOMRect(
+          cur.left,
+          top,
+          Math.max(cur.right, rc.right) - cur.left,
+          bottom - top,
+        );
+        continue;
+      }
+      if (cur) out.push(cur);
+      cur = rc;
+    }
+    if (cur) out.push(cur);
   }
   return out;
 }
