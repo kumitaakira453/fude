@@ -120,13 +120,17 @@ function ago(at: number): string {
   return day < 30 ? `${day} 日前` : `${Math.floor(day / 30)} か月前`;
 }
 
-// セルの文字を丸ごと覆っている指摘は、文字の行ではなくセルの箱で示す。
-// 表の中では、そのほうがどこへの指摘か読み取りやすい。
-function cellOf(range: Range): Element | null {
-  const start = range.startContainer.parentElement?.closest("td,th");
-  const end = range.endContainer.parentElement?.closest("td,th");
+// セルや箇条書きの項目の文字を丸ごと覆っている指摘は、文字の行ではなく
+// その箱で示す。行ごとの矩形だと、`コード` の囲みやチェックの前後で切れて
+// 散らかって見える。
+const UNIT = "td,th,li[data-mg-item]";
+
+function unitOf(range: Range): Element | null {
+  const start = range.startContainer.parentElement?.closest(UNIT);
+  const end = range.endContainer.parentElement?.closest(UNIT);
   if (!start || start !== end) return null;
-  const full = (start.textContent ?? "").trim();
+  // 比べるのは画面に出る文字。チェックのアイコンは文字として数えない。
+  const full = readBlockText(start as HTMLElement).plain.trim();
   const text = range.toString().trim();
   return full.length > 0 && text === full ? start : null;
 }
@@ -324,7 +328,7 @@ export function AnchorOverlay({
         boxes.push(fallback);
       }
       const areas = clipRects(boxes, clip);
-      const cell = inner ? cellOf(inner) : null;
+      const cell = inner ? unitOf(inner) : null;
       const spots = inner
         ? clipRects(
             cell
@@ -391,7 +395,7 @@ export function AnchorOverlay({
     }
     const wrap = el.querySelector(".mg-table-wrap");
     const clip = wrap ? wrap.getBoundingClientRect() : null;
-    const cell = range ? cellOf(range) : null;
+    const cell = range ? unitOf(range) : null;
     // またいで選んでいるときは、覆っているブロックの枠を並べる。
     const boxes: DOMRect[] = [];
     if (draft.whole) {
