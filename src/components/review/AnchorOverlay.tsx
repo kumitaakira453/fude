@@ -156,6 +156,8 @@ export function AnchorOverlay({
     whole?: boolean;
     // ブロックをまたいで選んでいるときの、最後のブロックの番号。
     until?: number;
+    // セル・項目を丸ごと対象にしたときの引き先（目印の CSS 選択子）。
+    unit?: string;
   } | null;
   onPick: (hit: AnchorHit) => void;
   // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
@@ -395,7 +397,10 @@ export function AnchorOverlay({
     }
     const wrap = el.querySelector(".mg-table-wrap");
     const clip = wrap ? wrap.getBoundingClientRect() : null;
-    const cell = range ? unitOf(range) : null;
+    // 丸ごとの対象は目印で直に引く。文字の一致で見分けると、記法の囲みや
+    // チェックの前後で当たらないことがある。
+    const marked = draft.unit ? el.querySelector(draft.unit) : null;
+    const cell = marked ?? (range ? unitOf(range) : null);
     // またいで選んでいるときは、覆っているブロックの枠を並べる。
     const boxes: DOMRect[] = [];
     if (draft.whole) {

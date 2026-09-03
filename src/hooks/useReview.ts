@@ -53,6 +53,11 @@ interface Draft {
   whole?: boolean;
   // ブロックをまたいだ指摘。覆っている最後のブロックの番号。
   until?: number;
+  // セル・項目を丸ごと対象にした指摘。印はその箱で出す。目印は描画側が
+  // 持っているソースオフセット。
+  unit?: boolean;
+  cellStart?: number;
+  itemAnchor?: number;
 }
 
 export function useReview({
@@ -256,7 +261,7 @@ export function useReview({
   );
 
   // 押しても何も起きない状態を作らない。進めない理由はその場で出す。
-  const startDraft = useCallback((opts?: { whole?: boolean }) => {
+  const startDraft = useCallback((opts?: { whole?: boolean; unit?: boolean }) => {
     // 読むのは DOM が今持っている選択。控え（selection）は selectionchange
     // 経由で 1 フレーム遅れて届くので、セルやブロック全体へ選択を広げた直後に
     // これを先に見ると、広げる前の一部分だけを対象にしてしまう。
@@ -311,6 +316,9 @@ export function useReview({
       sectionPath: sectionPathAt(all, picked.blockIndex),
       whole: opts?.whole,
       until: picked.endBlockIndex,
+      unit: opts?.unit,
+      cellStart: picked.cellStart,
+      itemAnchor: picked.itemAnchor,
     });
     // 対象は下書きの印で示すので、ネイティブの選択は解く。残すと、印と
     // 選択が二重に出て（チェックや `コード` の囲みを跨いで）散らかる。

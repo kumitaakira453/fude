@@ -258,7 +258,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         `[data-mg-block="${index}"] li[data-mg-item="${anchor}"]`,
       );
       if (!el || !selectTextIn(el)) return;
-      reviewRef.current?.startDraft();
+      reviewRef.current?.startDraft({ unit: true });
     },
     [content],
   );
@@ -272,7 +272,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       `[data-mg-block="${sel.blockIndex}"] [data-mg-cell="${sel.cellStart}"]`,
     );
     if (!cell || !selectTextIn(cell)) return;
-    reviewRef.current?.startDraft();
+    reviewRef.current?.startDraft({ unit: true });
   }, [content]);
 
   // 選択したところを消す頼み。ソースのどこを切るかは EditableBody が出す。
@@ -706,6 +706,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     whole:
                       review.draft.whole || review.draft.until !== undefined,
                     until: review.draft.until,
+                    // セル・項目を丸ごと対象にしたときの引き先。行ごとの
+                    // 矩形ではなくこの箱で示す。
+                    unit: !review.draft.unit
+                      ? undefined
+                      : review.draft.itemAnchor !== undefined
+                        ? `li[data-mg-item="${review.draft.itemAnchor}"]`
+                        : review.draft.cellStart !== undefined
+                          ? `[data-mg-cell="${review.draft.cellStart}"]`
+                          : undefined,
                   }
                 : null
             }
