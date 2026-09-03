@@ -139,16 +139,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!isActive) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || (e.key !== "z" && e.key !== "Z")) return;
-      const ae = document.activeElement as HTMLElement | null;
       // 編集中の入力欄（CodeMirror・セルのインライン textarea 等）では、
       // その入力欄自身のネイティブ undo を優先し、ドキュメント全体の undo は行わない
-      if (
-        ae?.closest?.(".cm-editor") ||
-        ae?.tagName === "TEXTAREA" ||
-        ae?.tagName === "INPUT" ||
-        ae?.isContentEditable
-      )
-        return;
+      if (inEditable(e.target)) return;
       if (!path) return;
       e.preventDefault();
       // 本文全体を読み直すので間があく。何が起きているかを知らせで出す。

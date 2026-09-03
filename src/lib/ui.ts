@@ -392,6 +392,7 @@ export function inEditable(target: EventTarget | null): boolean {
     (n.tagName === "INPUT" ||
       n.tagName === "TEXTAREA" ||
       n.isContentEditable ||
-      !!n.closest?.(".cm-editor"));
+      // その場編集は shadow root の中にあるので、外からは入れ物しか見えない。
+      !!n.closest?.(".cm-editor, .mg-block-cm"));
   return editable(el) || editable(ae);
 }

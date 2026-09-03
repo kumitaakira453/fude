@@ -66,8 +66,17 @@ export function BlockSourceEditor({
     // 引き継いでしまい、本当の blur で確定できなくなる。
     const done = { value: false };
     doneRef.current = done;
+    // CodeMirror は View を作るたびに、差し込み先の <style> の中身を丸ごと
+    // 書き直す。document へ差し込むと、そのたびに本文全体のスタイル再計算
+    // （65,000 字で 246ms）が走る。この場の編集は shadow root の中に閉じる。
+    // shadow root なら差し込みが adoptedStyleSheets になり、外の本文の
+    // スタイルは無効にならない。見た目は CodeMirror の theme 側に持たせて
+    // あるので、外の CSS には依存しない。
+    const shadow =
+      ref.current.shadowRoot ?? ref.current.attachShadow({ mode: "open" });
     const view = new EditorView({
-      parent: ref.current,
+      parent: shadow,
+      root: shadow,
       state: EditorState.create({
         doc: src,
         extensions: [

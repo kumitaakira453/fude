@@ -258,6 +258,23 @@ export function spanText(root: HTMLElement, sel: BlockSelection): string {
   return parts.filter((t) => t.trim() !== "").join("\n\n");
 }
 
+// その位置が入っているブロックの入れ物。またぐ選択では、終わりが文字ではなく
+// 入れ物（記事の要素）で示されることがある。その場合は指している子から辿る。
+function blockOf(node: Node, offset: number): HTMLElement | null {
+  if (!(node instanceof Element)) {
+    return node.parentElement?.closest<HTMLElement>("[data-mg-block]") ?? null;
+  }
+  // 入れ物が示す位置は「そこまで」なので、1 つ手前の子が最後の中身になる。
+  const kid = node.childNodes[offset - 1] ?? node.childNodes[offset] ?? null;
+  const from =
+    kid instanceof Element ? kid : (kid?.parentElement ?? (node as Element));
+  const hit = from.closest<HTMLElement>("[data-mg-block]");
+  if (hit) return hit;
+  // 入れ物そのものを指しているときは、その中の最後のブロックを採る。
+  const inside = from.querySelectorAll<HTMLElement>("[data-mg-block]");
+  return inside.length > 0 ? inside[inside.length - 1] : null;
+}
+
 // ブロックをまたいでいるときの、最後のブロックと、その中の終わりの位置。
 // またいでいなければ空を返す。
 function spanEnd(
@@ -266,17 +283,13 @@ function spanEnd(
   blockIndex: number,
 ): { endBlockIndex?: number; endOffset?: number } {
   if (!root.contains(range.endContainer)) return {};
-  const endEl =
-    range.endContainer instanceof Element
-      ? range.endContainer
-      : range.endContainer.parentElement;
-  const endBlock = endEl?.closest<HTMLElement>("[data-mg-block]");
+  const endBlock = blockOf(range.endContainer, range.endOffset);
   const at = endBlock ? blockIndexOf(endBlock) : null;
   if (!endBlock || at === null || at <= blockIndex) return {};
   const bt = readBlockText(endBlock);
   const offset = offsetOf(bt, range.endContainer, range.endOffset);
-  // 位置が読めない終わり方（要素そのものが終端など）でも、またいでいる事実は
-  // 残す。末尾まで選んだものとして扱う。
+  // 位置が読めない終わり方（入れ物が終端など）でも、またいでいる事実は残す。
+  // 末尾まで選んだものとして扱う。
   if (offset === null) return { endBlockIndex: at, endOffset: bt.plain.length };
   // 最後のブロックの文字を 1 つも含まない終わり方は、またぎとして扱わない。
   // 段落の行末より少し下まで引いただけで次のブロックを巻き込んでしまう。
