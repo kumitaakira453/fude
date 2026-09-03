@@ -78,7 +78,7 @@ export function Mermaid({ code }: { code: string }) {
             setError(null);
           }
         } else {
-          console.error("[mdglow mermaid]", e);
+          console.error("[fude mermaid]", e);
           if (alive) setError(String(e?.message || e));
         }
         cleanupOrphans(id);

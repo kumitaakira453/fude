@@ -319,13 +319,13 @@ export function useWorkspace() {
       const folderId = store.get(A.activeFolderIdAtom);
       if (!folderId) return false;
       const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
-      const title = entry ? folderDisplayName(entry) : "mdglow";
+      const title = entry ? folderDisplayName(entry) : "fude";
       try {
         await openDocWindow(folderId, path, title, at);
         return true;
       } catch (e) {
         void message(`新しいウィンドウを開けませんでした。\n${String(e)}`, {
-          title: "mdglow",
+          title: "fude",
           kind: "error",
         });
         return false;
@@ -342,7 +342,7 @@ export function useWorkspace() {
         return true;
       } catch (e) {
         void message(`新しいウィンドウを開けませんでした。\n${String(e)}`, {
-          title: "mdglow",
+          title: "fude",
           kind: "error",
         });
         return false;

@@ -12,7 +12,7 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: unknown) {
-    console.error("[mdglow error]", error, info);
+    console.error("[fude error]", error, info);
   }
 
   render() {

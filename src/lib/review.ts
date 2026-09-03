@@ -262,7 +262,7 @@ async function attempt(run: () => Promise<unknown>, failure: string): Promise<bo
     await run();
     return true;
   } catch (e) {
-    await message(`${failure}\n${String(e)}`, { title: "mdglow", kind: "error" });
+    await message(`${failure}\n${String(e)}`, { title: "fude", kind: "error" });
     return false;
   }
 }
@@ -272,7 +272,7 @@ async function call<T>(run: () => Promise<T>, failure: string): Promise<T | null
   try {
     return await run();
   } catch (e) {
-    await message(`${failure}\n${String(e)}`, { title: "mdglow", kind: "error" });
+    await message(`${failure}\n${String(e)}`, { title: "fude", kind: "error" });
     return null;
   }
 }

@@ -1,18 +1,18 @@
 ---
 name: doc-review
 description: |
-  mdglow で付けられたレビューの指摘を読み取り、ドキュメントを修正するスキル。
-  人間が mdglow でレビュー済みの状態で実行し、指摘に基づく修正 → 返信 → 版の記録を行う。
+  fude で付けられたレビューの指摘を読み取り、ドキュメントを修正するスキル。
+  人間が fude でレビュー済みの状態で実行し、指摘に基づく修正 → 返信 → 版の記録を行う。
   解決済みにするのは人間の操作で、AI は行わない。
-  トリガー例: 「レビュー対応して」「mdglow のコメント反映して」「/doc-review」
+  トリガー例: 「レビュー対応して」「fude のコメント反映して」「/doc-review」
 argument-hint:
   [対象ファイルパス（省略時は直前に作成・編集したファイル）]
-allowed-tools: Read, Edit, Bash(mdglow:*)
+allowed-tools: Read, Edit, Bash(fude:*)
 ---
 
 # ドキュメントレビュー対応スキル
 
-人間が mdglow で付けたレビューの指摘を読み取り、指摘に基づいてドキュメントを修正する。
+人間が fude で付けたレビューの指摘を読み取り、指摘に基づいてドキュメントを修正する。
 
 ## 引数
 
@@ -22,14 +22,14 @@ allowed-tools: Read, Edit, Bash(mdglow:*)
 
 ## 前提
 
-- `mdglow` に PATH が通っていること。通っていなければ次で張る
+- `fude` に PATH が通っていること。通っていなければ次で張る
 
   ```bash
   mkdir -p ~/.local/bin
-  ln -sfn "/Applications/mdglow.app/Contents/MacOS/app" ~/.local/bin/mdglow
+  ln -sfn "/Applications/fude.app/Contents/MacOS/app" ~/.local/bin/fude
   ```
 
-- 人間が mdglow で対象ファイルに指摘を付けてあること
+- 人間が fude で対象ファイルに指摘を付けてあること
 
 台帳はマシンに 1 つで、プロジェクトごとには分かれていない。`--project` でプロジェクトの
 ルートを渡して絞り込む。`--file` は絶対パスでも相対パスでもよい。
@@ -41,7 +41,7 @@ allowed-tools: Read, Edit, Bash(mdglow:*)
 未対応の指摘を一覧する。
 
 ```bash
-mdglow review list --project [プロジェクトルート] --file [対象ファイルパス]
+fude review list --project [プロジェクトルート] --file [対象ファイルパス]
 ```
 
 既定は**未対応のみ**（最後の発言が自分でないもの）で、AI 向けの形式で出る。返信済みの
@@ -73,12 +73,12 @@ mdglow review list --project [プロジェクトルート] --file [対象ファ�
 修正した各指摘に、何をしたかを返信する。
 
 ```bash
-mdglow review reply --thread [指摘ID] --author AI --body "[修正内容の要約]"
+fude review reply --thread [指摘ID] --author AI --body "[修正内容の要約]"
 ```
 
 指摘 ID は一覧の `#xxxxxxxx` の 8 桁。
 
-**指摘を解決済みにしてはならない。`mdglow review resolve` を実行しない。** 修正が
+**指摘を解決済みにしてはならない。`fude review resolve` を実行しない。** 修正が
 意図どおりかを見て指摘を閉じられるのは、指摘した人間だけ。対応したものも、
 対応しなかったものも、返信だけ残して未解決のままにする。
 
@@ -91,10 +91,10 @@ mdglow review reply --thread [指摘ID] --author AI --body "[修正内容の要�
 「どこが変わったか」を出すための基準になる。
 
 ```bash
-mdglow review commit --file [対象ファイルパス] --message "[対応の要約]"
+fude review commit --file [対象ファイルパス] --message "[対応の要約]"
 ```
 
-記録済みの版は `mdglow review versions --file [対象ファイルパス]` で新しい順に確認できる。
+記録済みの版は `fude review versions --file [対象ファイルパス]` で新しい順に確認できる。
 
 ### 5. 再レビュー依頼
 
@@ -107,7 +107,7 @@ mdglow review commit --file [対象ファイルパス] --message "[対応の要�
 |------|------|------|
 | #xxxxxxxx | [対象の状態] | [修正内容] |
 
-すべて未解決のままにしてあります。mdglow で確認し、良ければそちらで解決してください。
+すべて未解決のままにしてあります。fude で確認し、良ければそちらで解決してください。
 ```
 
 修正しなかった指摘があれば、理由を添えて別の表に分けて示す。

@@ -47,8 +47,8 @@ pub fn install(app: &AppHandle) {
         let open_recent: Imp = std::mem::transmute::<ActionFn, Imp>(open_recent);
         // 型エンコーディング: @=オブジェクト, v=戻り値なし, :=セレクタ
         add_method(class, sel!(applicationDockMenu:), menu, b"@@:@\0");
-        add_method(class, sel!(mdglowNewWindow:), new_window, b"v@:@\0");
-        add_method(class, sel!(mdglowOpenRecent:), open_recent, b"v@:@\0");
+        add_method(class, sel!(fudeNewWindow:), new_window, b"v@:@\0");
+        add_method(class, sel!(fudeOpenRecent:), open_recent, b"v@:@\0");
     }
 }
 
@@ -84,7 +84,7 @@ extern "C-unwind" fn dock_menu(this: &AnyObject, _cmd: Sel, _sender: *mut AnyObj
         add_item(
             &menu,
             "新しいウィンドウ",
-            sel!(mdglowNewWindow:),
+            sel!(fudeNewWindow:),
             target,
             TAG_NEW_WINDOW,
         );
@@ -94,7 +94,7 @@ extern "C-unwind" fn dock_menu(this: &AnyObject, _cmd: Sel, _sender: *mut AnyObj
             let _: () = msg_send![&*menu, addItem: separator];
         }
         for (i, folder) in recent.iter().enumerate() {
-            add_item(&menu, &folder.name, sel!(mdglowOpenRecent:), target, i as isize);
+            add_item(&menu, &folder.name, sel!(fudeOpenRecent:), target, i as isize);
         }
         // AppKit は autorelease されたメニューを期待する
         Retained::autorelease_return(menu)
@@ -106,7 +106,7 @@ extern "C-unwind" fn new_window(_this: &AnyObject, _cmd: Sel, _sender: *mut AnyO
     if let Err(e) = crate::windows::open_doc_window(
         app.clone(),
         "index.html".to_string(),
-        "mdglow".to_string(),
+        "fude".to_string(),
         None,
         None,
     ) {

@@ -241,7 +241,7 @@ export function ReviewScreen() {
         const name = file.split("/").pop() ?? file;
         const ok = await confirm(
           `${name} の未解決 ${list.length} 件をすべて解決にします。`,
-          { title: "mdglow", kind: "warning" },
+          { title: "fude", kind: "warning" },
         );
         if (!ok) return;
         const ids = list.map((t) => t.id);
@@ -285,7 +285,7 @@ export function ReviewScreen() {
         },
         (e: unknown) =>
           void message(`クリップボードに写せませんでした\n${String(e)}`, {
-            title: "mdglow",
+            title: "fude",
             kind: "error",
           }),
       );

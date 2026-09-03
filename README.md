@@ -1,4 +1,4 @@
-# ✨ mdglow
+# ✨ fude
 
 <p>
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
@@ -68,20 +68,20 @@ npm run tauri:build
 
 生成物（macOS）:
 
-- アプリ本体: `src-tauri/target/release/bundle/macos/mdglow.app`
-- インストーラ: `src-tauri/target/release/bundle/dmg/mdglow_0.1.0_aarch64.dmg`
+- アプリ本体: `src-tauri/target/release/bundle/macos/fude.app`
+- インストーラ: `src-tauri/target/release/bundle/dmg/fude_0.1.0_aarch64.dmg`
 
 インストール:
 
 ```bash
 # .app を Applications にコピー（= インストール）
-cp -R "src-tauri/target/release/bundle/macos/mdglow.app" /Applications/
-# 以降は Launchpad / Spotlight から "mdglow" で起動
-open -a mdglow
+cp -R "src-tauri/target/release/bundle/macos/fude.app" /Applications/
+# 以降は Launchpad / Spotlight から "fude" で起動
+open -a fude
 ```
 
 - **署名について**: 未署名のため初回は Gatekeeper に止められることがある。その場合は
-  「システム設定 → プライバシーとセキュリティ」で許可するか、`xattr -dr com.apple.quarantine /Applications/mdglow.app` を実行。
+  「システム設定 → プライバシーとセキュリティ」で許可するか、`xattr -dr com.apple.quarantine /Applications/fude.app` を実行。
 - **Windows**: `src-tauri/target/release/bundle/` に `.msi` / `.exe`（NSIS）。
 - **Linux**: 同ディレクトリに `.deb` / `.AppImage`。
 
@@ -96,17 +96,17 @@ GUI と同じ実行ファイルが CLI も兼ねる。第 1 引数が `review` �
 ```bash
 # ~/.local/bin に置く（sudo 不要。PATH に無ければ .zshrc 等で通す）
 mkdir -p ~/.local/bin
-ln -sfn "/Applications/mdglow.app/Contents/MacOS/app" ~/.local/bin/mdglow
+ln -sfn "/Applications/fude.app/Contents/MacOS/app" ~/.local/bin/fude
 
 # 全ユーザーから使えるようにする場合
-sudo ln -sfn "/Applications/mdglow.app/Contents/MacOS/app" /usr/local/bin/mdglow
+sudo ln -sfn "/Applications/fude.app/Contents/MacOS/app" /usr/local/bin/fude
 ```
 
 ```bash
-mdglow review --help   # 通っていれば使い方が出る
+fude review --help   # 通っていれば使い方が出る
 ```
 
-バンドル内の実行ファイル名は `app` だが、リンク名が `mdglow` ならヘルプもそう表示される。
+バンドル内の実行ファイル名は `app` だが、リンク名が `fude` ならヘルプもそう表示される。
 アプリを更新してもリンク先のパスは変わらないので、張り直しは要らない。
 Windows / Linux は実行ファイルの置き場所が違うので、`npm run tauri:build` の生成物に含まれる
 実行ファイルへリンクを張る。
@@ -152,20 +152,20 @@ GUI が起動していなくても CLI だけで完結する。台帳は
 
 | コマンド | 内容 |
 |---|---|
-| `mdglow review list` | 指摘の一覧。`--project <dir>` / `--file <path>` で絞り込み、`--status unanswered\|open\|all`、`--format agent\|md\|json`、`--brief`、`--exit-code` |
-| `mdglow review reply --thread <id> --body <text>` | 指摘に返信する（`--author` 既定 `AI`） |
-| `mdglow review resolve --thread <id>` | 解決済みにする（`--by` 既定 `AI`）。**AI は使わない** |
-| `mdglow review reopen --thread <id>` | 解決を取り消して未解決に戻す |
-| `mdglow review commit --file <path> --message <text>` | 対応完了を宣言し、その時点の本文を版として記録する |
-| `mdglow review versions --file <path>` | 版を新しい順に一覧する |
+| `fude review list` | 指摘の一覧。`--project <dir>` / `--file <path>` で絞り込み、`--status unanswered\|open\|all`、`--format agent\|md\|json`、`--brief`、`--exit-code` |
+| `fude review reply --thread <id> --body <text>` | 指摘に返信する（`--author` 既定 `AI`） |
+| `fude review resolve --thread <id>` | 解決済みにする（`--by` 既定 `AI`）。**AI は使わない** |
+| `fude review reopen --thread <id>` | 解決を取り消して未解決に戻す |
+| `fude review commit --file <path> --message <text>` | 対応完了を宣言し、その時点の本文を版として記録する |
+| `fude review versions --file <path>` | 版を新しい順に一覧する |
 
 ```bash
-mdglow review list --project ~/docs --file ~/docs/spec.md
+fude review list --project ~/docs --file ~/docs/spec.md
 ```
 
 ```
 未対応 2 / 返信済み 4 / 解決済み 59   対象: /Users/you/docs/spec.md
-返信は mdglow review reply --thread <ID> --author AI --body "<何をしたか>" で行う。解決済みにするのは人間の操作なので、resolve は実行しない。
+返信は fude review reply --thread <ID> --author AI --body "<何をしたか>" で行う。解決済みにするのは人間の操作なので、resolve は実行しない。
 
 ## /Users/you/docs/spec.md
 

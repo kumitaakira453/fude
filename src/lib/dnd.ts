@@ -7,7 +7,7 @@
 
 import type { DropPoint } from "./windows";
 
-export const DND_MIME = "application/x-mdglow-path";
+export const DND_MIME = "application/x-fude-path";
 
 export interface DragPayload {
   path: string;

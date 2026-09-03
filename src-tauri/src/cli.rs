@@ -7,7 +7,7 @@ use crate::review;
 // 台帳を直接読み書きする（GUI への IPC を経由しない）。
 
 #[derive(Parser)]
-#[command(name = "mdglow", about = "mdglow のレビュー機能を CLI から操作する")]
+#[command(name = "fude", about = "fude のレビュー機能を CLI から操作する")]
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -167,7 +167,7 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
                     print!("{}", review::format::threads_brief(&views));
                 } else if matches!(format, OutputFormat::Agent) {
                     println!(
-                        "返信は mdglow review reply --thread <ID> --author {} --body \"<何をしたか>\" で行う。\
+                        "返信は fude review reply --thread <ID> --author {} --body \"<何をしたか>\" で行う。\
                          解決済みにするのは人間の操作なので、resolve は実行しない。",
                         filter.author
                     );

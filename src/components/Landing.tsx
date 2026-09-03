@@ -73,7 +73,7 @@ export function Landing() {
           </div>
           <div>
             <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.02em] text-[var(--mg-fg)]">
-              mdglow
+              fude
             </h1>
             <p className="text-[13px] text-[var(--mg-muted)]">
               ローカルの Markdown を、美しく読む

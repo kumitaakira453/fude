@@ -240,7 +240,7 @@ export function Settings() {
                     className="text-[var(--mg-accent)]"
                   />
                   <span className="mg-set-row-main">
-                    <span className="mg-set-row-name">mdglow</span>
+                    <span className="mg-set-row-name">fude</span>
                     <span className="mg-set-note">
                       {isTauri
                         ? version

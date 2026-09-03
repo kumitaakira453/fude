@@ -85,7 +85,7 @@ export function Toolbar() {
           className="text-[var(--mg-accent)]"
         />
         <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">
-          mdglow
+          fude
         </span>
       </button>
 

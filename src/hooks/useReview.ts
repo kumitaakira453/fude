@@ -269,14 +269,14 @@ export function useReview({
     const picked = (content ? readSelection(content) : null) ?? selection;
     if (!picked) {
       void message("本文を選択してから押してください。", {
-        title: "mdglow",
+        title: "fude",
         kind: "info",
       });
       return;
     }
     if (!absPath) {
       void message("ファイルの場所を特定できませんでした。フォルダを開き直してください。", {
-        title: "mdglow",
+        title: "fude",
         kind: "error",
       });
       return;
@@ -286,7 +286,7 @@ export function useReview({
     if (!block) {
       void message(
         `選択された箇所（ブロック ${picked.blockIndex} / 全 ${all.length}）を本文の中で特定できませんでした。`,
-        { title: "mdglow", kind: "error" },
+        { title: "fude", kind: "error" },
       );
       return;
     }

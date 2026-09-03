@@ -50,7 +50,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   if (pane.tabs.length === 0) return null;
 
   const accept = (e: React.DragEvent) =>
-    e.dataTransfer.types.includes("application/x-mdglow-path");
+    e.dataTransfer.types.includes("application/x-fude-path");
 
   // 差し込み位置は子タブの矩形から決める。タブごとに handler を置くと、
   // 伝播の順番でコンテナ側が上書きしてしまう。

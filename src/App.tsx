@@ -99,7 +99,7 @@ export default function App() {
   // ウィンドウ一覧にそのまま並べるので、どのウィンドウが何かを名前で選べる。
   useEffect(() => {
     const entry = folders.find((f) => f.id === activeFolderId);
-    const title = entry ? folderDisplayName(entry) : "mdglow";
+    const title = entry ? folderDisplayName(entry) : "fude";
     void setWindowTitle(title).catch((e: unknown) => {
       console.error("ウィンドウのタイトルを設定できません", e);
     });

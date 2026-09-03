@@ -14,9 +14,9 @@ import { Icon } from "./Icon";
 // なるので、本体の行は「tbody 内の位置 + 2」がソースの行になる
 // （0 行目が見出し、1 行目が区切り）。
 
-const BLOCK_MIME = "application/x-mdglow-block";
-const ROW_MIME = "application/x-mdglow-trow";
-const COL_MIME = "application/x-mdglow-tcol";
+const BLOCK_MIME = "application/x-fude-block";
+const ROW_MIME = "application/x-fude-trow";
+const COL_MIME = "application/x-fude-tcol";
 
 // つまみの大きさ。掴み損ねないよう、見た目より広く取る。
 const GRIP = 24;
@@ -81,7 +81,7 @@ interface Guide {
   length: number;
 }
 
-const ITEM_MIME = "application/x-mdglow-item";
+const ITEM_MIME = "application/x-fude-item";
 
 const MIME: Record<Kind, string> = {
   block: BLOCK_MIME,

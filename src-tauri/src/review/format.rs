@@ -63,7 +63,7 @@ fn thread_section(view: &ThreadView) -> String {
     }
     if !view.cache_fresh && view.head_quote.is_some() {
         s.push_str(
-            "\n注: この対応付けは mdglow が最後にこのファイルを開いた時点のものです。\
+            "\n注: この対応付けは fude が最後にこのファイルを開いた時点のものです。\
              その後ファイルが変わっています。\n",
         );
     }
@@ -191,7 +191,7 @@ fn agent_section(view: &ThreadView, now: i64) -> String {
         }
     }
     if !view.cache_fresh && view.head_quote.is_some() {
-        s.push_str("注: この対応付けは古い。mdglow が最後に開いたあとファイルが変わっている\n");
+        s.push_str("注: この対応付けは古い。fude が最後に開いたあとファイルが変わっている\n");
     }
     if !t.comments.is_empty() {
         s.push_str("会話:\n");

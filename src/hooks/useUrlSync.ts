@@ -83,8 +83,8 @@ export function useUrlSync() {
   // popstate（ブラウザの戻る/進む）
   useEffect(() => {
     const onPop = (e: PopStateEvent) => {
-      const st = e.state as { mdglowIdx?: number } | null;
-      navIdx.current = typeof st?.mdglowIdx === "number" ? st.mdglowIdx : 0;
+      const st = e.state as { fudeIdx?: number } | null;
+      navIdx.current = typeof st?.fudeIdx === "number" ? st.fudeIdx : 0;
       updateNav.current();
       void applyUrl.current(parseHash(), { force: true });
     };
@@ -102,7 +102,7 @@ export function useUrlSync() {
     ) {
       navIdx.current += 1;
       navMax.current = navIdx.current;
-      history.pushState({ mdglowIdx: navIdx.current }, "", desired);
+      history.pushState({ fudeIdx: navIdx.current }, "", desired);
       updateNav.current();
     }
   }, [activeFolderId, activeFile]);

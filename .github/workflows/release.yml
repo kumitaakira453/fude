@@ -59,7 +59,7 @@ jobs:
         with:
           # タグ push 時は github.ref_name、手動実行時は入力タグ
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: "mdglow ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseName: "fude ${{ github.event.inputs.tag || github.ref_name }}"
           releaseBody: "macOS (Apple Silicon) 用インストーラ (.dmg) を下記 Assets からダウンロードしてください。"
           releaseDraft: true
           prerelease: false

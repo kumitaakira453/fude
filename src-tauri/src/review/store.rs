@@ -219,7 +219,7 @@ impl Lock {
                 Err(e) => return Err(format!("ロックを取れません ({}): {e}", path.display())),
             }
         }
-        Err("ロックが解放されません。mdglow を再起動してください".to_string())
+        Err("ロックが解放されません。fude を再起動してください".to_string())
     }
 }
 

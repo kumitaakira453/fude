@@ -1,6 +1,6 @@
 # リリース手順
 
-mdglow は **`v*` タグの push をトリガーに GitHub Actions が各 OS をビルドし、
+fude は **`v*` タグの push をトリガーに GitHub Actions が各 OS をビルドし、
 GitHub Releases に成果物と自動更新用マニフェスト (`latest.json`) を添付**する。
 ユーザーは公開済み Release から直接ダウンロードでき、既存インストールは起動時に
 更新通知を受け取る。
@@ -77,7 +77,7 @@ git push origin main vX.Y.Z
 
 > ⚠️ 自動更新は「**公開済み**の latest リリース」しか見ない。ドラフトのままだと
 > 配信されない。エンドポイントは
-> `https://github.com/kumitaakira453/mdglow/releases/latest/download/latest.json`。
+> `https://github.com/kumitaakira453/fude/releases/latest/download/latest.json`。
 
 ---
 
@@ -107,7 +107,7 @@ git push origin main vX.Y.Z
 ```bash
 npx tauri signer generate -w ~/.tauri/mdglow-updater.key -f
 # 出力された .pub の中身を tauri.conf.json の pubkey に貼り替え
-gh secret set TAURI_SIGNING_PRIVATE_KEY -R kumitaakira453/mdglow < ~/.tauri/mdglow-updater.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY -R kumitaakira453/fude < ~/.tauri/mdglow-updater.key
 ```
 
 ---

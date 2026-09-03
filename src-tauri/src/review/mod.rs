@@ -596,7 +596,7 @@ mod tests {
     fn missing_file_reports_no_file() {
         let thread = Thread {
             id: "t".into(),
-            file: "/tmp/mdglow-does-not-exist-9f3a.md".into(),
+            file: "/tmp/fude-does-not-exist-9f3a.md".into(),
             quote: "なにか".into(),
             block_hash: "h".into(),
             selection: String::new(),

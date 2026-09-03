@@ -127,13 +127,13 @@ describe("findPlain", () => {
 });
 
 // 実運用の文書に対する検証。対象は環境変数で渡し、無ければスキップする。
-//   MDGLOW_CORPUS=/path/to/docs MDGLOW_REPORT=/tmp/p0.txt npx vitest run
-const corpus = process.env.MDGLOW_CORPUS;
+//   FUDE_CORPUS=/path/to/docs FUDE_REPORT=/tmp/p0.txt npx vitest run
+const corpus = process.env.FUDE_CORPUS;
 
 // 集計値は標準出力ではなくファイルに残す。テストランナーが
 // コンソール出力を握るため、後から確実に読める形にしておく。
 function report(...lines: string[]) {
-  const dest = process.env.MDGLOW_REPORT;
+  const dest = process.env.FUDE_REPORT;
   if (dest) appendFileSync(dest, `${lines.join("\n")}\n`, "utf8");
 }
 

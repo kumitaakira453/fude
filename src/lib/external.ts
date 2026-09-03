@@ -24,7 +24,7 @@ export const EXTERNAL_APPS: ExternalApp[] = [
 export function revealInFinder(abs: string): void {
   void revealItemInDir(abs).catch((e) => {
     void message(`Finder で表示できませんでした。\n${String(e)}`, {
-      title: "mdglow",
+      title: "fude",
       kind: "error",
     });
   });
@@ -34,7 +34,7 @@ export function revealInFinder(abs: string): void {
 export function openWith(abs: string, app: string): void {
   void invoke("open_in_app", { app, path: abs }).catch((e) => {
     void message(`「${app}」で開けませんでした。\n${String(e)}`, {
-      title: "mdglow",
+      title: "fude",
       kind: "error",
     });
   });
