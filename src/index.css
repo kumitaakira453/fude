@@ -1474,6 +1474,24 @@ button.mg-task-check:hover {
 }
 
 /* 覗きカードの中の取り消し。押し間違いを本文の上から消すためのもの。 */
+/* 解決にする。取り消しと並ぶので、同じ大きさで色だけ変える。 */
+.mg-peek-done {
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.25rem;
+  border-radius: 0.3rem;
+  color: var(--mg-muted);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-peek-done:hover {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+
 .mg-peek-drop {
   display: grid;
   place-items: center;

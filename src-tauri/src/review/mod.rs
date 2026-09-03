@@ -379,6 +379,18 @@ pub fn resolve(thread_id: &str, by: &str) -> Result<(), String> {
     })
 }
 
+// 解決を取り消して未解決に戻す。本文の上から解決にできるようにした分、
+// 押し間違いをその場で戻せるようにしておく。
+pub fn reopen(thread_id: &str) -> Result<(), String> {
+    store::update(|ledger: &mut Ledger| {
+        let thread = ledger
+            .thread_mut(thread_id)
+            .ok_or_else(|| format!("指摘 {thread_id} が見つかりません"))?;
+        thread.status = Status::Open;
+        Ok(())
+    })
+}
+
 // 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
 // 既に解決済みのものは飛ばし、解決にした件数を返す。
 pub fn resolve_many(thread_ids: &[String], by: &str) -> Result<usize, String> {

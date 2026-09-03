@@ -63,6 +63,11 @@ enum ReviewAction {
         #[arg(long, default_value = "AI")]
         by: String,
     },
+    /// 解決を取り消して未解決に戻す
+    Reopen {
+        #[arg(long)]
+        thread: String,
+    },
     /// 対応が済んだことを宣言し、現在の内容を版として記録する
     Commit {
         #[arg(long)]
@@ -190,6 +195,10 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
         ReviewAction::Resolve { thread, by } => {
             review::resolve(&thread, &by)?;
             println!("解決済みにしました: #{thread}");
+        }
+        ReviewAction::Reopen { thread } => {
+            review::reopen(&thread)?;
+            println!("未解決に戻しました: #{thread}");
         }
         ReviewAction::Commit { file, message } => {
             let id = review::commit(&file, &message)?;

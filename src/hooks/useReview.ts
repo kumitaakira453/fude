@@ -25,7 +25,9 @@ import {
   createThread,
   isOpen,
   removeThread,
+  reopenThread,
   replyToThread,
+  resolveThread,
   readVersion,
   REVIEW_AUTHOR,
   setResolved,
@@ -198,7 +200,7 @@ export function useReview({
 
   const close = useCallback(() => setDraft(null), []);
 
-  // 消したものを戻す手。⌘Z と知らせの「元に戻す」から呼ぶ。
+  // 直前の操作を戻す手。⌘Z と知らせの「元に戻す」から呼ぶ。
   const undoRef = useRef<null | (() => Promise<void>)>(null);
 
   // 指摘そのものを取り消す。付け間違いはその場で消したいので確認は出さず、
@@ -239,7 +241,28 @@ export function useReview({
     [store, raw, body],
   );
 
-  // 消した直後の ⌘Z で戻す。戻すものが無ければ本文の undo に譲る。
+  // 本文の上から解決にする。レビュー画面まで行かずに片付けられるようにする。
+  // 確認は出さず、押し間違いは戻せるようにする。
+  const resolve = useCallback(
+    async (id: string) => {
+      if (!(await resolveThread(id, REVIEW_AUTHOR))) return;
+      await syncLedger(store);
+      const restore = async () => {
+        undoRef.current = null;
+        if (!(await reopenThread(id))) return;
+        await syncLedger(store);
+        notify(store, "未解決に戻しました", "right");
+      };
+      undoRef.current = restore;
+      notify(store, "解決にしました", "right", {
+        label: "元に戻す",
+        run: () => void restore(),
+      });
+    },
+    [store],
+  );
+
+  // 直後の ⌘Z で戻す。戻すものが無ければ本文の undo に譲る。
   const undoRemove = useCallback((): boolean => {
     const restore = undoRef.current;
     if (!restore) return false;
@@ -370,6 +393,7 @@ export function useReview({
     close,
     clearSelection,
     remove,
+    resolve,
     undoRemove,
   };
 }

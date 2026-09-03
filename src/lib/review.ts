@@ -192,6 +192,14 @@ export async function resolveThread(thread: string, by: string): Promise<boolean
   );
 }
 
+// 解決を取り消して未解決に戻す。
+export async function reopenThread(thread: string): Promise<boolean> {
+  return attempt(
+    () => invoke("review_reopen", { thread }),
+    "解決を取り消せませんでした",
+  );
+}
+
 // 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
 // 台帳のロックを 1 回しか取らないので、途中で止まって半端に終わることがない。
 // 戻り値は解決にした件数。失敗したときは null。

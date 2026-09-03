@@ -115,6 +115,13 @@ async fn review_resolve(thread: String, by: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn review_reopen(thread: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || review::reopen(&thread))
+        .await
+        .map_err(|e| format!("解決を取り消せませんでした: {e}"))?
+}
+
+#[tauri::command]
 async fn review_resolve_many(threads: Vec<String>, by: String) -> Result<usize, String> {
     tauri::async_runtime::spawn_blocking(move || review::resolve_many(&threads, &by))
         .await
@@ -250,6 +257,7 @@ pub fn run() {
             review_set_resolved,
             review_reply,
             review_resolve,
+            review_reopen,
             review_resolve_many,
             review_remove,
             review_edit_comment,

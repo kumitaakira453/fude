@@ -42,6 +42,11 @@ import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
 import { MarkdownEditor } from "./MarkdownEditor";
+import {
+  recallViewpoint,
+  rememberViewpoint,
+  viewKey,
+} from "../lib/viewpoint";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import { CommentComposer } from "./review/CommentComposer";
 import { Toc } from "./Toc";
@@ -86,13 +91,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const setBar = (frac: number) => {
     if (progressRef.current) progressRef.current.style.width = `${frac * 100}%`;
   };
-  // 見ていた場所をプレビューと全文編集で共有し、切替とファイル復帰で引き継ぐ。
-  // 割合ではなく本文の位置（先頭からの文字数）で持つ。割合は組まれた高さが
-  // 変わると別の場所を指すので、編集で本文が変わると合わない。
-  const viewAtRef = useRef<{ path: string | null; offset: number }>({
-    path: null,
-    offset: 0,
-  });
+  // 見ていた場所はプレビュー・全文編集・レビュー画面の行き帰りで引き継ぐ。
+  // 控えはコンポーネントの外（lib/viewpoint）に置く。レビュー画面は本文の木を
+  // 丸ごと差し替えるので、ここに持つと戻ってきた時点で消えていて先頭に戻る。
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
@@ -131,7 +132,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const enterEdit = () => {
     // 今見ている場所を控えて、そこから編集を始められるようにする。
-    if (path) viewAtRef.current = { path, offset: viewAt() };
+    rememberViewpoint(viewKey(pane.id, path), viewAt());
     setDraft(raw ?? "");
     setEditing(true);
   };
@@ -447,7 +448,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       setBar(max > 0 ? Math.min(1, scroller.scrollTop / max) : 0);
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        viewAtRef.current = { path, offset: viewAt() };
+        rememberViewpoint(viewKey(pane.id, path), viewAt());
       });
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
@@ -455,18 +456,18 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       cancelAnimationFrame(raf);
       scroller.removeEventListener("scroll", onScroll);
     };
-  }, [scroller, path, viewAt]);
+  }, [scroller, pane.id, path, viewAt]);
 
   // 控えの位置が本文の何番目のブロックか。復帰の合わせ先に使う。
-  // memo にしない（控えは ref なので、描画のたびに見直さないと古い値を使う）。
+  // memo にしない（控えは外に置いてあるので、描画のたびに見直さないと古い値を使う）。
   const restoreIndex = useCallback((): number | null => {
-    const saved = viewAtRef.current;
-    if (saved.path !== path || saved.offset <= 0) return null;
+    const saved = recallViewpoint(viewKey(pane.id, path));
+    if (saved <= 0) return null;
     const prefix = (rawRef.current ?? "").length - bodyRef.current.length;
-    const at = saved.offset - prefix;
+    const at = saved - prefix;
     const hit = blocksOf(bodyRef.current).findIndex((b) => b.end > at);
     return hit < 0 ? null : hit;
-  }, [path]);
+  }, [pane.id, path]);
 
   // 漸進描画をどこまで先に出すか。プレビューに戻る時点で決める（描画より前に
   // 決まっていないと、合わせ先のブロックがまだ無い）。
@@ -603,11 +604,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             initialDoc={draft}
             onChange={setDraft}
             onSave={save}
-            initialOffset={
-              viewAtRef.current.path === path ? viewAtRef.current.offset : 0
-            }
+            initialOffset={recallViewpoint(viewKey(pane.id, path))}
             onOffset={(offset) => {
-              viewAtRef.current = { path, offset };
+              rememberViewpoint(viewKey(pane.id, path), offset);
             }}
           />
         ) : (
@@ -720,6 +719,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             }
             onPick={review.inspect}
             onRemove={(id) => void review.remove(id)}
+            onResolve={(id) => void review.resolve(id)}
           />
         )}
 

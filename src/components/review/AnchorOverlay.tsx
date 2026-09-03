@@ -100,6 +100,24 @@ function guessBlock(
 // 印を離れてからカードを閉じるまでの猶予。印とカードの間を指が渡れる長さ。
 const HOVER_GRACE = 160;
 
+// カードと印の間、カードと画面の端の間に置く余白。
+const PEEK_GAP = 6;
+const PEEK_EDGE = 8;
+
+// 本文を縦にスクロールしている枠。カードを見える範囲に収めるために使う。
+function viewportOf(el: HTMLElement): { top: number; bottom: number } {
+  let node: HTMLElement | null = el.parentElement;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === "auto" || oy === "scroll") {
+      const rc = node.getBoundingClientRect();
+      return { top: rc.top, bottom: rc.bottom };
+    }
+    node = node.parentElement;
+  }
+  return { top: 0, bottom: window.innerHeight };
+}
+
 // 重ねた矩形の中に居るか。位置は本文の左上からの座標で持っている。
 function inside(rc: Rect, x: number, y: number): boolean {
   return (
@@ -143,6 +161,7 @@ export function AnchorOverlay({
   draft,
   onPick,
   onRemove,
+  onResolve,
 }: {
   content: HTMLElement | null;
   threads: ReviewThread[];
@@ -162,13 +181,17 @@ export function AnchorOverlay({
   onPick: (hit: AnchorHit) => void;
   // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
   onRemove: (id: string) => void;
+  // 解決にする。レビュー画面まで行かずに片付けられるようにする。
+  onResolve: (id: string) => void;
 }) {
   const [marks, setMarks] = useState<Mark[]>([]);
   const [pending, setPending] = useState<Rect[]>([]);
   // ホバーで出す指摘の中身。開くまでもなく読めるようにする。
   const [peek, setPeek] = useState<{
     id: string;
+    // 印の下端（既定の出し先）と上端（上に逃がすときの基準）。
     top: number;
+    markTop: number;
     left: number;
     note: string;
     more: number;
@@ -181,6 +204,7 @@ export function AnchorOverlay({
   // 印からカードへ指を移す間、少しだけ開いたままにする。印を離れた瞬間に
   // 消すと、カードに触れないので押せない。
   const hideTimer = useRef<number | undefined>(undefined);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   // 当たり判定と開き直しの判断を、描画のたびに作り直さずに済ませる控え。
   const marksRef = useRef<Mark[]>([]);
   const peekRef = useRef<string | null>(null);
@@ -197,6 +221,7 @@ export function AnchorOverlay({
     setPeek({
       id: mark.id,
       top: rc.top + rc.height,
+      markTop: rc.top,
       left: rc.left,
       note: mark.note,
       more: mark.more,
@@ -465,6 +490,33 @@ export function AnchorOverlay({
     };
   }, [compute, content, contentKey]);
 
+  // カードは既定で印の下に出す。そこが見えていないときだけ上へ逃がし、
+  // 上も入らなければ見える下端ぎりぎりに置く。下に出したまま画面外へ
+  // 追い出すと、読むためにいちばん下までスクロールすることになる。
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card || !peek || !content) return;
+    const place = () => {
+      card.style.top = `${peek.top + PEEK_GAP}px`;
+      const view = viewportOf(content);
+      const box = card.getBoundingClientRect();
+      if (box.bottom <= view.bottom - PEEK_EDGE) return;
+      const base = content.getBoundingClientRect().top;
+      const above = peek.markTop - box.height - PEEK_GAP;
+      card.style.top =
+        base + above >= view.top + PEEK_EDGE
+          ? `${above}px`
+          : `${view.bottom - PEEK_EDGE - box.height - base}px`;
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, { capture: true });
+    };
+  }, [peek, content]);
+
   marksRef.current = marks;
   if (peekRef.current !== (peek?.id ?? null)) peekRef.current = peek?.id ?? null;
 
@@ -496,10 +548,11 @@ export function AnchorOverlay({
       })}
       {peek && (
         <div
+          ref={cardRef}
           className="mg-review-peek"
           role="button"
           tabIndex={0}
-          style={{ top: peek.top + 6, left: peek.left }}
+          style={{ top: peek.top + PEEK_GAP, left: peek.left }}
           onMouseEnter={keep}
           onMouseLeave={hideSoon}
           onClick={() => onPick(peek.hit)}
@@ -535,8 +588,21 @@ export function AnchorOverlay({
               </span>
             )}
             <span className="mg-peek-go">クリックで開く</span>
-            {/* 取り消しはカードの中から。カード自体は開く操作なので、
+            {/* 解決と取り消しはカードの中から。カード自体は開く操作なので、
                 ここでは伝播を止める。 */}
+            <button
+              type="button"
+              className="mg-peek-done"
+              title="この指摘を解決にする"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPeek(null);
+                onResolve(peek.hit.id);
+              }}
+            >
+              <Icon name="check" size={13} />
+            </button>
             <button
               type="button"
               className="mg-peek-drop"
