@@ -165,6 +165,10 @@ describe("insertListItem", () => {
 });
 
 describe("itemTextStart", () => {
+  it("チェックリストはチェックの後ろから", () => {
+    expect(itemTextStart("- [ ] やること", 0)).toBe("- [ ] ".length);
+  });
+
   it("記号の直後の位置を返す", () => {
     expect(itemTextStart(LIST, 0)).toBe(2);
     expect(itemTextStart(LIST, 1)).toBe("- 一つ目\n".length + 2);

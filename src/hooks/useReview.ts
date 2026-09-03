@@ -24,6 +24,8 @@ import { parseFrontmatter } from "../lib/frontmatter";
 import {
   createThread,
   isOpen,
+  removeThread,
+  replyToThread,
   readVersion,
   REVIEW_AUTHOR,
   setResolved,
@@ -191,6 +193,55 @@ export function useReview({
 
   const close = useCallback(() => setDraft(null), []);
 
+  // 消したものを戻す手。⌘Z と知らせの「元に戻す」から呼ぶ。
+  const undoRef = useRef<null | (() => Promise<void>)>(null);
+
+  // 指摘そのものを取り消す。付け間違いはその場で消したいので確認は出さず、
+  // 代わりに戻せるようにする。戻すときは同じ文言で作り直す（台帳の id は
+  // 新しくなる）。
+  const remove = useCallback(
+    async (id: string) => {
+      const thread = store.get(ledgerAtom).threads.find((t) => t.id === id);
+      if (!thread || !(await removeThread(id))) return;
+      await syncLedger(store);
+      const restore = async () => {
+        undoRef.current = null;
+        const first = thread.comments[0];
+        const made = await createThread({
+          file: thread.file,
+          quote: thread.quote,
+          selection: thread.selection,
+          selectionOffset: thread.selection_offset,
+          sectionPath: thread.section_path,
+          source: raw ?? body,
+          author: first?.author ?? REVIEW_AUTHOR,
+          body: first?.body ?? "",
+        });
+        if (!made) return;
+        // 返信も並びのまま戻す。
+        for (const reply of thread.comments.slice(1)) {
+          await replyToThread(made, reply.author, reply.body);
+        }
+        await syncLedger(store);
+        notify(store, "指摘を戻しました", "right");
+      };
+      undoRef.current = restore;
+      notify(store, "指摘を削除しました", "right", {
+        label: "元に戻す",
+        run: () => void restore(),
+      });
+    },
+    [store, raw, body],
+  );
+
+  // 消した直後の ⌘Z で戻す。戻すものが無ければ本文の undo に譲る。
+  const undoRemove = useCallback((): boolean => {
+    const restore = undoRef.current;
+    if (!restore) return false;
+    void restore();
+    return true;
+  }, []);
+
   // 選択の控えを即座に落とす。selectionchange は 1 フレーム遅れて届くので、
   // 選択を解いた操作の側からも落として、メニューを残さない。
   const clearSelection = useCallback(() => setSelection(null), []);
@@ -261,6 +312,9 @@ export function useReview({
       whole: opts?.whole,
       until: picked.endBlockIndex,
     });
+    // 対象は下書きの印で示すので、ネイティブの選択は解く。残すと、印と
+    // 選択が二重に出て（チェックや `コード` の囲みを跨いで）散らかる。
+    window.getSelection()?.removeAllRanges();
     setSelection(null);
   }, [selection, content, absPath, body, getBlocks]);
 
@@ -307,5 +361,7 @@ export function useReview({
     submit,
     close,
     clearSelection,
+    remove,
+    undoRemove,
   };
 }

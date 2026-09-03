@@ -37,7 +37,6 @@ export function BlockSourceEditor({
   src,
   onCommit,
   onCancel,
-  onDelete,
   clickX,
   clickY,
 }: {
@@ -47,15 +46,12 @@ export function BlockSourceEditor({
   // 編集開始時のダブルクリック座標（ビューポート）。カーソルをその近くに置く。
   clickX?: number | null;
   clickY?: number | null;
-  // ブロックごと消す。押したら確定を走らせずに閉じる。
-  onDelete?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onCommitRef = useRef(onCommit);
   const onCancelRef = useRef(onCancel);
   const clickRef = useRef({ x: clickX, y: clickY });
   // 確定/取消済みフラグ。blur による二重確定・取消後の確定を防ぐ。
-  // 削除ボタンからも立てたいので、効果の外に置く。
   const doneRef = useRef({ value: false });
   onCommitRef.current = onCommit;
   onCancelRef.current = onCancel;
@@ -145,31 +141,6 @@ export function BlockSourceEditor({
   return (
     <div className="mg-block-editor">
       <div ref={ref} className="mg-block-cm" />
-      <div className="mg-block-hint" contentEditable={false}>
-        <kbd>⌘ ↵</kbd>
-        <span>確定</span>
-        <span className="mg-block-hint-sep">·</span>
-        <kbd>esc</kbd>
-        <span>取消</span>
-        {onDelete && (
-          <>
-            <span className="flex-1" />
-            <button
-              type="button"
-              className="mg-block-delete"
-              // mousedown で処理する。click を待つと入力欄の blur が先に走り、
-              // 確定してこの部品が外れてしまう。
-              onMouseDown={(e) => {
-                e.preventDefault();
-                doneRef.current.value = true;
-                onDelete();
-              }}
-            >
-              削除
-            </button>
-          </>
-        )}
-      </div>
     </div>
   );
 }

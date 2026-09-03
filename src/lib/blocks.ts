@@ -557,8 +557,11 @@ export function insertListItem(
   const head = MARKER.exec(lines[item.from]);
   if (!head) return null;
   const marker = lines[item.from].slice(0, head[0].length);
+  // チェックリストならチェックの空欄も引き継ぐ。続けて足すときに毎回
+  // 書き直さなくていい。
+  const task = /^\[[ xX]\]\s/.test(lines[item.from].slice(head[0].length));
   const line = side === "after" ? item.to : item.from;
-  lines.splice(line, 0, marker);
+  lines.splice(line, 0, task ? `${marker}[ ] ` : marker);
   return { src: lines.join("\n"), line };
 }
 
@@ -578,7 +581,8 @@ export function itemMarkerAt(src: string, line: number): number | null {
 export function itemTextStart(src: string, line: number): number | null {
   const lines = src.split("\n");
   if (line < 0 || line >= lines.length) return null;
-  const head = MARKER.exec(lines[line]);
+  // チェックリストではチェックの後ろから書き始める。
+  const head = ITEM_MARKER_RE.exec(lines[line]);
   if (!head) return null;
   let at = 0;
   for (let i = 0; i < line; i++) at += lines[i].length + 1;

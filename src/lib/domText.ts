@@ -181,7 +181,14 @@ function locate(bt: BlockText, offset: number): { node: Text; offset: number } |
 // 要素の中の文字を丸ごと選ぶ。要素そのものを範囲にすると選択の起点が
 // 要素になり、文字位置へ変換できない（readSelection が読めない）。
 export function selectTextIn(el: Element): boolean {
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  // 画面に出るがソースには無い文字（チェックのアイコンなど）は選ばない。
+  // そこから選び始めると、本文の文字として数えられず選択が読めなくなる。
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement?.closest(SYNTHETIC)
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
   const first = walker.nextNode() as Text | null;
   if (!first) return false;
   let last = first;

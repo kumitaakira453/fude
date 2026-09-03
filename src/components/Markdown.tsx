@@ -361,8 +361,31 @@ export const Markdown = memo(function Markdown({
         li({ node, children, ...rest }) {
           const anchor = shifted ? null : itemAnchor(node);
           if (editItem && anchor !== null && editItem.anchor === anchor) {
+            // チェックは編集の対象ではないが、消さずに残す。消えると、
+            // どの項目を直しているのか分からなくなる。押せる状態のまま
+            // 残すと、押した拍子に確定が走るので飾りとして描き直す。
+            // 子は描画済みの要素で、チェックは input の上書きが作ったもの。
+            // 型では見分けられないので props で拾う。
+            const box = Children.toArray(children).find(
+              (c) =>
+                isValidElement<{ type?: string }>(c) &&
+                c.props.type === "checkbox",
+            );
+            const checked =
+              isValidElement<{ checked?: boolean }>(box) && !!box.props.checked;
             return (
-              <li {...rest}>
+              // 横に並べる指定はチェックがある行だけ（has-check）。箇条書きの
+              // 行に付けると list-item でなくなり、記号（•）が消える。チェックの
+              // 行はもともと記号を出さないので、付けても失うものが無い。
+              <li
+                {...rest}
+                className={
+                  [rest.className, "mg-item-editing", box ? "has-check" : null]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+              >
+                {box ? <TaskCheck checked={checked} /> : null}
                 <CellEditor
                   value={editItem.value}
                   onCommit={(v) => onItemCommit?.(v)}

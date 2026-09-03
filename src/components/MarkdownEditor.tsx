@@ -70,6 +70,8 @@ const theme = EditorView.theme({
     lineHeight: "1.75",
     overflow: "auto",
     padding: "2rem 0",
+    scrollbarWidth: "thin",
+    scrollbarColor: "var(--mg-border) transparent",
   },
   ".cm-content": {
     maxWidth: "820px",
@@ -82,36 +84,72 @@ const theme = EditorView.theme({
     {
       backgroundColor: "var(--mg-accent-soft)",
     },
+  // ライブプレビューの見た目。shadow root の中では外の CSS が効かないので、
+  // ここに持たせる。
+  ".cm-lp-h1": { fontSize: "1.9em", fontWeight: "700", lineHeight: "1.25" },
+  ".cm-lp-h2": { fontSize: "1.55em", fontWeight: "700", lineHeight: "1.3" },
+  ".cm-lp-h3": { fontSize: "1.3em", fontWeight: "600" },
+  ".cm-lp-h4": { fontSize: "1.15em", fontWeight: "600" },
+  ".cm-lp-h5, .cm-lp-h6": { fontSize: "1.05em", fontWeight: "600" },
+  ".cm-lp-bold": { fontWeight: "700", color: "var(--mg-fg)" },
+  ".cm-lp-italic": { fontStyle: "italic" },
+  ".cm-lp-strike": {
+    textDecoration: "line-through",
+    color: "var(--mg-muted)",
+  },
+  ".cm-lp-code": {
+    fontFamily: "var(--mg-font-mono)",
+    fontSize: "0.9em",
+    background: "var(--mg-accent-soft)",
+    color: "var(--mg-accent2)",
+    borderRadius: "0.3rem",
+    padding: "0.1em 0.3em",
+  },
+  ".cm-lp-link": {
+    color: "var(--mg-accent)",
+    textDecoration: "underline",
+    textUnderlineOffset: "2px",
+  },
 });
 
 export function MarkdownEditor({
   initialDoc,
   onChange,
   onSave,
-  initialScrollFraction = 0,
-  onScrollFraction,
+  initialOffset = 0,
+  onOffset,
 }: {
   initialDoc: string;
   onChange: (text: string) => void;
   onSave: () => void;
-  // プレビューから引き継ぐ初期スクロール割合（0〜1）
-  initialScrollFraction?: number;
-  // 編集中のスクロール割合を親へ報告（プレビュー復帰時の復元用）
-  onScrollFraction?: (frac: number) => void;
+  // プレビューから引き継ぐ位置（本文の先頭からの文字数）。割合ではなく位置で
+  // 受ける。割合は組まれた高さが変わると別の場所を指す。
+  initialOffset?: number;
+  // 今見ている位置を親へ報告（プレビューへ戻るときに使う）。
+  onOffset?: (offset: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // 報告は View を組んだあとに差し替える（拡張の中から呼ぶため）。
+  const tellRef = useRef(() => {});
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
-  const onScrollFractionRef = useRef(onScrollFraction);
-  const initialFractionRef = useRef(initialScrollFraction);
+  const onOffsetRef = useRef(onOffset);
+  const initialOffsetRef = useRef(initialOffset);
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
-  onScrollFractionRef.current = onScrollFraction;
+  onOffsetRef.current = onOffset;
 
   useEffect(() => {
     if (!ref.current) return;
+    // CodeMirror は View を作るたびに、差し込み先の <style> の中身を丸ごと
+    // 書き直す。document へ差し込むと、そのたびに本文全体のスタイル再計算
+    // （65,000 字で 246ms）が走る。shadow root なら adoptedStyleSheets を
+    // 使うので、外のスタイルは無効にならない。
+    const shadow =
+      ref.current.shadowRoot ?? ref.current.attachShadow({ mode: "open" });
     const view = new EditorView({
-      parent: ref.current,
+      parent: shadow,
+      root: shadow,
       state: EditorState.create({
         doc: initialDoc,
         extensions: [
@@ -141,37 +179,60 @@ export function MarkdownEditor({
           EditorView.lineWrapping,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+            // カーソルを動かしただけでも、見ている場所として控えておく。
+            if (u.docChanged || u.selectionSet) tellRef.current();
           }),
           theme,
         ],
       }),
     });
 
-    // 目線を動かさない復元:
-    // プレビューと同じスクロール割合まで「画面の内容を動かさず」に合わせ、
-    // カーソルは今ビューポート先頭に見えている行へ置く（先頭へ飛ばさない）。
-    // CodeMirror のレイアウト確定を待つため二重 rAF で適用する。
+    // 目線を動かさない復元。渡された位置を画面の先頭に置き、カーソルも
+    // そこへ置く（先頭へ飛ばさない）。
     const s = view.scrollDOM;
+    // 位置を渡すのは、渡された位置へ合わせたあとだけ。合わせる前に報告すると、
+    // まだ先頭に居る状態（0）で控えを上書きしてしまう。
+    let restored = false;
     const restore = () => {
-      const max = s.scrollHeight - s.clientHeight;
-      if (max > 0) s.scrollTop = initialFractionRef.current * max;
-      // スクロールは動かさずに、可視先頭行へカーソルを置く
-      const block = view.lineBlockAtHeight(s.scrollTop);
-      view.dispatch({ selection: { anchor: block.from } });
+      const at = Math.max(
+        0,
+        Math.min(initialOffsetRef.current, view.state.doc.length),
+      );
+      // 打ち始める場所が要るのでカーソルもそこへ置く。行が上端で切れて
+      // 見えないと落ち着かないので、少し余白を取る。
+      view.dispatch({
+        selection: { anchor: at },
+        effects: EditorView.scrollIntoView(at, { y: "start", yMargin: 12 }),
+      });
+      restored = true;
     };
-    const raf = requestAnimationFrame(() => requestAnimationFrame(restore));
+    const raf = requestAnimationFrame(restore);
 
-    // 編集中のスクロール割合を報告（プレビュー復帰時に使う）
-    const onScroll = () => {
-      const max = s.scrollHeight - s.clientHeight;
-      onScrollFractionRef.current?.(max > 0 ? s.scrollTop / max : 0);
+    // 今見ている位置を報告する。カーソルが画面の中にあればカーソル、外に
+    // あれば画面の先頭行。プレビューへ戻るときにこの位置を使う。
+    const current = (): number => {
+      const top = view.lineBlockAtHeight(s.scrollTop + 1);
+      const bottom = view.lineBlockAtHeight(s.scrollTop + s.clientHeight - 1);
+      const head = view.state.selection.main.head;
+      return head >= top.from && head <= bottom.to ? head : top.from;
     };
-    s.addEventListener("scroll", onScroll, { passive: true });
+    // 生きているあいだに報告しておく。片付けは DOM が外れた後に走るので、
+    // そこで測ると scrollTop が 0 に見え、控えを 0 で上書きしてしまう。
+    let report = 0;
+    const tell = () => {
+      if (!restored) return;
+      cancelAnimationFrame(report);
+      report = requestAnimationFrame(() => onOffsetRef.current?.(current()));
+    };
+    s.addEventListener("scroll", tell, { passive: true });
+    tellRef.current = tell;
 
     view.focus();
     return () => {
       cancelAnimationFrame(raf);
-      s.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(report);
+      // 閉じる時点の位置を渡す。カーソルを動かしただけでも引き継がれる。
+      s.removeEventListener("scroll", tell);
       view.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

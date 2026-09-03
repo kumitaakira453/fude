@@ -34,6 +34,7 @@ import {
   isTableBlock,
   itemMarkerAt,
   itemTextRange,
+  itemTextStart,
   listItemAt,
   moveBlock,
   moveListItem,
@@ -95,10 +96,12 @@ export function EditableBody({
   editRequest,
   deleteRequest,
   onDeleted,
+  startIndex,
   content,
   scroller,
   contentKey,
   onComment,
+  onCommentItem,
 }: {
   body: string;
   editorial: boolean;
@@ -109,6 +112,8 @@ export function EditableBody({
   contentKey?: string;
   // ブロック全体への指摘。選択の付け替えが要るので呼び出し側で行う。
   onComment?: (index: number) => void;
+  // 箇条書きの項目への指摘。目印は描画側が持っているソースオフセット。
+  onCommentItem?: (index: number, anchor: number) => void;
   // 外から編集を始める頼み。選択メニューの「編集する」が立てる。
   // nonce が変わるたびに読み直すので、同じ場所を続けて頼んでも効く。
   editRequest?: {
@@ -132,6 +137,9 @@ export function EditableBody({
   // 削除したときに、消す前の本文と知らせの文を渡す（取り消しに使う）。
   // 消せなかったときは本文を渡さない（戻すものが無い）。
   onDeleted?: (previousBody: string | null, text: string) => void;
+  // 最初の描画で、ここまでのブロックは一度に出す。復帰したときに見ていた
+  // 場所を合わせるには、その手前までが組まれている必要がある。
+  startIndex?: number;
 }) {
   // ブロック割り。指摘を読む側と同じものを使う（割り方が食い違うと、指摘が
   // 別のブロックを指す）。全文 parse は 65,000 字で 200ms 超かかるので、
@@ -143,7 +151,9 @@ export function EditableBody({
   // 最初のひと塊だけ即座に出し、残りはフレームごとに足していく。
   // limit は初期値のみ（DocPane がファイルごとに key で貼り替える）。編集で
   // body が変わっても描き直しにはならない。
-  const [limit, setLimit] = useState(FIRST_CHUNK);
+  const [limit, setLimit] = useState(
+    () => Math.max(0, startIndex ?? 0) + FIRST_CHUNK,
+  );
   useEffect(() => {
     if (limit >= blocks.length) {
       // 一度出し切ったら上限を外す。ブロック数ちょうどで止めると、編集で
@@ -542,6 +552,47 @@ export function EditableBody({
     [editTable],
   );
 
+  // 項目の中身をその場で編集する。空の項目には選ぶ文字が無いので、
+  // 書き始める位置は行頭の記号（チェックを含む）の長さから出す。
+  const openItem = useCallback(
+    (index: number, src: string, line: number, value: string) => {
+      const anchor = itemMarkerAt(src, line);
+      if (anchor === null) return;
+      const range = itemTextRange(src, anchor);
+      const start = range?.start ?? itemTextStart(src, line);
+      if (start === null || start === undefined) return;
+      setEditingItem({
+        blockIndex: index,
+        anchor,
+        start,
+        end: range?.end ?? start,
+        value,
+      });
+    },
+    [],
+  );
+
+  const commentItem = useCallback(
+    (index: number, at: number) => {
+      const block = blocks[index];
+      if (!block) return;
+      const anchor = itemMarkerAt(block.src, at);
+      if (anchor === null) return;
+      onCommentItem?.(index, anchor);
+    },
+    [blocks, onCommentItem],
+  );
+
+  const editItem = useCallback(
+    (index: number, at: number) => {
+      const block = blocks[index];
+      if (!block) return;
+      const range = itemTextRange(block.src, itemMarkerAt(block.src, at) ?? 0);
+      openItem(index, block.src, at, range ? block.src.slice(range.start, range.end) : "");
+    },
+    [blocks, openItem],
+  );
+
   const actOnItem = useCallback(
     (index: number, at: number, act: TableAct) => {
       if (act === "insertBefore" || act === "insertAfter") {
@@ -554,18 +605,7 @@ export function EditableBody({
         );
         if (!made) return;
         apply(replaceBlock(body, block, made.src), keep);
-        // 空の項目は選ぶ文字が無い。位置から直に開く。
-        const anchor = itemMarkerAt(made.src, made.line);
-        const range = anchor === null ? null : itemTextRange(made.src, anchor);
-        if (anchor !== null && range) {
-          setEditingItem({
-            blockIndex: index,
-            anchor,
-            start: range.start,
-            end: range.end,
-            value: "",
-          });
-        }
+        openItem(index, made.src, made.line, "");
         return;
       }
       editTable(index, (src) =>
@@ -576,7 +616,7 @@ export function EditableBody({
             : deleteListItem(src, at),
       );
     },
-    [blocks, body, apply, editTable],
+    [blocks, body, apply, editTable, openItem],
   );
 
   // コールアウトのアイコンを選び直す。開きタグの属性だけが変わる。
@@ -654,7 +694,6 @@ export function EditableBody({
             clickY={editing.y}
             onCommit={(src) => commit(b.index, src)}
             onCancel={() => setEditing(null)}
-            onDelete={() => remove(b.index)}
           />
         ) : (
           <Markdown
@@ -709,6 +748,8 @@ export function EditableBody({
         onTableAppend={appendTable}
         onItemMove={moveItem}
         onItemAct={actOnItem}
+        onItemEdit={editItem}
+        onItemComment={commentItem}
         itemAt={itemAt}
         onEdit={(index) => {
           const block = blocks[index];

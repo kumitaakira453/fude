@@ -1,10 +1,23 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useReview } from "../hooks/useReview";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
-import { selectTextIn } from "../lib/domText";
+import {
+  blockIndexOf,
+  blockRect,
+  selectTextIn,
+  topmostBlock,
+} from "../lib/domText";
+import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { closePane, inEditable } from "../lib/ui";
 import { notify, notifyBusy, settle } from "../state/toast";
@@ -73,11 +86,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const setBar = (frac: number) => {
     if (progressRef.current) progressRef.current.style.width = `${frac * 100}%`;
   };
-  // スクロール割合(0〜1)をプレビューと編集で共有し、切替で位置を引き継ぐ。
-  // 同一内容なら frac×max は元の top と一致するため、ファイル復帰時の復元にも使える。
-  const scrollFracRef = useRef<{ path: string | null; frac: number }>({
+  // 見ていた場所をプレビューと全文編集で共有し、切替とファイル復帰で引き継ぐ。
+  // 割合ではなく本文の位置（先頭からの文字数）で持つ。割合は組まれた高さが
+  // 変わると別の場所を指すので、編集で本文が変わると合わない。
+  const viewAtRef = useRef<{ path: string | null; offset: number }>({
     path: null,
-    frac: 0,
+    offset: 0,
   });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -116,6 +130,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   }, [path, loaded]);
 
   const enterEdit = () => {
+    // 今見ている場所を控えて、そこから編集を始められるようにする。
+    if (path) viewAtRef.current = { path, offset: viewAt() };
     setDraft(raw ?? "");
     setEditing(true);
   };
@@ -124,9 +140,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   };
   const exitEdit = () => {
     if (path && draft !== (raw ?? "")) void saveFile(path, draft);
+    // 戻ったときに合わせるブロックまでを、最初の描画で出させる。
+    setStartAt(restoreIndex() ?? 0);
     setEditing(false);
   };
   const toggleEdit = () => (editing ? exitEdit() : enterEdit());
+  // キー操作から呼ぶための控え。listener の依存に本文の要素（後から入る）を
+  // 載せないと、それが無い時点の関数を掴んだままになり、見ていた場所を
+  // 取れずに先頭から開いてしまう。
+  const toggleRef = useRef(toggleEdit);
+  toggleRef.current = toggleEdit;
 
   // ファイル切替で編集モード解除
   useEffect(() => {
@@ -144,6 +167,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if (inEditable(e.target)) return;
       if (!path) return;
       e.preventDefault();
+      // 指摘を消した直後は、それを戻す。消したものが無ければ本文へ譲る。
+      if (!e.shiftKey && reviewRef.current?.undoRemove()) return;
       // 本文全体を読み直すので間があく。何が起きているかを知らせで出す。
       const back = !e.shiftKey;
       const id = notifyBusy(store, back ? "戻しています" : "やり直しています", "right");
@@ -174,13 +199,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
         if (reviewRef.current?.selection) return;
         e.preventDefault();
-        toggleEdit();
+        toggleRef.current();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, editing, draft, raw, path]);
+  }, [isActive]);
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
@@ -222,6 +246,19 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       );
       if (!el || !selectTextIn(el)) return;
       reviewRef.current?.startDraft({ whole: true });
+    },
+    [content],
+  );
+
+  // 箇条書きの項目への指摘。項目の中身を選んでから通常の流れに乗せるので、
+  // 印はその項目の箱で出る。
+  const commentOnItem = useCallback(
+    (index: number, anchor: number) => {
+      const el = content?.querySelector<HTMLElement>(
+        `[data-mg-block="${index}"] li[data-mg-item="${anchor}"]`,
+      );
+      if (!el || !selectTextIn(el)) return;
+      reviewRef.current?.startDraft();
     },
     [content],
   );
@@ -324,9 +361,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         e.preventDefault();
         current.startDraft();
       } else if (key === "i" && e.shiftKey) {
-        // 範囲を広げた指摘。セルの中ならそのセル、それ以外はブロック全体。
+        // 範囲を広げた指摘。セルの中ならそのセル、箇条書きならその項目、
+        // それ以外はブロック全体。
         e.preventDefault();
         if (sel.cellStart !== undefined) commentOnCell();
+        else if (sel.itemAnchor !== undefined)
+          commentOnItem(sel.blockIndex, sel.itemAnchor);
         else commentOnBlock(sel.blockIndex);
       } else if (key === "e" && !e.shiftKey) {
         e.preventDefault();
@@ -340,9 +380,21 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     startEdit,
     commentOnCell,
     commentOnBlock,
+    commentOnItem,
     deleteSelection,
     overlayOpen,
   ]);
+
+  // 頼みは 1 回で使い切る。残しておくと、本文の入れ物が組み直されたとき
+  // （全文編集から戻ったときなど）にもう一度効いてしまう。編集なら勝手に
+  // その場編集が開き、削除なら同じ削除がもう一度走る。
+  // 子の layout effect のあとに走るので、渡し損ねることはない。
+  useLayoutEffect(() => {
+    if (editRequest) setEditRequest(null);
+  }, [editRequest]);
+  useLayoutEffect(() => {
+    if (deleteRequest) setDeleteRequest(null);
+  }, [deleteRequest]);
 
   // 削除の知らせ。消す前の本文を受け取ったときだけ取り消しを出す。
   const undoDelete = useCallback(
@@ -371,59 +423,93 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (path && !cache.has(path)) void reloadFile(path);
   }, [path, cache, reloadFile]);
 
-  // 読書プログレス + スクロール位置の保存。
+  // いま画面の上端にあるブロックの、本文の中での位置。
+  const viewAt = useCallback((): number => {
+    if (!content || !scroller) return 0;
+    const el = topmostBlock(content, scroller.getBoundingClientRect().top);
+    const at = el ? blockIndexOf(el) : null;
+    if (at === null) return 0;
+    const block = blocksOf(bodyRef.current)[at];
+    if (!block) return 0;
+    const prefix = (rawRef.current ?? "").length - bodyRef.current.length;
+    return prefix + block.start;
+  }, [content, scroller]);
+
+  // 読書プログレス + 見ていた場所の保存。
   // 重要: マウント時に即時実行しない。まだ復元前で scrollTop=0 のため、
-  // 保存割合を 0 で上書きしてしまい「切替のたびに先頭へ」戻る原因になる。
+  // 先頭を保存してしまい「切替のたびに先頭へ」戻る原因になる。
   // 保存は実際のスクロール操作時のみ行う。
   useEffect(() => {
     if (!scroller) return;
+    let raf = 0;
     const onScroll = () => {
       const max = scroller.scrollHeight - scroller.clientHeight;
-      const frac = max > 0 ? Math.min(1, scroller.scrollTop / max) : 0;
-      setBar(frac);
-      scrollFracRef.current = { path, frac };
+      setBar(max > 0 ? Math.min(1, scroller.scrollTop / max) : 0);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        viewAtRef.current = { path, offset: viewAt() };
+      });
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
-    return () => scroller.removeEventListener("scroll", onScroll);
-  }, [scroller, raw, path]);
+    return () => {
+      cancelAnimationFrame(raf);
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, [scroller, path, viewAt]);
 
-  // scroller マウント時: 同じファイルなら保存割合へ、別ファイルなら先頭へ。
-  // 画像/KaTeX で高さが後から変わるため rAF でレイアウト確定後に適用。
-  useEffect(() => {
-    if (!scroller) return;
-    const saved = scrollFracRef.current;
-    const frac = saved.path === path ? saved.frac : 0;
-    setBar(frac);
-    if (frac === 0) {
+  // 控えの位置が本文の何番目のブロックか。復帰の合わせ先に使う。
+  // memo にしない（控えは ref なので、描画のたびに見直さないと古い値を使う）。
+  const restoreIndex = useCallback((): number | null => {
+    const saved = viewAtRef.current;
+    if (saved.path !== path || saved.offset <= 0) return null;
+    const prefix = (rawRef.current ?? "").length - bodyRef.current.length;
+    const at = saved.offset - prefix;
+    const hit = blocksOf(bodyRef.current).findIndex((b) => b.end > at);
+    return hit < 0 ? null : hit;
+  }, [path]);
+
+  // 漸進描画をどこまで先に出すか。プレビューに戻る時点で決める（描画より前に
+  // 決まっていないと、合わせ先のブロックがまだ無い）。
+  const [startAt, setStartAt] = useState(0);
+
+  // 本文が出たとき: 同じファイルなら見ていた場所のブロックを上端へ、
+  // 別ファイルなら先頭へ。描き終わる前に合わせるので、先頭が一瞬見えて
+  // からスクロールしていく動きにはならない。
+  useLayoutEffect(() => {
+    if (editing || !scroller || !content) return;
+    const at = restoreIndex();
+    if (at === null) {
       scroller.scrollTop = 0;
       return;
     }
-    // 本文は先頭から順に描画されるので、高さが伸びている間は復元をやり直す。
-    // 画像や KaTeX で後から高さが変わる場合にも効く。
-    // ユーザーが自分でスクロールしたら、そこで復元を打ち切る。
+    // 画像や KaTeX で後から高さが変わるので、数フレーム押さえる。
+    // 自分でスクロールしたらそこで打ち切る。
     let settled = false;
+    let left = 12;
+    let raf = 0;
     const apply = () => {
       if (settled) return;
-      const max = scroller.scrollHeight - scroller.clientHeight;
-      if (max > 0) scroller.scrollTop = frac * max;
+      const el = content.querySelector<HTMLElement>(`[data-mg-block="${at}"]`);
+      const box = el ? blockRect(el) : null;
+      if (box) {
+        const delta = box.top - scroller.getBoundingClientRect().top;
+        if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
+      }
+      if (--left > 0) raf = requestAnimationFrame(apply);
     };
     const stop = () => {
       settled = true;
     };
-    const raf = requestAnimationFrame(apply);
-    const ro = content ? new ResizeObserver(apply) : null;
-    ro?.observe(content!);
+    apply();
+    raf = requestAnimationFrame(apply);
     scroller.addEventListener("wheel", stop, { passive: true, once: true });
     scroller.addEventListener("touchstart", stop, { passive: true, once: true });
-    const timer = window.setTimeout(stop, 2000);
     return () => {
       cancelAnimationFrame(raf);
-      ro?.disconnect();
-      window.clearTimeout(timer);
       scroller.removeEventListener("wheel", stop);
       scroller.removeEventListener("touchstart", stop);
     };
-  }, [path, scroller, content]);
+  }, [path, editing, scroller, content, restoreIndex, startAt]);
 
 
   const ctx = useMemo(
@@ -517,13 +603,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             initialDoc={draft}
             onChange={setDraft}
             onSave={save}
-            initialScrollFraction={
-              scrollFracRef.current.path === path
-                ? scrollFracRef.current.frac
-                : 0
+            initialOffset={
+              viewAtRef.current.path === path ? viewAtRef.current.offset : 0
             }
-            onScrollFraction={(frac) => {
-              scrollFracRef.current = { path, frac };
+            onOffset={(offset) => {
+              viewAtRef.current = { path, offset };
             }}
           />
         ) : (
@@ -581,10 +665,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       editRequest={editRequest}
                       deleteRequest={deleteRequest}
                       onDeleted={undoDelete}
+                      startIndex={startAt}
                       content={content}
                       scroller={scroller}
                       contentKey={path}
                       onComment={commentOnBlock}
+                      onCommentItem={commentOnItem}
                     />
                   </markdownContext.Provider>
                 </article>
@@ -624,6 +710,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 : null
             }
             onPick={review.inspect}
+            onRemove={(id) => void review.remove(id)}
           />
         )}
 

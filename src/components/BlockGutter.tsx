@@ -48,7 +48,17 @@ interface View {
   // 非表のブロックの外枠。メニューの対象を塗るのに使う。
   box: Box | null;
   // 箇条書きの項目。Markdown ではリスト全体が 1 ブロックだが、掴む単位は項目。
-  item: { at: number; top: number; height: number; box: Box } | null;
+  item: {
+    at: number;
+    top: number;
+    height: number;
+    // 1 行目の真ん中。つまみはここに合わせる（項目全体の真ん中だと、
+    // 2 行以上の項目で行の間に落ちる）。
+    mid: number;
+    // 項目の左端（記号を含む）。つまみはここから左へ置く。
+    edge: number;
+    box: Box;
+  } | null;
   // 非表のとき: 1 行目の中心（本文の座標）。つまみをこの高さに揃える。
   y: number;
   // 左余白の広さ。狭い画面では出すつまみを減らす。
@@ -111,18 +121,53 @@ function relative(r: DOMRect, base: DOMRect): Box {
 // 本文の外の余白で相手を見失う。
 // 指している高さの項目。入れ子は内側（背の低い方）が勝つ。
 // 当たり判定で拾うと、余白に出た瞬間に相手を見失う。
+// 要素の 1 行目の箱。行の高さを読むより確実で、チェックボックスの行送りや
+// 項目の余白に引っ張られない。
+function firstLine(el: Element): DOMRect | null {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const rects = range.getClientRects();
+  return rects.length > 0 ? rects[0] : null;
+}
+
+// つまみを置く基準になる、項目の左端。1 行目で最も左にある字に合わせる。
+// 箇条書きの記号（•）は箱を持たないので、リストが記号のために空けている
+// 幅の分だけ左へ寄せる。チェックリストはチェックが項目の中にあるので、
+// 1 行目の左端がそのまま基準になる。
+function itemEdge(li: HTMLElement): number {
+  const box = li.getBoundingClientRect();
+  const line = firstLine(li) ?? box;
+  if (li.querySelector(".mg-task-check")) return line.left;
+  const list = li.parentElement?.getBoundingClientRect();
+  const reserve = list ? Math.max(0, box.left - list.left) : 0;
+  return line.left - reserve;
+}
+
+// 指している高さの項目。項目の外（間の余白など）を指していても、一番近い
+// 項目に寄せる。箇条書きで掴む相手は常に項目にする（リスト全体のつまみと
+// 並べると、どちらを掴んでいるのか分からなくなる）。
 function itemAtY(blockEl: Element, y: number): HTMLElement | null {
   let hit: HTMLElement | null = null;
   let best = Infinity;
+  let near: HTMLElement | null = null;
+  let gap = Infinity;
   for (const li of blockEl.querySelectorAll<HTMLElement>("li[data-mg-item]")) {
     const r = li.getBoundingClientRect();
-    if (y < r.top || y >= r.bottom) continue;
-    if (r.height < best) {
-      best = r.height;
-      hit = li;
+    const away = y < r.top ? r.top - y : y >= r.bottom ? y - r.bottom : 0;
+    if (away === 0) {
+      // 入れ子では内側（小さい方）を採る。
+      if (r.height < best) {
+        best = r.height;
+        hit = li;
+      }
+      continue;
+    }
+    if (away < gap) {
+      gap = away;
+      near = li;
     }
   }
-  return hit;
+  return hit ?? near;
 }
 
 function numberOf(el: Element | null, key: string): number | null {
@@ -255,6 +300,8 @@ export function BlockGutter({
   onTableAppend,
   onItemMove,
   onItemAct,
+  onItemEdit,
+  onItemComment,
   itemAt,
 }: {
   content: HTMLElement | null;
@@ -276,6 +323,10 @@ export function BlockGutter({
   // 箇条書きの項目。at は記号がある行番号。
   onItemMove: (index: number, from: number, to: number) => void;
   onItemAct: (index: number, at: number, act: TableAct) => void;
+  // 項目の中身をその場で編集する。
+  onItemEdit: (index: number, at: number) => void;
+  // 項目そのものへの指摘。
+  onItemComment: (index: number, at: number) => void;
   // その位置が箇条書きの何行目の項目か。無ければ null。
   itemAt: (
     index: number,
@@ -394,11 +445,16 @@ export function BlockGutter({
         bottom: 0,
         box: relative(box, base),
         item:
-          found && liBox
+          found && liBox && li
             ? {
                 at: found.from,
                 top: liBox.top - base.top,
                 height: liBox.height,
+                mid: (() => {
+                  const line = firstLine(li) ?? liBox;
+                  return line.top - base.top + line.height / 2;
+                })(),
+                edge: itemEdge(li) - base.left,
                 box: relative(liBox, base),
               }
             : null,
@@ -610,6 +666,18 @@ export function BlockGutter({
   const itemItems = (index: number, at: number) => {
     const act = (a: TableAct) => () => onItemAct(index, at, a);
     return [
+      {
+        icon: "add_comment",
+        label: "指摘する",
+        keys: "⌘⇧I",
+        run: () => onItemComment(index, at),
+      },
+      {
+        icon: "edit",
+        label: "編集する",
+        keys: "⌘E",
+        run: () => onItemEdit(index, at),
+      },
       { icon: "arrow_upward", label: "上に挿入", run: act("insertBefore") },
       { icon: "arrow_downward", label: "下に挿入", run: act("insertAfter") },
       { icon: "content_copy", label: "複製", run: act("duplicate") },
@@ -628,11 +696,13 @@ export function BlockGutter({
             {
               icon: "add_comment",
               label: "指摘する",
+              keys: "⌘⇧I",
               run: () => onComment(menu.index),
             },
             {
               icon: "edit",
               label: "編集する",
+              keys: "⌘E",
               run: () => onEdit(menu.index),
             },
             {
@@ -661,16 +731,19 @@ export function BlockGutter({
   // ブロックのつまみの置き場所。表なら左上の角、それ以外は 1 行目の左。
   // 余白に入る分だけ出す。本文の上に重ねると読めなくなるので、狭いときは
   // 掴みだけにする。
-  const wide = !!view && view.room >= BOTH;
+  // 使える幅。箇条書きは項目の左端から測る（字下げの分だけ余裕がある）。
+  const room = view ? view.room + (view.item ? view.item.edge : 0) : 0;
+  const wide = !!view && room >= BOTH;
   // 非表のつまみの置き場所。表は行・列の帯の交点（下で別に置く）。
-  // 箇条書きは項目の行に合わせる。リスト全体の上端に出すと、どの項目を
-  // 掴むのか分からない。
+  // 箇条書きは項目の 1 行目に高さを合わせ、左は項目の左端に寄せる。本文の
+  // 左端に合わせると、字下げの分だけ離れて見える。
   const anchor =
     view && !view.table
       ? {
-          top: (view.item ? view.item.top + view.item.height / 2 : view.y) -
-            GRIP / 2,
-          left: view.room >= ONLY ? -(wide ? BOTH : ONLY) : 2,
+          top: (view.item ? view.item.mid : view.y) - GRIP / 2,
+          left:
+            (view.item ? view.item.edge : 0) +
+            (room >= ONLY ? -(wide ? BOTH : ONLY) : 2),
         }
       : null;
   // 箇条書きの中では、掴む相手は項目そのもの。
@@ -689,7 +762,7 @@ export function BlockGutter({
               {wide && (
                 <button
                   type="button"
-                  title="下に挿入"
+                  title={view.item ? "下に項目を挿入" : "下に挿入"}
                   className="mg-grip"
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={() =>
@@ -703,7 +776,11 @@ export function BlockGutter({
               )}
               <button
                 type="button"
-                title="ドラッグで移動 / クリックでメニュー"
+                title={
+                  view.item
+                    ? "ドラッグで項目を移動 / クリックでメニュー"
+                    : "ドラッグで移動 / クリックでメニュー"
+                }
                 className="mg-grip mg-grip-hold"
                 draggable
                 onDragStart={hold(grabKind, view.index, grabAt)}
@@ -968,6 +1045,9 @@ export function BlockGutter({
                   className={it.danger ? "" : "text-[var(--mg-muted)]"}
                 />
                 {it.label}
+                {"keys" in it && it.keys && (
+                  <span className="mg-menu-keys">{it.keys}</span>
+                )}
               </button>
             ))}
           </div>,

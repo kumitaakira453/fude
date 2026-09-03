@@ -138,6 +138,7 @@ export function AnchorOverlay({
   contentKey,
   draft,
   onPick,
+  onRemove,
 }: {
   content: HTMLElement | null;
   threads: ReviewThread[];
@@ -153,6 +154,8 @@ export function AnchorOverlay({
     until?: number;
   } | null;
   onPick: (hit: AnchorHit) => void;
+  // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
+  onRemove: (id: string) => void;
 }) {
   const [marks, setMarks] = useState<Mark[]>([]);
   const [pending, setPending] = useState<Rect[]>([]);
@@ -523,6 +526,21 @@ export function AnchorOverlay({
               </span>
             )}
             <span className="mg-peek-go">クリックで開く</span>
+            {/* 取り消しはカードの中から。カード自体は開く操作なので、
+                ここでは伝播を止める。 */}
+            <button
+              type="button"
+              className="mg-peek-drop"
+              title="この指摘を削除"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPeek(null);
+                onRemove(peek.hit.id);
+              }}
+            >
+              <Icon name="delete" size={13} />
+            </button>
           </div>
         </div>
       )}

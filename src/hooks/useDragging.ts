@@ -7,7 +7,14 @@ import { useEffect } from "react";
 export function useDragging() {
   useEffect(() => {
     const mark = (e: MouseEvent) => {
-      if (e.button === 0) document.body.classList.add("mg-dragging");
+      if (e.button !== 0) return;
+      // 重ねたもの（つまみ・印・カード）を掴んだときは抑えない。抑えると
+      // 押した瞬間に触れない板になり、つまみ自身のドラッグが始まらない。
+      const el = e.target as Element | null;
+      if (el?.closest?.(".mg-block-layer, .mg-review-layer, .mg-hl-layer")) {
+        return;
+      }
+      document.body.classList.add("mg-dragging");
     };
     const clear = () => document.body.classList.remove("mg-dragging");
     window.addEventListener("mousedown", mark);
