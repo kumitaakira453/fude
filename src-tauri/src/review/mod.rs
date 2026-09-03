@@ -32,6 +32,7 @@ pub enum AnchorState {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ThreadView {
     pub thread: Thread,
+    pub handled: Handled,
     pub anchor: AnchorState,
     pub head_quote: Option<String>, // 現在のブロック本文（控えから）
     pub cache_fresh: bool,          // 控えが今のファイルと合っているか
@@ -39,41 +40,151 @@ pub struct ThreadView {
     pub latest: Option<Version>,    // そのファイルの最新の版
 }
 
-#[derive(Debug, Clone, Default)]
+// 「自分の返信」と見なす author の既定。CLI の reply もこの名前で書く。
+pub const DEFAULT_AUTHOR: &str = "AI";
+
+// 一覧の絞り込み。既定は「未対応」。解決を人間に委ねている以上、未解決には
+// すでに返信したものが残り続けるので、未解決をそのまま次の仕事にはできない。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum StatusFilter {
+    #[default]
+    Unanswered,
+    Open,
+    All,
+}
+
+impl StatusFilter {
+    pub fn label(self) -> &'static str {
+        match self {
+            StatusFilter::Unanswered => "未対応",
+            StatusFilter::Open => "未解決",
+            StatusFilter::All => "すべて",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Filter {
     pub project: Option<PathBuf>,
     pub file: Option<PathBuf>,
-    pub include_resolved: bool,
+    pub status: StatusFilter,
+    // 「自分の返信」と見なす author。未対応の判定に使う。
+    pub author: String,
+}
+
+impl Default for Filter {
+    fn default() -> Self {
+        Self {
+            project: None,
+            file: None,
+            status: StatusFilter::default(),
+            author: DEFAULT_AUTHOR.to_string(),
+        }
+    }
+}
+
+// 指摘の状態を、次に手を付けるべきかどうかで見る。
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Handled {
+    Unanswered, // まだ返していない、または人間が返信を重ねた
+    Answered,   // 最後の発言が自分。人間の判断待ち
+    Resolved,   // 人間が閉じた
+}
+
+// 最後の発言が自分なら返信済みと見なす。人間が再度書けば未対応に戻る。
+// 解決済みの印を AI が付けない設計なので、この判定が「次の仕事」の唯一の目印になる。
+pub fn handled_state(thread: &Thread, author: &str) -> Handled {
+    if matches!(thread.status, Status::Resolved { .. }) {
+        return Handled::Resolved;
+    }
+    match thread.comments.last() {
+        Some(last) if last.author == author => Handled::Answered,
+        _ => Handled::Unanswered,
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Counts {
+    pub unanswered: usize,
+    pub answered: usize,
+    pub resolved: usize,
+}
+
+impl Counts {
+    pub fn total(&self) -> usize {
+        self.unanswered + self.answered + self.resolved
+    }
 }
 
 // ---- 参照 ----
 
-pub fn list(filter: &Filter) -> Result<Vec<ThreadView>, String> {
-    let ledger = store::load()?;
+// 絞り込みの対象（project / file）を正規化した形で返す。
+fn scope(filter: &Filter) -> Result<(Option<String>, Option<String>), String> {
     let project = filter
         .project
         .as_ref()
         .map(|p| normalize(p))
         .transpose()?;
     let file = filter.file.as_ref().map(|p| normalize(p)).transpose()?;
+    Ok((project, file))
+}
+
+fn in_scope(thread: &Thread, project: &Option<String>, file: &Option<String>) -> bool {
+    if let Some(f) = file {
+        if &thread.file != f {
+            return false;
+        }
+    }
+    if let Some(dir) = project {
+        if !under(&thread.file, dir) {
+            return false;
+        }
+    }
+    true
+}
+
+// 絞り込みの中の内訳を数える。status は無視するので、0 件のときに
+// 「未対応が無いだけか、そもそも指摘が無いのか」を言い分けられる。
+pub fn counts(filter: &Filter) -> Result<Counts, String> {
+    let ledger = store::load()?;
+    let (project, file) = scope(filter)?;
+    let mut counts = Counts::default();
+    for thread in &ledger.threads {
+        if !in_scope(thread, &project, &file) {
+            continue;
+        }
+        match handled_state(thread, &filter.author) {
+            Handled::Unanswered => counts.unanswered += 1,
+            Handled::Answered => counts.answered += 1,
+            Handled::Resolved => counts.resolved += 1,
+        }
+    }
+    Ok(counts)
+}
+
+pub fn list(filter: &Filter) -> Result<Vec<ThreadView>, String> {
+    let ledger = store::load()?;
+    let (project, file) = scope(filter)?;
 
     let mut views = Vec::new();
     for thread in &ledger.threads {
-        if !filter.include_resolved && matches!(thread.status, Status::Resolved { .. }) {
+        let keep = match filter.status {
+            StatusFilter::All => true,
+            StatusFilter::Open => matches!(thread.status, Status::Open),
+            StatusFilter::Unanswered => {
+                handled_state(thread, &filter.author) == Handled::Unanswered
+            }
+        };
+        if !keep {
             continue;
         }
-        if let Some(ref f) = file {
-            if &thread.file != f {
-                continue;
-            }
-        }
-        if let Some(ref dir) = project {
-            if !under(&thread.file, dir) {
-                continue;
-            }
+        if !in_scope(thread, &project, &file) {
+            continue;
         }
         let (anchor, head_quote, cache_fresh) = resolve_view(thread);
         views.push(ThreadView {
+            handled: handled_state(thread, &filter.author),
             anchor,
             head_quote,
             cache_fresh,
@@ -378,6 +489,73 @@ fn under(file: &str, dir: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn thread_with(comments: Vec<(&str, &str)>) -> Thread {
+        Thread {
+            id: "t".into(),
+            file: "/docs/a.md".into(),
+            quote: "本文".into(),
+            block_hash: "h".into(),
+            selection: String::new(),
+            selection_offset: 0,
+            section_path: Vec::new(),
+            base_version: "v".into(),
+            status: Status::Open,
+            comments: comments
+                .into_iter()
+                .enumerate()
+                .map(|(i, (author, body))| Comment {
+                    id: format!("c{i}"),
+                    author: author.into(),
+                    body: body.into(),
+                    created_at: 0,
+                })
+                .collect(),
+            created_at: 0,
+            resolved: None,
+        }
+    }
+
+    #[test]
+    fn last_speaker_decides_whether_it_is_answered() {
+        // 指摘だけ。まだ返していない
+        assert_eq!(
+            handled_state(&thread_with(vec![("you", "直して")]), "AI"),
+            Handled::Unanswered
+        );
+        // 自分が返した。人間の判断待ち
+        assert_eq!(
+            handled_state(&thread_with(vec![("you", "直して"), ("AI", "直した")]), "AI"),
+            Handled::Answered
+        );
+        // 人間が重ねて書いた。また自分の番
+        assert_eq!(
+            handled_state(
+                &thread_with(vec![("you", "直して"), ("AI", "直した"), ("you", "まだ違う")]),
+                "AI"
+            ),
+            Handled::Unanswered
+        );
+        // コメントが 1 つも無い指摘も未対応として拾う
+        assert_eq!(handled_state(&thread_with(vec![]), "AI"), Handled::Unanswered);
+    }
+
+    #[test]
+    fn resolved_outranks_the_last_speaker() {
+        let mut thread = thread_with(vec![("you", "直して")]);
+        thread.status = Status::Resolved {
+            by: "you".into(),
+            at: 0,
+        };
+        assert_eq!(handled_state(&thread, "AI"), Handled::Resolved);
+    }
+
+    #[test]
+    fn the_author_treated_as_self_is_configurable() {
+        let thread = thread_with(vec![("you", "直して"), ("AI", "直した")]);
+        // 別の名前で見れば、AI の返信は他人の発言なので未対応のまま
+        assert_eq!(handled_state(&thread, "bot"), Handled::Unanswered);
+    }
 
     #[test]
     fn under_matches_only_real_descendants() {

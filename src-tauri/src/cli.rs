@@ -32,11 +32,20 @@ enum ReviewAction {
         /// このファイルに絞る（絶対パスでも相対パスでもよい）
         #[arg(long)]
         file: Option<PathBuf>,
-        /// 既定は未解決のみ。未解決には対象が書き換わったものも含む
-        #[arg(long, value_enum, default_value_t = StatusFilter::Open)]
+        /// 既定は未対応のみ（最後の発言が自分でないもの）
+        #[arg(long, value_enum, default_value_t = StatusFilter::Unanswered)]
         status: StatusFilter,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Md)]
+        /// 「自分の返信」と見なす author。未対応の判定に使う
+        #[arg(long, default_value = review::DEFAULT_AUTHOR)]
+        author: String,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Agent)]
         format: OutputFormat,
+        /// 1 件 1 行の一覧だけ出す
+        #[arg(long)]
+        brief: bool,
+        /// 該当が 0 件のとき終了コード 2 で終わる
+        #[arg(long)]
+        exit_code: bool,
     },
     /// 指摘に返信する
     Reply {
@@ -72,14 +81,29 @@ enum ReviewAction {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum StatusFilter {
-    /// 未解決のみ
+    /// 未対応のみ（最後の発言が自分でないもの）
+    Unanswered,
+    /// 未解決すべて（返信済みも含む）
     Open,
     /// 解決済みも含む
     All,
 }
 
+impl From<StatusFilter> for review::StatusFilter {
+    fn from(value: StatusFilter) -> Self {
+        match value {
+            StatusFilter::Unanswered => review::StatusFilter::Unanswered,
+            StatusFilter::Open => review::StatusFilter::Open,
+            StatusFilter::All => review::StatusFilter::All,
+        }
+    }
+}
+
 #[derive(Clone, Copy, ValueEnum)]
 enum OutputFormat {
+    /// AI 向け。要約を先に置き、行動が変わらない情報を落とす
+    Agent,
+    /// 人間向け。版や絶対時刻まで出す
     Md,
     Json,
 }
@@ -97,20 +121,63 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
             project,
             file,
             status,
+            author,
             format,
+            brief,
+            exit_code,
         } => {
-            let views = review::list(&review::Filter {
+            // 対象の見出しは絞り込んだものをそのまま出す。何を数えたのかが
+            // 分からないと、0 件の意味を読み手が取り違える。
+            let target = file
+                .as_ref()
+                .or(project.as_ref())
+                .map(|p| p.display().to_string());
+            let filter = review::Filter {
                 project,
                 file,
-                include_resolved: matches!(status, StatusFilter::All),
-            })?;
-            let out = match format {
-                OutputFormat::Md => review::format::threads_markdown(&views),
-                OutputFormat::Json => {
-                    serde_json::to_string_pretty(&views).map_err(|e| e.to_string())?
-                }
+                status: status.into(),
+                author,
             };
-            println!("{out}");
+            let views = review::list(&filter)?;
+
+            if matches!(format, OutputFormat::Json) {
+                let out = serde_json::to_string_pretty(&views).map_err(|e| e.to_string())?;
+                println!("{out}");
+            } else {
+                let counts = review::counts(&filter)?;
+                println!(
+                    "{}",
+                    review::format::summary_line(&counts, target.as_deref())
+                );
+                if views.is_empty() {
+                    println!(
+                        "{}",
+                        review::format::empty_notice(
+                            filter.status,
+                            &counts,
+                            target.as_deref()
+                        )
+                    );
+                } else if brief {
+                    print!("{}", review::format::threads_brief(&views));
+                } else if matches!(format, OutputFormat::Agent) {
+                    println!(
+                        "返信は mdglow review reply --thread <ID> --author {} --body \"<何をしたか>\" で行う。\
+                         解決済みにするのは人間の操作なので、resolve は実行しない。",
+                        filter.author
+                    );
+                    print!("{}", review::format::threads_agent(&views));
+                } else {
+                    print!("{}", review::format::threads_markdown(&views));
+                }
+            }
+
+            if exit_code && views.is_empty() {
+                // エラーの 1 と混ざらないよう 2 を使う。
+                use std::io::Write;
+                let _ = std::io::stdout().flush();
+                std::process::exit(2);
+            }
         }
         ReviewAction::Reply {
             thread,

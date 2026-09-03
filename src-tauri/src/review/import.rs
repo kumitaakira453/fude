@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::store::{self, Comment, Ledger, Origin, Status, Thread, Version};
-use super::{snapshot, Filter};
+use super::{snapshot, Filter, StatusFilter};
 
 // Remarker（先行して使っていた別アプリ）の指摘を取り込む。
 //
@@ -242,7 +242,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 // 取り込み結果を人が読める形にする。
 pub fn describe(report: &ImportReport) -> Result<String, String> {
     let views = super::list(&Filter {
-        include_resolved: true,
+        status: StatusFilter::All,
         ..Default::default()
     })?;
     let mut counts = [0usize; 5];

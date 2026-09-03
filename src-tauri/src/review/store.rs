@@ -278,6 +278,28 @@ pub fn format_iso_utc(millis: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}Z")
 }
 
+// 経過時間をざっくり言い表す。絶対時刻より「自分の返信より後に書かれたか」が
+// 分かる形の方が判断に効く。タイムゾーンを要さないので依存も増えない。
+pub fn humanize_since(now_millis: i64, at_millis: i64) -> String {
+    let secs = (now_millis - at_millis).div_euclid(1000);
+    if secs < 60 {
+        return "たった今".to_string();
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{mins}分前");
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{hours}時間前");
+    }
+    let days = hours / 24;
+    if days < 30 {
+        return format!("{days}日前");
+    }
+    format!("{}か月前", days / 30)
+}
+
 // 1970-01-01 からの日数を暦日に直す（Howard Hinnant の civil_from_days）。
 fn civil_from_days(z: i64) -> (i64, i64, i64) {
     let z = z + 719_468;
@@ -295,6 +317,21 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn elapsed_time_is_said_in_the_coarsest_useful_unit() {
+        let now = 1_772_190_000_000;
+        let min = 60_000;
+        assert_eq!(humanize_since(now, now), "たった今");
+        assert_eq!(humanize_since(now, now - 59_000), "たった今");
+        assert_eq!(humanize_since(now, now - 5 * min), "5分前");
+        assert_eq!(humanize_since(now, now - 90 * min), "1時間前");
+        assert_eq!(humanize_since(now, now - 26 * 60 * min), "1日前");
+        assert_eq!(humanize_since(now, now - 3 * 24 * 60 * min), "3日前");
+        assert_eq!(humanize_since(now, now - 45 * 24 * 60 * min), "1か月前");
+        // 台帳の時刻が未来にずれていても破綻させない
+        assert_eq!(humanize_since(now, now + 10 * min), "たった今");
+    }
 
     fn sample_thread() -> Thread {
         Thread {
