@@ -365,6 +365,8 @@ export function BlockGutter({
     y: number;
   } | null>(null);
   const viewRef = useRef<View | null>(null);
+  // 最後に指していた場所。中身の高さが変わったときに測り直すのに使う。
+  const atRef = useRef<{ x: number; y: number } | null>(null);
   // 掴んでいる相手。素の listener からも読むので ref に置く。
   // box は表の矩形（行・列を掴んだときだけ）。帯の上を動いている間も、
   // 表の中へ座標を寄せて落とす先を決めるために使う。
@@ -398,14 +400,13 @@ export function BlockGutter({
     // 見ていると、余白に直接入ってきた時に何も起きない。
     const host = scroller ?? content;
 
-    const onMouseMove = (e: MouseEvent) => {
+    // 指している場所から出すものを決める。中身の高さが変わったときにも
+    // 同じ場所で測り直せるよう、座標を引数で受ける。
+    const measure = (x: number, y: number, target: Node | null) => {
       if (heldRef.current || menuRef.current) return;
-      // 選択を引いているあいだは出さない。押せるものが下に出ると、ドラッグの
-      // 行き先をそれが奪って選択が飛ぶ。
-      if (e.buttons !== 0) return;
       // つまみの上に来ても保つ。消えると押せない。
-      if (layerRef.current?.contains(e.target as Node)) return;
-      const hit = blockAtY(content, e.clientY);
+      if (target && layerRef.current?.contains(target)) return;
+      const hit = blockAtY(content, y);
       // 本文の外（上下の余白）では直前の相手を保つ。
       if (!hit) return;
 
@@ -416,24 +417,24 @@ export function BlockGutter({
       if (held && !isTable(hit.index)) {
         const pad = GRIP + AWAY + 4;
         const near =
-          e.clientX >= base.left + held.left - pad &&
-          e.clientX <= base.left + held.left + held.width + pad &&
-          e.clientY >= base.top + held.top - pad &&
-          e.clientY <= base.top + held.top + held.height + pad;
+          x >= base.left + held.left - pad &&
+          x <= base.left + held.left + held.width + pad &&
+          y >= base.top + held.top - pad &&
+          y <= base.top + held.top + held.height + pad;
         if (near) return;
       }
       const room = scroller
         ? base.left - scroller.getBoundingClientRect().left
         : BOTH;
       const geo = isTable(hit.index)
-        ? tableGeometry(hit.el, e.clientX, e.clientY, base)
+        ? tableGeometry(hit.el, x, y, base)
         : null;
 
       if (geo) {
         // 行は左の縁、列は上の縁を指したときだけ出す。表の内側どこでも出すと
         // 常に付いて回って読みにくい。外の帯の上も同じ判定で通る。
-        const onLeft = e.clientX <= base.left + geo.table.left + EDGE;
-        const onTop = e.clientY <= base.top + geo.table.top + EDGE;
+        const onLeft = x <= base.left + geo.table.left + EDGE;
+        const onTop = y <= base.top + geo.table.top + EDGE;
         const next: View = {
           index: hit.index,
           y: 0,
@@ -453,7 +454,7 @@ export function BlockGutter({
       const box = blockRect(hit.el);
       if (!box) return;
       // 箇条書きは項目ごとに掴む。指している高さの li から行番号を引く。
-      const li = itemAtY(hit.el, e.clientY);
+      const li = itemAtY(hit.el, y);
       const anchorAt = numberOf(li, "mgItem");
       const found =
         li && anchorAt !== null ? itemAt(hit.index, anchorAt) : null;
@@ -486,6 +487,14 @@ export function BlockGutter({
         col: null,
       };
       if (!same(viewRef.current, next)) show(next);
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      // 選択を引いているあいだは出さない。押せるものが下に出ると、ドラッグの
+      // 行き先をそれが奪って選択が飛ぶ。
+      if (e.buttons !== 0) return;
+      atRef.current = { x: e.clientX, y: e.clientY };
+      measure(e.clientX, e.clientY, e.target as Node | null);
     };
 
     const onMouseLeave = () => {
@@ -606,12 +615,20 @@ export function BlockGutter({
     };
 
     // 中身の高さが変わると、出したままの帯は前の位置に取り残される（行を足すと
-    // 表が下へ伸び、足す帯が新しい行に重なる）。測り直す手がかりが無いので
-    // いったん引き、次に動かしたときに出し直す。掴んでいる間は動かさない。
-    const settle = new ResizeObserver(() => {
+    // 表が下へ伸び、足す帯が新しい行に重なる）。最後に指していた場所で測り
+    // 直す。大きさが変わっていない知らせでは何もしない（描き直しと測り直しが
+    // 互いを呼び合うのを避ける）。掴んでいる間は動かさない。
+    let seen = { w: 0, h: 0 };
+    const settle = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (!box) return;
+      if (Math.abs(box.width - seen.w) < 1 && Math.abs(box.height - seen.h) < 1) {
+        return;
+      }
+      seen = { w: box.width, h: box.height };
       if (heldRef.current) return;
-      show(null);
-      setGuide(null);
+      const at = atRef.current;
+      if (at) measure(at.x, at.y, null);
     });
     settle.observe(content);
 

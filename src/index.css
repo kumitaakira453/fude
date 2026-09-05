@@ -1880,12 +1880,6 @@ body.mg-dragging .mg-sel-menu {
 .mg-prose.mg-editorial tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
 }
-/* 指している行を示す。色はアクセント寄りにして、無彩色のゼブラと重ならない
-   ようにする。セルに敷くのは、行に敷くとゼブラの地と入れ替わってしまい、
-   偶数行では逆に薄くなるため（セルの地なら上に重なる）。 */
-.mg-prose.mg-editorial tbody tr:hover > td {
-  background: color-mix(in srgb, var(--mg-accent) 8%, transparent);
-}
 
 /* リンクカード（行独立の外部リンク） */
 .mg-prose .mg-linkcard {
