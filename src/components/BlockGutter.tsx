@@ -605,6 +605,16 @@ export function BlockGutter({
       setMenu({ kind: "cell", index, at, x: e.clientX, y: e.clientY });
     };
 
+    // 中身の高さが変わると、出したままの帯は前の位置に取り残される（行を足すと
+    // 表が下へ伸び、足す帯が新しい行に重なる）。測り直す手がかりが無いので
+    // いったん引き、次に動かしたときに出し直す。掴んでいる間は動かさない。
+    const settle = new ResizeObserver(() => {
+      if (heldRef.current) return;
+      show(null);
+      setGuide(null);
+    });
+    settle.observe(content);
+
     host.addEventListener("mousemove", onMouseMove);
     host.addEventListener("mouseleave", onMouseLeave);
     host.addEventListener("dragover", onDragOver);
@@ -616,6 +626,7 @@ export function BlockGutter({
       host.removeEventListener("dragover", onDragOver);
       host.removeEventListener("drop", onDrop);
       host.removeEventListener("contextmenu", onContextMenu);
+      settle.disconnect();
     };
   }, [content, scroller, isTable, onMove, onTableMove]);
 
