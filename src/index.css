@@ -673,6 +673,15 @@ button.mg-task-check:hover {
 .mg-prose table td {
   padding-block: 0.4rem;
 }
+/* 表の淵と列の区切り。行の区切りと同じ細さ・色で引く。枠があれば、中身の
+   無いセルも「在る」ことが分かる。 */
+.mg-prose table {
+  border: 1px solid var(--mg-border);
+}
+.mg-prose table th + th,
+.mg-prose table td + td {
+  border-left: 1px solid var(--mg-border);
+}
 /* 列幅の制御は内容を包む .mg-cell（ブロック div）で行う。
    セル(td/th)自身への max-width は table-layout:auto では仕様上 undefined で
    WKWebView が無視するが、ブロック div の max-width は全エンジンで定義済み。
@@ -694,11 +703,6 @@ button.mg-task-check:hover {
 }
 .mg-prose .mg-cell:empty {
   min-width: 4rem;
-  /* 空のセルは地の色しか無く、白い行に当たると在ることすら分からない。
-     置き場所だけを破線で示す。outline なので幅も高さも動かない。 */
-  outline: 1px dashed color-mix(in srgb, var(--mg-fg) 14%, transparent);
-  outline-offset: -1px;
-  border-radius: 0.2rem;
 }
 .mg-prose .mg-cell-editing {
   max-width: none;
