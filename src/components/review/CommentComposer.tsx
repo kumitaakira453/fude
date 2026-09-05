@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { isMermaidBlock } from "../../lib/blocks";
 import type { AnchorHit } from "../../lib/review";
 import { Icon } from "../Icon";
+import { Markdown } from "../Markdown";
 
 // 読書中に選択した箇所へ指摘を書く小窓。書くことだけを担い、
 // 付いている指摘を読む・返信する・解決するのはレビュー画面が受け持つ。
@@ -18,6 +20,7 @@ const MAX_INPUT_RATIO = 0.45;
 export function CommentComposer({
   anchorRect,
   selection,
+  source,
   busy,
   track,
   bounds,
@@ -26,6 +29,9 @@ export function CommentComposer({
 }: {
   anchorRect: AnchorHit;
   selection: string;
+  // ブロック全体への指摘のときの、もとの書き方。渡されたときは描画して見せる
+  // （表を字の並びで見せても、どこへの指摘なのか読み取れない）。
+  source?: string;
   busy: boolean;
   // 対象が今どこに居るかを測る。スクロールで動いた分だけ小窓も動かす。
   track?: () => { top: number; left: number } | null;
@@ -142,12 +148,14 @@ export function CommentComposer({
     };
   }, [onClose]);
 
-  // 対象の見出し。表は行の間に改行が挟まるので、空行と字下げを落として
-  // 3 行の枠に中身が入るようにする。
+  // 対象の見出し。画面から拾った字は行の間に改行が挟まるので、空行と字下げを
+  // 落として 3 行の枠に中身が入るようにする。
   const quote = selection
     .replace(/[ \t]+/g, " ")
     .replace(/\s*\n\s*/g, "\n")
     .trim();
+  // 図は描き直すと重いので、書き方をそのまま字で見せる。
+  const shown = source && !isMermaidBlock(source) ? source : null;
 
   const submit = () => {
     const text = body.trim();
@@ -163,9 +171,15 @@ export function CommentComposer({
       className="fixed z-40 overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-xl"
     >
       <div className="border-b border-[var(--mg-border)] px-3 py-2">
-        <p className="mg-review-quote text-[12px] leading-relaxed text-[var(--mg-fg-dim)]">
-          {quote}
-        </p>
+        {shown ? (
+          <div className="mg-compose-quote mg-prose prose">
+            <Markdown body={shown} editorial={false} />
+          </div>
+        ) : (
+          <p className="mg-review-quote text-[12px] leading-relaxed text-[var(--mg-fg-dim)]">
+            {quote}
+          </p>
+        )}
       </div>
       <div className="p-2">
         <textarea

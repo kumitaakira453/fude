@@ -3183,6 +3183,32 @@ svg[id^="mmd-"] foreignObject p {
 }
 
 /* 小窓に出す引用。長い表やリストでも小窓が伸びないように畳む。 */
+/* 指摘の小窓に出す対象。表は表のまま見せたいので、字ではなく描画して置く。
+   小窓に収まる大きさへ抑え、はみ出す分はこの中でスクロールさせる。 */
+.mg-compose-quote {
+  max-height: 8.5rem;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--mg-fg-dim);
+}
+.mg-compose-quote > :first-child {
+  margin-top: 0;
+}
+.mg-compose-quote > :last-child {
+  margin-bottom: 0;
+}
+.mg-compose-quote :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0.15em 0;
+  font-size: 1.05em;
+}
+.mg-compose-quote :is(p, ul, ol, blockquote, pre) {
+  margin: 0.2em 0;
+}
+.mg-compose-quote :is(td, th) {
+  padding: 0.15rem 0.5rem;
+}
+
 .mg-review-quote {
   display: -webkit-box;
   -webkit-box-orient: vertical;

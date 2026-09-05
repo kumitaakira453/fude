@@ -828,11 +828,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {!editing && review.draft && (
           <CommentComposer
             anchorRect={review.draft.hit}
-            // ブロック全体への指摘は、画面から拾った文字を並べると表のように
-            // 空行だらけになる。もとの書き方をそのまま見せる。
-            selection={
-              review.draft.whole ? review.draft.quote : review.draft.text
-            }
+            selection={review.draft.text}
+            // ブロック全体への指摘は、画面から拾った文字を並べても何への指摘か
+            // 読み取れない（表は行の間の改行だけが並ぶ）。もとの書き方を渡す。
+            source={review.draft.whole ? review.draft.quote : undefined}
             busy={review.busy}
             track={trackDraft}
             bounds={draftArea}
