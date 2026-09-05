@@ -365,3 +365,12 @@ export const schema = new Schema({
 });
 
 export type MdSchema = typeof schema;
+
+// 行内の装飾の入れ子の順序。外側から link → strong → em → strike → code。
+//
+// Markdown の記号は必ず入れ子になるので、装飾の重なりはこの順序でしか書けない。
+// 原文へ戻すときの入れ子と、打った字が継ぐ装飾の判断で同じ並びを使う。
+const INLINE_NEST = ["link", "strong", "em", "strike", "code"];
+
+// 外側から数えた深さ。並びに無い装飾は、いちばん外側として扱う。
+export const nestOf = (name: string): number => INLINE_NEST.indexOf(name);

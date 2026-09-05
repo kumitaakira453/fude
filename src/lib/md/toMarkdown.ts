@@ -9,6 +9,7 @@ import type {
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { toMarkdown as mdastToMarkdown, type Options } from "mdast-util-to-markdown";
 import { fromMarkdown, parseTree, type Loaded, type Span } from "./fromMarkdown";
+import { nestOf } from "./schema";
 import { splitRow } from "../blocks";
 import { plainEdit, sameShape, spliceNode } from "./splice";
 
@@ -243,10 +244,9 @@ function tableText(node: PmNode): string {
 
 // ---- 行内 ----
 
-// 入れ子の順序。外側から link → strong → em → strike → code。
-const RANK = ["link", "strong", "em", "strike", "code"];
+// 外側から順に並べる。順序は schema が持っている。
 const ranked = (marks: readonly Mark[]) =>
-  [...marks].sort((a, b) => RANK.indexOf(a.type.name) - RANK.indexOf(b.type.name));
+  [...marks].sort((a, b) => nestOf(a.type.name) - nestOf(b.type.name));
 
 interface Item {
   marks: Mark[];

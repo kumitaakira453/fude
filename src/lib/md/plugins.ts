@@ -5,6 +5,7 @@ import { keymap } from "prosemirror-keymap";
 import {
   Fragment,
   Slice,
+  type Mark,
   type MarkType,
   type Node as PmNode,
   type ResolvedPos,
@@ -17,7 +18,7 @@ import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
 import { insideBlock } from "./nodeViews";
-import { schema } from "./schema";
+import { nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
 import {
   cellDown,
@@ -215,17 +216,25 @@ const toSourceForward: Command = (state, dispatch, view) => {
 // 記号を画面に出さないモードでは、入力変換で付けることはできても外す道が無い。
 // 選んでいなければ、カーソルの居る装飾の範囲まるごとを外す（`code` の囲みを
 // 消したいときに、いちいち選ばせない）。
+
+// カーソルの居る装飾の範囲。隣り合っていれば、原文で分かれて書かれていても
+// 1 つの範囲として返す。続いている装飾を 1 回で外せる。
 function markRun($pos: ResolvedPos, type: MarkType): { from: number; to: number } | null {
+  const parts: { from: number; to: number; on: boolean }[] = [];
   let at = $pos.start();
-  let found: { from: number; to: number } | null = null;
   $pos.parent.forEach((child) => {
-    const from = at;
+    parts.push({ from: at, to: at + child.nodeSize, on: !!type.isInSet(child.marks) });
     at += child.nodeSize;
-    if (found || !type.isInSet(child.marks)) return;
-    // 末尾も範囲に含める。そこで打つと装飾が続くので、同じ範囲と見なす。
-    if ($pos.pos > from && $pos.pos <= at) found = { from, to: at };
   });
-  return found;
+
+  // 末尾も範囲に含める。そこで打つと装飾が続くので、同じ範囲と見なす。
+  const hit = parts.findIndex((p) => p.on && $pos.pos > p.from && $pos.pos <= p.to);
+  if (hit < 0) return null;
+  let head = hit;
+  let tail = hit;
+  while (head > 0 && parts[head - 1].on) head--;
+  while (tail < parts.length - 1 && parts[tail + 1].on) tail++;
+  return { from: parts[head].from, to: parts[tail].to };
 }
 
 function toggleInline(type: MarkType): Command {
@@ -243,6 +252,35 @@ function toggleInline(type: MarkType): Command {
     return toggleMark(type)(state, dispatch, view);
   };
 }
+
+// 打った字が継ぐ装飾を、入れ子として書ける組み合わせに直す。
+//
+// ProseMirror は装飾ごとに「範囲の末尾で継ぐか」を決める。link は継がず
+// （inclusive: false）code は継ぐので、[`名前.md`](url) の末尾で打った字は
+// 「リンクの外にある行内コード」になる。Markdown の記号は必ず入れ子になるので
+// この重なりは原文に書けず、行内コードが 2 つの ` 対に割れて出る。画面でも
+// 囲みが 2 つ並ぶ。
+//
+// 内側の装飾が残るなら、それを包む外側の装飾も一緒に残す。リンクだけで囲った
+// 文字の末尾では内側に何も残らないので、リンクが続かない既定の振る舞いは
+// そのまま。
+function nested(marks: readonly Mark[], before: readonly Mark[]): readonly Mark[] | null {
+  const inner = Math.max(...marks.map((m) => nestOf(m.type.name)), -1);
+  const add = before.filter((m) => nestOf(m.type.name) < inner && !m.isInSet(marks));
+  if (!add.length) return null;
+  return add.reduce((set: readonly Mark[], m) => m.addToSet(set), marks);
+}
+
+const keepNesting = new Plugin({
+  appendTransaction(_trs, _old, state) {
+    const { empty, $from } = state.selection;
+    if (!empty || !$from.parent.inlineContent) return null;
+    // 装飾の範囲の末尾に居るときだけ。文字の途中では継ぐ装飾が決まっている。
+    if ($from.textOffset || !$from.nodeBefore) return null;
+    const marks = nested(state.storedMarks ?? $from.marks(), $from.nodeBefore.marks);
+    return marks ? state.tr.setStoredMarks(marks) : null;
+  },
+});
 
 // コードの塊の中の Tab。字下げとして扱う（他と同じ半角 4 つ）。
 const INDENT = "    ";
@@ -376,6 +414,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       "Shift-Tab": chainCommands(outdentCode, goToNextCell(-1), liftListItem(item)),
     }),
     keymap(baseKeymap),
+    // 打った字が継ぐ装飾の直し。入力変換より後に置き、規則が控えを触ったあとの
+    // 組み合わせを見る。
+    keepNesting,
     // セルの選択と、いま触っているセルの印。
     tableEditing(),
     focusedCell,
