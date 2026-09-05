@@ -589,6 +589,52 @@ export function itemTextStart(src: string, line: number): number | null {
   return at + head[0].length;
 }
 
+// ---- タスクの印の入れ替え ----
+
+const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
+
+const flip = (line: string): string =>
+  line.replace(TASK_RE, (_m, head: string, mark: string, close: string) =>
+    head + (mark === " " ? "x" : " ") + close,
+  );
+
+// 指定した位置を含む行のタスクの印を入れ替える。その行にタスクが無ければ null。
+//
+// 位置は描画側が項目に載せた目印（itemMarkerAt と同じ、mdast の listItem の
+// 開始位置）。行を数え上げると、GFM がタスクとして描かない "- [ ] "
+// （コード例の中の行や、"]" の後ろに空白が無い行）を 1 つ数えた時点で、
+// 以降の項目がまとめてずれる。
+export function toggleTaskAt(src: string, at: number): string | null {
+  if (at < 0 || at > src.length) return null;
+  const lines = src.split("\n");
+  let start = 0;
+  for (const line of lines) {
+    const end = start + line.length;
+    if (at <= end) {
+      const next = flip(line);
+      if (next === line) return null;
+      return src.slice(0, start) + next + src.slice(end);
+    }
+    start = end + 1;
+  }
+  return null;
+}
+
+// 上から数えて n 番目のタスクの印を入れ替える。位置の目印が付かないブロック
+// （生 HTML の囲みを開いて描くもの）だけで使う。
+export function toggleTaskNth(src: string, nth: number): string | null {
+  const lines = src.split("\n");
+  let seen = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const next = flip(lines[i]);
+    if (next === lines[i]) continue;
+    if (++seen !== nth) continue;
+    lines[i] = next;
+    return lines.join("\n");
+  }
+  return null;
+}
+
 // ---- 編集する単位の判定 ----
 //
 // どこを編集するかは、選択された箇所を含む「最小の単位」で決める。

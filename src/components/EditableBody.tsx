@@ -46,6 +46,8 @@ import {
   replaceBlock,
   setCellValue,
   splitRow,
+  toggleTaskAt,
+  toggleTaskNth,
 } from "../lib/blocks";
 import { useAtomValue } from "jotai";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
@@ -57,9 +59,6 @@ import { CalloutIcon } from "./CalloutIcon";
 import { BlockSourceEditor } from "./BlockSourceEditor";
 import { Markdown } from "./Markdown";
 import { MermaidModal } from "./MermaidModal";
-
-// タスク行（- [ ] / 1. [x] など）
-const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
 
 // 漸進描画の粒度。最初のひと塊は 1 画面を埋める程度、以降はフレームごとに足す。
 const FIRST_CHUNK = 24;
@@ -308,28 +307,27 @@ export function EditableBody({
     apply(replaceBlock(body, block, newSrc), keep);
   };
 
-  // ブロック内 ordinal 番目のタスクの [ ]↔[x] をトグルして保存。
-  // どのブロックかは押されたボタンから辿る。番号を渡す形にすると、
-  // ブロックを 1 つ消しただけで以降の番号がずれ、全部が描き直しになる。
+  // 押されたタスクの [ ]↔[x] を入れ替えて保存。どのブロックのどの項目かは、
+  // 押されたボタンから辿る。番号を渡す形にすると、ブロックを 1 つ消しただけで
+  // 以降の番号がずれ、全部が描き直しになる。
   const toggleTask = useCallback((ordinal: number, el: HTMLElement) => {
     const wrap = el.closest<HTMLElement>("[data-mg-block]");
     const at = wrap ? Number(wrap.dataset.mgBlock) : NaN;
     const { blocks, body, apply } = latest.current;
     const block = Number.isInteger(at) ? blocks[at] : undefined;
     if (!block) return;
-    const lines = block.src.split("\n");
-    let count = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (!TASK_RE.test(lines[i])) continue;
-      count++;
-      if (count !== ordinal) continue;
-      lines[i] = lines[i].replace(
-        TASK_RE,
-        (_m, a, c, b) => a + (c === " " ? "x" : " ") + b,
-      );
-      apply(replaceBlock(body, block, lines.join("\n")), keep);
-      return;
-    }
+    // 項目に載っている原文の位置で書き換える行を決める。上から数える形だと、
+    // 描かれない "- [ ] "（コード例の中の行など）を 1 つ数えた時点で以降が
+    // まとめてずれる。
+    const item = el.closest<HTMLElement>("[data-mg-item]");
+    const anchor = item ? Number(item.dataset.mgItem) : NaN;
+    // 位置が載らないのは、生 HTML の囲みを開いて描いたブロックだけ。原文と
+    // 描いたものの文字数が合わないので、そこは従来どおり上から数える。
+    const next = Number.isInteger(anchor)
+      ? toggleTaskAt(block.src, anchor)
+      : toggleTaskNth(block.src, ordinal);
+    if (next === null) return;
+    apply(replaceBlock(body, block, next), keep);
   }, []);
 
   // 外からの頼みを受けて編集を始める。どの単位で開くかは選択された位置から

@@ -60,6 +60,20 @@ describe("タスクのチェック", () => {
     expect(source()).toBe("- [ ] やる\n");
   });
 
+  it("押した項目だけが入れ替わる", () => {
+    // 専用の描画は自分の位置を持っているので、描かれない "- [ ] " が
+    // 混ざっても隣に飛ばない。
+    const view = editor(
+      ["- [ ] あ", "- [ ]い", "- [ ] う", "- [ ] え"].join("\n") + "\n",
+    );
+    const checks = view.dom.querySelectorAll(".mg-task-check");
+    // "- [ ]い" はタスクにならないので、チェックは 3 つ。
+    expect(checks).toHaveLength(3);
+
+    click(checks[1]);
+    expect(source()).toBe(["- [ ] あ", "- [ ]い", "- [x] う", "- [ ] え"].join("\n") + "\n");
+  });
+
   it("印のある項目にだけチェックを出し、点は落とす", () => {
     const view = editor("- ふつう\n- [ ] やる\n- [x] やった\n");
     const items = [...view.dom.querySelectorAll("li")];
