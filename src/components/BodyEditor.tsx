@@ -89,6 +89,52 @@ const lineBreak: Command = (state, dispatch) => {
   return true;
 };
 
+
+// カーソルを自分で描く。
+//
+// 標準のカーソルは、明朝のように上下へ余裕のある書体と広い行間が重なると、
+// 字よりずっと大きく描かれる（ゴシックや行間を詰めたときは起きない）。高さを
+// 決める指定は CSS に無いので、字の箱に合わせた棒を自分で重ねる。
+// 変換中は標準のカーソルへ戻す。二重に見えるのと、変換の位置が遅れるのを防ぐ。
+function caretPainter(view: EditorView, host: HTMLElement) {
+  const bar = document.createElement("div");
+  bar.className = "mg-caret";
+  bar.style.display = "none";
+  host.appendChild(bar);
+
+  const draw = () => {
+    const { selection } = view.state;
+    if (!selection.empty || !view.hasFocus() || view.composing) {
+      bar.style.display = "none";
+      host.classList.remove("mg-caret-on");
+      return;
+    }
+    const at = view.coordsAtPos(selection.head);
+    const box = host.getBoundingClientRect();
+    bar.style.display = "block";
+    bar.style.left = `${at.left - box.left}px`;
+    bar.style.top = `${at.top - box.top}px`;
+    bar.style.height = `${at.bottom - at.top}px`;
+    host.classList.add("mg-caret-on");
+    // 打っている間は点滅を止める。動くたびに掛け直して数える。
+    bar.classList.remove("is-idle");
+    void bar.offsetWidth;
+    bar.classList.add("is-idle");
+  };
+
+  const onFocus = () => draw();
+  view.dom.addEventListener("focus", onFocus);
+  view.dom.addEventListener("blur", onFocus);
+  return {
+    draw,
+    stop: () => {
+      view.dom.removeEventListener("focus", onFocus);
+      view.dom.removeEventListener("blur", onFocus);
+      bar.remove();
+    },
+  };
+}
+
 export function BodyEditor({
   body,
   prefix,
@@ -172,10 +218,13 @@ export function BodyEditor({
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
+        caret.draw();
         if (tr.docChanged) changed.current(prefix + toMarkdown(next.doc, loaded));
       },
     });
+    const caret = caretPainter(view, at);
     view.focus();
+    caret.draw();
 
     const scroller = scrollerOf(at);
     // 開いた位置へ合わせる。字体や画像で高さが決まるまで数フレームかかる。
@@ -222,11 +271,12 @@ export function BodyEditor({
       cancelAnimationFrame(raf);
       cancelAnimationFrame(tick);
       scroller?.removeEventListener("scroll", onScroll);
+      caret.stop();
       view.destroy();
     };
     // 本文を差し替えるのはファイルを開き直したときだけ。呼び出し側が key で作り直す。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={host} />;
+  return <div ref={host} className="relative" />;
 }

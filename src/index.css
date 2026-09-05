@@ -3642,3 +3642,34 @@ svg[id^="mmd-"] foreignObject p {
 .mg-prose .mg-callout-body > * + * {
   margin-top: 0.6em;
 }
+/* 自分で描くカーソル。標準のカーソルは書体と行間の組み合わせで字より大きく
+   描かれることがあり、高さを決める指定が CSS に無いため。変換中は標準へ戻す
+   ので、そのときだけ色を戻す。 */
+.mg-caret-on .mg-pm {
+  caret-color: transparent;
+}
+.mg-caret {
+  position: absolute;
+  width: 1.5px;
+  background: var(--mg-fg);
+  pointer-events: none;
+  z-index: 1;
+}
+.mg-caret.is-idle {
+  animation: mgCaret 1.05s steps(1) 0.6s infinite;
+}
+@keyframes mgCaret {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-caret.is-idle {
+    animation: none;
+  }
+}
