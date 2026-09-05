@@ -1,10 +1,4 @@
-import { baseKeymap, chainCommands } from "prosemirror-commands";
-import { inputRules, undoInputRule } from "prosemirror-inputrules";
-import { history, redo, undo } from "prosemirror-history";
-import { keymap } from "prosemirror-keymap";
-import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
-import { EditorState, TextSelection, type Command } from "prosemirror-state";
-import { goToNextCell, tableEditing } from "prosemirror-tables";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 // ProseMirror が要る土台の指定。改行の前後に挟む見えない img を本文の img 指定から
 // 守るもの（無いと typography の余白が付いて、改行のたびに隙間が空く）や、
@@ -12,22 +6,10 @@ import { EditorView } from "prosemirror-view";
 import "prosemirror-view/style/prosemirror.css";
 import { useEffect, useRef, useState } from "react";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
-import { highlightCode } from "../lib/md/highlight";
-import { rules } from "../lib/md/inputRules";
-import { insideBlock, nodeViews, type EditorDeps } from "../lib/md/nodeViews";
-import { MermaidModal } from "./MermaidModal";
-import {
-  cellDown,
-  cellEnd,
-  cellEnter,
-  cellLeft,
-  cellRight,
-  cellStart,
-  cellUp,
-  focusedCell,
-} from "../lib/md/tableKeys";
-import { schema } from "../lib/md/schema";
+import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
+import { editorPlugins } from "../lib/md/plugins";
 import { toMarkdown } from "../lib/md/toMarkdown";
+import { MermaidModal } from "./MermaidModal";
 
 // 組版されたまま書く全文編集。
 //
@@ -64,47 +46,6 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
-
-// ```lang と打って改行したときも、コードの塊にする。入力変換は空白で終わる
-// 打鍵しか見ないので、改行で確定する人には効かない。
-const fenceOnEnter: Command = (state, dispatch) => {
-  const { $from, empty } = state.selection;
-  if (!empty || !$from.parent.isTextblock || $from.parent.type.spec.code) return false;
-  const m = /^[`｀]{3,}([a-zA-Z0-9_+-]*)$/.exec($from.parent.textContent);
-  if (!m) return false;
-  if (dispatch) {
-    const at = $from.start();
-    dispatch(
-      state.tr
-        .delete(at, $from.end())
-        .setBlockType(at, at, schema.nodes.codeBlock, {
-          lang: m[1] || null,
-          fenced: true,
-          fence: "```",
-        })
-        .scrollIntoView(),
-    );
-  }
-  return true;
-};
-
-// 行の中の改行。表のセルでは <br> を置く（GFM の表は行を分けられない）。
-const lineBreak: Command = (state, dispatch) => {
-  const { $from } = state.selection;
-  const inCell = (() => {
-    for (let d = $from.depth; d > 0; d--) {
-      if ($from.node(d).type === schema.nodes.tableCell) return true;
-    }
-    return false;
-  })();
-  if (dispatch) {
-    const node = inCell
-      ? schema.nodes.rawInline.create({ value: "<br>" })
-      : schema.nodes.hardBreak.create();
-    dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
-  }
-  return true;
-};
 
 
 // カーソルを自分で描く。
@@ -226,48 +167,13 @@ export function BodyEditor({
     const want = Math.max(0, (viewpoint?.at ?? 0) - prefix.length);
     const target = want > 0 ? (blocks.find((b) => b.end > want) ?? null) : null;
 
-    const item = schema.nodes.listItem;
     const state = EditorState.create({
       doc: loaded.doc,
       // 焦点を当てると選んでいるところへ画面が動く。合わせたい位置を先に選んでおく。
       selection: target
         ? TextSelection.near(loaded.doc.resolve(target.pos + 1))
         : undefined,
-      plugins: [
-        history(),
-        inputRules({ rules }),
-        keymap({
-          // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
-          Backspace: undoInputRule,
-          "Mod-s": () => {
-            saved.current();
-            return true;
-          },
-          "Mod-z": undo,
-          "Shift-Mod-z": redo,
-          "Mod-y": redo,
-          Enter: chainCommands(cellEnter, fenceOnEnter, splitListItem(item)),
-          ArrowUp: cellUp,
-          ArrowDown: cellDown,
-          ArrowLeft: cellLeft,
-          ArrowRight: cellRight,
-          "Mod-ArrowLeft": cellStart,
-          "Mod-ArrowRight": cellEnd,
-          "Shift-Enter": lineBreak,
-          "Mod-Enter": lineBreak,
-          "Shift-Mod-Enter": lineBreak,
-          // 表の中では隣のセルへ。そうでなければ箇条書きの字下げ。
-          Tab: chainCommands(goToNextCell(1), sinkListItem(item)),
-          "Shift-Tab": chainCommands(goToNextCell(-1), liftListItem(item)),
-        }),
-        keymap(baseKeymap),
-        // セルの選択と、いま触っているセルの印。
-        tableEditing(),
-        focusedCell,
-        // コードの色と、カーソルの居る塊の印（図だけを出しているときに使う）。
-        highlightCode,
-        insideBlock,
-      ],
+      plugins: editorPlugins({ onSave: () => saved.current() }),
     });
 
     const view = new EditorView(at, {
