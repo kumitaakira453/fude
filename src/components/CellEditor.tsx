@@ -25,6 +25,16 @@ export function CellEditor({
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
     autosize(el);
+    // 表は枠の中で横にスクロールする。足したばかりの列は枠の外に出るので、
+    // 入ったセルが見える位置まで寄せる。列を足した直後は表が組み直されている
+    // 途中なので、1 フレーム置いてから測る。
+    const at = requestAnimationFrame(() => {
+      (el.closest("td, th") ?? el).scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+      });
+    });
+    return () => cancelAnimationFrame(at);
   }, []);
   const commit = () => {
     if (committed.current) return;
