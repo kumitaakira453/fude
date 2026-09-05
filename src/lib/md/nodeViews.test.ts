@@ -126,6 +126,24 @@ describe("囲みのアイコン", () => {
     expect(source()).not.toContain("icon=");
   });
 
+  it("実データの形でも囲みの位置が取れる", () => {
+    // 色まで付いた形。中身は入れ物（mg-callout-body）の中に入る。
+    const view = editor(
+      ['<callout icon="⚠️" color="gray_bg">', "", "気をつけること", "", "</callout>", ""].join(
+        "\n",
+      ),
+    );
+    const ico = view.dom.querySelector(".mg-callout-ico")!;
+    expect(ico.textContent).toBe("⚠️");
+    expect(view.dom.querySelector(".mg-callout")?.getAttribute("data-color")).toBe(
+      "gray_bg",
+    );
+
+    const hit = calloutIcoAt(view, ico);
+    expect(hit?.node.type.name).toBe("callout");
+    expect(view.state.doc.nodeAt(hit!.pos)?.attrs.icon).toBe("⚠️");
+  });
+
   it("囲みの外を押しても掴まない", () => {
     const view = editor("ただの段落\n");
     expect(calloutIcoAt(view, view.dom.querySelector("p"))).toBeNull();

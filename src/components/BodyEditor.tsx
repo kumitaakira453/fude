@@ -49,6 +49,13 @@ function blocksOf(loaded: Loaded): Block[] {
   return out;
 }
 
+// 押されたところにある囲みのアイコン。無ければ null。
+function icoOf(event: Event): Element | null {
+  return event.target instanceof Element
+    ? event.target.closest(".mg-callout-ico")
+    : null;
+}
+
 // 縦スクロールを持つ最初の親。本文の入れ物は呼び出し側が持っている。
 function scrollerOf(from: HTMLElement | null): HTMLElement | null {
   for (let el = from?.parentElement ?? null; el; el = el.parentElement) {
@@ -257,15 +264,21 @@ export function BodyEditor({
         ...(fontFamily ? { style: `font-family: ${fontFamily}` } : {}),
       },
       handleDOMEvents: {
+        // 押した拍子に書いていた場所を見失わないようにする。
+        mousedown(_here, event) {
+          if (!icoOf(event)) return false;
+          event.preventDefault();
+          return true;
+        },
         // 囲みのアイコンを押したら、読むときと同じ盤を出す。
-        mousedown(here, event) {
-          const ico =
-            event.target instanceof Element
-              ? event.target.closest(".mg-callout-ico")
-              : null;
-          const hit = calloutIcoAt(here, event.target);
+        //
+        // 出すのは click。mousedown で出すと、盤が付ける「外を押したら閉じる」
+        // （mousedown を見ている）が、まだ配り終えていないその押下を受け取り、
+        // 出した端から閉じてしまう。
+        click(here, event) {
+          const ico = icoOf(event);
+          const hit = ico && calloutIcoAt(here, event.target);
           if (!ico || !hit) return false;
-          // 押した拍子に書いていた場所を見失わないようにする。
           event.preventDefault();
           const box = ico.getBoundingClientRect();
           setPicking((was) => ({
