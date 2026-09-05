@@ -3700,6 +3700,8 @@ svg[id^="mmd-"] foreignObject p {
 }
 /* 操作は塊に触れたときだけ出す。常に出ていると本文を読む邪魔になる。 */
 .mg-code-head {
+  /* 本文の書体（設定で変わる）に引きずらせない。操作の字はいつも同じ。 */
+  font-family: var(--mg-font-sans);
   position: absolute;
   top: 6px;
   right: 6px;
@@ -3725,6 +3727,7 @@ svg[id^="mmd-"] foreignObject p {
 }
 .mg-code-lang {
   display: flex;
+  font-family: var(--mg-font-sans);
   align-items: center;
   gap: 0.1rem;
   height: 24px;
@@ -3850,6 +3853,8 @@ svg[id^="mmd-"] foreignObject p {
 .mg-lang-filter {
   flex: 1;
   min-width: 0;
+  /* input は既定の書体を持つので、継がせるだけでは揃わない。 */
+  font-family: var(--mg-font-sans);
   height: 38px;
   border: 0;
   background: transparent;
@@ -3877,7 +3882,8 @@ svg[id^="mmd-"] foreignObject p {
   font-size: 13px;
   text-align: left;
 }
-.mg-lang-row:hover {
+/* 矢印と Enter で選ぶための印。触っても同じ印にする。 */
+.mg-lang-row.is-active {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }

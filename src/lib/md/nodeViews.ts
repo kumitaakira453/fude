@@ -55,6 +55,8 @@ function icon(name: string, size = 15): HTMLElement {
 
 // 言語を選ぶ小窓。OS の一覧はアプリの見た目から浮くので、自分で出す。
 // 塊は角丸のために overflow を切っているので、小窓は body に置いて画面座標で貼る。
+//
+// 開いた時点で先頭が選ばれていて、絞り込んで Enter で決められる。
 function pickLang(
   anchor: HTMLElement,
   current: string | null,
@@ -78,6 +80,10 @@ function pickLang(
   list.className = "mg-lang-list";
   menu.appendChild(list);
 
+  let shown: string[] = [];
+  let rows: HTMLButtonElement[] = [];
+  let active = 0;
+
   const close = () => {
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
@@ -87,32 +93,55 @@ function pickLang(
   const onOutside = (e: MouseEvent) => {
     if (!menu.contains(e.target as Node)) close();
   };
+  const take = (name: string) => {
+    close();
+    onPick(name);
+  };
+  const mark = () => {
+    rows.forEach((row, i) => row.classList.toggle("is-active", i === active));
+    rows[active]?.scrollIntoView({ block: "nearest" });
+  };
+  const move = (by: number) => {
+    if (!shown.length) return;
+    active = (active + by + shown.length) % shown.length;
+    mark();
+  };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
       close();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      move(1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      move(-1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (shown[active]) take(shown[active]);
     }
   };
 
   const draw = (needle: string) => {
     const want = needle.trim().toLowerCase();
-    list.replaceChildren(
-      ...languages(current)
-        .filter((name) => !want || name.includes(want))
-        .map((name) => {
-          const row = document.createElement("button");
-          row.type = "button";
-          row.className = "mg-lang-row";
-          if (name === (current ?? PLAIN)) row.classList.add("is-on");
-          row.textContent = name;
-          row.addEventListener("mousedown", (e) => e.preventDefault());
-          row.addEventListener("click", () => {
-            close();
-            onPick(name);
-          });
-          return row;
-        }),
-    );
+    shown = languages(current).filter((name) => !want || name.includes(want));
+    active = 0;
+    rows = shown.map((name) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "mg-lang-row";
+      if (name === (current ?? PLAIN)) row.classList.add("is-on");
+      row.textContent = name;
+      row.addEventListener("mousedown", (e) => e.preventDefault());
+      row.addEventListener("mouseenter", () => {
+        active = shown.indexOf(name);
+        mark();
+      });
+      row.addEventListener("click", () => take(name));
+      return row;
+    });
+    list.replaceChildren(...rows);
+    mark();
   };
   draw("");
   filter.addEventListener("input", () => draw(filter.value));
