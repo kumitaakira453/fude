@@ -20,6 +20,7 @@ export function CommentComposer({
   selection,
   busy,
   track,
+  bounds,
   onSubmit,
   onClose,
 }: {
@@ -28,6 +29,8 @@ export function CommentComposer({
   busy: boolean;
   // 対象が今どこに居るかを測る。スクロールで動いた分だけ小窓も動かす。
   track?: () => { top: number; left: number } | null;
+  // 小窓が居てよい範囲。ペインの本文の領域を渡す。
+  bounds?: () => { top: number; bottom: number; left: number; right: number } | null;
   onSubmit: (body: string) => void;
   onClose: () => void;
 }) {
@@ -70,32 +73,41 @@ export function CommentComposer({
     bottom: anchorRect.bottom + shift.y,
     left: anchorRect.left + shift.x,
   };
-  // 画面外に出ないように寄せる
-  const left = Math.min(Math.max(GAP, anchor.left), window.innerWidth - WIDTH - GAP);
+  // 居てよい範囲。分割しているときに隣のペインへはみ出さないよう、
+  // 画面ではなく本文の領域で抑える。
+  const area = bounds?.() ?? {
+    top: 0,
+    bottom: window.innerHeight,
+    left: 0,
+    right: window.innerWidth,
+  };
+  const width = Math.max(240, Math.min(WIDTH, area.right - area.left - GAP * 2));
+  const left = Math.min(
+    Math.max(area.left + GAP, anchor.left),
+    Math.max(area.left + GAP, area.right - width - GAP),
+  );
   // 下に開いて下へ伸びるのが基本。書いた文が下に足されていく向きと揃う。
   // 上に開くのは、下では小窓が成り立たないほど狭く、かつ上の方が広いときだけ。
   // 向きは開いた時点で決める。書いている途中で上下が入れ替わると読めなくなる。
   const upwardRef = useRef<boolean | null>(null);
   if (upwardRef.current === null) {
-    const below = window.innerHeight - anchor.bottom - GAP * 2;
-    const above = anchor.top - GAP * 2;
+    const below = area.bottom - anchor.bottom - GAP * 2;
+    const above = anchor.top - area.top - GAP * 2;
     upwardRef.current = below < CHROME + MIN_INPUT && above > below;
   }
   const openUpward = upwardRef.current;
-  // 入力欄の上限。画面に収まる高さと、画面の 45% の小さい方。
+  // 入力欄の上限。本文の領域に収まる高さと、その 45% の小さい方。
+  const tall = area.bottom - area.top;
   const maxInput = Math.max(
     MIN_INPUT,
-    Math.min(
-      window.innerHeight - CHROME - GAP * 2,
-      window.innerHeight * MAX_INPUT_RATIO,
-    ),
+    Math.min(tall - CHROME - GAP * 2, tall * MAX_INPUT_RATIO),
   );
-  // 対象について動き、画面の上端・下端で止まる。対象が画面から出ても、
+  // 対象について動き、本文の領域の上端・下端で止まる。対象が見えなくなっても、
   // 小窓は端に留まって書き続けられる。
   const wanted = openUpward ? anchor.top - GAP - height : anchor.bottom + GAP;
   const top = Math.min(
-    Math.max(GAP, wanted),
-    Math.max(GAP, window.innerHeight - height - GAP),
+    Math.max(area.top + GAP, wanted),
+    Math.max(area.top + GAP, area.bottom - height - GAP),
   );
   const style = { left, top, visibility: height > 0 ? "visible" : "hidden" } as const;
 
@@ -130,6 +142,13 @@ export function CommentComposer({
     };
   }, [onClose]);
 
+  // 対象の見出し。表は行の間に改行が挟まるので、空行と字下げを落として
+  // 3 行の枠に中身が入るようにする。
+  const quote = selection
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+
   const submit = () => {
     const text = body.trim();
     if (!text || busy) return;
@@ -140,12 +159,12 @@ export function CommentComposer({
   return (
     <div
       ref={boxRef}
-      style={{ ...style, width: WIDTH }}
+      style={{ ...style, width }}
       className="fixed z-40 overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-xl"
     >
       <div className="border-b border-[var(--mg-border)] px-3 py-2">
         <p className="mg-review-quote text-[12px] leading-relaxed text-[var(--mg-fg-dim)]">
-          {selection}
+          {quote}
         </p>
       </div>
       <div className="p-2">

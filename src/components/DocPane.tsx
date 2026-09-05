@@ -262,6 +262,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // 指摘を書いている間、対象のブロックが今どこに居るかを測る。小窓は
   // 動いた分だけ一緒に動く。
+  // 小窓が居てよい範囲。分割しているときに隣のペインやタブ帯へはみ出さない。
+  const draftArea = useCallback(() => {
+    const el = scroller ?? content;
+    return el ? el.getBoundingClientRect() : null;
+  }, [scroller, content]);
+
   const trackDraft = useCallback(() => {
     const at = reviewRef.current?.draft?.blockIndex;
     if (!content || at === undefined) return null;
@@ -822,9 +828,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {!editing && review.draft && (
           <CommentComposer
             anchorRect={review.draft.hit}
-            selection={review.draft.text}
+            // ブロック全体への指摘は、画面から拾った文字を並べると表のように
+            // 空行だらけになる。もとの書き方をそのまま見せる。
+            selection={
+              review.draft.whole ? review.draft.quote : review.draft.text
+            }
             busy={review.busy}
             track={trackDraft}
+            bounds={draftArea}
             onSubmit={(text) => void review.submit(text)}
             onClose={review.close}
           />
