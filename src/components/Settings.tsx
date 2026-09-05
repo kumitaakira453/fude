@@ -245,7 +245,7 @@ export function Settings() {
                     />
                     <span className="mg-set-row-main">
                       <span className="mg-set-row-name">
-                        見たまま書く
+                        リアルタイム描画モード
                         <span className="mg-set-beta">Beta</span>
                       </span>
                       <span className="mg-set-note">
