@@ -135,6 +135,74 @@ const splitItem: Command = (state, dispatch, view) => {
   )(state, dispatch, view);
 };
 
+// 組版された姿から、書いたときの記号へ戻す。
+//
+// 記号を画面に出さない代わりに、記号そのものへ戻る道が要る。打った直後なら
+// 入力変換の打ち消しで戻せるが、ファイルから開いたものには控えが無い。
+// ブロックの先頭で Backspace、末尾で Delete をこれに当てる。
+//
+// 水平線は中身を持たないので、そのままでは触れない（節点として選べないように
+// してある）。記号を 1 つ減らした段落に戻す。3 本そろわない "--" は水平線に
+// 読まれないので、段落の文字として何も逃がさずに書ける。丸ごと文字に戻すと
+// "\---" と逃がされ、Backspace 一回で中身が変わってしまう。
+function hrToSource(at: number, hr: PmNode, back: boolean): Command {
+  return (state, dispatch) => {
+    if (dispatch) {
+      const marker = (hr.attrs.marker as string) || "---";
+      // 戻る向きなら末尾の 1 つ、進む向きなら先頭の 1 つを落とす。
+      const left = back ? marker.slice(0, -1) : marker.slice(1);
+      const tr = state.tr.replaceWith(
+        at,
+        at + hr.nodeSize,
+        schema.nodes.paragraph.create(null, schema.text(left)),
+      );
+      dispatch(
+        tr
+          .setSelection(TextSelection.create(tr.doc, back ? at + 1 + left.length : at + 1))
+          .scrollIntoView(),
+      );
+    }
+    return true;
+  };
+}
+
+// ブロックの先頭で Backspace。直前の水平線を記号へ戻し、見出しは飾りを外す。
+const toSourceBack: Command = (state, dispatch, view) => {
+  const { empty, $from } = state.selection;
+  if (!empty || $from.parentOffset !== 0 || !$from.parent.isTextblock) return false;
+
+  const head = $from.before();
+  const prev = state.doc.resolve(head).nodeBefore;
+  if (prev?.type === schema.nodes.thematicBreak) {
+    return hrToSource(head - prev.nodeSize, prev, true)(state, dispatch, view);
+  }
+
+  // 見出しは飾りを外して段落にする。"#" を文字として戻すことはできない
+  // （1 つ減らした "# " は h1 として読まれてしまう）。
+  if ($from.parent.type === schema.nodes.heading) {
+    if (dispatch) {
+      dispatch(
+        state.tr.setBlockType($from.pos, $from.pos, schema.nodes.paragraph).scrollIntoView(),
+      );
+    }
+    return true;
+  }
+  return false;
+};
+
+// ブロックの末尾で Delete。直後の水平線を記号へ戻す。文書の最後に水平線が
+// あると後ろへ回り込めないので、こちら側の道も要る。
+const toSourceForward: Command = (state, dispatch, view) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock) return false;
+  if ($from.parentOffset !== $from.parent.content.size) return false;
+
+  const tail = $from.after();
+  const next = state.doc.resolve(tail).nodeAfter;
+  if (next?.type !== schema.nodes.thematicBreak) return false;
+  return hrToSource(tail, next, false)(state, dispatch, view);
+};
+
 // 貼り付けた文字を Markdown として読む。
 //
 // そのまま文字として入れると、保存のときに # や - が原文へ戻るように逃がされて
@@ -196,7 +264,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     kept,
     keymap({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
-      Backspace: undoRule(kept),
+      // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
+      Backspace: chainCommands(undoRule(kept), toSourceBack),
+      Delete: toSourceForward,
       "Mod-s": () => {
         onSave();
         return true;

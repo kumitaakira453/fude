@@ -487,12 +487,38 @@ describe("水平線", () => {
     expect(NodeSelection.isSelectable(hr)).toBe(false);
   });
 
-  it("後ろの行頭からの Backspace で消える", () => {
+  it("後ろの行頭で Backspace すると記号が 1 つ減った段落になる", () => {
     const view = editor("あ\n\n---\n\nい\n");
-    // "い" の行頭
     const at = view.state.doc.child(0).nodeSize + view.state.doc.child(1).nodeSize + 1;
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
     expect(press(view, "Backspace")).toBe(true);
-    expect(source()).toBe("あ\n\nい\n");
+    expect(view.state.doc.child(1).type.name).toBe("paragraph");
+    // 3 本そろわないので、何も逃がさずに段落として書ける。
+    expect(source()).toBe("あ\n\n--\n\nい\n");
+    // カーソルは記号の末尾。ここから先は普段の 1 文字削除（画面側が行う）。
+    const tail = view.state.doc.child(0).nodeSize + 1 + "--".length;
+    expect(view.state.selection.from).toBe(tail);
+    view.dispatch(view.state.tr.delete(tail - 1, tail));
+    expect(view.state.doc.child(1).textContent).toBe("-");
+    // 1 本だけの "-" は箇条書きの記号なので、原文では逃がされる。
+    expect(source()).toBe("あ\n\n\\-\n\nい\n");
   });
+
+  it("前の行末で Delete しても記号が 1 つ減る", () => {
+    const view = editor("あ\n\n---\n");
+    caretAtEndOf(view, 0);
+    expect(press(view, "Delete")).toBe(true);
+    expect(view.state.doc.child(1).type.name).toBe("paragraph");
+    expect(view.state.doc.child(1).textContent).toBe("--");
+  });
+
+  it("見出しの先頭で Backspace すると飾りが外れる", () => {
+    const view = editor("## 題\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)));
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe("paragraph");
+    expect(source()).toBe("題\n");
+  });
+
+
 });

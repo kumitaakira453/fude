@@ -405,12 +405,10 @@ export const Markdown = memo(function Markdown({
           );
         },
         hr() {
-          // WebKit は hr::before を描画しないため、editorial の「· · ·」区切りは
-          // ドットを実テキストで持つ div にする（確実に表示される）。
+          // WebKit は hr::before を描画しないため、節切りの罫は div そのものを
+          // 罫にする（幅と高さと地色を持たせる）。
           return editorial ? (
-            <div className="mg-hr" aria-hidden>
-              · · ·
-            </div>
+            <div className="mg-hr" aria-hidden />
           ) : (
             <hr />
           );

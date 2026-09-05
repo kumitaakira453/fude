@@ -1970,14 +1970,19 @@ body.mg-dragging .mg-sel-menu {
   }
 }
 /* 区切り線: ただの罫線ではなく「· · ·」の上品なディバイダ（div で実描画） */
+/* 節切りの罫。本の節切りに近い、中央の短い罫にする。点や飾りは意匠が勝ちすぎて
+   本文より目立つ。上下の余白でも切れ目を伝える。 */
 .mg-prose.mg-editorial .mg-hr {
-  margin: 2em 0;
-  text-align: center;
-  color: var(--mg-accent);
-  opacity: 0.55;
-  letter-spacing: 0.5em;
-  font-size: 1.15rem;
-  line-height: 1;
+  width: min(9em, 40%);
+  height: 1px;
+  margin: 3.25em auto;
+  /* 両端を薄くする。真っ直ぐ切ると線が途中で切れたように見える。 */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--mg-fg) 32%, transparent) 50%,
+    transparent
+  );
   user-select: none;
 }
 /* 箇条書きのマーカーをアクセント色で少し際立たせる */
@@ -3615,10 +3620,8 @@ svg[id^="mmd-"] foreignObject p {
 .mg-pm [data-tight="true"] > li > p {
   margin-block: 0;
 }
-/* 水平線は読むときと同じ「· · ·」の div で持つ。紙面のような余白が off の
-   ときは点を隠して 1 本の線に戻す。 */
+/* 紙面のような余白が off のときは、素の 1 本の線に戻す。 */
 .mg-pm:not(.mg-editorial) .mg-hr {
-  font-size: 0;
   border-top: 1px solid var(--mg-border);
   margin-block: 2.5em;
 }

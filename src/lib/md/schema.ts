@@ -195,12 +195,11 @@ export const schema = new Schema({
       selectable: false,
       attrs: { ...id, marker: { default: "---" } },
       parseDOM: [{ tag: "hr" }, { tag: "div.mg-hr" }],
-      // 読むときと同じ形。WebKit は hr::before を描かないので、点は字で持つ。
+      // 読むときと同じ形。WebKit は hr::before を描かないので、div そのものを罫にする。
       toDOM: () =>
         [
           "div",
           { class: "mg-hr", contenteditable: "false", "aria-hidden": "true" },
-          "· · ·",
         ] as DOMOutputSpec,
     },
 
