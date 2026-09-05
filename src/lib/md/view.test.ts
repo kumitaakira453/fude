@@ -349,10 +349,32 @@ describe("セルの中の移動", () => {
     expect(source()).toBe("| a | b |\n| --- | --- |\n| zc | d |\n");
   });
 
-  it("一番上の行で上矢印は表の外へ譲る", () => {
+  it("一番下の行から下矢印で表の外へ出る", () => {
+    const view = editor("| a | b |\n| --- | --- |\n| c | d |\n\nあと\n");
+    // 2 行目の左のセル
+    caretAtEndOf(view, 2);
+    expect(press(view, "ArrowDown")).toBe(true);
+    type(view, "z");
+    // 右のセルへ移らず、表の後ろの段落に入る
+    expect(source()).toBe("| a | b |\n| --- | --- |\n| c | d |\n\nzあと\n");
+  });
+
+  it("一番上の行から上矢印で表の外へ出る", () => {
+    const view = editor("まえ\n\n| a | b |\n| --- | --- |\n| c | d |\n");
+    // 表の 1 行目の左のセル
+    caretAtEndOf(view, 1);
+    expect(press(view, "ArrowUp")).toBe(true);
+    type(view, "z");
+    expect(source()).toBe("まえz\n\n| a | b |\n| --- | --- |\n| c | d |\n");
+  });
+
+  it("表の後ろに何も無ければ動かさない（右のセルへ逃げない）", () => {
     const view = editor("| a | b |\n| --- | --- |\n| c | d |\n");
-    caretAtEndOf(view, 0);
-    expect(press(view, "ArrowUp")).toBe(false);
+    caretAtEndOf(view, 2);
+    const at = view.state.selection.from;
+    // 既定へ流さないので true。位置は動かない。
+    expect(press(view, "ArrowDown")).toBe(true);
+    expect(view.state.selection.from).toBe(at);
   });
 });
 

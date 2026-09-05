@@ -1,6 +1,6 @@
 import type { Node as PmNode, ResolvedPos } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
-import { TextSelection, type Command } from "prosemirror-state";
+import { Selection, TextSelection, type Command } from "prosemirror-state";
 import { cellAround, TableMap } from "prosemirror-tables";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { schema } from "./schema";
@@ -73,9 +73,23 @@ function step(dx: number, dy: number): Command {
 
     const col = here.rect.left + dx;
     const row = here.rect.top + dy;
-    if (col < 0 || col >= here.map.width || row < 0 || row >= here.map.height) {
-      return false;
+
+    // 升目の外。上下は自分で表の外へ出す。ここで既定に流すと、WebKit は表の中を
+    // DOM 順に動かすので、下端でさらに下を押すと右のセルへ順に移ってしまう。
+    if (row < 0 || row >= here.map.height) {
+      if (dy === 0) return false;
+      const table = here.$cell.node(-1);
+      const from = here.$cell.before(-1);
+      const to = from + table.nodeSize;
+      const $at = state.doc.resolve(dy < 0 ? from : to);
+      const out = Selection.near($at, dy < 0 ? -1 : 1);
+      // 表の外に行き先が無ければ動かさない。それでも既定へは流さない。
+      if (dispatch && (out.from <= from || out.from >= to)) {
+        dispatch(state.tr.setSelection(out).scrollIntoView());
+      }
+      return true;
     }
+    if (col < 0 || col >= here.map.width) return false;
 
     if (dispatch) {
       // TableMap が持つのはセルの「手前」の位置。そこから逆方向に探すと 1 つ前の
