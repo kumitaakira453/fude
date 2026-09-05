@@ -3642,11 +3642,15 @@ svg[id^="mmd-"] foreignObject p {
 .mg-prose .mg-callout-body > * + * {
   margin-top: 0.6em;
 }
-/* 自分で描くカーソル。標準のカーソルは書体と行間の組み合わせで字より大きく
-   描かれることがあり、高さを決める指定が CSS に無いため。変換中は標準へ戻す
-   ので、そのときだけ色を戻す。 */
+/* 自分で描くカーソル。標準のカーソルは行の高さで描かれ、書体と行間の
+   組み合わせで字より大きくなる。高さを決める指定は CSS に無い。
+   標準は消し、字の箱に合わせた棒を重ねる。 */
 .mg-caret-on .mg-pm {
   caret-color: transparent;
+}
+/* 棒を出せないとき（測れない場所）だけ標準が出る。そのときも色は揃える。 */
+.mg-pm {
+  caret-color: var(--mg-accent);
 }
 .mg-caret {
   position: absolute;
