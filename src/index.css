@@ -2440,11 +2440,12 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.6rem 0.6rem 0.55rem 0.7rem;
-  border-block: 1px solid color-mix(in srgb, var(--mg-fg) 14%, transparent);
-  /* 地はアクセントで作らない。選ばれている札（アクセント）と近い色になり、
-     見出しと札のどちらなのか見分けられなくなる。無彩色で沈める。 */
-  background: color-mix(in srgb, var(--mg-fg) 9%, var(--mg-panel));
+  /* 面を塗って立てない。塗ると帯そのものが目に付き、読む対象である指摘より
+     強く出てしまう。読み分けは字の強さと余白で作り、地は一覧と同じにする
+     （貼り付いたときに札が透けないよう、地は敷いておく）。 */
+  padding: 0.9rem 0.6rem 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-panel);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
