@@ -2707,18 +2707,21 @@ svg[id^="mmd-"] foreignObject p {
   position: absolute;
   inset-block: 0;
   left: 0;
-  width: 2px;
+  width: 3px;
   background: transparent;
   transition: background 0.12s;
 }
 .mg-thread-card:hover {
   background: var(--mg-hover);
 }
-.mg-thread-card.is-active {
-  background: var(--mg-accent-soft);
-}
+/* 選ばれている札は面を塗らない。塗ると、ファイルの見出しの面と 2 つの色面が
+   同じ列に並び、どちらが何の意味なのか読めなくなる。印は左の棒と字の太さで
+   示す（面は見出しの役だけにする）。 */
 .mg-thread-card.is-active::before {
   background: var(--mg-accent);
+}
+.mg-thread-card.is-active .mg-thread-body {
+  font-weight: 600;
 }
 
 /* 何への指摘かの手がかり。1 行だけ、開き括弧を付けて本文と取り違えないように
