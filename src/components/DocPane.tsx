@@ -30,7 +30,7 @@ import {
   fontAtom,
   paletteOpenAtom,
   readingWidthAtom,
-  richEditorAtom,
+  startEditingAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
   themeAtom,
@@ -45,7 +45,6 @@ import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
 import { BodyEditor } from "./BodyEditor";
-import { MarkdownEditor } from "./MarkdownEditor";
 import {
   recallViewpoint,
   rememberViewpoint,
@@ -67,7 +66,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
   const editorial = useAtomValue(editorialAtom);
-  const rich = useAtomValue(richEditorAtom);
+  const startEditing = useAtomValue(startEditingAtom);
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
   const tocOpen = useAtomValue(tocOpenAtom);
@@ -102,6 +101,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 控えはコンポーネントの外（lib/viewpoint）に置く。レビュー画面は本文の木を
   // 丸ごと差し替えるので、ここに持つと戻ってきた時点で消えていて先頭に戻る。
   const [editing, setEditing] = useState(false);
+  // 読む / 書くの切り替えは本文を丸ごと組み直すので、その間は画面が止まる。
+  // 先に印を出しておく。
+  const [switching, setSwitching] = useState(false);
   const [draft, setDraft] = useState("");
   // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
   // 選択メニューの「編集する」から立てる編集の頼み。
@@ -156,18 +158,40 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setStartAt(restoreIndex() ?? 0);
     setEditing(false);
   };
-  const toggleEdit = () => (editing ? exitEdit() : enterEdit());
+  const toggleEdit = () => {
+    if (switching) return;
+    setSwitching(true);
+    // 印を描いた後の一枚で切り替える。同じ一枚でやると印が出ないまま止まる。
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => (editing ? exitEdit() : enterEdit()));
+    });
+  };
   // キー操作から呼ぶための控え。listener の依存に本文の要素（後から入る）を
   // 載せないと、それが無い時点の関数を掴んだままになり、見ていた場所を
   // 取れずに先頭から開いてしまう。
   const toggleRef = useRef(toggleEdit);
   toggleRef.current = toggleEdit;
 
+  // 組み上がったら印を消す。子の効果が先に走るので、この時点で編集面はできている。
+  useEffect(() => {
+    setSwitching(false);
+  }, [editing]);
+
   // ファイル切替で編集モード解除
   useEffect(() => {
     setEditing(false);
     setEditingFm(null);
   }, [path]);
+
+  // 「開いたら編集から始める」。本文が読めた時点で切り替える。同じファイルで
+  // 一度だけ効かせるので、⌘E で読む側へ戻ったあと勝手に書く側へは戻らない。
+  const began = useRef<string | null>(null);
+  useEffect(() => {
+    if (!startEditing || !path || !loaded || began.current === path) return;
+    began.current = path;
+    setDraft(raw ?? "");
+    setEditing(true);
+  }, [startEditing, path, loaded, raw]);
 
   // ドキュメント全体の Undo/Redo（アクティブペインのみ、CM 編集中は CM に任せる）
   useEffect(() => {
@@ -673,6 +697,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {path && (
           <button
             onClick={toggleEdit}
+            disabled={switching}
             title={editing ? "プレビュー (⌘E)" : "全文編集 (⌘E) ／ 本文はダブルクリックでその場編集"}
             className={`grid h-6 w-6 place-items-center rounded transition hover:bg-[var(--mg-hover)] ${
               editing
@@ -681,9 +706,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             }`}
           >
             <Icon
-              name={editing ? "visibility" : "edit"}
+              name={
+                switching ? "progress_activity" : editing ? "visibility" : "edit"
+              }
               size={15}
-              fill={editing}
+              fill={editing && !switching}
+              className={switching ? "mg-spin" : undefined}
             />
           </button>
         )}
@@ -709,7 +737,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
-        {editing && path && rich ? (
+        {editing && path ? (
           <div
             ref={setEditScroller}
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
@@ -734,17 +762,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               } ${WIDTH_CLASS[width]} mx-auto`}
             />
           </div>
-        ) : editing && path ? (
-          <MarkdownEditor
-            key={path}
-            initialDoc={draft}
-            onChange={setDraft}
-            onSave={save}
-            initialOffset={recallViewpoint(viewKey(pane.id, path)).at}
-            onOffset={(offset) => {
-              rememberViewpoint(viewKey(pane.id, path), offset);
-            }}
-          />
         ) : (
           <div
             ref={setScroller}
@@ -819,7 +836,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
         {/* 目次は編集中も出す。見出しの増減は MutationObserver が拾うので、
             打つそばから追従する。 */}
-        {(!editing || rich) && !isSplit && tocOpen && path && (
+        {!isSplit && tocOpen && path && (
           <Toc
             content={editing ? editContent : content}
             scroller={editing ? editScroller : scroller}

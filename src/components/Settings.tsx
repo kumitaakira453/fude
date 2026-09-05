@@ -9,7 +9,7 @@ import {
   editorialAtom,
   fontAtom,
   readingWidthAtom,
-  richEditorAtom,
+  startEditingAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
   themeAtom,
@@ -44,7 +44,7 @@ export function Settings() {
   const [fontValue, setFontValue] = useAtom(fontAtom);
   const [widthValue, setWidthValue] = useAtom(readingWidthAtom);
   const [editorialValue, setEditorialValue] = useAtom(editorialAtom);
-  const [richValue, setRichValue] = useAtom(richEditorAtom);
+  const [startValue, setStartValue] = useAtom(startEditingAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -53,7 +53,7 @@ export function Settings() {
     editorialValue,
     setEditorialValue,
   );
-  const [rich, setRich] = useOptimisticSetting(richValue, setRichValue);
+  const [start, setStart] = useOptimisticSetting(startValue, setStartValue);
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
@@ -232,27 +232,27 @@ export function Settings() {
 
                   <button
                     type="button"
-                    onClick={() => setRich(!rich)}
+                    onClick={() => setStart(!start)}
                     className="mg-set-row"
                   >
                     <Icon
                       name="edit_note"
                       size={18}
-                      fill={rich}
+                      fill={start}
                       className={
-                        rich ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                        start ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
                       }
                     />
                     <span className="mg-set-row-main">
                       <span className="mg-set-row-name">
-                        リアルタイム描画モード
+                        開いたら編集から始める
                         <span className="mg-set-beta">Beta</span>
                       </span>
                       <span className="mg-set-note">
-                        ⌘E の全文編集で、# や ** を出さずに表示のまま書く
+                        ファイルを開いた時点で全文編集にする（⌘E で読む側へ戻る）
                       </span>
                     </span>
-                    <span className={`mg-switch${rich ? " is-on" : ""}`}>
+                    <span className={`mg-switch${start ? " is-on" : ""}`}>
                       <i />
                     </span>
                   </button>
