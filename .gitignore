@@ -11,3 +11,5 @@ logo-src.png
 logo-clean.png
 logo-icon.png
 sample/
+# 実験の生成物
+scripts/out
