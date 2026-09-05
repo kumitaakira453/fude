@@ -211,6 +211,34 @@ const toSourceForward: Command = (state, dispatch, view) => {
   return hrToSource(tail, next, false)(state, dispatch, view);
 };
 
+// 消した 1 文字の分だけ後ろへ戻る位置。絵文字や結合文字は複数の符号単位で
+// 1 文字なので、区切りを引いて末尾のひと塊を測る。
+function lastUnit(text: string): number {
+  const parts = [...new Intl.Segmenter().segment(text)];
+  return parts.length ? parts[parts.length - 1].segment.length : 1;
+}
+
+// 装飾の範囲の末尾で Backspace。消した字と同じ装飾を控える。
+//
+// 行内コードは囲みの直後で打った字を中に入れない（schema の inclusive: false）。
+// そのままでは、打ち間違いを消して打ち直したときに囲みの外へ出てしまう。消した
+// 字の装飾を控えておけば、打ち直しは元と同じ囲みの中へ入る。
+const eraseInMark: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || $from.textOffset || !$from.parent.inlineContent) return false;
+  const before = $from.nodeBefore;
+  if (!before?.isText) return false;
+  // 既定で継ぐ装飾が消した字と同じなら、ブラウザの削除に任せる。
+  const marks = $from.marks();
+  if (before.marks.every((m) => m.isInSet(marks))) return false;
+  if (dispatch) {
+    const back = lastUnit(before.text ?? "");
+    const tr = state.tr.delete($from.pos - back, $from.pos);
+    dispatch(tr.ensureMarks(before.marks).scrollIntoView());
+  }
+  return true;
+};
+
 // 行内の装飾を付け外しする。
 //
 // 記号を画面に出さないモードでは、入力変換で付けることはできても外す道が無い。
@@ -227,7 +255,7 @@ function markRun($pos: ResolvedPos, type: MarkType): { from: number; to: number 
     at += child.nodeSize;
   });
 
-  // 末尾も範囲に含める。そこで打つと装飾が続くので、同じ範囲と見なす。
+  // 末尾も範囲に含める。囲みの終わりに居るときも、その囲みを外せるようにする。
   const hit = parts.findIndex((p) => p.on && $pos.pos > p.from && $pos.pos <= p.to);
   if (hit < 0) return null;
   let head = hit;
@@ -385,7 +413,8 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     keymap({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
-      Backspace: chainCommands(undoRule(kept), toSourceBack),
+      // 装飾の末尾で消したときは、打ち直しが同じ装飾へ入るようにする。
+      Backspace: chainCommands(undoRule(kept), toSourceBack, eraseInMark),
       Delete: toSourceForward,
       "Mod-s": () => {
         onSave();

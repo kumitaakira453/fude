@@ -53,10 +53,11 @@ function press(view: EditorView, key: string, mods: Partial<KeyboardEventInit> =
   return view.someProp("handleKeyDown", (f) => f(view, event)) ?? false;
 }
 
-// 直前の 1 文字を消す。1 文字の削除はブラウザが直に行い、ProseMirror は
-// 書き換わった DOM を読み直して同じ形の transaction を組む（消した範囲の装飾を
-// 控えに置く）。その経路をそのまま真似る。
+// 直前の 1 文字を消す。装飾の末尾では keymap が受け取るので、まずそちらへ渡す。
+// 受けなければブラウザが直に消し、ProseMirror が書き換わった DOM を読み直して
+// 同じ形の transaction を組む（消した範囲の装飾を控えに置く）。その経路を真似る。
 function erase(view: EditorView) {
+  if (press(view, "Backspace")) return;
   const { from } = view.state.selection;
   const marks = view.state.doc.resolve(from - 1).marksAcross(view.state.doc.resolve(from));
   const tr = view.state.tr.delete(from - 1, from);
@@ -118,14 +119,6 @@ describe("行内コードの末尾で打ち直す", () => {
     expect(codes()).toBe(1);
   });
 
-  it("リンクの中の行内コードは、消さずに打ち足しても続く", () => {
-    const view = editor("[`a`](./a.md)\n");
-    caretAtEndOf(view, 0);
-    type(view, ".md");
-    expect(source()).toBe("[`a.md`](./a.md)\n");
-    expect(codes()).toBe(1);
-  });
-
   it("リンクだけで囲った文字の末尾で打った字はリンクの外", () => {
     const view = editor("[題](./a.md)\n");
     caretAtEndOf(view, 0);
@@ -138,6 +131,51 @@ describe("行内コードの末尾で打ち直す", () => {
     caretAtEndOf(view, 0);
     type(view, "字");
     expect(source()).toBe("[**強い字**](./a.md)\n");
+  });
+
+  it("絵文字を消しても割れない", () => {
+    const view = editor("`a🎈` を見る\n");
+    caretAfterCode(view);
+    erase(view);
+    type(view, "b");
+    expect(source()).toBe("`ab` を見る\n");
+  });
+});
+
+describe("行内コードから抜ける", () => {
+  it("囲みの直後に打った字は外へ出る", () => {
+    const view = editor("`Log`\n");
+    caretAtEndOf(view, 0);
+    type(view, "日本語");
+    expect(source()).toBe("`Log`日本語\n");
+    expect(codes()).toBe(1);
+  });
+
+  it("リンクの中の囲みの直後でも、リンクごと抜ける", () => {
+    const view = editor("[`a.md`](./a.md)\n");
+    caretAtEndOf(view, 0);
+    type(view, "を見る");
+    expect(source()).toBe("[`a.md`](./a.md)を見る\n");
+    expect(codes()).toBe(1);
+  });
+
+  it("太字は直後に打っても続く", () => {
+    const view = editor("**強い**\n");
+    caretAtEndOf(view, 0);
+    type(view, "字");
+    expect(source()).toBe("**強い字**\n");
+  });
+
+  it("抜けたあとの字を選んで ⌘⇧C を押すと囲みが伸びる", () => {
+    const view = editor("`a.m`\n");
+    caretAtEndOf(view, 0);
+    type(view, "d");
+    // 打った "d" を選び直して付ける。
+    const end = view.state.doc.content.size - 1;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, end - 1, end)));
+    expect(press(view, "c", { ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(source()).toBe("`a.md`\n");
+    expect(codes()).toBe(1);
   });
 });
 

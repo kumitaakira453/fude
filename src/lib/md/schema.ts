@@ -357,7 +357,11 @@ export const schema = new Schema({
       toDOM: () => ["del", 0] as DOMOutputSpec,
     },
 
+    // 囲みの直後で打った字は中に入れない。記号を画面に出さないので、入ると
+    // 囲みから出る手立てが無くなる（閉じの ` を消せない）。伸ばしたいときは、
+    // 消した字を打ち直すか、範囲を選んで付け直す。
     code: {
+      inclusive: false,
       parseDOM: [{ tag: "code" }],
       toDOM: () => ["code", 0] as DOMOutputSpec,
     },
