@@ -18,8 +18,21 @@ const id = { id: { default: null as string | null } };
 
 // <summary>…</summary> の中身。開きタグは原文のまま持っているので、
 // 見出しとして出すぶんだけ取り出す。
-const summaryOf = (head: string): string =>
+export const summaryOf = (head: string): string =>
   /<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary>/.exec(head)?.[1].trim() ?? "";
+
+const SUMMARY = /(<summary(?:\s[^>]*)?>)[\s\S]*?(<\/summary>)/;
+
+// 新しく作るトグルの開きタグ。書き戻しは開き・中身・閉じの間を 1 行空けるので、
+// この形のまま読み直せる。
+export const DETAILS_HEAD = "<details>\n<summary>トグル</summary>";
+
+// 打ち直した見出しを、開きタグの <summary> の中身へ差し戻す。開きタグの属性や
+// 前後の行は原文のまま残す。
+export const withSummary = (head: string, text: string): string =>
+  SUMMARY.test(head)
+    ? head.replace(SUMMARY, (_, open: string, close: string) => open + text + close)
+    : `${head}\n<summary>${text}</summary>`;
 
 export const schema = new Schema({
   nodes: {

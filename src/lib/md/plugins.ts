@@ -18,6 +18,7 @@ import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
 import { insideBlock } from "./nodeViews";
 import { schema } from "./schema";
+import { slashMenu } from "./slash";
 import {
   cellDown,
   cellEnd,
@@ -341,6 +342,8 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     pasteMarkdown,
     typed,
     kept,
+    // 段落の先頭の "/" から構造を選ぶ。矢印と Enter を先に取るので keymap より前。
+    slashMenu,
     keymap({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
