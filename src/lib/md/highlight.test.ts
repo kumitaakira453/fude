@@ -35,10 +35,41 @@ describe("色の付く範囲", () => {
     }
   });
 
-  it("言語なし・未登録・図には色を付けない", () => {
+  it("common の外の言語も引ける", () => {
+    expect(slice("void main() { print('a'); }", "dart").length).toBeGreaterThan(0);
+    expect(slice("SELECT 1", "sql").length).toBeGreaterThan(0);
+  });
+
+  it("言語なしと未登録には色を付けない", () => {
     expect(tokens("def f(): pass", null)).toEqual([]);
-    expect(tokens("select 1", "jq")).toEqual([]);
-    expect(tokens("graph LR\n  A --> B", MERMAID)).toEqual([]);
+    expect(tokens("これは言語ではない", "not-a-language")).toEqual([]);
+  });
+});
+
+describe("図のソース", () => {
+  const got = (code: string) =>
+    tokens(code, MERMAID).map((t) => ({ text: code.slice(t.from, t.to), cls: t.cls }));
+
+  it("図の種類と向きを拾う", () => {
+    const out = got("flowchart LR\n  A --> B");
+    expect(out).toContainEqual({ text: "flowchart", cls: "hljs-keyword" });
+    expect(out).toContainEqual({ text: "LR", cls: "hljs-keyword" });
+  });
+
+  it("線と文字列と注記を拾う", () => {
+    const out = got('%% めも\n  A -->|"ラベル"| B');
+    expect(out).toContainEqual({ text: "%% めも", cls: "hljs-comment" });
+    expect(out.some((t) => t.cls === "hljs-title" && t.text.includes("-->"))).toBe(true);
+    expect(out.some((t) => t.cls === "hljs-string" && t.text === '"ラベル"')).toBe(true);
+  });
+
+  it("行をまたいでも位置がずれない", () => {
+    const code = "sequenceDiagram\n  participant A\n  A ->> B: こんにちは";
+    for (const t of tokens(code, MERMAID)) {
+      expect(t.from).toBeLessThan(t.to);
+      expect(t.to).toBeLessThanOrEqual(code.length);
+    }
+    expect(got(code)).toContainEqual({ text: "participant", cls: "hljs-keyword" });
   });
 });
 
