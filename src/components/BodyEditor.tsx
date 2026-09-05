@@ -80,11 +80,22 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
 // 標準へ戻す。
 function caretPainter(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
-  bar.className = "mg-caret";
+  bar.className = "mg-caret is-idle";
   bar.style.display = "none";
   host.appendChild(bar);
 
+  // 直前に描いた場所。同じなら書き直さない。style を書くだけでレイアウトが
+  // 無効になるので、動いていないときに書くのは丸損。
+  let was = "";
+  // 棒を出しているか。入れ物のクラスは子孫セレクタで効いているので、
+  // 付け外しのたびに編集面の配下まるごとのスタイル再計算が走る。範囲を
+  // 選んでいる間は選択の変化が連続で来るため、変わったときだけ触る。
+  let shown = false;
+
   const hide = () => {
+    if (!shown) return;
+    shown = false;
+    was = "";
     bar.style.display = "none";
     host.classList.remove("mg-caret-on");
   };
@@ -119,19 +130,40 @@ function caretPainter(view: EditorView, host: HTMLElement) {
       return;
     }
     const box = host.getBoundingClientRect();
-    bar.style.display = "block";
-    bar.style.left = `${at.left - box.left}px`;
-    bar.style.top = `${at.top - box.top}px`;
-    bar.style.height = `${at.bottom - at.top}px`;
-    host.classList.add("mg-caret-on");
-    // 打っている間は点滅を止める。動くたびに掛け直して数える。
-    bar.classList.remove("is-idle");
-    void bar.offsetWidth;
-    bar.classList.add("is-idle");
+    const left = at.left - box.left;
+    const top = at.top - box.top;
+    const height = at.bottom - at.top;
+    const now = `${left},${top},${height}`;
+    if (now === was && shown) return;
+    was = now;
+
+    bar.style.left = `${left}px`;
+    bar.style.top = `${top}px`;
+    bar.style.height = `${height}px`;
+    if (!shown) {
+      shown = true;
+      bar.style.display = "block";
+      host.classList.add("mg-caret-on");
+    }
+    // 打っている間は点滅を止める。動くたびに頭から数え直す。
+    // クラスを掛け直して offsetWidth を読む形にすると、そこで毎回
+    // レイアウトが走る。
+    for (const anim of bar.getAnimations()) anim.currentTime = 0;
   };
 
   // 棒は組み直しのときだけ描き直すのでは足りない。位置が変わる契機は他にもある。
-  const again = () => draw();
+  //
+  // ただし測るとレイアウトが走るので、来た合図は 1 枚にまとめる。打鍵ごとに
+  // 打鍵・選択の変化・大きさの変化の 3 経路から来るため、そのまま測ると
+  // 同期レイアウトが何度も走って重くなる。
+  let frame = 0;
+  const again = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      draw();
+    });
+  };
   view.dom.addEventListener("focus", again);
   view.dom.addEventListener("blur", again);
   // コードの塊のように中で横スクロールするものがある。scroll は上がって
@@ -144,13 +176,14 @@ function caretPainter(view: EditorView, host: HTMLElement) {
   watch.observe(view.dom);
 
   return {
-    draw,
+    draw: again,
     stop: () => {
       view.dom.removeEventListener("focus", again);
       view.dom.removeEventListener("blur", again);
       view.dom.removeEventListener("scroll", again, true);
       document.removeEventListener("selectionchange", again);
       watch.disconnect();
+      cancelAnimationFrame(frame);
       bar.remove();
     },
   };
