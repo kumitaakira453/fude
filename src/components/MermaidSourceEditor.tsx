@@ -10,6 +10,7 @@ import { indentUnit } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { useEffect, useRef } from "react";
+import { mermaidHighlight, mermaidLang } from "../lib/mermaidLang";
 
 const theme = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "var(--mg-fg)", height: "100%" },
@@ -93,6 +94,8 @@ export function MermaidSourceEditor({
             ...historyKeymap,
           ]),
           indentUnit.of("  "),
+          mermaidLang,
+          mermaidHighlight,
           EditorView.lineWrapping,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) handlers.current.onChange(u.state.doc.toString());
