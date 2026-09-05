@@ -181,6 +181,29 @@ describe("行内コードから抜ける", () => {
     expect(codes()).toBe(1);
   });
 
+  it("丸ごと囲みの範囲を選んで ⌘⇧C を押すと外れる", () => {
+    const view = editor("`a.md`\n");
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, 1, view.state.doc.content.size - 1),
+      ),
+    );
+    expect(press(view, "c", { ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(source()).toBe("a.md\n");
+    expect(codes()).toBe(0);
+  });
+
+  it("丸ごと太字の範囲を選んで ⌘B を押すと外れる", () => {
+    const view = editor("**強い**\n");
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, 1, view.state.doc.content.size - 1),
+      ),
+    );
+    expect(press(view, "b", { ctrlKey: true })).toBe(true);
+    expect(source()).toBe("強い\n");
+  });
+
   // リンクの内と外の行内コードは、原文では別のものとしか書けない。リンクの
   // ラベルを直したいときは、消して打ち直すほうを使う（リンクごと保たれる）。
   it("リンクの内と外にまたがって付けると、囲みは分かれる", () => {
