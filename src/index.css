@@ -681,10 +681,13 @@ button.mg-task-check:hover {
    両方が描かれると行の間が 2 本になる。行側は落として出所を 1 つにする。 */
 .mg-prose table {
   border-collapse: collapse;
+  border-spacing: 0;
 }
 .mg-prose table thead,
-.mg-prose table tbody tr {
-  border-bottom-width: 0;
+.mg-prose table tbody,
+.mg-prose table tfoot,
+.mg-prose table tr {
+  border-width: 0;
 }
 .mg-prose table th,
 .mg-prose table td {
