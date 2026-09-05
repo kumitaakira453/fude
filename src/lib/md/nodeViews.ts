@@ -23,7 +23,7 @@ export type MermaidMode = "code" | "split" | "diagram";
 const MODES: { mode: MermaidMode; icon: string; label: string }[] = [
   { mode: "code", icon: "code", label: "ソース" },
   { mode: "split", icon: "horizontal_split", label: "分割" },
-  { mode: "diagram", icon: "schema", label: "図" },
+  { mode: "diagram", icon: "visibility", label: "図" },
 ];
 
 // 打ち終わってから描き直すまでの待ち。打つたびに描くと図が跳ねる。
@@ -53,6 +53,80 @@ function icon(name: string, size = 15): HTMLElement {
   return el;
 }
 
+// 言語を選ぶ小窓。OS の一覧はアプリの見た目から浮くので、自分で出す。
+// 塊は角丸のために overflow を切っているので、小窓は body に置いて画面座標で貼る。
+function pickLang(
+  anchor: HTMLElement,
+  current: string | null,
+  onPick: (value: string) => void,
+) {
+  const menu = document.createElement("div");
+  menu.className = "mg-lang-menu";
+
+  const filter = document.createElement("input");
+  filter.className = "mg-lang-filter";
+  filter.type = "text";
+  filter.placeholder = "言語をしぼる";
+  menu.appendChild(filter);
+
+  const list = document.createElement("div");
+  list.className = "mg-lang-list";
+  menu.appendChild(list);
+
+  const close = () => {
+    document.removeEventListener("mousedown", onOutside, true);
+    document.removeEventListener("keydown", onKey, true);
+    menu.remove();
+  };
+  const onOutside = (e: MouseEvent) => {
+    if (!menu.contains(e.target as Node)) close();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  };
+
+  const draw = (needle: string) => {
+    const want = needle.trim().toLowerCase();
+    list.replaceChildren(
+      ...languages(current)
+        .filter((name) => !want || name.includes(want))
+        .map((name) => {
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "mg-lang-row";
+          if (name === (current ?? PLAIN)) row.classList.add("is-on");
+          row.textContent = name;
+          row.addEventListener("mousedown", (e) => e.preventDefault());
+          row.addEventListener("click", () => {
+            close();
+            onPick(name);
+          });
+          return row;
+        }),
+    );
+  };
+  draw("");
+  filter.addEventListener("input", () => draw(filter.value));
+
+  document.body.appendChild(menu);
+  // 下に入らなければ上へ出す。押した札の左端に頭を揃える。
+  const at = anchor.getBoundingClientRect();
+  const box = menu.getBoundingClientRect();
+  const below = window.innerHeight - at.bottom;
+  menu.style.left = `${Math.max(8, Math.min(at.left, window.innerWidth - box.width - 8))}px`;
+  menu.style.top =
+    below > box.height + 12
+      ? `${at.bottom + 4}px`
+      : `${Math.max(8, at.top - box.height - 4)}px`;
+
+  filter.focus();
+  document.addEventListener("mousedown", onOutside, true);
+  document.addEventListener("keydown", onKey, true);
+}
+
 function button(name: string, title: string, onClick: () => void): HTMLButtonElement {
   const el = document.createElement("button");
   el.type = "button";
@@ -60,6 +134,8 @@ function button(name: string, title: string, onClick: () => void): HTMLButtonEle
   el.title = title;
   el.setAttribute("aria-label", title);
   el.appendChild(icon(name));
+  // 押した拍子に編集面から焦点が外れると、書いていた場所を見失う。
+  el.addEventListener("mousedown", (e) => e.preventDefault());
   el.addEventListener("click", (e) => {
     e.preventDefault();
     onClick();
@@ -76,7 +152,8 @@ class CodeBlockView implements NodeView {
   private getPos: () => number | undefined;
   private deps: EditorDeps;
 
-  private lang: HTMLSelectElement;
+  private head: HTMLElement;
+  private lang: HTMLButtonElement;
   private copy: HTMLButtonElement;
   private tools: HTMLElement;
   private stage: HTMLElement;
@@ -108,11 +185,18 @@ class CodeBlockView implements NodeView {
     const head = document.createElement("div");
     head.className = "mg-code-head";
     head.contentEditable = "false";
+    this.head = head;
 
-    this.lang = document.createElement("select");
+    this.lang = document.createElement("button");
+    this.lang.type = "button";
     this.lang.className = "mg-code-lang";
     this.lang.title = "言語";
-    this.lang.addEventListener("change", () => this.setLang(this.lang.value));
+    this.lang.addEventListener("mousedown", (e) => e.preventDefault());
+    this.lang.addEventListener("click", () =>
+      pickLang(this.lang, this.node.attrs.lang as string | null, (value) =>
+        this.setLang(value),
+      ),
+    );
     head.appendChild(this.lang);
 
     this.tools = document.createElement("div");
@@ -144,17 +228,18 @@ class CodeBlockView implements NodeView {
     this.canvas = document.createElement("div");
     this.canvas.className = "mg-mermaid-inner";
     this.stage.appendChild(this.canvas);
-    this.dom.appendChild(this.stage);
 
     this.error = document.createElement("div");
     this.error.className = "mg-mermaid-err";
     this.error.contentEditable = "false";
-    this.dom.appendChild(this.error);
 
     const pre = document.createElement("pre");
     this.contentDOM = document.createElement("code");
     pre.appendChild(this.contentDOM);
     this.dom.appendChild(pre);
+    // 図はソースの下。両方出すときは、書いた結果が下に出るほうが読み順に合う。
+    this.dom.appendChild(this.error);
+    this.dom.appendChild(this.stage);
 
     deps.redraws.add(this.redraw);
     this.paint();
@@ -164,19 +249,7 @@ class CodeBlockView implements NodeView {
   private paint() {
     const lang = this.node.attrs.lang as string | null;
     const isMermaid = lang === MERMAID;
-    const want = languages(lang);
-    const have = [...this.lang.options].map((o) => o.value);
-    if (want.length !== have.length || want.some((v, i) => v !== have[i])) {
-      this.lang.replaceChildren(
-        ...want.map((name) => {
-          const o = document.createElement("option");
-          o.value = name;
-          o.textContent = name;
-          return o;
-        }),
-      );
-    }
-    this.lang.value = lang ?? PLAIN;
+    this.lang.textContent = lang ?? PLAIN;
 
     this.dom.classList.toggle("is-mermaid", isMermaid);
     const mode = this.mode();
@@ -297,9 +370,12 @@ class CodeBlockView implements NodeView {
     return true;
   }
 
+  // 帯と図の中の操作は編集面に渡さない。塊の余白を押したときは渡す（行頭に
+  // カーソルを置く手が塞がる）。
   stopEvent(event: Event): boolean {
     const at = event.target;
-    return at instanceof Node && !this.contentDOM.contains(at);
+    if (!(at instanceof Node)) return false;
+    return this.head.contains(at) || this.stage.contains(at) || this.error.contains(at);
   }
 
   ignoreMutation(m: ViewMutationRecord): boolean {

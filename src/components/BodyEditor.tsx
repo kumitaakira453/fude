@@ -6,6 +6,10 @@ import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-li
 import { EditorState, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
+// ProseMirror が要る土台の指定。改行の前後に挟む見えない img を本文の img 指定から
+// 守るもの（無いと typography の余白が付いて、改行のたびに隙間が空く）や、
+// 選択の見せ方が入っている。
+import "prosemirror-view/style/prosemirror.css";
 import { useEffect, useRef, useState } from "react";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { highlightCode } from "../lib/md/highlight";

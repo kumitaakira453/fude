@@ -3692,30 +3692,47 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-code-bg);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
+/* コードは読むときと同じで、折り返さずに横へ流す。ProseMirror の土台は
+   pre を折り返す指定なので、ここで戻す。 */
+.mg-pm-code > pre {
+  white-space: pre;
+  overflow-x: auto;
+}
+/* 操作は塊に触れたときだけ出す。常に出ていると本文を読む邪魔になる。 */
 .mg-code-head {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  /* 高さは中身で変えない。言語を選び直しても枠を動かさないため。 */
-  min-height: 30px;
-  padding: 0 0.5rem 0 0.35rem;
-  border-bottom: 1px solid var(--mg-border);
-  background: var(--mg-code-head);
+  gap: 0.35rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--mg-panel) 90%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
   user-select: none;
 }
+.mg-pm-code:hover > .mg-code-head,
+.mg-pm-code > .mg-code-head:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
 .mg-code-lang {
-  appearance: none;
   height: 22px;
   padding: 0 0.4rem;
-  border: 0;
   border-radius: 0.35rem;
-  background: transparent;
   color: var(--mg-muted);
   font-family: var(--mg-font-mono);
   font-size: 11px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
 }
 .mg-code-lang:hover {
@@ -3753,7 +3770,7 @@ svg[id^="mmd-"] foreignObject p {
 .mg-code-modes {
   display: flex;
   gap: 0.1rem;
-  margin-right: 0.25rem;
+  margin-right: 0.15rem;
   padding: 0.1rem;
   border-radius: 0.45rem;
   background: color-mix(in srgb, var(--mg-fg) 7%, transparent);
@@ -3778,38 +3795,72 @@ svg[id^="mmd-"] foreignObject p {
 .mg-mermaid-err:empty {
   display: none;
 }
-/* ソースだけ / 分割 / 図だけ。図だけのときも、カーソルが中に入っていれば
-   ソースを出す（隠したままだとカーソルが見えなくなる）。 */
+/* ソースだけ / 分割 / 図だけ。図はソースの下に置く。
+   図だけのときも、カーソルが中に入っていればソースを出す（隠したままだと
+   カーソルが見えなくなる）。 */
 .mg-pm-code.is-mermaid[data-mode="code"] .mg-mermaid {
   display: none;
 }
 .mg-pm-code.is-mermaid[data-mode="split"] .mg-mermaid {
-  border-bottom: 1px solid var(--mg-border);
+  border-top: 1px solid var(--mg-border);
 }
 .mg-pm-code.is-mermaid[data-mode="diagram"]:not(.is-inside) > pre {
   display: none;
 }
-/* 図だけのときは、読むときと同じ見た目に戻す。帯は図に重ねて、触れたときだけ出す。 */
+/* 図だけのときは、読むときと同じ見た目に戻す。 */
 .mg-pm-code.is-mermaid[data-mode="diagram"]:not(.is-inside) {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
-.mg-pm-code.is-mermaid[data-mode="diagram"]:not(.is-inside) .mg-code-head {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 2;
-  min-height: 0;
-  padding: 0.15rem 0.3rem;
+
+/* 言語を選ぶ小窓。塊は角丸のために overflow を切っているので、body に置く。 */
+.mg-lang-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: 210px;
+  max-height: 320px;
+  padding: 0.35rem;
   border: 1px solid var(--mg-border);
-  border-radius: 0.6rem;
-  background: color-mix(in srgb, var(--mg-panel) 88%, transparent);
-  backdrop-filter: blur(6px);
-  opacity: 0;
-  transition: opacity 0.12s;
+  border-radius: 0.7rem;
+  background: var(--mg-panel);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.22);
 }
-.mg-pm-code.is-mermaid[data-mode="diagram"]:hover .mg-code-head,
-.mg-pm-code.is-mermaid[data-mode="diagram"] .mg-code-head:focus-within {
-  opacity: 1;
+.mg-lang-filter {
+  height: 26px;
+  margin-bottom: 0.3rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.4rem;
+  background: var(--mg-bg);
+  color: var(--mg-fg);
+  font-size: 12px;
+}
+.mg-lang-filter:focus {
+  outline: none;
+  border-color: var(--mg-accent);
+}
+.mg-lang-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+}
+.mg-lang-row {
+  padding: 0.28rem 0.5rem;
+  border-radius: 0.4rem;
+  color: var(--mg-fg-dim);
+  font-family: var(--mg-font-mono);
+  font-size: 12px;
+  text-align: left;
+}
+.mg-lang-row:hover {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-lang-row.is-on {
+  color: var(--mg-accent);
+  font-weight: 600;
 }
