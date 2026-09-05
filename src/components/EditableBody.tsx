@@ -108,6 +108,7 @@ export function EditableBody({
   contentKey,
   onComment,
   onCommentItem,
+  onCommentCell,
 }: {
   body: string;
   editorial: boolean;
@@ -120,6 +121,8 @@ export function EditableBody({
   onComment?: (index: number) => void;
   // 箇条書きの項目への指摘。目印は描画側が持っているソースオフセット。
   onCommentItem?: (index: number, anchor: number) => void;
+  // 表のセルへの指摘。目印はセルの中身が始まるソース上の位置。
+  onCommentCell?: (index: number, cellStart: number) => void;
   // 外から編集を始める頼み。選択メニューの「編集する」が立てる。
   // nonce が変わるたびに読み直すので、同じ場所を続けて頼んでも効く。
   editRequest?: {
@@ -596,6 +599,27 @@ export function EditableBody({
     [blocks, onCommentItem],
   );
 
+  // 位置から直にセルの編集へ入る。空のセルは選ぶ文字を持たないので、
+  // 選択を起点にした道（⌘E）では入れない。
+  const editCellAt = useCallback(
+    (index: number, cellStart: number) => {
+      const block = blocks[index];
+      if (!block) return;
+      const unit = cellFromStart(block.src, cellStart);
+      if (!unit) return;
+      setEditing(null);
+      setEditingItem(null);
+      setEditingCell({
+        blockIndex: block.index,
+        cellStart,
+        lineIndex: unit.lineIndex,
+        colIndex: unit.colIndex,
+        value: cellValueAt(block.src, unit.lineIndex, unit.colIndex),
+      });
+    },
+    [blocks],
+  );
+
   const editItem = useCallback(
     (index: number, at: number) => {
       const block = blocks[index];
@@ -763,6 +787,8 @@ export function EditableBody({
         onItemAct={actOnItem}
         onItemEdit={editItem}
         onItemComment={commentItem}
+        onCellEdit={editCellAt}
+        onCellComment={(index, at) => onCommentCell?.(index, at)}
         itemAt={itemAt}
         onEdit={(index) => {
           const block = blocks[index];

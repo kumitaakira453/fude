@@ -290,6 +290,34 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [content],
   );
 
+  // セルへの指摘を、位置から直に始める。右押しのメニューから呼ぶ。
+  // 中身のあるセルは選択に乗せ、空のセルはセルの箱そのものを対象にする。
+  const commentOnCellAt = useCallback(
+    (index: number, cellStart: number) => {
+      if (!content) return;
+      const cell = content.querySelector<HTMLElement>(
+        `[data-mg-block="${index}"] [data-mg-cell="${cellStart}"]`,
+      );
+      if (!cell) return;
+      if (selectTextIn(cell)) {
+        reviewRef.current?.startDraft({ unit: true });
+        return;
+      }
+      reviewRef.current?.startDraft({
+        unit: true,
+        at: {
+          blockIndex: index,
+          start: 0,
+          end: 0,
+          text: "",
+          rect: cell.getBoundingClientRect(),
+          cellStart,
+        },
+      });
+    },
+    [content],
+  );
+
   // セル全体への指摘。セルの中を選んでいるときだけ使える。選択をセルの
   // 中身へ広げてから通常の流れに乗せるので、印はセルの箱で出る。
   const commentOnCell = useCallback(() => {
@@ -705,6 +733,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       contentKey={path}
                       onComment={commentOnBlock}
                       onCommentItem={commentOnItem}
+                      onCommentCell={commentOnCellAt}
                     />
                   </markdownContext.Provider>
                 </article>

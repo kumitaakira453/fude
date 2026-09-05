@@ -70,6 +70,15 @@ interface View {
 }
 
 type Kind = "block" | "row" | "col" | "item";
+
+// 右押しやつまみから出すメニューの 1 項目。
+interface MenuItem {
+  icon: string;
+  label: string;
+  keys?: string;
+  danger?: boolean;
+  run: () => void;
+}
 export type Part = "row" | "col";
 export type TableAct =
   "insertBefore" | "insertAfter" | "duplicate" | "clear" | "delete";
@@ -306,6 +315,8 @@ export function BlockGutter({
   onItemAct,
   onItemEdit,
   onItemComment,
+  onCellEdit,
+  onCellComment,
   itemAt,
 }: {
   content: HTMLElement | null;
@@ -331,6 +342,10 @@ export function BlockGutter({
   onItemEdit: (index: number, at: number) => void;
   // 項目そのものへの指摘。
   onItemComment: (index: number, at: number) => void;
+  // 表のセル。at はセルの中身が始まるソース上の位置（描画側が持つ目印）。
+  // 空のセルは選ぶ文字が無く、選択からは入れないのでここから開く。
+  onCellEdit: (index: number, at: number) => void;
+  onCellComment: (index: number, at: number) => void;
   // その位置が箇条書きの何行目の項目か。無ければ null。
   itemAt: (
     index: number,
@@ -343,7 +358,7 @@ export function BlockGutter({
   const [guide, setGuide] = useState<Guide | null>(null);
   // 何のメニューか。ブロックのつまみは項目一式、行・列は削除だけ。
   const [menu, setMenu] = useState<{
-    kind: Kind;
+    kind: Kind | "cell";
     index: number;
     at: number;
     x: number;
@@ -576,15 +591,31 @@ export function BlockGutter({
       else onTableMove(held.index, held.kind, held.at, to);
     };
 
+    // 右押しでセルのメニューを出す。空のセルは選ぶ文字が無いので、
+    // 選択から入る道（⌘E・⌘⇧I）が使えない。ここが唯一の入口になる。
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      const cell = target?.closest<HTMLElement>("[data-mg-cell]") ?? null;
+      if (!cell) return;
+      const blockEl = cell.closest<HTMLElement>("[data-mg-block]");
+      const index = blockEl ? Number(blockEl.dataset.mgBlock) : NaN;
+      const at = Number(cell.dataset.mgCell);
+      if (!Number.isInteger(index) || !Number.isInteger(at)) return;
+      e.preventDefault();
+      setMenu({ kind: "cell", index, at, x: e.clientX, y: e.clientY });
+    };
+
     host.addEventListener("mousemove", onMouseMove);
     host.addEventListener("mouseleave", onMouseLeave);
     host.addEventListener("dragover", onDragOver);
     host.addEventListener("drop", onDrop);
+    host.addEventListener("contextmenu", onContextMenu);
     return () => {
       host.removeEventListener("mousemove", onMouseMove);
       host.removeEventListener("mouseleave", onMouseLeave);
       host.removeEventListener("dragover", onDragOver);
       host.removeEventListener("drop", onDrop);
+      host.removeEventListener("contextmenu", onContextMenu);
     };
   }, [content, scroller, isTable, onMove, onTableMove]);
 
@@ -689,10 +720,28 @@ export function BlockGutter({
     ];
   };
 
+  // 表のセルのメニュー。右押しで出す。空のセルへ入る唯一の道でもある。
+  const cellItems = (index: number, at: number): MenuItem[] => [
+    {
+      icon: "add_comment",
+      label: "指摘する",
+      keys: "⌘⇧I",
+      run: () => onCellComment(index, at),
+    },
+    {
+      icon: "edit",
+      label: "編集する",
+      keys: "⌘E",
+      run: () => onCellEdit(index, at),
+    },
+  ];
+
   const items =
     menu === null
       ? []
-      : menu.kind === "item"
+      : menu.kind === "cell"
+        ? cellItems(menu.index, menu.at)
+        : menu.kind === "item"
         ? itemItems(menu.index, menu.at)
         : menu.kind !== "block"
           ? partItems(menu.kind, menu.index, menu.at)
