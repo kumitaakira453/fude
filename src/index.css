@@ -2440,49 +2440,28 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  /* 面を塗って立てない。塗ると帯そのものが目に付き、読む対象である指摘より
-     強く出てしまう。読み分けは近接と字の強さで作る。
-     下に線を引かないのは、線があると見出しが「下の指摘の親」ではなく
-     「上のかたまりの締め」に見えるため。区切りはかたまりの上だけに置く。
-     地は敷く（貼り付いたときに札が透ける）。 */
-  padding: 0.95rem 0.6rem 0.35rem 0.7rem;
+  padding: 0.45rem 0.6rem 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--mg-border);
   background: var(--mg-panel);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--mg-muted);
 }
-/* 指摘の本文より一回り小さく、太さで見出しと分かるようにする。
-   同じ大きさで太いだけだと、読む対象と見出しが同じ強さで並ぶ。 */
+/* どのファイルの指摘かは色で示す。指摘の本文（地の色）と時刻（薄い灰）の
+   間に置くと、太さや大きさだけでは埋もれる。面は塗らず、字にだけ色を持たせる。 */
 .mg-review-group .mg-review-name {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--mg-fg);
+  color: color-mix(in srgb, var(--mg-accent) 88%, var(--mg-fg));
 }
 .mg-review-group .mg-review-ico {
-  color: var(--mg-fg-dim);
-}
-/* まとめて写す・まとめて解決は、そのかたまりを触っている間だけ出す。
-   常に出しておくと、見出しがラベルではなく道具の並びとして読まれる。 */
-.mg-review-group .mg-bulk {
-  opacity: 0;
-  transition:
-    opacity 0.12s,
-    background 0.12s,
-    color 0.12s;
-}
-.mg-review-set:hover .mg-bulk,
-.mg-review-group:focus-within .mg-bulk {
-  opacity: 1;
+  color: var(--mg-accent);
 }
 /* ファイルごとのまとまり。間を空けるより線で切ったほうが、どこまでが
    同じファイルの指摘か分かる。 */
 .mg-review-set + .mg-review-set {
   border-top: 1px solid var(--mg-border);
-}
-/* 見出しとその指摘を 1 つの塊として読ませる。かたまりの終わりは余白で示す。 */
-.mg-review-set {
-  padding-bottom: 0.35rem;
 }
 /* 短い知らせ。下の中央に出して自分で消える。押す対象は持たせない。
    右下は右ペインの操作ボタンの真上に来るので、中央に置いて重ならないようにする。 */
@@ -2726,12 +2705,11 @@ svg[id^="mmd-"] foreignObject p {
    引用は手掛かりなので小さく上に添えるだけにする。 */
 /* 選択の地色は列の端まで届かせる。角を丸めて浮かせると、一覧の行ではなく
    独立した札に見えて並びが読みにくい。 */
-/* 見出しより深く始める。字下げの差が、どのファイルの指摘なのかを示す。 */
 .mg-thread-card {
   position: relative;
   display: block;
   width: 100%;
-  padding: 0.55rem 0.8rem 0.5rem 1.45rem;
+  padding: 0.55rem 0.8rem 0.5rem 0.9rem;
   text-align: left;
   transition: background 0.12s;
 }
