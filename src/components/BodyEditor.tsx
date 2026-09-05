@@ -1,9 +1,10 @@
-import { baseKeymap } from "prosemirror-commands";
+import { baseKeymap, chainCommands } from "prosemirror-commands";
 import { inputRules, undoInputRule } from "prosemirror-inputrules";
 import { history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { EditorState, TextSelection } from "prosemirror-state";
+import { goToNextCell, tableEditing } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 import { useEffect, useRef } from "react";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
@@ -106,10 +107,13 @@ export function BodyEditor({
           "Shift-Mod-z": redo,
           "Mod-y": redo,
           Enter: splitListItem(item),
-          Tab: sinkListItem(item),
-          "Shift-Tab": liftListItem(item),
+          // 表の中では隣のセルへ。そうでなければ箇条書きの字下げ。
+          Tab: chainCommands(goToNextCell(1), sinkListItem(item)),
+          "Shift-Tab": chainCommands(goToNextCell(-1), liftListItem(item)),
         }),
         keymap(baseKeymap),
+        // 矢印キーでの行き来とセルの選択を、見えている表の形に合わせる。
+        tableEditing(),
       ],
     });
 

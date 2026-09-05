@@ -3625,3 +3625,7 @@ svg[id^="mmd-"] foreignObject p {
   background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-panel));
   border-bottom-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
 }
+/* 表のセルを選んでいる状態。prosemirror-tables が付ける印に色を当てる。 */
+.mg-pm .selectedCell {
+  background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
+}

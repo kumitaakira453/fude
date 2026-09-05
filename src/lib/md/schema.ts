@@ -140,6 +140,9 @@ export const schema = new Schema({
       group: "block",
       content: "tableRow+",
       isolating: true,
+      // prosemirror-tables が表の形を読むための役割。矢印キーでの行き来と
+      // セルの選択がこれで効く。
+      tableRole: "table",
       attrs: {
         ...id,
         align: { default: [] as (string | null)[] },
@@ -159,6 +162,7 @@ export const schema = new Schema({
 
     tableRow: {
       content: "tableCell+",
+      tableRole: "row",
       parseDOM: [{ tag: "tr" }],
       toDOM: () => ["tr", 0] as DOMOutputSpec,
     },
@@ -166,7 +170,15 @@ export const schema = new Schema({
     tableCell: {
       content: "inline*",
       isolating: true,
-      attrs: { header: { default: false } },
+      tableRole: "cell",
+      // colspan / rowspan は GFM の表には無いが、prosemirror-tables が
+      // 形を数えるのに読むので持たせる。
+      attrs: {
+        header: { default: false },
+        colspan: { default: 1 },
+        rowspan: { default: 1 },
+        colwidth: { default: null as number[] | null },
+      },
       parseDOM: [
         { tag: "td", attrs: { header: false } },
         { tag: "th", attrs: { header: true } },
