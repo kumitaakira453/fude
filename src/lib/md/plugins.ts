@@ -277,7 +277,10 @@ function toggleInline(type: MarkType): Command {
         return true;
       }
     }
-    return toggleMark(type)(state, dispatch, view);
+    // 一部にしか付いていない範囲は、外すのではなく全部に付ける。既定は
+    // 「どこかに付いていれば外す」で、囲みと囲みの外を一緒に選んで付け直す
+    // ときに、選んだところが丸ごと素に戻ってしまう。
+    return toggleMark(type, null, { removeWhenPresent: false })(state, dispatch, view);
   };
 }
 

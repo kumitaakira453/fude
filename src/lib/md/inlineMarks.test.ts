@@ -166,6 +166,37 @@ describe("行内コードから抜ける", () => {
     expect(source()).toBe("**強い字**\n");
   });
 
+  it("囲みと抜けた字をまとめて選んで ⌘⇧C を押すと、全部が囲みに入る", () => {
+    const view = editor("`a.m`\n");
+    caretAtEndOf(view, 0);
+    type(view, "d");
+    // 囲みの中と外をまたいで選ぶ。
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, 1, view.state.doc.content.size - 1),
+      ),
+    );
+    expect(press(view, "c", { ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(source()).toBe("`a.md`\n");
+    expect(codes()).toBe(1);
+  });
+
+  // リンクの内と外の行内コードは、原文では別のものとしか書けない。リンクの
+  // ラベルを直したいときは、消して打ち直すほうを使う（リンクごと保たれる）。
+  it("リンクの内と外にまたがって付けると、囲みは分かれる", () => {
+    const view = editor("[`a.m`](./a.md)\n");
+    caretAtEndOf(view, 0);
+    type(view, "d");
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, 1, view.state.doc.content.size - 1),
+      ),
+    );
+    expect(press(view, "c", { ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(source()).toBe("[`a.m`](./a.md)`d`\n");
+    expect(codes()).toBe(2);
+  });
+
   it("抜けたあとの字を選んで ⌘⇧C を押すと囲みが伸びる", () => {
     const view = editor("`a.m`\n");
     caretAtEndOf(view, 0);
