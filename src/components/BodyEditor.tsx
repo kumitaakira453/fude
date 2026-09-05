@@ -5,6 +5,7 @@ import { EditorView } from "prosemirror-view";
 // 選択の見せ方が入っている。
 import "prosemirror-view/style/prosemirror.css";
 import { useEffect, useRef, useState } from "react";
+import { throttled } from "../lib/later";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { editorPlugins } from "../lib/md/plugins";
@@ -20,6 +21,14 @@ import { MermaidModal } from "./MermaidModal";
 //
 // 見ていた場所は、読むときと同じ「本文の先頭からの文字数」でやり取りする。
 // 行き来しても同じところに戻るように、開いたら合わせ、動かしたら控える。
+
+// 打鍵が途切れてから組み直すまでの待ちと、打ち続けているときの上限。
+//
+// 本文全体の組み直しは大きいファイルで 20ms を超える（929 ブロックで実測）。
+// 打鍵ごとに走らせると引っかかるので、手を止めてから 1 回だけ流す。
+// 止めなくても上限ごとに流すので、長く打ち続けても書きかけは残る。
+const WAIT = 500;
+const CAP = 3000;
 
 interface Block {
   pos: number;
@@ -127,6 +136,7 @@ export function BodyEditor({
   onDom,
   onChange,
   onSave,
+  flushRef,
 }: {
   body: string;
   // フロントマター。本文の前にそのまま戻す。
@@ -145,8 +155,11 @@ export function BodyEditor({
   onViewpoint?: (at: number, into: number) => void;
   // 編集面の要素。目次のように本文の DOM を見る側へ渡す。
   onDom?: (el: HTMLElement | null) => void;
+  // 組み直した本文。打鍵ごとではなく、手を止めてから届く。
   onChange: (raw: string) => void;
   onSave: () => void;
+  // 待たずに今すぐ届けさせる口。⌘S・編集を抜ける・窓を離れるときに使う。
+  flushRef?: { current: (() => void) | null };
 }) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
@@ -207,13 +220,25 @@ export function BodyEditor({
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
-        // 先に本文を渡す。カーソルの描画は測れないことがあり、そこで落ちると
-        // 書いたものが控えに乗らないまま消える。
-        if (tr.docChanged) changed.current(prefix + toMarkdown(next.doc, loaded));
+        // 打鍵の経路に置くのはここまで。組み直しは手を止めてから。
+        if (tr.docChanged) send();
         caret.draw();
       },
     });
     const caret = caretPainter(view, at);
+
+    // 組み直して親へ渡す。ここだけが重いので、打鍵の経路から外してある。
+    const send = throttled(
+      () => changed.current(prefix + toMarkdown(view.state.doc, loaded)),
+      WAIT,
+      CAP,
+    );
+    if (flushRef) flushRef.current = () => send.flush();
+    // 窓を離れるときは待たずに流す。戻ってこないこともある。
+    const onLeave = () => send.flush();
+    window.addEventListener("blur", onLeave);
+    document.addEventListener("visibilitychange", onLeave);
+
     onDom?.(view.dom);
     view.focus();
     caret.draw();
@@ -263,6 +288,12 @@ export function BodyEditor({
       cancelAnimationFrame(raf);
       cancelAnimationFrame(tick);
       scroller?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("blur", onLeave);
+      document.removeEventListener("visibilitychange", onLeave);
+      // 片付ける前に書きかけを流す。ここで捨てると、ファイルを切り替えた
+      // ときに打ったものが消える。
+      send.flush();
+      if (flushRef) flushRef.current = null;
       caret.stop();
       onDom?.(null);
       view.destroy();

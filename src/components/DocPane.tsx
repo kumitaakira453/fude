@@ -128,8 +128,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const isActive = activeId === pane.id;
   const path = activePath(pane);
   const raw = path ? cache.get(path) : undefined;
-  const cacheRef = useRef(cache);
-  cacheRef.current = cache;
 
   // 本文が未読込のあいだはローディングを出す。ただし一瞬で読める場合に
   // ちらつかせないよう、遅延してから表示する（読めたら即座に消す）。
@@ -148,11 +146,27 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 先に終わった 1 件で印が消えないため。
   const [saving, setSaving] = useState(0);
   const write = useCallback(
-    (rel: string, text: string) => {
+    (rel: string, text: string, opts?: { checkpoint?: boolean }) => {
       setSaving((n) => n + 1);
-      void saveFile(rel, text).finally(() => setSaving((n) => n - 1));
+      void saveFile(rel, text, opts).finally(() => setSaving((n) => n - 1));
     },
     [saveFile],
+  );
+
+  // 編集面から「今すぐ組み直して渡せ」と頼む口。編集面が入れる。
+  const flushRef = useRef<(() => void) | null>(null);
+  // この編集で文書全体の Undo に段を積んだか。積むのは 1 回だけにして、
+  // ⌘Z が「この編集を始める前」まで 1 度で戻るようにする。
+  const marked = useRef(false);
+
+  // 自動保存。編集面が組み直した本文をそのまま書く。
+  const autoSave = useCallback(
+    (rel: string, text: string) => {
+      const first = !marked.current;
+      marked.current = true;
+      write(rel, text, { checkpoint: first });
+    },
+    [write],
   );
 
   const enterEdit = () => {
@@ -160,13 +174,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const seen = viewAt();
     rememberViewpoint(viewKey(pane.id, path), seen.at, seen.into);
     setDraft(raw ?? "");
+    marked.current = false;
     setEditing(true);
   };
-  const save = () => {
-    if (path) write(path, draft);
-  };
+  // ⌘S。自動保存があるので押す必要は無いが、待たずに書ける。
+  const save = () => flushRef.current?.();
   const exitEdit = () => {
-    if (path && draft !== (raw ?? "")) write(path, draft);
+    // 書きかけを先に流す。流れた分は自動保存が書く。
+    flushRef.current?.();
     // 戻ったときに合わせるブロックまでを、最初の描画で出させる。
     setStartAt(restoreIndex() ?? 0);
     setEditing(false);
@@ -190,27 +205,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setSwitching(false);
   }, [editing]);
 
-  // 編集中かどうかと書きかけを、効果の中から今の値で見るための控え。
-  const editingRef = useRef(editing);
-  const draftRef = useRef(draft);
-  const shownPath = useRef(path);
-  editingRef.current = editing;
-  draftRef.current = draft;
 
-  // ファイル切替で編集モード解除。書きかけは捨てずに、切り替える前のファイルへ
-  // 保存する（⌘E で戻れば保存されるのに、タブを移ると消えるのを防ぐ）。
+  // ファイル切替で編集モード解除。書きかけは編集面の後片付けが流すので、
+  // ここでは何も書かない（切り替える前の path 向けの onChange が呼ばれる）。
   useEffect(() => {
-    const was = shownPath.current;
-    shownPath.current = path;
-    if (was && was !== path && editingRef.current) {
-      const onDisk = cacheRef.current.get(was) ?? "";
-      if (draftRef.current && draftRef.current !== onDisk) {
-        write(was, draftRef.current);
-      }
-    }
+    marked.current = false;
     setEditing(false);
     setEditingFm(null);
-  }, [path, write]);
+  }, [path]);
 
   // 「開いたら編集から始める」。本文が読めた時点で切り替える。同じファイルで
   // 一度だけ効かせるので、⌘E で読む側へ戻ったあと勝手に書く側へは戻らない。
@@ -219,6 +221,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!startEditing || !path || !loaded || began.current === path) return;
     began.current = path;
     setDraft(raw ?? "");
+    marked.current = false;
     setEditing(true);
   }, [startEditing, path, loaded, raw]);
 
@@ -785,8 +788,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 rememberViewpoint(viewKey(pane.id, path), at, into);
               }}
               onDom={setEditContent}
-              onChange={setDraft}
+              onChange={(next) => {
+                setDraft(next);
+                if (path) autoSave(path, next);
+              }}
               onSave={save}
+              flushRef={flushRef}
               fontFamily={fontStack(font)}
               dark={dark}
               resolveAsset={ctx.resolveAsset}

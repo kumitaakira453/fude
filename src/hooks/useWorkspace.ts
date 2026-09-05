@@ -526,15 +526,18 @@ export function useWorkspace() {
     [absOf, store],
   );
 
+  // checkpoint: 文書全体の Undo に 1 段積むか。自動保存は積まない
+  // （0.5 秒ごとに 1 段になると、⌘Z が実質使えなくなる）。
   const saveFile = useCallback(
-    async (rel: string, text: string) => {
-      // 直前の内容を undo スタックへ（redo はクリア）
-      const prev = store.get(A.contentCacheAtom).get(rel);
-      if (prev !== undefined && prev !== text) {
-        const h = histFor(rel);
-        h.undo.push(prev);
-        if (h.undo.length > HISTORY_LIMIT) h.undo.shift();
-        h.redo = [];
+    async (rel: string, text: string, opts?: { checkpoint?: boolean }) => {
+      if (opts?.checkpoint !== false) {
+        const prev = store.get(A.contentCacheAtom).get(rel);
+        if (prev !== undefined && prev !== text) {
+          const h = histFor(rel);
+          h.undo.push(prev);
+          if (h.undo.length > HISTORY_LIMIT) h.undo.shift();
+          h.redo = [];
+        }
       }
       await writeContent(rel, text);
     },
