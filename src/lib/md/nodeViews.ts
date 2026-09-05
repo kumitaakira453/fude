@@ -59,6 +59,7 @@ function pickLang(
   anchor: HTMLElement,
   current: string | null,
   onPick: (value: string) => void,
+  onDone?: () => void,
 ) {
   const menu = document.createElement("div");
   menu.className = "mg-lang-menu";
@@ -81,6 +82,7 @@ function pickLang(
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
     menu.remove();
+    onDone?.();
   };
   const onOutside = (e: MouseEvent) => {
     if (!menu.contains(e.target as Node)) close();
@@ -200,11 +202,16 @@ class CodeBlockView implements NodeView {
     this.lang.appendChild(this.name);
     this.lang.appendChild(icon("expand_more", 16));
     this.lang.addEventListener("mousedown", (e) => e.preventDefault());
-    this.lang.addEventListener("click", () =>
-      pickLang(this.lang, this.node.attrs.lang as string | null, (value) =>
-        this.setLang(value),
-      ),
-    );
+    this.lang.addEventListener("click", () => {
+      // 小窓を出している間は、手が離れても操作を消さない。
+      this.head.classList.add("is-open");
+      pickLang(
+        this.lang,
+        this.node.attrs.lang as string | null,
+        (value) => this.setLang(value),
+        () => this.head.classList.remove("is-open"),
+      );
+    });
     head.appendChild(this.lang);
 
     this.tools = document.createElement("div");

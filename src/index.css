@@ -3713,15 +3713,15 @@ svg[id^="mmd-"] foreignObject p {
   background: color-mix(in srgb, var(--mg-panel) 90%, transparent);
   backdrop-filter: blur(6px);
   box-shadow: 0 2px 10px rgb(0 0 0 / 0.12);
+  /* 見えていなくても当たり判定は残す。ここに手を持ってきたときだけ出す。 */
   opacity: 0;
-  pointer-events: none;
   transition: opacity 0.12s;
   user-select: none;
 }
-.mg-pm-code:hover > .mg-code-head,
-.mg-pm-code > .mg-code-head:focus-within {
+.mg-code-head:hover,
+.mg-code-head:focus-within,
+.mg-code-head.is-open {
   opacity: 1;
-  pointer-events: auto;
 }
 .mg-code-lang {
   display: flex;
