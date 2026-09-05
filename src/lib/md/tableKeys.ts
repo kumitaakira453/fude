@@ -1,7 +1,9 @@
+import type { Node as PmNode, ResolvedPos } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
 import { TextSelection, type Command } from "prosemirror-state";
 import { cellAround, TableMap } from "prosemirror-tables";
 import { Decoration, DecorationSet } from "prosemirror-view";
+import { schema } from "./schema";
 
 // 表の中の移動を、見えているセルの並びに合わせる。
 //
@@ -19,6 +21,22 @@ function cellAt(state: Parameters<Command>[0]) {
   return { $cell, start, map, rect: map.findCell($cell.pos - start) };
 }
 
+// カーソルがセルの中の上端 / 下端の行に居るか。
+//
+// view.endOfTextblock("up") は使わない。DOM 側の選択を 1 行動かして戻す作りで、
+// 折り返しや <br> のあるセルでは WebKit が表の外まで動かしてしまい、判定が当てに
+// ならない。カーソルとセルの両端の座標を直に比べる。
+function atVerticalEdge(
+  view: NonNullable<Parameters<Command>[2]>,
+  $head: ResolvedPos,
+  dy: number,
+): boolean {
+  const at = view.coordsAtPos($head.pos);
+  const edge = view.coordsAtPos(dy < 0 ? $head.start() : $head.end());
+  // 1px は行の高さの丸め分。同じ行と見なす。
+  return dy < 0 ? at.top - edge.top <= 1 : edge.bottom - at.bottom <= 1;
+}
+
 // 升目を dx / dy だけ動かす。端なら何もしない。
 function step(dx: number, dy: number): Command {
   return (state, dispatch, view) => {
@@ -30,11 +48,11 @@ function step(dx: number, dy: number): Command {
     if (!here) return false;
 
     const { $head } = state.selection;
-    // 左右は字の端に着いてから渡す。上下は行の端に着いてから。
+    // 左右は字の端に着いてから渡す。
     if (dx < 0 && $head.parentOffset > 0) return false;
     if (dx > 0 && $head.parentOffset < $head.parent.content.size) return false;
-    if (dy < 0 && view && !view.endOfTextblock("up")) return false;
-    if (dy > 0 && view && !view.endOfTextblock("down")) return false;
+    // 上下はセルの中の行を数えてから渡す。
+    if (dy !== 0 && view && !atVerticalEdge(view, $head, dy)) return false;
 
     const col = here.rect.left + dx;
     const row = here.rect.top + dy;
@@ -60,13 +78,40 @@ export const cellRight = step(1, 0);
 export const cellUp = step(0, -1);
 export const cellDown = step(0, 1);
 
-// ⌘← / ⌘→ はセルの中の端へ。表の外は既定の動きに任せる。
+// セルの中で行を分けるもの。GFM の表は行を分けられないので原文でも <br> になる。
+function isBreak(node: PmNode): boolean {
+  if (node.type === schema.nodes.hardBreak) return true;
+  return (
+    node.type === schema.nodes.rawInline &&
+    /^<br\s*\/?>$/i.test(node.attrs.value as string)
+  );
+}
+
+// カーソルの居る行の両端。セルの中を <br> で区切って、その区間を返す。
+function lineIn($head: ResolvedPos): { from: number; to: number } {
+  const start = $head.start();
+  let from = start;
+  let to = start + $head.parent.content.size;
+  let offset = 0;
+  $head.parent.forEach((node) => {
+    const a = start + offset;
+    const b = a + node.nodeSize;
+    offset += node.nodeSize;
+    if (!isBreak(node)) return;
+    if (b <= $head.pos) from = Math.max(from, b);
+    else if (a >= $head.pos && a < to) to = a;
+  });
+  return { from, to };
+}
+
+// ⌘← / ⌘→ はカーソルの居る行の端へ。セルの外は既定の動きに任せる。
 function edge(dir: -1 | 1): Command {
   return (state, dispatch, view) => {
     if (view?.composing) return false;
     if (!cellAt(state)) return false;
     const { $head } = state.selection;
-    const at = dir < 0 ? $head.start() : $head.end();
+    const line = lineIn($head);
+    const at = dir < 0 ? line.from : line.to;
     if (at === $head.pos) return false;
     if (dispatch) {
       dispatch(

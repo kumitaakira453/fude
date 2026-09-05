@@ -157,6 +157,87 @@ describe("変換した直後の Backspace で記号へ戻す", () => {
     expect(view.state.doc.lastChild?.type.name).toBe("paragraph");
   });
 
+  it("- の箇条書き", () => {
+    const view = editor("あ\n\nい\n");
+    caretAtEndOf(view, 1);
+    press(view, "Enter");
+    type(view, "- ");
+    expect(view.state.doc.lastChild?.type.name).toBe("bulletList");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.lastChild?.type.name).toBe("paragraph");
+    expect(view.state.doc.lastChild?.textContent).toBe("- ");
+  });
+
+  it("1. の番号付き", () => {
+    const view = editor("あ\n\nい\n");
+    caretAtEndOf(view, 1);
+    press(view, "Enter");
+    type(view, "1. ");
+    expect(view.state.doc.lastChild?.type.name).toBe("orderedList");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.lastChild?.type.name).toBe("paragraph");
+  });
+
+  it("> の引用", () => {
+    const view = editor("あ\n\nい\n");
+    caretAtEndOf(view, 1);
+    press(view, "Enter");
+    type(view, "> ");
+    expect(view.state.doc.lastChild?.type.name).toBe("blockquote");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.lastChild?.type.name).toBe("paragraph");
+  });
+
+  it("--- の水平線", () => {
+    const view = editor("あ\n\nい\n");
+    caretAtEndOf(view, 1);
+    press(view, "Enter");
+    type(view, "---");
+    expect(view.state.doc.lastChild?.type.name).toBe("thematicBreak");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.lastChild?.textContent).toBe("---");
+  });
+
+  it("``` のコードの塊", () => {
+    const view = editor("あ\n\nい\n");
+    caretAtEndOf(view, 1);
+    press(view, "Enter");
+    type(view, "```ts ");
+    expect(view.state.doc.lastChild?.type.name).toBe("codeBlock");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.lastChild?.type.name).toBe("paragraph");
+  });
+
+  it("[題](url) のリンク", () => {
+    const view = editor("あ\n");
+    caretAtEndOf(view, 0);
+    type(view, "[題](https://example.com)");
+    expect(view.state.doc.textContent).toBe("あ題");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.textContent).toBe("あ[題](https://example.com)");
+  });
+
+  it("[ ] のタスク", () => {
+    const view = editor("- あ\n");
+    caretAtEndOf(view, 0);
+    press(view, "Enter");
+    type(view, "[ ] ");
+    const item = () => view.state.doc.lastChild?.lastChild;
+    expect(item()?.attrs.checked).toBe(false);
+    expect(press(view, "Backspace")).toBe(true);
+    expect(item()?.attrs.checked).toBe(null);
+    expect(item()?.textContent).toBe("[ ] ");
+  });
+
+  it("* の斜め", () => {
+    const view = editor("あ\n");
+    caretAtEndOf(view, 0);
+    type(view, "*ここ*");
+    expect(view.state.doc.textContent).toBe("あここ");
+    expect(press(view, "Backspace")).toBe(true);
+    expect(view.state.doc.textContent).toBe("あ*ここ*");
+  });
+
   it("選択が動いた後は字を消す側へ譲る", () => {
     const view = editor("あ\n");
     caretAtEndOf(view, 0);
@@ -207,5 +288,69 @@ describe("Markdown を貼り付ける", () => {
   it("貼り付けた分は原文の目印を持たない", () => {
     const slice = markdownSlice("## 題\n");
     expect(slice?.content.child(0).attrs.id).toBe(null);
+  });
+});
+
+describe("セルの中の移動", () => {
+  // jsdom では Mod は Ctrl になる（navigator.platform が空で mac と見なされない）。
+  const modArrow = (view: EditorView, key: string) =>
+    press(view, key, { ctrlKey: true });
+
+  // <br> で 2 行に分かれたセル。doc > table > tr > td と入って、中身は 3 から。
+  // 中身は text("ab") + <br> + text("cd")。
+  const HEAD = 3;
+  const LINE2 = HEAD + 3; // <br> の直後 = 2 行目の頭
+  const TAIL = HEAD + 5; // "cd" の後ろ = 2 行目の末尾
+
+  function cell() {
+    const view = editor("| ab<br>cd | x |\n| --- | --- |\n| y | z |\n");
+    // 2 行目の "c" と "d" の間
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, LINE2 + 1)),
+    );
+    return view;
+  }
+
+  it("⌘← はその行の頭まで（セルの頭ではない）", () => {
+    const view = cell();
+    expect(modArrow(view, "ArrowLeft")).toBe(true);
+    expect(view.state.selection.from).toBe(LINE2);
+  });
+
+  it("⌘→ はその行の末尾まで", () => {
+    const view = cell();
+    expect(modArrow(view, "ArrowRight")).toBe(true);
+    expect(view.state.selection.from).toBe(TAIL);
+  });
+
+  it("1 行目に居るときは 1 行目の端まで", () => {
+    const view = cell();
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, HEAD + 1)));
+    expect(modArrow(view, "ArrowRight")).toBe(true);
+    // <br> の手前で止まる。セルの末尾へは行かない。
+    expect(view.state.selection.from).toBe(HEAD + 2);
+  });
+
+  it("上矢印で上のセルへ移る", () => {
+    const view = editor("| a | b |\n| --- | --- |\n| c | d |\n");
+    // 2 行目の左のセル
+    caretAtEndOf(view, 2);
+    expect(press(view, "ArrowUp")).toBe(true);
+    type(view, "z");
+    expect(source()).toBe("| za | b |\n| --- | --- |\n| c | d |\n");
+  });
+
+  it("下矢印で下のセルへ移る", () => {
+    const view = editor("| a | b |\n| --- | --- |\n| c | d |\n");
+    caretAtEndOf(view, 0);
+    expect(press(view, "ArrowDown")).toBe(true);
+    type(view, "z");
+    expect(source()).toBe("| a | b |\n| --- | --- |\n| zc | d |\n");
+  });
+
+  it("一番上の行で上矢印は表の外へ譲る", () => {
+    const view = editor("| a | b |\n| --- | --- |\n| c | d |\n");
+    caretAtEndOf(view, 0);
+    expect(press(view, "ArrowUp")).toBe(false);
   });
 });
