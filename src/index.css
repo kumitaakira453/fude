@@ -2665,18 +2665,14 @@ svg[id^="mmd-"] foreignObject p {
   gap: 0.05rem;
   line-height: 1.35;
 }
-/* 長い名前は 2 行まで折り返す。1 行で切ると拡張子まで落ちて、
-   同じ書き出しのファイルを見分けられない。 */
 .mg-review-name {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   overflow: hidden;
-  overflow-wrap: anywhere;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--mg-fg-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mg-review-dir {
   overflow: hidden;
