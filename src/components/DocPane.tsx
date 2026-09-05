@@ -601,7 +601,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       }`}
     >
       {/* ヘッダー */}
-      <header className="flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
+      {/* 編集中は帯にアクセントを敷く。読むときと同じ見た目だと、どちらに
+          いるのか分からない。 */}
+      <header
+        className={`mg-pane-head flex items-center gap-2 border-b px-4 py-2 backdrop-blur ${
+          editing
+            ? "is-editing"
+            : "border-[var(--mg-border)] bg-[var(--mg-panel)]/80"
+        }`}
+      >
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           <Breadcrumbs path={path} paneId={pane.id} />
         </div>
@@ -676,6 +684,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               }}
               onChange={setDraft}
               onSave={save}
+              fontFamily={fontStack(font)}
               className={`mg-prose prose ${
                 editorial ? "mg-editorial" : ""
               } ${WIDTH_CLASS[width]} mx-auto`}

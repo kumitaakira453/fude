@@ -1,4 +1,5 @@
 import { Schema, type DOMOutputSpec } from "prosemirror-model";
+import { CALLOUT_RE } from "../callout";
 
 // 全文編集の編集モデル。Markdown の実データが要求する形だけを持つ。
 //
@@ -47,7 +48,14 @@ export const schema = new Schema({
       defining: true,
       attrs: { ...id },
       parseDOM: [{ tag: "blockquote" }],
-      toDOM: () => ["blockquote", 0] as DOMOutputSpec,
+      // 目印の無い引用は、読むときと同じ「大きく見せる引用」にする。
+      // 効かせるかどうかは .mg-editorial 側の指定が決める。
+      toDOM: (node) =>
+        [
+          "blockquote",
+          CALLOUT_RE.test(node.textContent) ? {} : { class: "mg-pull" },
+          0,
+        ] as DOMOutputSpec,
     },
 
     // fenced か字下げか、囲みが ``` か ~~~ かまで覚える。書き戻すときに
@@ -105,6 +113,7 @@ export const schema = new Schema({
         [
           "ol",
           {
+            class: "mg-steps",
             ...(node.attrs.start === 1 ? {} : { start: node.attrs.start }),
             ...(node.attrs.tight ? { "data-tight": "true" } : {}),
           },
@@ -169,8 +178,14 @@ export const schema = new Schema({
     thematicBreak: {
       group: "block",
       attrs: { ...id, marker: { default: "---" } },
-      parseDOM: [{ tag: "hr" }],
-      toDOM: () => ["hr"] as DOMOutputSpec,
+      parseDOM: [{ tag: "hr" }, { tag: "div.mg-hr" }],
+      // 読むときと同じ形。WebKit は hr::before を描かないので、点は字で持つ。
+      toDOM: () =>
+        [
+          "div",
+          { class: "mg-hr", contenteditable: "false", "aria-hidden": "true" },
+          "· · ·",
+        ] as DOMOutputSpec,
     },
 
     // Notion 由来の囲み。中身は普通のブロックとして編集できる。

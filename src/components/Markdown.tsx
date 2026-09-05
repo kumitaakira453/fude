@@ -23,6 +23,7 @@ import { CellEditor } from "./CellEditor";
 import { CodeBlock } from "./CodeBlock";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
+import { CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
 import { MdImage } from "./MdImage";
 import { Mermaid } from "./Mermaid";
@@ -66,7 +67,6 @@ const CALLOUT: Record<string, { k: string; cls: string; icon: string }> = {
   WARNING: { k: "Warning", cls: "warning", icon: "warning" },
   CAUTION: { k: "Caution", cls: "caution", icon: "report" },
 };
-const CALLOUT_RE = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i;
 
 // blockquote 先頭の [!TYPE] マーカーを表示から取り除く
 function stripCalloutMarker(children: ReactNode): ReactNode {

@@ -54,7 +54,8 @@ const linkRule = new InputRule(
 
 // --- や *** を打ったら水平線にする。打った形をそのまま覚える。
 const ruleRule = new InputRule(/^(-{3,}|\*{3,}|_{3,})$/, (state, match, start, end) =>
-  state.tr.replaceWith(
+  // 段落の中に線は置けない。範囲ごと差し替えて、段落そのものを線にする。
+  state.tr.replaceRangeWith(
     start,
     end,
     schema.nodes.thematicBreak.create({ marker: match[1] }),

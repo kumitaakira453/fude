@@ -3613,3 +3613,15 @@ svg[id^="mmd-"] foreignObject p {
 .mg-pm [data-tight="true"] > li > p {
   margin-block: 0;
 }
+/* 水平線は読むときと同じ「· · ·」の div で持つ。紙面のような余白が off の
+   ときは点を隠して 1 本の線に戻す。 */
+.mg-pm:not(.mg-editorial) .mg-hr {
+  font-size: 0;
+  border-top: 1px solid var(--mg-border);
+  margin-block: 2.5em;
+}
+/* 編集中の帯。読むときと見分けが付くよう、アクセントを薄く敷いて縁を締める。 */
+.mg-pane-head.is-editing {
+  background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-panel));
+  border-bottom-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
+}

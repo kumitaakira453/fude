@@ -50,6 +50,7 @@ export function BodyEditor({
   body,
   prefix,
   className,
+  fontFamily,
   initialOffset,
   onOffset,
   onChange,
@@ -59,6 +60,8 @@ export function BodyEditor({
   // フロントマター。本文の前にそのまま戻す。
   prefix: string;
   className?: string;
+  // 読むときと同じ書体で書けるように、本文の入れ物と同じ指定を渡す。
+  fontFamily?: string;
   // 開いたときに合わせる位置（原文の先頭からの文字数）。
   initialOffset?: number;
   onOffset?: (offset: number) => void;
@@ -112,7 +115,10 @@ export function BodyEditor({
 
     const view = new EditorView(at, {
       state,
-      attributes: { class: `mg-pm ${className ?? ""}`.trim() },
+      attributes: {
+        class: `mg-pm ${className ?? ""}`.trim(),
+        ...(fontFamily ? { style: `font-family: ${fontFamily}` } : {}),
+      },
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
