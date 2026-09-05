@@ -1970,21 +1970,6 @@ body.mg-dragging .mg-sel-menu {
   }
 }
 /* 区切り線: ただの罫線ではなく「· · ·」の上品なディバイダ（div で実描画） */
-/* 節切りの罫。本の節切りに近い、中央の短い罫にする。点や飾りは意匠が勝ちすぎて
-   本文より目立つ。上下の余白でも切れ目を伝える。 */
-.mg-prose.mg-editorial .mg-hr {
-  width: min(9em, 40%);
-  height: 1px;
-  margin: 3.25em auto;
-  /* 両端を薄くする。真っ直ぐ切ると線が途中で切れたように見える。 */
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--mg-fg) 32%, transparent) 50%,
-    transparent
-  );
-  user-select: none;
-}
 /* 箇条書きのマーカーをアクセント色で少し際立たせる */
 .mg-prose.mg-editorial ul > li::marker {
   color: var(--mg-accent);
@@ -3619,11 +3604,6 @@ svg[id^="mmd-"] foreignObject p {
    編集面でも段落の余白を落として同じ間隔にする。 */
 .mg-pm [data-tight="true"] > li > p {
   margin-block: 0;
-}
-/* 紙面のような余白が off のときは、素の 1 本の線に戻す。 */
-.mg-pm:not(.mg-editorial) .mg-hr {
-  border-top: 1px solid var(--mg-border);
-  margin-block: 2.5em;
 }
 /* 編集中の帯。読むときと見分けが付くよう、アクセントを薄く敷いて縁を締める。 */
 .mg-pane-head.is-editing {

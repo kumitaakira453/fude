@@ -9,7 +9,6 @@ const SYNTHETIC = [
   ".material-symbols-rounded", // アイコンは合字なので文字として現れる
   ".mg-codeblock > div:first-child", // コードブロックの言語ラベルとコピーボタン
   ".mg-callout-k", // Note / Tip などの種別ラベル
-  ".mg-hr", // editorial の「· · ·」区切り
   ".mg-lc-t > span", // リンクカードのドメイン
   ".mg-cell-editor", // 編集中の入力欄
   ".cm-editor", // その場編集で開いている生ソース

@@ -195,12 +195,8 @@ export const schema = new Schema({
       selectable: false,
       attrs: { ...id, marker: { default: "---" } },
       parseDOM: [{ tag: "hr" }, { tag: "div.mg-hr" }],
-      // 読むときと同じ形。WebKit は hr::before を描かないので、div そのものを罫にする。
-      toDOM: () =>
-        [
-          "div",
-          { class: "mg-hr", contenteditable: "false", "aria-hidden": "true" },
-        ] as DOMOutputSpec,
+      // 読むときと同じ素の罫。見た目は本文の指定（typography）が持つ。
+      toDOM: () => ["hr"] as DOMOutputSpec,
     },
 
     // Notion 由来の囲み。中身は普通のブロックとして編集できる。

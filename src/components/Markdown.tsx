@@ -404,15 +404,6 @@ export const Markdown = memo(function Markdown({
             </li>
           );
         },
-        hr() {
-          // WebKit は hr::before を描画しないため、節切りの罫は div そのものを
-          // 罫にする（幅と高さと地色を持たせる）。
-          return editorial ? (
-            <div className="mg-hr" aria-hidden />
-          ) : (
-            <hr />
-          );
-        },
         input({ type, checked }) {
           if (type !== "checkbox") {
             return <input type={type} checked={checked} readOnly />;
