@@ -55,6 +55,10 @@ import { CommentComposer } from "./review/CommentComposer";
 import { Toc } from "./Toc";
 import { Tooltip } from "./Tooltip";
 
+// 外の書き換えを取り込むまでの待ち。エージェントは 1 回の作業で何度も書くので、
+// 続けて来た分をまとめる。
+const ADOPT_WAIT = 800;
+
 const WIDTH_CLASS: Record<string, string> = {
   cozy: "max-w-[760px]",
   wide: "max-w-[1000px]",
@@ -155,6 +159,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // 編集面から「今すぐ組み直して渡せ」と頼む口。編集面が入れる。
   const flushRef = useRef<(() => void) | null>(null);
+  // 外で書き換わった本文を編集面へ入れる口。
+  const adoptRef = useRef<((text: string) => void) | null>(null);
+  // 編集面が読み込んだ本文。自分の保存が返ってきただけなのか、外で
+  // 書き換わったのかを見分ける。
+  const base = useRef("");
   // この編集で文書全体の Undo に段を積んだか。積むのは 1 回だけにして、
   // ⌘Z が「この編集を始める前」まで 1 度で戻るようにする。
   const marked = useRef(false);
@@ -164,6 +173,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     (rel: string, text: string) => {
       const first = !marked.current;
       marked.current = true;
+      base.current = text;
       write(rel, text, { checkpoint: first });
     },
     [write],
@@ -174,6 +184,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const seen = viewAt();
     rememberViewpoint(viewKey(pane.id, path), seen.at, seen.into);
     setDraft(raw ?? "");
+    base.current = raw ?? "";
     marked.current = false;
     setEditing(true);
   };
@@ -200,6 +211,24 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const toggleRef = useRef(toggleEdit);
   toggleRef.current = toggleEdit;
 
+  // 外で書き換わったものを編集面へ取り込む。
+  //
+  // 相手は AI エージェントで、1 回の作業で何度も書く。続けて来た分は 1 回に
+  // まとめる。手元に未保存があるあいだは触らない（打っている最中に本文を
+  // 差し替えない、という意味でもある）。
+  useEffect(() => {
+    if (!editing || raw === undefined || raw === base.current) return;
+    if (draft !== base.current) return;
+    const t = window.setTimeout(() => {
+      // 寝かせている間に打ち始めたら見送る。
+      if (draft !== base.current) return;
+      base.current = raw;
+      setDraft(raw);
+      adoptRef.current?.(raw);
+    }, ADOPT_WAIT);
+    return () => window.clearTimeout(t);
+  }, [editing, raw, draft]);
+
   // 組み上がったら印を消す。子の効果が先に走るので、この時点で編集面はできている。
   useEffect(() => {
     setSwitching(false);
@@ -221,6 +250,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!startEditing || !path || !loaded || began.current === path) return;
     began.current = path;
     setDraft(raw ?? "");
+    base.current = raw ?? "";
     marked.current = false;
     setEditing(true);
   }, [startEditing, path, loaded, raw]);
@@ -794,6 +824,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               }}
               onSave={save}
               flushRef={flushRef}
+              adoptRef={adoptRef}
               fontFamily={fontStack(font)}
               dark={dark}
               resolveAsset={ctx.resolveAsset}

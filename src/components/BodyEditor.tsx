@@ -137,6 +137,7 @@ export function BodyEditor({
   onChange,
   onSave,
   flushRef,
+  adoptRef,
 }: {
   body: string;
   // フロントマター。本文の前にそのまま戻す。
@@ -160,6 +161,8 @@ export function BodyEditor({
   onSave: () => void;
   // 待たずに今すぐ届けさせる口。⌘S・編集を抜ける・窓を離れるときに使う。
   flushRef?: { current: (() => void) | null };
+  // 外で書き換わった本文を入れる口。
+  adoptRef?: { current: ((text: string) => void) | null };
 }) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
@@ -196,8 +199,9 @@ export function BodyEditor({
     const at = host.current;
     if (!at) return;
 
-    const loaded = fromMarkdown(body);
-    const blocks = blocksOf(loaded);
+    // 外で書き換わったら差し替えるので、土台は入れ替わる。
+    let loaded = fromMarkdown(body);
+    let blocks = blocksOf(loaded);
     const want = Math.max(0, (viewpoint?.at ?? 0) - prefix.length);
     const target = want > 0 ? (blocks.find((b) => b.end > want) ?? null) : null;
 
@@ -234,6 +238,27 @@ export function BodyEditor({
       CAP,
     );
     if (flushRef) flushRef.current = () => send.flush();
+
+    // 外で書き換わった本文を取り込む。
+    //
+    // React ごと作り直さない。作り直すと編集面・プラグイン・専用の描画・
+    // カーソルの描画まで全部作り直しになる。差し替えを 1 つの transaction で
+    // 流せば、ProseMirror が古い doc と差分を取って変わったところの DOM だけ
+    // 触る。スクロール位置も自然に保たれる。
+    const adopt = (text: string) => {
+      const next = fromMarkdown(text);
+      loaded = next;
+      blocks = blocksOf(next);
+      // 外の変更は編集面の ⌘Z に積まない。自分が打ったものではない。
+      const tr = view.state.tr
+        .replaceWith(0, view.state.doc.content.size, next.doc.content)
+        .setMeta("addToHistory", false);
+      view.dispatch(tr);
+      // 取り込んだ本文はそのまま親の控えでもある。組み直しの予約は流す。
+      send.cancel();
+      caret.draw();
+    };
+    if (adoptRef) adoptRef.current = adopt;
     // 窓を離れるときは待たずに流す。戻ってこないこともある。
     const onLeave = () => send.flush();
     window.addEventListener("blur", onLeave);
@@ -294,6 +319,7 @@ export function BodyEditor({
       // ときに打ったものが消える。
       send.flush();
       if (flushRef) flushRef.current = null;
+      if (adoptRef) adoptRef.current = null;
       caret.stop();
       onDom?.(null);
       view.destroy();
