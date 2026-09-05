@@ -527,6 +527,26 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     };
   }, [scroller, pane.id, path, viewAt]);
 
+  // 編集面でも読書プログレスを動かす。見ている場所の控えは編集面の側が持つので、
+  // ここで見るのは帯だけ。
+  useEffect(() => {
+    if (!editScroller) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const max = editScroller.scrollHeight - editScroller.clientHeight;
+        setBar(max > 0 ? Math.min(1, editScroller.scrollTop / max) : 0);
+      });
+    };
+    onScroll();
+    editScroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      editScroller.removeEventListener("scroll", onScroll);
+    };
+  }, [editScroller]);
+
   // 控えの位置が本文の何番目のブロックか。復帰の合わせ先に使う。
   // memo にしない（控えは外に置いてあるので、描画のたびに見直さないと古い値を使う）。
   const restoreIndex = useCallback((): number | null => {
