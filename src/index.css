@@ -3650,8 +3650,10 @@ svg[id^="mmd-"] foreignObject p {
 }
 .mg-caret {
   position: absolute;
-  width: 1.5px;
-  background: var(--mg-fg);
+  width: 2px;
+  border-radius: 1px;
+  /* テーマのアクセントで置く。字と同じ色だと本文に紛れて見つけにくい。 */
+  background: var(--mg-accent);
   pointer-events: none;
   z-index: 1;
 }
