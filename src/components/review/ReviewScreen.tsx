@@ -13,6 +13,7 @@ import {
   type BlockChange,
 } from "../../lib/blockDiff";
 import { fontStack } from "../../lib/fonts";
+import { buildProjection } from "../../lib/projection";
 import { inEditable } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import {
@@ -474,6 +475,22 @@ function DetailSkeleton() {
   );
 }
 
+// 一覧に出す「何への指摘か」の 1 行。記法をそのまま出すと
+// `| **バージョン** | **更新日** |` のような並びになって読めないので、
+// 画面に出るときの字へ均してから 1 行に詰める。
+const lineCache = new Map<string, string>();
+
+function targetLine(thread: ReviewThread): string {
+  const raw = thread.selection.trim();
+  if (raw) return raw.replace(/\s+/g, " ");
+  const hit = lineCache.get(thread.quote);
+  if (hit !== undefined) return hit;
+  const plain = buildProjection(thread.quote).plain.replace(/\s+/g, " ").trim();
+  const line = plain || thread.quote.replace(/\s+/g, " ").trim();
+  lineCache.set(thread.quote, line);
+  return line;
+}
+
 function ThreadCard({
   thread,
   where,
@@ -487,11 +504,12 @@ function ThreadCard({
 }) {
   return (
     <button onClick={onPick} className={`mg-thread-card ${active ? "is-active" : ""}`}>
-      <div className="mg-thread-quote">
-        <span>{thread.selection || thread.quote}</span>
-      </div>
+      {/* 読みたいのは指摘そのもの。対象はその下に、手がかりとして小さく添える。 */}
       <div className="mg-thread-body">
         {thread.comments[0]?.body ?? "（本文なし）"}
+      </div>
+      <div className="mg-thread-quote">
+        <span>{targetLine(thread)}</span>
       </div>
       <div className="mg-thread-foot">
         {/* 幅が狭いので、いちばん細かい節だけを出す。全体は title で読める。

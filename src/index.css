@@ -2452,8 +2452,10 @@ svg[id^="mmd-"] foreignObject p {
   letter-spacing: 0.06em;
   color: var(--mg-muted);
 }
+/* 指摘の本文より一回り小さく、太さで見出しと分かるようにする。
+   同じ大きさで太いだけだと、読む対象と見出しが同じ強さで並ぶ。 */
 .mg-review-group .mg-review-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--mg-fg);
 }
@@ -2752,14 +2754,17 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-accent);
 }
 
-/* 引用は 1 行だけ。開き括弧を付けて、指摘の本文と取り違えないようにする。 */
+/* 何への指摘かの手がかり。1 行だけ、開き括弧を付けて本文と取り違えないように
+   する。指摘より弱く見せるので、書体は本文と同じものを使う。 */
 .mg-thread-quote {
   display: flex;
   gap: 0.3rem;
   overflow: hidden;
-  font-size: 11px;
+  margin-bottom: 0.3rem;
+  font-size: 10.5px;
   line-height: 1.4;
   color: var(--mg-muted);
+  opacity: 0.85;
 }
 .mg-thread-quote::before {
   content: "❝";
@@ -2770,19 +2775,18 @@ svg[id^="mmd-"] foreignObject p {
 }
 .mg-thread-quote span {
   overflow: hidden;
-  font-family: var(--mg-font-serif);
-  font-style: italic;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 札の主役。ここだけが本文の濃さで、他は手がかりとして沈める。 */
 .mg-thread-body {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  margin: 0.2rem 0 0.3rem;
-  font-size: 12.5px;
+  margin: 0 0 0.2rem;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--mg-fg);
 }
