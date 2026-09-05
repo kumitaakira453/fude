@@ -94,6 +94,28 @@ describe("タスクのチェック", () => {
     expect(items[2].dataset.checked).toBe("true");
   });
 
+  it("入れ子は項目の中に入り、外側の項目にチェックの要素を足さない", () => {
+    const view = editor(
+      ["- そと", "  - なか", "", "> 引用", ">", "> - そと", ">   - なか", ""].join("\n"),
+    );
+    const outers = [...view.dom.querySelectorAll("li")].filter(
+      (li) => li.querySelector("ul") !== null,
+    );
+    // 素の入れ子と、引用の中の入れ子。
+    expect(outers).toHaveLength(2);
+
+    for (const li of outers) {
+      // 点の無い項目には、チェックの要素も印も入れない。
+      expect(li.className).toBe("");
+      expect(li.querySelector(".mg-task-check")).toBeNull();
+      expect(li.querySelector(".mg-task-body")).toBeNull();
+      // 項目の中身は段落 → 入れ子の一覧の順。入れ子は項目の中に入る。
+      const kids = [...li.children].map((el) => el.tagName);
+      expect(kids).toEqual(["P", "UL"]);
+      expect(li.querySelector(":scope > ul > li > p")?.textContent).toBe("なか");
+    }
+  });
+
   it("チェックは編集の対象にしない", () => {
     const view = editor("- [ ] やる\n");
     const check = view.dom.querySelector(".mg-task-check")!;
