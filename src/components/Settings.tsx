@@ -200,7 +200,7 @@ export function Settings() {
                 </section>
 
                 <section className="mg-set-sec">
-                  <h3>組版</h3>
+                  <h3>表示</h3>
                   <button
                     type="button"
                     onClick={() => setEditorial(!editorial)}
@@ -218,11 +218,11 @@ export function Settings() {
                     />
                     <span className="mg-set-row-main">
                       <span className="mg-set-row-name">
-                        エディトリアル組版
+                        紙面のような余白
                         <span className="mg-set-beta">Beta</span>
                       </span>
                       <span className="mg-set-note">
-                        紙面のように字間・行間・見出しの余白を整える
+                        字間・行間・見出しの間を、本のように広めに取る
                       </span>
                     </span>
                     <span className={`mg-switch${editorial ? " is-on" : ""}`}>
