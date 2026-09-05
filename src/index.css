@@ -2431,6 +2431,8 @@ svg[id^="mmd-"] foreignObject p {
 }
 
 /* 一覧のファイル見出し */
+/* どのファイルの指摘かの見出し。一覧の地と同じ色だと、指摘の札に紛れて
+   区切りが読めない。薄く色を敷き、名前は本文と同じ濃さで出す。 */
 .mg-review-group {
   position: sticky;
   top: 0;
@@ -2438,13 +2440,22 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.45rem 0.6rem 0.4rem 0.75rem;
+  padding: 0.5rem 0.6rem 0.45rem 0.7rem;
   border-bottom: 1px solid var(--mg-border);
-  background: var(--mg-panel);
+  background: color-mix(in srgb, var(--mg-accent) 7%, var(--mg-panel));
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--mg-muted);
+}
+.mg-review-group .mg-review-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--mg-fg);
+}
+.mg-review-group .mg-review-ico {
+  color: var(--mg-accent);
+  opacity: 0.75;
 }
 /* ファイルごとのまとまり。間を空けるより線で切ったほうが、どこまでが
    同じファイルの指摘か分かる。 */
@@ -2650,14 +2661,18 @@ svg[id^="mmd-"] foreignObject p {
   gap: 0.05rem;
   line-height: 1.35;
 }
+/* 長い名前は 2 行まで折り返す。1 行で切ると拡張子まで落ちて、
+   同じ書き出しのファイルを見分けられない。 */
 .mg-review-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
+  overflow-wrap: anywhere;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--mg-fg-dim);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .mg-review-dir {
   overflow: hidden;
