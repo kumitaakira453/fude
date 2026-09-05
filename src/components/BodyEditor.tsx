@@ -94,8 +94,8 @@ export function BodyEditor({
   prefix,
   className,
   fontFamily,
-  initialOffset,
-  onOffset,
+  viewpoint,
+  onViewpoint,
   onChange,
   onSave,
 }: {
@@ -105,19 +105,20 @@ export function BodyEditor({
   className?: string;
   // 読むときと同じ書体で書けるように、本文の入れ物と同じ指定を渡す。
   fontFamily?: string;
-  // 開いたときに合わせる位置（原文の先頭からの文字数）。
-  initialOffset?: number;
-  onOffset?: (offset: number) => void;
+  // 開いたときに合わせる位置。読むときと同じ持ち方（文字数と、そのブロックへ
+  // 入り込んでいる画素）。
+  viewpoint?: { at: number; into: number };
+  onViewpoint?: (at: number, into: number) => void;
   onChange: (raw: string) => void;
   onSave: () => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
   const saved = useRef(onSave);
-  const moved = useRef(onOffset);
+  const moved = useRef(onViewpoint);
   changed.current = onChange;
   saved.current = onSave;
-  moved.current = onOffset;
+  moved.current = onViewpoint;
 
   useEffect(() => {
     const at = host.current;
@@ -125,7 +126,7 @@ export function BodyEditor({
 
     const loaded = fromMarkdown(body);
     const blocks = blocksOf(loaded);
-    const want = Math.max(0, (initialOffset ?? 0) - prefix.length);
+    const want = Math.max(0, (viewpoint?.at ?? 0) - prefix.length);
     const target = want > 0 ? (blocks.find((b) => b.end > want) ?? null) : null;
 
     const item = schema.nodes.listItem;
@@ -185,7 +186,10 @@ export function BodyEditor({
         const dom = view.nodeDOM(target.pos);
         const el = dom instanceof HTMLElement ? dom : null;
         if (el) {
-          const delta = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+          const delta =
+            el.getBoundingClientRect().top -
+            scroller.getBoundingClientRect().top +
+            (viewpoint?.into ?? 0);
           if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
         }
         if (--left > 0) raf = requestAnimationFrame(align);
@@ -201,12 +205,15 @@ export function BodyEditor({
       cancelAnimationFrame(tick);
       tick = requestAnimationFrame(() => {
         const top = scroller.getBoundingClientRect().top;
+        let into = 0;
         const seen = blocks.find((b) => {
           const dom = view.nodeDOM(b.pos);
           const el = dom instanceof HTMLElement ? dom : null;
-          return el ? el.getBoundingClientRect().bottom > top : false;
+          if (!el || el.getBoundingClientRect().bottom <= top) return false;
+          into = Math.max(0, top - el.getBoundingClientRect().top);
+          return true;
         });
-        if (seen) moved.current?.(prefix.length + seen.start);
+        if (seen) moved.current?.(prefix.length + seen.start, into);
       });
     };
     scroller?.addEventListener("scroll", onScroll, { passive: true });

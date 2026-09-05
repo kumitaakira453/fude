@@ -294,12 +294,16 @@ export const schema = new Schema({
       atom: true,
       attrs: { value: { default: "" } },
       parseDOM: [{ tag: "span.mg-raw-inline" }],
+      // <br> は字ではなく実際の改行として出す。表のセルの中で行を分けるのに
+      // 使う（GFM の表は行を分けられないので、原文でもこの形になる）。
       toDOM: (node) =>
-        [
+        /^<br\s*\/?>$/i.test(node.attrs.value)
+          ? (["br"] as DOMOutputSpec)
+          : ([
           "span",
           { class: "mg-raw-inline", contenteditable: "false" },
           node.attrs.value,
-        ] as DOMOutputSpec,
+        ] as DOMOutputSpec),
     },
 
     text: { group: "inline" },

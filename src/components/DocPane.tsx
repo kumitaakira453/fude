@@ -135,7 +135,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const enterEdit = () => {
     // 今見ている場所を控えて、そこから編集を始められるようにする。
-    rememberViewpoint(viewKey(pane.id, path), viewAt());
+    const seen = viewAt();
+    rememberViewpoint(viewKey(pane.id, path), seen.at, seen.into);
     setDraft(raw ?? "");
     setEditing(true);
   };
@@ -481,16 +482,23 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (path && !cache.has(path)) void reloadFile(path);
   }, [path, cache, reloadFile]);
 
-  // いま画面の上端にあるブロックの、本文の中での位置。
-  const viewAt = useCallback((): number => {
-    if (!content || !scroller) return 0;
-    const el = topmostBlock(content, scroller.getBoundingClientRect().top);
-    const at = el ? blockIndexOf(el) : null;
-    if (at === null) return 0;
+  // いま画面の上端にあるブロックと、そのブロックへ入り込んでいる画素。
+  // 長い表の途中を見ていたときに、表の先頭へ戻ってしまわないようにする。
+  const viewAt = useCallback((): { at: number; into: number } => {
+    if (!content || !scroller) return { at: 0, into: 0 };
+    const top = scroller.getBoundingClientRect().top;
+    const el = topmostBlock(content, top);
+    if (!el) return { at: 0, into: 0 };
+    const at = blockIndexOf(el);
+    if (at === null) return { at: 0, into: 0 };
     const block = blocksOf(bodyRef.current)[at];
-    if (!block) return 0;
+    if (!block) return { at: 0, into: 0 };
     const prefix = (rawRef.current ?? "").length - bodyRef.current.length;
-    return prefix + block.start;
+    const box = blockRect(el);
+    return {
+      at: prefix + block.start,
+      into: box ? Math.max(0, top - box.top) : 0,
+    };
   }, [content, scroller]);
 
   // 読書プログレス + 見ていた場所の保存。
@@ -505,7 +513,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       setBar(max > 0 ? Math.min(1, scroller.scrollTop / max) : 0);
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        rememberViewpoint(viewKey(pane.id, path), viewAt());
+        const seen = viewAt();
+    rememberViewpoint(viewKey(pane.id, path), seen.at, seen.into);
       });
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
@@ -518,7 +527,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 控えの位置が本文の何番目のブロックか。復帰の合わせ先に使う。
   // memo にしない（控えは外に置いてあるので、描画のたびに見直さないと古い値を使う）。
   const restoreIndex = useCallback((): number | null => {
-    const saved = recallViewpoint(viewKey(pane.id, path));
+    const saved = recallViewpoint(viewKey(pane.id, path)).at;
     if (saved <= 0) return null;
     const prefix = (rawRef.current ?? "").length - bodyRef.current.length;
     const at = saved - prefix;
@@ -550,7 +559,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const el = content.querySelector<HTMLElement>(`[data-mg-block="${at}"]`);
       const box = el ? blockRect(el) : null;
       if (box) {
-        const delta = box.top - scroller.getBoundingClientRect().top;
+        const into = recallViewpoint(viewKey(pane.id, path)).into;
+        const delta = box.top - scroller.getBoundingClientRect().top + into;
         if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
       }
       if (--left > 0) raf = requestAnimationFrame(apply);
@@ -678,9 +688,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               key={path}
               body={body}
               prefix={fmPrefix}
-              initialOffset={recallViewpoint(viewKey(pane.id, path))}
-              onOffset={(offset) => {
-                rememberViewpoint(viewKey(pane.id, path), offset);
+              viewpoint={recallViewpoint(viewKey(pane.id, path))}
+              onViewpoint={(at, into) => {
+                rememberViewpoint(viewKey(pane.id, path), at, into);
               }}
               onChange={setDraft}
               onSave={save}
@@ -696,7 +706,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             initialDoc={draft}
             onChange={setDraft}
             onSave={save}
-            initialOffset={recallViewpoint(viewKey(pane.id, path))}
+            initialOffset={recallViewpoint(viewKey(pane.id, path)).at}
             onOffset={(offset) => {
               rememberViewpoint(viewKey(pane.id, path), offset);
             }}
