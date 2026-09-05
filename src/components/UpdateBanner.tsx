@@ -68,7 +68,9 @@ export function UpdateBanner() {
   if (phase === "hidden" || !update) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[320px] overflow-hidden rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-2xl">
+    // 設定やキー操作の一覧（z-index 60）より上に置く。更新を確認するのは設定の中
+    // なので、その上に出ないと押せる場所に現れない。
+    <div className="fixed bottom-4 right-4 z-[70] w-[320px] overflow-hidden rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-2xl">
       <div className="flex items-start gap-3 p-4">
         <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]">
           <Icon name="rocket_launch" size={18} fill />
