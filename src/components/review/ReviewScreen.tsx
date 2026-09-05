@@ -823,11 +823,14 @@ function ThreadDetail({
           ))}
         </nav>
 
-        <Quote
-          quote={thread.quote}
-          selection={thread.selection}
-          offset={thread.selection_offset}
-        />
+        {/* 引用の中の相対パス画像も本文と同じ文脈で解く。 */}
+        <markdownContext.Provider value={ctx}>
+          <Quote
+            quote={thread.quote}
+            selection={thread.selection}
+            offset={thread.selection_offset}
+          />
+        </markdownContext.Provider>
 
         <div className="mg-talk">
           {thread.comments.map((c, i) => (

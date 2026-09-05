@@ -2286,8 +2286,9 @@ svg[id^="mmd-"] foreignObject p {
   position: absolute;
   z-index: 2;
   display: flex;
-  width: max-content;
-  max-width: 23rem;
+  /* 中身の量で幅を変えない。指摘ごとに大きさが動くと、次にどこへ出るかが
+     読めず、置いてあるものを目で探し直すことになる。 */
+  width: min(23rem, 100%);
   flex-direction: column;
   gap: 0.3rem;
   overflow: hidden;
@@ -2861,32 +2862,21 @@ svg[id^="mmd-"] foreignObject p {
   gap: 0.25rem;
   margin: 0.5rem 0.9rem 0;
 }
-.mg-quote {
-  max-height: 8.5rem;
-  overflow: hidden;
-  margin: 0;
+/* 指摘した時点の本文。当時の書き方のまま描いて、選ばれていた部分だけを立てる。 */
+.mg-quote-md {
+  width: 100%;
+  max-height: 9rem;
+  overflow: auto;
   padding-left: 0.6rem;
   border-left: 3px double var(--mg-accent);
-  font-size: 12px;
-  line-height: 1.6;
   color: var(--mg-muted);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
-.mg-quote.is-open {
+.mg-quote-md.is-open {
   max-height: 40vh;
-  overflow-y: auto;
 }
 /* 選ばれていた部分。周りは地の文として読ませ、ここだけを立てる。 */
-.mg-quote-hit {
-  border-radius: 0.2rem;
-  padding: 0.05rem 0.1rem;
-  background: color-mix(in srgb, var(--mg-accent) 22%, transparent);
-  color: var(--mg-fg);
-  font-weight: 500;
-}
-.mg-quote-cut {
-  opacity: 0.55;
+::highlight(mg-quote-selection) {
+  background-color: color-mix(in srgb, var(--mg-accent) 30%, transparent);
 }
 .mg-quote-more {
   padding: 0.1rem 0.4rem;
@@ -3183,29 +3173,38 @@ svg[id^="mmd-"] foreignObject p {
 }
 
 /* 小窓に出す引用。長い表やリストでも小窓が伸びないように畳む。 */
-/* 指摘の小窓に出す対象。表は表のまま見せたいので、字ではなく描画して置く。
-   小窓に収まる大きさへ抑え、はみ出す分はこの中でスクロールさせる。 */
+/* 対象を小さな枠に描くときの詰め方。指摘の小窓（書くとき）と、
+   指摘した時点の引用（読むとき）で同じ見せ方にする。はみ出す分は
+   枠の中でスクロールさせる。 */
 .mg-compose-quote {
   max-height: 8.5rem;
   overflow: auto;
-  font-size: 12px;
-  line-height: 1.65;
   color: var(--mg-fg-dim);
 }
-.mg-compose-quote > :first-child {
+.mg-compose-quote,
+.mg-quote-md {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.mg-compose-quote > :first-child,
+.mg-quote-md > :first-child {
   margin-top: 0;
 }
-.mg-compose-quote > :last-child {
+.mg-compose-quote > :last-child,
+.mg-quote-md > :last-child {
   margin-bottom: 0;
 }
-.mg-compose-quote :is(h1, h2, h3, h4, h5, h6) {
+.mg-compose-quote :is(h1, h2, h3, h4, h5, h6),
+.mg-quote-md :is(h1, h2, h3, h4, h5, h6) {
   margin: 0.15em 0;
   font-size: 1.05em;
 }
-.mg-compose-quote :is(p, ul, ol, blockquote, pre) {
+.mg-compose-quote :is(p, ul, ol, blockquote, pre),
+.mg-quote-md :is(p, ul, ol, blockquote, pre) {
   margin: 0.2em 0;
 }
-.mg-compose-quote :is(td, th) {
+.mg-compose-quote :is(td, th),
+.mg-quote-md :is(td, th) {
   padding: 0.15rem 0.5rem;
 }
 

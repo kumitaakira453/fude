@@ -519,6 +519,8 @@ export function AnchorOverlay({
     if (!card || !peek || !content) return;
     const place = () => {
       card.style.top = `${peek.top + PEEK_GAP}px`;
+      // 幅は一定なので、右端で切れる分だけ左へ寄せる。
+      card.style.left = `${Math.max(0, Math.min(peek.left, content.clientWidth - card.offsetWidth))}px`;
       const view = viewportOf(content);
       const box = card.getBoundingClientRect();
       if (box.bottom <= view.bottom - PEEK_EDGE) return;
