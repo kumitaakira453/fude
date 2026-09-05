@@ -3,7 +3,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it } from "vitest";
 import { fromMarkdown, type Loaded } from "./fromMarkdown";
-import { editorPlugins } from "./plugins";
+import { editorPlugins, markdownSlice } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
 
 // 編集面をそのまま組み立てて、打鍵で試す。
@@ -165,5 +165,47 @@ describe("変換した直後の Backspace で記号へ戻す", () => {
     caretAtEndOf(view, 0);
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
     expect(press(view, "Backspace")).toBe(false);
+  });
+});
+
+describe("Markdown を貼り付ける", () => {
+  // 貼り付けは文字ではなく構造として入れる。文字のまま入れると、保存のときに
+  // # や - が原文へ戻るように逃がされて「\#」の形になる。
+  function paste(body: string, at: number, text: string) {
+    const view = editor(body);
+    caretAtEndOf(view, at);
+    const slice = markdownSlice(text);
+    if (!slice) throw new Error("読めなかった");
+    view.dispatch(view.state.tr.replaceSelection(slice));
+    return source();
+  }
+
+  it("見出しと箇条書きが構造になる", () => {
+    const out = paste("あ\n", 0, "## 題\n\n- 一\n- 二\n");
+    expect(out).toContain("## 題");
+    expect(out).toContain("- 一");
+    expect(out).not.toContain("\\#");
+    expect(out).not.toContain("\\-");
+  });
+
+  it("表がそのまま表になる", () => {
+    const out = paste("あ\n", 0, "| a | b |\n| --- | --- |\n| c | d |\n");
+    expect(out).toContain("| --- | --- |");
+    expect(out).not.toContain("\\|");
+  });
+
+  it("コードの塊は言語ごと入る", () => {
+    const out = paste("あ\n", 0, "```python\nx = 1\n```\n");
+    expect(out).toContain("```python");
+  });
+
+  it("段落 1 つなら書いている行の続きになる", () => {
+    const out = paste("あ\n", 0, "**強い**");
+    expect(out).toBe("あ**強い**\n");
+  });
+
+  it("貼り付けた分は原文の目印を持たない", () => {
+    const slice = markdownSlice("## 題\n");
+    expect(slice?.content.child(0).attrs.id).toBe(null);
   });
 });

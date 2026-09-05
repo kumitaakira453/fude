@@ -2,10 +2,12 @@ import { baseKeymap, chainCommands } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { inputRules } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
+import { Fragment, Slice, type Node as PmNode } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { Plugin, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import type { Transform } from "prosemirror-transform";
+import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
 import { insideBlock } from "./nodeViews";
@@ -133,6 +135,48 @@ const splitItem: Command = (state, dispatch, view) => {
   )(state, dispatch, view);
 };
 
+// 貼り付けた文字を Markdown として読む。
+//
+// そのまま文字として入れると、保存のときに # や - が原文へ戻るように逃がされて
+// 「\#」のような形になる。書いたとおりの構造として入れれば、逃がす必要が無い。
+export function markdownSlice(text: string): Slice | null {
+  const doc = fromMarkdown(text).doc;
+  if (!doc.childCount) return null;
+
+  const blocks: PmNode[] = [];
+  doc.forEach((node) => {
+    // 読み込んだ本文の目印と混ざらないよう、貼り付けた分の目印は外す。
+    // 目印が無ければ、保存のときに原文から出さずに組み直す（正しい振る舞い）。
+    const attrs = node.attrs.id === undefined ? node.attrs : { ...node.attrs, id: null };
+    blocks.push(node.type.create(attrs, node.content, node.marks));
+  });
+
+  // 段落 1 つだけなら、いま書いている行の続きとして入れる。
+  if (blocks.length === 1 && blocks[0].type === schema.nodes.paragraph) {
+    return new Slice(blocks[0].content, 0, 0);
+  }
+  return new Slice(Fragment.from(blocks), 0, 0);
+}
+
+const pasteMarkdown = new Plugin({
+  props: {
+    handlePaste(view, event) {
+      const data = event.clipboardData;
+      if (!data) return false;
+      // 書式付き（このアプリの中での複写を含む）は、そちらの読み取りに任せる。
+      if (data.getData("text/html")) return false;
+      const text = data.getData("text/plain");
+      if (!text.trim()) return false;
+      // コードの中は文字のまま入れる。
+      if (view.state.selection.$from.parent.type.spec.code) return false;
+      const slice = markdownSlice(text);
+      if (!slice) return false;
+      view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+      return true;
+    },
+  },
+});
+
 export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
   const item = schema.nodes.listItem;
   const typed = inputRules({ rules });
@@ -140,6 +184,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
 
   return [
     history(),
+    pasteMarkdown,
     typed,
     kept,
     keymap({
