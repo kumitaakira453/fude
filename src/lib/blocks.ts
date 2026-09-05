@@ -610,6 +610,31 @@ export function isMermaidBlock(src: string): boolean {
   return /^\s*`{3,}\s*mermaid\b/i.test(src);
 }
 
+// 囲みだけの行（``` や ~~~）
+const FENCE_END = /^\s*(?:`{3,}|~{3,})\s*$/;
+
+// mermaid ブロックから図の記述だけを取り出す。囲みの行は含めない。
+export function mermaidBody(src: string): string {
+  const lines = src.replace(/\s+$/, "").split("\n");
+  const last = lines.length - 1;
+  const end = last > 0 && FENCE_END.test(lines[last]) ? last : lines.length;
+  return lines.slice(1, end).join("\n");
+}
+
+// 図の記述を差し替える。囲みは元のものをそのまま使う。
+export function replaceMermaidBody(src: string, body: string): string {
+  const lines = src.replace(/\s+$/, "").split("\n");
+  const last = lines.length - 1;
+  const close =
+    last > 0 && FENCE_END.test(lines[last])
+      ? lines[last]
+      : (lines[0].match(/^\s*(`{3,}|~{3,})/)?.[1] ?? "```");
+  const inner = body.replace(/\s+$/, "");
+  return [lines[0], ...(inner === "" ? [] : inner.split("\n")), close].join(
+    "\n",
+  );
+}
+
 // 1 行を「エスケープされていない `|`」で分割する（`\|` は区切りにしない）
 export function splitRow(line: string): string[] {
   const parts: string[] = [];

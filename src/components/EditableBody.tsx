@@ -32,6 +32,7 @@ import {
   insertTableRow,
   isMermaidBlock,
   isTableBlock,
+  mermaidBody,
   itemMarkerAt,
   itemTextRange,
   itemTextStart,
@@ -41,16 +42,21 @@ import {
   moveTableColumn,
   moveTableRow,
   remapAfterMove,
+  replaceMermaidBody,
   replaceBlock,
   setCellValue,
   splitRow,
 } from "../lib/blocks";
+import { useAtomValue } from "jotai";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
+import { DARK_THEME_IDS } from "../lib/themes";
+import { themeAtom } from "../state/atoms";
 import { setCalloutIcon } from "../lib/htmlBlocks";
 import { BlockGutter, type Part, type TableAct } from "./BlockGutter";
 import { CalloutIcon } from "./CalloutIcon";
 import { BlockSourceEditor } from "./BlockSourceEditor";
 import { Markdown } from "./Markdown";
+import { MermaidModal } from "./MermaidModal";
 
 // タスク行（- [ ] / 1. [x] など）
 const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
@@ -181,6 +187,9 @@ export function EditableBody({
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   // 編集中の箇条書き項目（リスト全体ではなく 1 項目の本文だけ）
   const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
+  // 編集中の図。図は読み幅に収まらないので、拡大表示の中で直す。
+  const [mermaidAt, setMermaidAt] = useState<number | null>(null);
+  const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
 
   // 差し込みの受け皿。確定するまで本文には書かない。
   const [pending, setPending] = useState<{
@@ -322,7 +331,7 @@ export function EditableBody({
 
   // 外からの頼みを受けて編集を始める。どの単位で開くかは選択された位置から
   // 決める（表ならセル、箇条書きなら項目、それ以外はブロック全体）。
-  // mermaid は生ソースを編集させない（図が壊れる）。
+  // 図だけは本文の中に収まらないので、拡大表示のソース欄で開く。
   // 描き終わる前に処理する。ここで待つと、頼みを受けた描画とエディタが乗る
   // 描画が別のフレームになり、押してから入力できるまでに 1 拍おく。
   useLayoutEffect(() => {
@@ -330,10 +339,14 @@ export function EditableBody({
     // 作り直されるので、切り替え前の頼みがそのまま届く。
     if (!editRequest || editRequest.path !== contentKey) return;
     const block = blocks[editRequest.blockIndex];
-    if (!block || isMermaidBlock(block.src)) return;
+    if (!block) return;
     setEditing(null);
     setEditingCell(null);
     setEditingItem(null);
+    if (isMermaidBlock(block.src)) {
+      setMermaidAt(block.index);
+      return;
+    }
 
     // 表のセル。目印は描画側が持っているソースオフセットなので、行と列は
     // そこから数え直せる。画面に出ている文字の位置から数えると、表では
@@ -753,9 +766,12 @@ export function EditableBody({
         itemAt={itemAt}
         onEdit={(index) => {
           const block = blocks[index];
-          // mermaid は生ソースを編集させない（図が壊れる）。
-          if (!block || isMermaidBlock(block.src)) return;
+          if (!block) return;
           setPending(null);
+          if (isMermaidBlock(block.src)) {
+            setMermaidAt(index);
+            return;
+          }
           setEditing({ index, x: null, y: null });
         }}
         onMove={move}
@@ -771,6 +787,25 @@ export function EditableBody({
         contentKey={contentKey ?? ""}
         onPick={pickIcon}
       />
+      {mermaidAt !== null && blocks[mermaidAt] && (
+        <MermaidModal
+          // 別のブロックを開いたら書きかけを持ち越さない
+          key={mermaidAt}
+          svg=""
+          dark={dark}
+          edit={{
+            src: mermaidBody(blocks[mermaidAt].src),
+            onSave: (next) => {
+              commit(
+                mermaidAt,
+                replaceMermaidBody(blocks[mermaidAt].src, next),
+              );
+              setMermaidAt(null);
+            },
+          }}
+          onClose={() => setMermaidAt(null)}
+        />
+      )}
     </>
   );
 }

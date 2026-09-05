@@ -2101,6 +2101,96 @@ svg[id^="mmd-"] foreignObject p {
   display: block;
 }
 
+/* 図のソース欄。拡大表示の左に置き、図を見ながら直す。幅は MermaidModal の
+   PANE と揃えてあり、図はそのぶん右へ寄る。 */
+.mg-mmd-pane {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  bottom: 16px;
+  width: 400px;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 14px;
+  background: var(--mg-panel);
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.5);
+}
+.mg-mmd-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--mg-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mg-fg-dim);
+}
+.mg-mmd-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.4rem 0.7rem;
+}
+.mg-mmd-cm {
+  height: 100%;
+}
+/* 通らない間の知らせ。図は前のまま残すので、ここだけが変わる。 */
+.mg-mmd-err {
+  max-height: 7rem;
+  overflow: auto;
+  padding: 0.55rem 0.9rem;
+  border-top: 1px solid color-mix(in srgb, var(--mg-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--mg-danger) 10%, transparent);
+  color: var(--mg-danger);
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.mg-mmd-pane-foot {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-mmd-pane-foot button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.55rem;
+  font-size: 12px;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    opacity 0.15s;
+}
+.mg-mmd-save {
+  background: var(--mg-accent);
+  color: #fff;
+  font-weight: 500;
+}
+.mg-mmd-save:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.mg-mmd-save:disabled {
+  opacity: 0.45;
+}
+.mg-mmd-quiet {
+  color: var(--mg-muted);
+}
+.mg-mmd-quiet:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-mmd-key {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 /* ============================================================
    検索ハイライト（本文 DOM を書き換えないオーバーレイ）
    ============================================================ */

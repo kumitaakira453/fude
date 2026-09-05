@@ -9,6 +9,8 @@ export interface MarkdownCtx {
   peekAsset: (src: string) => string | null;
   // 現在描画中ドキュメントのパス（相対解決の基準）
   docPath: string;
+  // そのブロックを編集で開く。図のように本文の中では直せないものが使う。
+  onEditBlock?: (blockIndex: number) => void;
 }
 
 export const markdownContext = createContext<MarkdownCtx | null>(null);

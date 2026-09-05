@@ -350,8 +350,10 @@ export function AnchorOverlay({
           ? null
           : findPlain(bt.plain, thread.selection, thread.selection_offset);
       const whole = rangeAt(bt, 0, bt.plain.length);
-      if (!whole) continue;
       const inner = span ? rangeAt(bt, span.start, span.end) : null;
+      // 図のように選べる文字を持たないブロックは範囲を作れない。枠で示す。
+      const outline = blockRect(el) ?? whole?.getBoundingClientRect() ?? null;
+      if (!outline) continue;
 
       const wrap = el.querySelector(".mg-table-wrap");
       const clip = wrap ? wrap.getBoundingClientRect() : null;
@@ -372,10 +374,7 @@ export function AnchorOverlay({
         const box = part ? blockRect(part) : null;
         if (box) boxes.push(box);
       }
-      if (boxes.length === 0) {
-        const fallback = blockRect(el) ?? whole.getBoundingClientRect();
-        boxes.push(fallback);
-      }
+      if (boxes.length === 0) boxes.push(outline);
       const areas = clipRects(boxes, clip);
       const cell = inner ? unitOf(inner) : null;
       const spots = inner

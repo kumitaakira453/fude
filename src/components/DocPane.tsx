@@ -245,8 +245,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const el = content.querySelector<HTMLElement>(
         `[data-mg-block="${index}"]`,
       );
-      if (!el || !selectTextIn(el)) return;
-      reviewRef.current?.startDraft({ whole: true });
+      if (!el) return;
+      if (selectTextIn(el)) {
+        reviewRef.current?.startDraft({ whole: true });
+        return;
+      }
+      // 図のように選べる文字を持たないブロック。枠そのものを対象にする。
+      const rect = blockRect(el) ?? el.getBoundingClientRect();
+      reviewRef.current?.startDraft({
+        whole: true,
+        at: { blockIndex: index, start: 0, end: 0, text: "", rect },
+      });
     },
     [content],
   );
@@ -519,6 +528,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       onNavigate: (href: string) => path && navigate(path, href),
       resolveAsset: (src: string) => resolveAsset(path ?? "", src),
       peekAsset: (src: string) => peekAsset(path ?? "", src),
+      onEditBlock: (blockIndex: number) => {
+        const p = pathRef.current;
+        if (!p) return;
+        setEditRequest((r) => ({
+          path: p,
+          blockIndex,
+          nonce: (r?.nonce ?? 0) + 1,
+        }));
+      },
     }),
     [path, navigate, resolveAsset, peekAsset],
   );

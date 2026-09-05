@@ -261,70 +261,76 @@ export function useReview({
   );
 
   // 押しても何も起きない状態を作らない。進めない理由はその場で出す。
-  const startDraft = useCallback((opts?: { whole?: boolean; unit?: boolean }) => {
-    // 読むのは DOM が今持っている選択。控え（selection）は selectionchange
-    // 経由で 1 フレーム遅れて届くので、セルやブロック全体へ選択を広げた直後に
-    // これを先に見ると、広げる前の一部分だけを対象にしてしまう。
-    // 押した拍子に選択が解けている場合だけ控えに戻る。
-    const picked = (content ? readSelection(content) : null) ?? selection;
-    if (!picked) {
-      void message("本文を選択してから押してください。", {
-        title: "fude",
-        kind: "info",
+  // at は図のように選べる文字を持たないブロックのために、呼び出し側が
+  // 組み立てた対象。渡されたときは DOM の選択を読まない。
+  const startDraft = useCallback(
+    (opts?: { whole?: boolean; unit?: boolean; at?: BlockSelection }) => {
+      // 読むのは DOM が今持っている選択。控え（selection）は selectionchange
+      // 経由で 1 フレーム遅れて届くので、セルやブロック全体へ選択を広げた直後に
+      // これを先に見ると、広げる前の一部分だけを対象にしてしまう。
+      // 押した拍子に選択が解けている場合だけ控えに戻る。
+      const picked =
+        opts?.at ?? (content ? readSelection(content) : null) ?? selection;
+      if (!picked) {
+        void message("本文を選択してから押してください。", {
+          title: "fude",
+          kind: "info",
+        });
+        return;
+      }
+      if (!absPath) {
+        void message("ファイルの場所を特定できませんでした。フォルダを開き直してください。", {
+          title: "fude",
+          kind: "error",
+        });
+        return;
+      }
+      const all = getBlocks();
+      const block = all.find((b) => b.index === picked.blockIndex);
+      if (!block) {
+        void message(
+          `選択された箇所（ブロック ${picked.blockIndex} / 全 ${all.length}）を本文の中で特定できませんでした。`,
+          { title: "fude", kind: "error" },
+        );
+        return;
+      }
+      // またいだ選択は、範囲そのものを対象にする。引用にはまたいだ分の生ソースを
+      // 入れる（読む側は先頭のブロックで位置を出し、続くブロック数はこの引用の
+      // 割り方から分かる）。断片だけを残すと、選んだ範囲と記録が食い違う。
+      const spanning = picked.endBlockIndex !== undefined;
+      const lastBlock = spanning
+        ? all.find((b) => b.index === picked.endBlockIndex)
+        : undefined;
+      const quote =
+        lastBlock && lastBlock.end > block.end
+          ? body.slice(block.start, lastBlock.end)
+          : block.src;
+      setDraft({
+        hit: {
+          id: "",
+          top: picked.rect.top,
+          bottom: picked.rect.bottom,
+          left: picked.rect.left,
+        },
+        blockIndex: picked.blockIndex,
+        offset: picked.start,
+        text:
+          spanning && content ? spanText(content, picked) : picked.text,
+        quote,
+        sectionPath: sectionPathAt(all, picked.blockIndex),
+        whole: opts?.whole,
+        until: picked.endBlockIndex,
+        unit: opts?.unit,
+        cellStart: picked.cellStart,
+        itemAnchor: picked.itemAnchor,
       });
-      return;
-    }
-    if (!absPath) {
-      void message("ファイルの場所を特定できませんでした。フォルダを開き直してください。", {
-        title: "fude",
-        kind: "error",
-      });
-      return;
-    }
-    const all = getBlocks();
-    const block = all.find((b) => b.index === picked.blockIndex);
-    if (!block) {
-      void message(
-        `選択された箇所（ブロック ${picked.blockIndex} / 全 ${all.length}）を本文の中で特定できませんでした。`,
-        { title: "fude", kind: "error" },
-      );
-      return;
-    }
-    // またいだ選択は、範囲そのものを対象にする。引用にはまたいだ分の生ソースを
-    // 入れる（読む側は先頭のブロックで位置を出し、続くブロック数はこの引用の
-    // 割り方から分かる）。断片だけを残すと、選んだ範囲と記録が食い違う。
-    const spanning = picked.endBlockIndex !== undefined;
-    const lastBlock = spanning
-      ? all.find((b) => b.index === picked.endBlockIndex)
-      : undefined;
-    const quote =
-      lastBlock && lastBlock.end > block.end
-        ? body.slice(block.start, lastBlock.end)
-        : block.src;
-    setDraft({
-      hit: {
-        id: "",
-        top: picked.rect.top,
-        bottom: picked.rect.bottom,
-        left: picked.rect.left,
-      },
-      blockIndex: picked.blockIndex,
-      offset: picked.start,
-      text:
-        spanning && content ? spanText(content, picked) : picked.text,
-      quote,
-      sectionPath: sectionPathAt(all, picked.blockIndex),
-      whole: opts?.whole,
-      until: picked.endBlockIndex,
-      unit: opts?.unit,
-      cellStart: picked.cellStart,
-      itemAnchor: picked.itemAnchor,
-    });
-    // 対象は下書きの印で示すので、ネイティブの選択は解く。残すと、印と
-    // 選択が二重に出て（チェックや `コード` の囲みを跨いで）散らかる。
-    window.getSelection()?.removeAllRanges();
-    setSelection(null);
-  }, [selection, content, absPath, body, getBlocks]);
+      // 対象は下書きの印で示すので、ネイティブの選択は解く。残すと、印と
+      // 選択が二重に出て（チェックや `コード` の囲みを跨いで）散らかる。
+      window.getSelection()?.removeAllRanges();
+      setSelection(null);
+    },
+    [selection, content, absPath, body, getBlocks],
+  );
 
   const submit = useCallback(
     async (text: string) => {
