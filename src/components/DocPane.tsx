@@ -19,6 +19,7 @@ import {
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
+import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable } from "../lib/ui";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
@@ -32,6 +33,7 @@ import {
   richEditorAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
+  themeAtom,
   tocOpenAtom,
   watchModeAtom,
   type Pane,
@@ -66,6 +68,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const width = useAtomValue(readingWidthAtom);
   const editorial = useAtomValue(editorialAtom);
   const rich = useAtomValue(richEditorAtom);
+  // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
+  const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
   const tocOpen = useAtomValue(tocOpenAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
@@ -722,6 +726,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               onChange={setDraft}
               onSave={save}
               fontFamily={fontStack(font)}
+              dark={dark}
+              resolveAsset={ctx.resolveAsset}
+              peekAsset={ctx.peekAsset}
               className={`mg-prose prose ${
                 editorial ? "mg-editorial" : ""
               } ${WIDTH_CLASS[width]} mx-auto`}

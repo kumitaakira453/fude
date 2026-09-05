@@ -6,9 +6,12 @@ import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-li
 import { EditorState, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
+import { highlightCode } from "../lib/md/highlight";
 import { rules } from "../lib/md/inputRules";
+import { insideBlock, nodeViews, type EditorDeps } from "../lib/md/nodeViews";
+import { MermaidModal } from "./MermaidModal";
 import {
   cellDown,
   cellEnd,
@@ -63,7 +66,7 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
 const fenceOnEnter: Command = (state, dispatch) => {
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock || $from.parent.type.spec.code) return false;
-  const m = /^`{3,}([a-zA-Z0-9_+-]*)$/.exec($from.parent.textContent);
+  const m = /^[`｀]{3,}([a-zA-Z0-9_+-]*)$/.exec($from.parent.textContent);
   if (!m) return false;
   if (dispatch) {
     const at = $from.start();
@@ -150,6 +153,9 @@ export function BodyEditor({
   prefix,
   className,
   fontFamily,
+  dark,
+  resolveAsset,
+  peekAsset,
   viewpoint,
   onViewpoint,
   onDom,
@@ -162,6 +168,11 @@ export function BodyEditor({
   className?: string;
   // 読むときと同じ書体で書けるように、本文の入れ物と同じ指定を渡す。
   fontFamily?: string;
+  // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
+  dark: boolean;
+  // 相対パスの画像をローカルから解く。読むときと同じ経路。
+  resolveAsset?: (src: string) => Promise<string | null>;
+  peekAsset?: (src: string) => string | null;
   // 開いたときに合わせる位置。読むときと同じ持ち方（文字数と、そのブロックへ
   // 入り込んでいる画素）。
   viewpoint?: { at: number; into: number };
@@ -178,6 +189,29 @@ export function BodyEditor({
   changed.current = onChange;
   saved.current = onSave;
   moved.current = onViewpoint;
+
+  // 拡大中の図。モーダルは React の側にあるので、NodeView からは合図だけ受ける。
+  const [zoomed, setZoomed] = useState<{ svg: string; onEdit: () => void } | null>(
+    null,
+  );
+
+  // 専用の描画が要るもの（図・画像）へ渡す口。編集面を作り直さずに差し替えたい
+  // ものだけを持つので、中身は書き換えて使う。
+  const deps = useRef<EditorDeps>({
+    dark,
+    modes: new Map(),
+    redraws: new Set(),
+    onZoom: (svg, onEdit) => setZoomed({ svg, onEdit }),
+  });
+  deps.current.resolveAsset = resolveAsset;
+  deps.current.peekAsset = peekAsset;
+
+  // テーマの明暗が変わったら、開いている図を描き直す。図は明暗の 2 通りしか無い。
+  useEffect(() => {
+    if (deps.current.dark === dark) return;
+    deps.current.dark = dark;
+    for (const redraw of deps.current.redraws) redraw();
+  }, [dark]);
 
   useEffect(() => {
     const at = host.current;
@@ -226,11 +260,15 @@ export function BodyEditor({
         // セルの選択と、いま触っているセルの印。
         tableEditing(),
         focusedCell,
+        // コードの色と、カーソルの居る塊の印（図だけを出しているときに使う）。
+        highlightCode,
+        insideBlock,
       ],
     });
 
     const view = new EditorView(at, {
       state,
+      nodeViews: nodeViews(deps.current),
       attributes: {
         class: `mg-pm ${className ?? ""}`.trim(),
         ...(fontFamily ? { style: `font-family: ${fontFamily}` } : {}),
@@ -300,5 +338,22 @@ export function BodyEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={host} className="relative" />;
+  return (
+    <>
+      {/* 編集面は ProseMirror が中の DOM を持つ。React の子は入れない。 */}
+      <div ref={host} className="relative" />
+      {zoomed && (
+        <MermaidModal
+          svg={zoomed.svg}
+          dark={dark}
+          onEdit={() => {
+            const edit = zoomed.onEdit;
+            setZoomed(null);
+            edit();
+          }}
+          onClose={() => setZoomed(null)}
+        />
+      )}
+    </>
+  );
 }
