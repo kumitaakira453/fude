@@ -80,8 +80,6 @@ enum ReviewAction {
         #[arg(long)]
         file: PathBuf,
     },
-    /// Remarker に溜まっている指摘を取り込む（何度実行しても二重に入らない）
-    ImportRemarker,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -204,10 +202,6 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
             let id = review::commit(&file, &message)?;
             let short: String = id.chars().take(8).collect();
             println!("版を記録しました: {short} \"{message}\"");
-        }
-        ReviewAction::ImportRemarker => {
-            let report = review::import::import_remarker()?;
-            println!("{}", review::import::describe(&report)?);
         }
         ReviewAction::Versions { file } => {
             let versions = review::versions(&file)?;
