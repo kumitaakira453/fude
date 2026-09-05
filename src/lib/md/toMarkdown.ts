@@ -41,11 +41,36 @@ export function toMarkdown(doc: PmNode, loaded: Loaded): string {
   // 間の空行もそのまま持ってくる。
   let prevEnd: number | null = 0;
 
+  // まだ残っているブロックの目印。原文から持ってくる区間に、消されたブロックが
+  // 挟まっていないかを見るのに使う。
+  const alive = new Set<string>();
+  doc.forEach((node) => {
+    const id = node.attrs.id as string | null;
+    if (id) alive.add(id);
+  });
+
+  // 原文の [from, to) を持ってくる。消されたブロックの分は抜く。
+  //
+  // 空きをそのまま持ってくるだけだと、消したブロックの本文が「間の空き」として
+  // 戻ってしまう。ブロックにならなかったもの（注釈など）は原文のまま残る。
+  let dropped = false;
+  const between = (from: number, to: number): string => {
+    let text = "";
+    let at = from;
+    for (const [id, [start, end]] of loaded.ranges) {
+      if (alive.has(id) || start < at || end > to) continue;
+      text += loaded.source.slice(at, start);
+      at = end;
+      dropped = true;
+    }
+    return text + loaded.source.slice(at, to);
+  };
+
   doc.forEach((node, _offset, index) => {
     const kept = keep(node, loaded);
     const gap =
       prevEnd !== null && kept && prevEnd <= kept.span.start
-        ? loaded.source.slice(prevEnd, kept.span.start)
+        ? between(prevEnd, kept.span.start)
         : index === 0
           ? ""
           : "\n\n";
@@ -53,8 +78,19 @@ export function toMarkdown(doc: PmNode, loaded: Loaded): string {
     prevEnd = kept ? kept.span.end : null;
   });
 
-  if (prevEnd !== null) return out + loaded.source.slice(prevEnd);
-  return out.endsWith("\n") ? out : `${out}\n`;
+  const text =
+    prevEnd !== null
+      ? out + between(prevEnd, loaded.source.length)
+      : out.endsWith("\n")
+        ? out
+        : `${out}\n`;
+  if (!dropped) return text;
+  // 抜いたあとに空行が余る。詰めるのは消したときだけ（原文が持っている空行を
+  // 勝手に詰めない）。
+  return text
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "")
+    .replace(/\n*$/, "\n");
 }
 
 // 原文から出せるなら、その文字列と範囲を返す。

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState, NodeSelection, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it } from "vitest";
 import { fromMarkdown, type Loaded } from "./fromMarkdown";
@@ -412,5 +412,65 @@ describe("貼り付けた後の往復", () => {
   it("先頭に貼っても並びが変わらない", () => {
     const { before, after } = pasteAt("あ\n\nい\n", 0, WHOLE);
     expect(after).toEqual(before);
+  });
+});
+
+describe("ブロックを消す", () => {
+  // 触っていないブロックは原文から出す仕組みなので、消したことが原文に
+  // 伝わらないと本文が復活する。
+  function drop(body: string, nth: number) {
+    const view = editor(body);
+    let from = 0;
+    let to = 0;
+    view.state.doc.forEach((node, offset, index) => {
+      if (index !== nth) return;
+      from = offset;
+      to = offset + node.nodeSize;
+    });
+    view.dispatch(view.state.tr.delete(from, to));
+    return source();
+  }
+
+  it("途中の段落", () => {
+    expect(drop("あ\n\nい\n\nう\n", 1)).toBe("あ\n\nう\n");
+  });
+
+  it("先頭の段落", () => {
+    expect(drop("あ\n\nい\n\nう\n", 0)).toBe("い\n\nう\n");
+  });
+
+  it("末尾の段落", () => {
+    expect(drop("あ\n\nい\n\nう\n", 2)).toBe("あ\n\nい\n");
+  });
+
+  it("水平線", () => {
+    expect(drop("あ\n\n---\n\nい\n", 1)).toBe("あ\n\nい\n");
+  });
+
+  it("表", () => {
+    const body = "あ\n\n| a | b |\n| --- | --- |\n| c | d |\n\nい\n";
+    expect(drop(body, 1)).toBe("あ\n\nい\n");
+  });
+
+  it("コードの塊", () => {
+    expect(drop("あ\n\n```ts\nx\n```\n\nい\n", 1)).toBe("あ\n\nい\n");
+  });
+});
+
+describe("水平線", () => {
+  it("節点として選べない（横いっぱいの枠を出さない）", () => {
+    const view = editor("あ\n\n---\n\nい\n");
+    const hr = view.state.doc.child(1);
+    expect(hr.type.name).toBe("thematicBreak");
+    expect(NodeSelection.isSelectable(hr)).toBe(false);
+  });
+
+  it("後ろの行頭からの Backspace で消える", () => {
+    const view = editor("あ\n\n---\n\nい\n");
+    // "い" の行頭
+    const at = view.state.doc.child(0).nodeSize + view.state.doc.child(1).nodeSize + 1;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    expect(press(view, "Backspace")).toBe(true);
+    expect(source()).toBe("あ\n\nい\n");
   });
 });

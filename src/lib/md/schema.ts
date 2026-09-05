@@ -189,6 +189,10 @@ export const schema = new Schema({
 
     thematicBreak: {
       group: "block",
+      // 節点として選べないようにする。中身を持たない区切りなので選ぶ意味が無く、
+      // 選ぶと横いっぱいの枠が出て空の入力欄のように見える。後ろの行頭からの
+      // Backspace では変わらず消える。
+      selectable: false,
       attrs: { ...id, marker: { default: "---" } },
       parseDOM: [{ tag: "hr" }, { tag: "div.mg-hr" }],
       // 読むときと同じ形。WebKit は hr::before を描かないので、点は字で持つ。
