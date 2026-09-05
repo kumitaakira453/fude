@@ -144,6 +144,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return () => window.clearTimeout(t);
   }, [path, loaded]);
 
+  // 保存の途中が分かるようにする。件数で数えるのは、続けて保存したときに
+  // 先に終わった 1 件で印が消えないため。
+  const [saving, setSaving] = useState(0);
+  const write = useCallback(
+    (rel: string, text: string) => {
+      setSaving((n) => n + 1);
+      void saveFile(rel, text).finally(() => setSaving((n) => n - 1));
+    },
+    [saveFile],
+  );
+
   const enterEdit = () => {
     // 今見ている場所を控えて、そこから編集を始められるようにする。
     const seen = viewAt();
@@ -152,10 +163,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setEditing(true);
   };
   const save = () => {
-    if (path) void saveFile(path, draft);
+    if (path) write(path, draft);
   };
   const exitEdit = () => {
-    if (path && draft !== (raw ?? "")) void saveFile(path, draft);
+    if (path && draft !== (raw ?? "")) write(path, draft);
     // 戻ったときに合わせるブロックまでを、最初の描画で出させる。
     setStartAt(restoreIndex() ?? 0);
     setEditing(false);
@@ -194,12 +205,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (was && was !== path && editingRef.current) {
       const onDisk = cacheRef.current.get(was) ?? "";
       if (draftRef.current && draftRef.current !== onDisk) {
-        void saveFile(was, draftRef.current);
+        write(was, draftRef.current);
       }
     }
     setEditing(false);
     setEditingFm(null);
-  }, [path, saveFile]);
+  }, [path, write]);
 
   // 「開いたら編集から始める」。本文が読めた時点で切り替える。同じファイルで
   // 一度だけ効かせるので、⌘E で読む側へ戻ったあと勝手に書く側へは戻らない。
@@ -285,9 +296,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if (!p) return;
       const full = rawRef.current ?? "";
       const prefix = full.slice(0, full.length - bodyRef.current.length);
-      void saveFile(p, prefix + newBody);
+      write(p, prefix + newBody);
     },
-    [saveFile],
+    [write],
   );
 
   // ブロック全体への指摘。つまみのメニューから呼ぶ。選択を持たない操作なので、
@@ -523,7 +534,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const fmPrefix = (raw ?? "").slice(0, (raw ?? "").length - body.length);
   const saveFm = (newFm: string) => {
     if (!path || newFm === fmPrefix) return;
-    void saveFile(path, newFm + body);
+    write(path, newFm + body);
   };
 
   // path はあるが未読込なら読み込む
@@ -692,6 +703,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           <Breadcrumbs path={path} paneId={pane.id} />
         </div>
+        {saving > 0 && (
+          <span title="保存中" className="shrink-0 text-[var(--mg-muted)]">
+            <Icon name="progress_activity" size={13} className="mg-spin" />
+          </span>
+        )}
         <Tooltip
           align="end"
           label={
