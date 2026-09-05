@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
-// コールアウトのアイコンを選び直す。アイコンは生 HTML から出るので React の
-// 要素として掴めない。目印（data-mg-callout-ico）への押下を本文ごと拾う。
+// コールアウトのアイコンを選び直す盤と、読むときの掴み方。
+//
+// 盤（IconBoard）は出す場所と選ばれたときの手だけを受け取る。読むときはアイコンが
+// 生 HTML から出るので React の要素として掴めず、目印（data-mg-callout-ico）への
+// 押下を本文ごと拾って盤を出す。編集面は節点を持っているので、掴み方は向こうにある。
 
 const RECENT_KEY = "mdglow:callout-icons";
 const RECENT_MAX = 8;
@@ -38,68 +41,44 @@ function remember(icon: string): void {
   }
 }
 
-export function CalloutIcon({
-  content,
-  contentKey,
+// 絵文字を選ぶ盤。画面座標で貼るので、出す側は押されたアイコンの座標を渡す。
+export function IconBoard({
+  x,
+  y,
   onPick,
+  onClose,
 }: {
-  content: HTMLElement | null;
-  contentKey: string;
+  x: number;
+  y: number;
   // 選んだアイコン。空文字はアイコンを外す。
-  onPick: (blockIndex: number, icon: string) => void;
+  onPick: (icon: string) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState<{
-    index: number;
-    x: number;
-    y: number;
-  } | null>(null);
   const [typed, setTyped] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => setOpen(null), [contentKey]);
-
-  useEffect(() => {
-    if (!content) return;
-    const onClick = (e: MouseEvent) => {
-      const ico = (e.target as Element | null)?.closest?.(
-        "[data-mg-callout-ico]",
-      );
-      if (!ico) return;
-      const blockEl = ico.closest("[data-mg-block]");
-      const index = Number(blockEl?.getAttribute("data-mg-block"));
-      if (!Number.isFinite(index)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const box = ico.getBoundingClientRect();
-      setTyped("");
-      setOpen({ index, x: box.left, y: box.bottom + 6 });
-    };
-    content.addEventListener("click", onClick);
-    return () => content.removeEventListener("click", onClick);
-  }, [content]);
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useEffect(() => {
-    if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (boxRef.current?.contains(e.target as Node)) return;
-      setOpen(null);
+      close.current();
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close.current();
+    const onResize = () => close.current();
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", () => setOpen(null));
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
     };
-  }, [open]);
-
-  if (!open) return null;
+  }, []);
 
   const choose = (icon: string) => {
     if (icon) remember(icon);
-    onPick(open.index, icon);
-    setOpen(null);
+    onPick(icon);
   };
 
   const recent = recents();
@@ -108,8 +87,8 @@ export function CalloutIcon({
     <div
       ref={boxRef}
       style={{
-        left: Math.min(open.x, window.innerWidth - 268),
-        top: Math.min(open.y, window.innerHeight - 300),
+        left: Math.min(x, window.innerWidth - 268),
+        top: Math.min(y, window.innerHeight - 300),
       }}
       className="mg-ico-pick"
     >
@@ -158,5 +137,65 @@ export function CalloutIcon({
       </div>
     </div>,
     document.body,
+  );
+}
+
+export function CalloutIcon({
+  content,
+  contentKey,
+  onPick,
+}: {
+  content: HTMLElement | null;
+  contentKey: string;
+  // 選んだアイコン。空文字はアイコンを外す。
+  onPick: (blockIndex: number, icon: string) => void;
+}) {
+  // seq は開くたびに増やす。盤を作り直させて、前に打った絞り込みを持ち越さない。
+  const [open, setOpen] = useState<{
+    seq: number;
+    index: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  useEffect(() => setOpen(null), [contentKey]);
+
+  useEffect(() => {
+    if (!content) return;
+    const onClick = (e: MouseEvent) => {
+      const ico = (e.target as Element | null)?.closest?.(
+        "[data-mg-callout-ico]",
+      );
+      if (!ico) return;
+      const blockEl = ico.closest("[data-mg-block]");
+      const index = Number(blockEl?.getAttribute("data-mg-block"));
+      if (!Number.isFinite(index)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const box = ico.getBoundingClientRect();
+      setOpen((was) => ({
+        seq: (was?.seq ?? 0) + 1,
+        index,
+        x: box.left,
+        y: box.bottom + 6,
+      }));
+    };
+    content.addEventListener("click", onClick);
+    return () => content.removeEventListener("click", onClick);
+  }, [content]);
+
+  if (!open) return null;
+
+  return (
+    <IconBoard
+      key={open.seq}
+      x={open.x}
+      y={open.y}
+      onPick={(icon) => {
+        onPick(open.index, icon);
+        setOpen(null);
+      }}
+      onClose={() => setOpen(null)}
+    />
   );
 }

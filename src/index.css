@@ -784,11 +784,13 @@ button.mg-task-check:hover {
 /* ============================================================
    コールアウトのアイコンを選び直す
    ============================================================ */
-.mg-prose .mg-callout-ico[data-mg-callout-ico] {
+.mg-prose .mg-callout-ico[data-mg-callout-ico],
+.mg-pm .mg-callout-ico {
   cursor: pointer;
   transition: box-shadow 0.12s ease;
 }
-.mg-prose .mg-callout-ico[data-mg-callout-ico]:hover {
+.mg-prose .mg-callout-ico[data-mg-callout-ico]:hover,
+.mg-pm .mg-callout-ico:hover {
   background: color-mix(in srgb, var(--mg-fg) 10%, transparent);
   border-radius: 0.3rem;
 }
@@ -3619,8 +3621,31 @@ svg[id^="mmd-"] foreignObject p {
 }
 /* 詰まった箇条書きの項目。読むときは項目の中が段落にならないので、
    編集面でも段落の余白を落として同じ間隔にする。 */
-.mg-pm [data-tight="true"] > li > p {
+.mg-pm [data-tight="true"] > li > p,
+.mg-pm [data-tight="true"] > li > .mg-task-body > p {
   margin-block: 0;
+}
+/* タスクの項目。チェックと中身を横に並べる。並べると list-item でなくなり、
+   点は出なくなる（読むときも、チェックの行に点は出ない）。 */
+.mg-pm li.task-list-item {
+  display: flex;
+  /* 文字の足元で揃える。上端で揃えると、中身の方が背が高いぶんチェックだけ
+     上に浮いて見える。 */
+  align-items: baseline;
+}
+/* 読むときは vertical-align: -0.28em でチェックを文字に合わせている。flex では
+   vertical-align が効かないので、同じ分だけ下げて位置を揃える。 */
+.mg-pm li.task-list-item > .mg-task-check {
+  position: relative;
+  top: 0.28em;
+}
+.mg-pm .mg-task-body {
+  flex: 1;
+  min-width: 0;
+}
+/* タスクのある箇条書きは、読むときと同じだけ左を詰める。 */
+.mg-pm ul:has(> li.task-list-item) {
+  padding-left: 0.5rem;
 }
 /* 編集中の帯。読むときと見分けが付くよう、アクセントを薄く敷いて縁を締める。 */
 .mg-pane-head.is-editing {

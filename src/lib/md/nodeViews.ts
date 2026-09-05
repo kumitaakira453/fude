@@ -43,11 +43,11 @@ export interface EditorDeps {
   redraws: Set<() => void>;
 }
 
-export function icon(name: string, size = 15): HTMLElement {
+export function icon(name: string, size = 15, fill = false): HTMLElement {
   const el = document.createElement("span");
   el.className = "material-symbols-rounded select-none leading-none";
   el.style.fontSize = `${size}px`;
-  el.style.fontVariationSettings = `'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' ${size}`;
+  el.style.fontVariationSettings = `'FILL' ${fill ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' ${size}`;
   el.setAttribute("aria-hidden", "true");
   el.textContent = name;
   return el;
@@ -483,6 +483,97 @@ class ImageView implements NodeView {
   }
 }
 
+// 箇条書きの項目。checked が付いているものだけ、読むときと同じチェックを出す。
+//
+// チェックは編集の対象ではないので、中身とは別の入れ物に分ける。印の無い項目は
+// 素の li のまま（点はそのまま出る）。
+class ListItemView implements NodeView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+
+  private node: PmNode;
+  private view: EditorView;
+  private getPos: () => number | undefined;
+  // 印の無い項目には無い。
+  private check: HTMLButtonElement | null = null;
+
+  constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
+    this.node = node;
+    this.view = view;
+    this.getPos = getPos;
+
+    this.dom = document.createElement("li");
+    const checked = node.attrs.checked as boolean | null;
+    if (checked === null) {
+      this.contentDOM = this.dom;
+      return;
+    }
+
+    this.dom.dataset.checked = String(checked);
+    // 読むときと同じ印。点を落とす指定がこの印に当たっている。
+    this.dom.className = "task-list-item";
+
+    this.check = document.createElement("button");
+    this.check.type = "button";
+    this.check.className = "mg-task-check";
+    this.check.setAttribute("contenteditable", "false");
+    // 押した拍子に編集面から焦点が外れると、書いていた場所を見失う。
+    this.check.addEventListener("mousedown", (e) => e.preventDefault());
+    this.check.addEventListener("click", (e) => {
+      e.preventDefault();
+      this.flip();
+    });
+    this.dom.appendChild(this.check);
+
+    this.contentDOM = document.createElement("div");
+    this.contentDOM.className = "mg-task-body";
+    this.dom.appendChild(this.contentDOM);
+    this.paint(checked);
+  }
+
+  private paint(checked: boolean) {
+    if (!this.check) return;
+    const label = checked ? "未完了に戻す" : "完了にする";
+    this.check.setAttribute("aria-label", label);
+    this.check.replaceChildren(
+      icon(checked ? "check_box" : "check_box_outline_blank", 20, checked),
+    );
+  }
+
+  // 原文の "- [ ] " と "- [x] " を入れ替える。
+  private flip() {
+    const at = this.getPos();
+    if (at === undefined) return;
+    this.view.dispatch(
+      this.view.state.tr.setNodeMarkup(at, undefined, {
+        ...this.node.attrs,
+        checked: !(this.node.attrs.checked as boolean),
+      }),
+    );
+  }
+
+  update(node: PmNode): boolean {
+    if (node.type !== this.node.type) return false;
+    const was = this.node.attrs.checked as boolean | null;
+    const now = node.attrs.checked as boolean | null;
+    // 印が付いた・外れたときは作りが変わる。組み直させる。
+    if ((was === null) !== (now === null)) return false;
+    this.node = node;
+    if (now !== null && now !== was) this.paint(now);
+    return true;
+  }
+
+  // チェックへの操作は編集面に渡さない。中身を押したときは渡す。
+  stopEvent(event: Event): boolean {
+    const at = event.target;
+    return !!this.check && at instanceof Node && this.check.contains(at);
+  }
+
+  ignoreMutation(m: ViewMutationRecord): boolean {
+    return !!this.check && !this.contentDOM.contains(m.target);
+  }
+}
+
 // トグルの見出し。原文では開きタグの中の <summary> なので、本文のブロックとして
 // は編集できない。入力欄として出し、打ったぶんを attrs へ差し戻す。
 class DetailsView implements NodeView {
@@ -592,6 +683,8 @@ export function nodeViews(deps: EditorDeps) {
       new CodeBlockView(node, view, getPos, deps),
     details: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new DetailsView(node, view, getPos),
+    listItem: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
+      new ListItemView(node, view, getPos),
     image: (node: PmNode) => new ImageView(node, deps),
   };
 }

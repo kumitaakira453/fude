@@ -6,11 +6,13 @@ import { EditorView } from "prosemirror-view";
 import "prosemirror-view/style/prosemirror.css";
 import { useEffect, useRef, useState } from "react";
 import { throttled } from "../lib/later";
+import { calloutIcoAt, setCalloutIcon } from "../lib/md/calloutIcon";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
 import { editorPlugins } from "../lib/md/plugins";
 import { toMarkdown } from "../lib/md/toMarkdown";
+import { IconBoard } from "./CalloutIcon";
 import { MermaidModal } from "./MermaidModal";
 
 // 組版されたまま書く全文編集。
@@ -201,6 +203,15 @@ export function BodyEditor({
     null,
   );
 
+  // 開いているアイコンの盤。押されたときに差し替えの手ごと持つので、後から
+  // 節点を探し直さない。seq は開くたびに増やし、盤を作り直させる。
+  const [picking, setPicking] = useState<{
+    seq: number;
+    x: number;
+    y: number;
+    apply: (icon: string) => void;
+  } | null>(null);
+
   // 専用の描画が要るもの（図・画像）へ渡す口。編集面を作り直さずに差し替えたい
   // ものだけを持つので、中身は書き換えて使う。
   const deps = useRef<EditorDeps>({
@@ -244,6 +255,27 @@ export function BodyEditor({
       attributes: {
         class: `mg-pm ${className ?? ""}`.trim(),
         ...(fontFamily ? { style: `font-family: ${fontFamily}` } : {}),
+      },
+      handleDOMEvents: {
+        // 囲みのアイコンを押したら、読むときと同じ盤を出す。
+        mousedown(here, event) {
+          const ico =
+            event.target instanceof Element
+              ? event.target.closest(".mg-callout-ico")
+              : null;
+          const hit = calloutIcoAt(here, event.target);
+          if (!ico || !hit) return false;
+          // 押した拍子に書いていた場所を見失わないようにする。
+          event.preventDefault();
+          const box = ico.getBoundingClientRect();
+          setPicking((was) => ({
+            seq: (was?.seq ?? 0) + 1,
+            x: box.left,
+            y: box.bottom + 6,
+            apply: (value) => setCalloutIcon(here, hit.pos, value),
+          }));
+          return true;
+        },
       },
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
@@ -369,6 +401,18 @@ export function BodyEditor({
     <>
       {/* 編集面は ProseMirror が中の DOM を持つ。React の子は入れない。 */}
       <div ref={host} className="relative" />
+      {picking && (
+        <IconBoard
+          key={picking.seq}
+          x={picking.x}
+          y={picking.y}
+          onPick={(value) => {
+            picking.apply(value);
+            setPicking(null);
+          }}
+          onClose={() => setPicking(null)}
+        />
+      )}
       {zoomed && (
         <MermaidModal
           svg={zoomed.svg}
