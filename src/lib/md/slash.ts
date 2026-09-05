@@ -1,5 +1,11 @@
 import { chainCommands, setBlockType } from "prosemirror-commands";
-import type { Attrs, NodeType, ResolvedPos } from "prosemirror-model";
+import {
+  Fragment,
+  type Attrs,
+  type Node as PmNode,
+  type NodeType,
+  type ResolvedPos,
+} from "prosemirror-model";
 import { liftListItem, wrapInList } from "prosemirror-schema-list";
 import {
   Plugin,
@@ -88,6 +94,48 @@ function toWrapper(type: NodeType, attrs: Attrs): Command {
   };
 }
 
+// 表のセルは行を分けられないので、行内の改行は <br> に移す
+// （セルの中で改行を打ったときと同じ形）。
+function cellContent(content: Fragment): Fragment {
+  const out: PmNode[] = [];
+  content.forEach((node) => {
+    out.push(
+      node.type === schema.nodes.hardBreak
+        ? schema.nodes.rawInline.create({ value: "<br>" })
+        : node,
+    );
+  });
+  return Fragment.from(out);
+}
+
+// 3 行 × 3 列の表。見出し行 1 と本文 2 行。桁幅と区切り行は原文へ書き戻す
+// ときに組み直すので、覚えずに作る。書きかけの文字は左上のセルに入れる。
+const insertTable: Command = (state, dispatch) => {
+  const { $from, empty } = state.selection;
+  const { table, tableRow, tableCell } = schema.nodes;
+  if (!empty || !$from.parent.isTextblock || !fits($from, table)) return false;
+  if (dispatch) {
+    const row = (header: boolean, head?: Fragment) =>
+      tableRow.create(null, [
+        tableCell.create({ header }, head),
+        tableCell.create({ header }),
+        tableCell.create({ header }),
+      ]);
+    const node = table.create({ align: [], widths: [], delim: null }, [
+      row(true, cellContent($from.parent.content)),
+      row(false),
+      row(false),
+    ]);
+    const at = $from.before();
+    const tr = state.tr.replaceRangeWith(at, $from.after(), node);
+    // 左上のセルから書き始められるようにする（表 → 行 → セルで 3 つ内側）。
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(at + 3), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
+
 // 線は手前に差し込む。いまの塊はそのまま残るので、続けて書ける。
 const insertRule: Command = (state, dispatch) => {
   const { $from } = state.selection;
@@ -106,7 +154,7 @@ const headings: SlashItem[] = [1, 2, 3, 4].map((level) => {
     label: `見出し ${level}`,
     icon: `format_h${level}`,
     hint: `${hashes} `,
-    aliases: [`h${level}`, `heading${level}`, `midashi${level}`, hashes],
+    aliases: [`h${level}`, `${level}`, `heading${level}`, `midashi${level}`, hashes],
     run: setBlockType(schema.nodes.heading, { level }),
   };
 });
@@ -134,7 +182,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     label: "番号付きリスト",
     icon: "format_list_numbered",
     hint: "1. ",
-    aliases: ["ol", "ordered", "orderedlist", "number", "bango", "1."],
+    aliases: ["ol", "ordered", "orderedlist", "number", "numbered", "bango", "1."],
     run: wrapInList(schema.nodes.orderedList, { marker: ".", start: 1, tight: true }),
   },
   {
@@ -162,6 +210,14 @@ export const SLASH_ITEMS: SlashItem[] = [
     run: toWrapper(schema.nodes.callout, { icon: "💡", color: null }),
   },
   {
+    id: "table",
+    label: "テーブル",
+    icon: "table",
+    hint: "",
+    aliases: ["table", "teburu", "表", "グリッド"],
+    run: insertTable,
+  },
+  {
     id: "rule",
     label: "区切り線",
     icon: "horizontal_rule",
@@ -171,15 +227,32 @@ export const SLASH_ITEMS: SlashItem[] = [
   },
 ];
 
-// 表示名と別名の両方で当てる。
+// 当たり方の強さ。別名の丸ごと一致 → 別名の頭一致 → 表示名の頭一致 →
+// どこかに含む。当たらなければ -1。
+//
+// 打つのは英字の別名（"table" や "h2"）が主軸なので、頭から一致するものを
+// 先に出す。"h" で見出しが並び、"h2" で見出し 2 が先頭に来る。
+const RANKS = 4;
+
+function rank(item: SlashItem, want: string): number {
+  if (item.aliases.includes(want)) return 0;
+  if (item.aliases.some((alias) => alias.startsWith(want))) return 1;
+  const label = item.label.toLowerCase();
+  if (label.startsWith(want)) return 2;
+  if (label.includes(want) || item.aliases.some((alias) => alias.includes(want))) return 3;
+  return -1;
+}
+
+// 表示名と別名の両方で当てる。強い順に並べ、同じ強さの中は一覧の並びのまま。
 export function slashItems(query: string): SlashItem[] {
   const want = query.toLowerCase();
   if (!want) return SLASH_ITEMS;
-  return SLASH_ITEMS.filter(
-    (item) =>
-      item.label.toLowerCase().includes(want) ||
-      item.aliases.some((alias) => alias.includes(want)),
-  );
+  const buckets: SlashItem[][] = Array.from({ length: RANKS }, () => []);
+  for (const item of SLASH_ITEMS) {
+    const at = rank(item, want);
+    if (at >= 0) buckets[at].push(item);
+  }
+  return buckets.flat();
 }
 
 // ---- 小窓の状態 ----

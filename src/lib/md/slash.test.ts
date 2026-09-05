@@ -72,7 +72,20 @@ const state = (view: EditorView) => slashKey.getState(view.state);
 
 // 節点の並びと、原文へ戻るときに効く attrs を控える。目印は読み直すと
 // 振り直されるので見ない。
-const KEYS = ["level", "checked", "icon", "color", "head", "marker", "tight", "start", "lang"];
+// 桁幅（widths）・区切り行（delim）・align は原文の書き方の控えなので見ない。
+// 作った表は覚えておらず、読み直したものは原文から拾う。
+const KEYS = [
+  "level",
+  "checked",
+  "icon",
+  "color",
+  "head",
+  "marker",
+  "tight",
+  "start",
+  "lang",
+  "header",
+];
 
 function sketch(doc: PmNode): string[] {
   const out: string[] = [];
@@ -170,17 +183,73 @@ describe("絞り込み", () => {
     expect(slashItems("")).toHaveLength(SLASH_ITEMS.length);
   });
 
-  it("別名で当たる", () => {
-    expect(slashItems("h1").map((item) => item.id)).toEqual(["h1"]);
-    expect(slashItems("todo").map((item) => item.id)).toEqual(["todo"]);
-    expect(slashItems("hr").map((item) => item.id)).toEqual(["rule"]);
-    expect(slashItems("bullet").map((item) => item.id)).toEqual(["bullet"]);
-    // "ul" は "rule" にも含まれるので、先頭に来ることだけを見る。
-    expect(slashItems("ul")[0].id).toBe("bullet");
+  // 打つのは英字の別名が主軸。指示された呼び方が先頭に来ること。
+  const ENGLISH: [string, string][] = [
+    ["text", "text"],
+    ["p", "text"],
+    ["paragraph", "text"],
+    ["h1", "h1"],
+    ["h2", "h2"],
+    ["h3", "h3"],
+    ["h4", "h4"],
+    ["heading1", "h1"],
+    ["heading3", "h3"],
+    ["list", "bullet"],
+    ["ul", "bullet"],
+    ["bullet", "bullet"],
+    ["ol", "ordered"],
+    ["number", "ordered"],
+    ["numbered", "ordered"],
+    ["todo", "todo"],
+    ["task", "todo"],
+    ["check", "todo"],
+    ["checkbox", "todo"],
+    ["toggle", "toggle"],
+    ["details", "toggle"],
+    ["callout", "callout"],
+    ["note", "callout"],
+    ["table", "table"],
+    ["hr", "rule"],
+    ["divider", "rule"],
+    ["line", "rule"],
+  ];
+
+  for (const [query, id] of ENGLISH) {
+    it(`/${query} は ${id} が先頭に来る`, () => {
+      expect(slashItems(query)[0]?.id).toBe(id);
+    });
+  }
+
+  const JAPANESE: [string, string][] = [
+    ["本文", "text"],
+    ["見出し", "h1"],
+    ["箇条書き", "bullet"],
+    ["番号", "ordered"],
+    ["タスク", "todo"],
+    ["トグル", "toggle"],
+    ["折りたたみ", "toggle"],
+    ["コールアウト", "callout"],
+    ["テーブル", "table"],
+    ["表", "table"],
+    ["区切り", "rule"],
+  ];
+
+  for (const [query, id] of JAPANESE) {
+    it(`${query} は ${id} が先頭に来る`, () => {
+      expect(slashItems(query)[0]?.id).toBe(id);
+    });
+  }
+
+  it("h だけなら見出し 1〜4 が並ぶ", () => {
+    expect(slashItems("h").slice(0, 4).map((item) => item.id)).toEqual([
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+    ]);
   });
 
-  it("表示名で当たる", () => {
-    expect(slashItems("区切").map((item) => item.id)).toEqual(["rule"]);
+  it("見出しは 4 つとも当たる", () => {
     expect(slashItems("見出し")).toHaveLength(4);
   });
 
@@ -209,6 +278,11 @@ const CASES: { id: string; query: string; want: string }[] = [
     want: "あ\n\n<details>\n<summary>トグル</summary>\n\nい\n\n</details>\n",
   },
   { id: "callout", query: "callout", want: 'あ\n\n<callout icon="💡">\nい\n</callout>\n' },
+  {
+    id: "table",
+    query: "table",
+    want: "あ\n\n| い | | |\n| - | - | - |\n| | | |\n| | | |\n",
+  },
   { id: "rule", query: "hr", want: "あ\n\n---\n\nい\n" },
 ];
 
@@ -236,6 +310,49 @@ describe("決めた構造にする", () => {
       expect(sketch(fromMarkdown(source()).doc)).toEqual(sketch(view.state.doc));
     });
   }
+});
+
+describe("テーブル", () => {
+  // セルの並びを行ごとに読む。見出し行は 1 行目だけ。
+  function grid(table: PmNode) {
+    const rows: { header: boolean; text: string }[][] = [];
+    table.forEach((row) => {
+      const cells: { header: boolean; text: string }[] = [];
+      row.forEach((cell) => {
+        cells.push({ header: cell.attrs.header === true, text: cell.textContent });
+      });
+      rows.push(cells);
+    });
+    return rows;
+  }
+
+  it("3 行 × 3 列で、見出し行は 1 行目だけ", () => {
+    const view = slash("table");
+    press(view, "Enter");
+    const table = view.state.doc.child(1);
+    expect(table.type.name).toBe("table");
+    expect(grid(table).map((row) => row.map((cell) => cell.header))).toEqual([
+      [true, true, true],
+      [false, false, false],
+      [false, false, false],
+    ]);
+  });
+
+  it("左上のセルから書き始められる", () => {
+    const view = slash("table");
+    press(view, "Enter");
+    type(view, "い");
+    expect(grid(view.state.doc.child(1))[0].map((cell) => cell.text)).toEqual(["い", "", ""]);
+  });
+
+  it("読み直しても 3 行 × 3 列のまま", () => {
+    const view = slash("table");
+    press(view, "Enter");
+    type(view, "い");
+    const back = fromMarkdown(source()).doc.child(1);
+    expect(back.type.name).toBe("table");
+    expect(grid(back)).toEqual(grid(view.state.doc.child(1)));
+  });
 });
 
 describe("トグルの見出し", () => {
