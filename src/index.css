@@ -2444,22 +2444,12 @@ svg[id^="mmd-"] foreignObject p {
   /* 地をアクセントで塗る。選ばれている札（アクセント 10% 前後）よりはっきり
      濃くしないと、面として読めず札に紛れる。選びの印は札の左の棒なので、
      帯の方が濃くても取り違えない。 */
-  border-bottom: 1px solid color-mix(in srgb, var(--mg-accent) 35%, transparent);
+  border-bottom: 1px solid var(--mg-border);
   background: color-mix(in srgb, var(--mg-accent) 26%, var(--mg-panel));
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--mg-muted);
-}
-/* どのファイルの指摘かは色で示す。指摘の本文（地の色）と時刻（薄い灰）の
-   間に置くと、太さや大きさだけでは埋もれる。面は塗らず、字にだけ色を持たせる。 */
-.mg-review-group .mg-review-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: color-mix(in srgb, var(--mg-accent) 88%, var(--mg-fg));
-}
-.mg-review-group .mg-review-ico {
-  color: var(--mg-accent);
 }
 /* ファイルごとのまとまり。間を空けるより線で切ったほうが、どこまでが
    同じファイルの指摘か分かる。 */
