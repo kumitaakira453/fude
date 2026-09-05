@@ -677,9 +677,11 @@ button.mg-task-check:hover {
   padding-inline: 0.85rem;
 }
 /* 表の淵と列の区切り。行の区切りと同じ細さ・色で引く。枠があれば、中身の
-   無いセルも「在る」ことが分かる。 */
+   無いセルも「在る」ことが分かる。線は重ねて 1 本にする（既定の separate では
+   行の線とセルの線が別々に描かれ、2 本に見える）。 */
 .mg-prose table {
   border: 1px solid var(--mg-border);
+  border-collapse: collapse;
 }
 .mg-prose table th + th,
 .mg-prose table td + td {
