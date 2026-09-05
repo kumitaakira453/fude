@@ -3891,3 +3891,10 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-accent);
   font-weight: 600;
 }
+
+/* 塊そのものを選んでいる状態。ProseMirror の既定は水色で、どのテーマからも浮く。 */
+.mg-pm .ProseMirror-selectednode,
+.ProseMirror.mg-pm.ProseMirror-selectednode {
+  outline: 2px solid var(--mg-accent);
+  outline-offset: 1px;
+}

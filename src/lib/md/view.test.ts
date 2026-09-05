@@ -355,3 +355,62 @@ describe("セルの中の移動", () => {
     expect(press(view, "ArrowUp")).toBe(false);
   });
 });
+
+describe("貼り付けた後の往復", () => {
+  // 編集面に見えているものが、保存の文字列にそのまま出るか。
+  // 出力を読み直して、節点の並びが編集面と一致することを確かめる。
+  function shape(doc: import("prosemirror-model").Node): string[] {
+    const out: string[] = [];
+    doc.forEach((node) => out.push(node.type.name));
+    return out;
+  }
+
+  function pasteAt(body: string, nth: number, text: string) {
+    const view = editor(body);
+    caretAtEndOf(view, nth);
+    const slice = markdownSlice(text);
+    if (!slice) throw new Error("読めなかった");
+    view.dispatch(view.state.tr.replaceSelection(slice));
+    const out = source();
+    return { before: shape(view.state.doc), after: shape(fromMarkdown(out).doc), out };
+  }
+
+  const WHOLE = [
+    "# 題",
+    "",
+    "本文と **強調**。",
+    "",
+    "| a | b |",
+    "| --- | --- |",
+    "| c | d |",
+    "",
+    "```python",
+    "x = 1",
+    "```",
+    "",
+    "---",
+    "",
+  ].join("\n");
+
+  it("文書の途中に貼っても並びが変わらない", () => {
+    const { before, after, out } = pasteAt("あ\n\nい\n\nう\n", 1, WHOLE);
+    expect(after).toEqual(before);
+    expect(out).toContain("x = 1");
+  });
+
+  it("文書の末尾に貼っても並びが変わらない", () => {
+    const { before, after } = pasteAt("あ\n\nい\n", 1, WHOLE);
+    expect(after).toEqual(before);
+  });
+
+  it("表の直後に貼っても並びが変わらない", () => {
+    const body = "| a | b |\n| --- | --- |\n| c | d |\n\nあと\n";
+    const { before, after } = pasteAt(body, 4, WHOLE);
+    expect(after).toEqual(before);
+  });
+
+  it("先頭に貼っても並びが変わらない", () => {
+    const { before, after } = pasteAt("あ\n\nい\n", 0, WHOLE);
+    expect(after).toEqual(before);
+  });
+});

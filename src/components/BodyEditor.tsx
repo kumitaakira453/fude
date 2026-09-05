@@ -67,7 +67,15 @@ function caretPainter(view: EditorView, host: HTMLElement) {
       host.classList.remove("mg-caret-on");
       return;
     }
-    const at = view.coordsAtPos(selection.head);
+    // 隠れているところ（図だけを出している塊の中など）は測れない。
+    let at: { left: number; top: number; bottom: number };
+    try {
+      at = view.coordsAtPos(selection.head);
+    } catch {
+      bar.style.display = "none";
+      host.classList.remove("mg-caret-on");
+      return;
+    }
     const box = host.getBoundingClientRect();
     bar.style.display = "block";
     bar.style.left = `${at.left - box.left}px`;
@@ -186,8 +194,10 @@ export function BodyEditor({
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
-        caret.draw();
+        // 先に本文を渡す。カーソルの描画は測れないことがあり、そこで落ちると
+        // 書いたものが控えに乗らないまま消える。
         if (tr.docChanged) changed.current(prefix + toMarkdown(next.doc, loaded));
+        caret.draw();
       },
     });
     const caret = caretPainter(view, at);

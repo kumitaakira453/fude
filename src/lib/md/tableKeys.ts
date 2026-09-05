@@ -21,6 +21,19 @@ function cellAt(state: Parameters<Command>[0]) {
   return { $cell, start, map, rect: map.findCell($cell.pos - start) };
 }
 
+// 2 つの位置が同じ視覚行に居るか。
+//
+// 上端 / 下端をそのまま引き算しないのは、同じ行でも箱の高さが揃わないため。
+// 行内コードは上下に余白と背景を持つので素の文字より数 px 高く、しきい値を
+// 数 px にすると同じ行を別の行と誤る。縦の重なりで見れば高さの違いに強い。
+function sameLine(a: { top: number; bottom: number }, b: { top: number; bottom: number }) {
+  const height = Math.min(a.bottom - a.top, b.bottom - b.top);
+  // 高さが取れないときは上端だけで見る。
+  if (height <= 0) return Math.abs(a.top - b.top) <= 1;
+  const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  return overlap > height / 2;
+}
+
 // カーソルがセルの中の上端 / 下端の行に居るか。
 //
 // view.endOfTextblock("up") は使わない。DOM 側の選択を 1 行動かして戻す作りで、
@@ -31,10 +44,14 @@ function atVerticalEdge(
   $head: ResolvedPos,
   dy: number,
 ): boolean {
-  const at = view.coordsAtPos($head.pos);
-  const edge = view.coordsAtPos(dy < 0 ? $head.start() : $head.end());
-  // 1px は行の高さの丸め分。同じ行と見なす。
-  return dy < 0 ? at.top - edge.top <= 1 : edge.bottom - at.bottom <= 1;
+  try {
+    const at = view.coordsAtPos($head.pos);
+    const edge = view.coordsAtPos(dy < 0 ? $head.start() : $head.end());
+    return sameLine(at, edge);
+  } catch {
+    // 測れないときは渡す側へ倒す。上下が効かないほうが困る。
+    return true;
+  }
 }
 
 // 升目を dx / dy だけ動かす。端なら何もしない。

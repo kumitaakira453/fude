@@ -4,7 +4,7 @@ import { inputRules } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
 import { Fragment, Slice, type Node as PmNode } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
-import { Plugin, type Command } from "prosemirror-state";
+import { Plugin, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import type { Transform } from "prosemirror-transform";
 import { fromMarkdown } from "./fromMarkdown";
@@ -171,7 +171,14 @@ const pasteMarkdown = new Plugin({
       if (view.state.selection.$from.parent.type.spec.code) return false;
       const slice = markdownSlice(text);
       if (!slice) return false;
-      view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+      const tr = view.state.tr.replaceSelection(slice);
+      // 貼り付けた最後が水平線のような葉ブロックだと、既定では「その塊を選んだ」
+      // 状態になって枠が出る。文字の位置へ置き直す。
+      view.dispatch(
+        tr
+          .setSelection(TextSelection.near(tr.doc.resolve(tr.selection.to), 1))
+          .scrollIntoView(),
+      );
       return true;
     },
   },

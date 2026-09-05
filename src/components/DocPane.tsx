@@ -128,6 +128,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const isActive = activeId === pane.id;
   const path = activePath(pane);
   const raw = path ? cache.get(path) : undefined;
+  const cacheRef = useRef(cache);
+  cacheRef.current = cache;
 
   // 本文が未読込のあいだはローディングを出す。ただし一瞬で読める場合に
   // ちらつかせないよう、遅延してから表示する（読めたら即座に消す）。
@@ -177,11 +179,27 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setSwitching(false);
   }, [editing]);
 
-  // ファイル切替で編集モード解除
+  // 編集中かどうかと書きかけを、効果の中から今の値で見るための控え。
+  const editingRef = useRef(editing);
+  const draftRef = useRef(draft);
+  const shownPath = useRef(path);
+  editingRef.current = editing;
+  draftRef.current = draft;
+
+  // ファイル切替で編集モード解除。書きかけは捨てずに、切り替える前のファイルへ
+  // 保存する（⌘E で戻れば保存されるのに、タブを移ると消えるのを防ぐ）。
   useEffect(() => {
+    const was = shownPath.current;
+    shownPath.current = path;
+    if (was && was !== path && editingRef.current) {
+      const onDisk = cacheRef.current.get(was) ?? "";
+      if (draftRef.current && draftRef.current !== onDisk) {
+        void saveFile(was, draftRef.current);
+      }
+    }
     setEditing(false);
     setEditingFm(null);
-  }, [path]);
+  }, [path, saveFile]);
 
   // 「開いたら編集から始める」。本文が読めた時点で切り替える。同じファイルで
   // 一度だけ効かせるので、⌘E で読む側へ戻ったあと勝手に書く側へは戻らない。
