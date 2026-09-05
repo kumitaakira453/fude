@@ -9,6 +9,7 @@ import {
   editorialAtom,
   fontAtom,
   readingWidthAtom,
+  richEditorAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
   themeAtom,
@@ -43,6 +44,7 @@ export function Settings() {
   const [fontValue, setFontValue] = useAtom(fontAtom);
   const [widthValue, setWidthValue] = useAtom(readingWidthAtom);
   const [editorialValue, setEditorialValue] = useAtom(editorialAtom);
+  const [richValue, setRichValue] = useAtom(richEditorAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -51,6 +53,7 @@ export function Settings() {
     editorialValue,
     setEditorialValue,
   );
+  const [rich, setRich] = useOptimisticSetting(richValue, setRichValue);
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
@@ -223,6 +226,33 @@ export function Settings() {
                       </span>
                     </span>
                     <span className={`mg-switch${editorial ? " is-on" : ""}`}>
+                      <i />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRich(!rich)}
+                    className="mg-set-row"
+                  >
+                    <Icon
+                      name="edit_note"
+                      size={18}
+                      fill={rich}
+                      className={
+                        rich ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                      }
+                    />
+                    <span className="mg-set-row-main">
+                      <span className="mg-set-row-name">
+                        組版のまま書く
+                        <span className="mg-set-beta">Beta</span>
+                      </span>
+                      <span className="mg-set-note">
+                        ⌘E の全文編集を、記号ではなく組版された姿のまま書く形にする
+                      </span>
+                    </span>
+                    <span className={`mg-switch${rich ? " is-on" : ""}`}>
                       <i />
                     </span>
                   </button>

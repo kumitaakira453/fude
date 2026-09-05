@@ -3592,3 +3592,19 @@ svg[id^="mmd-"] foreignObject p {
     animation: none;
   }
 }
+
+/* 組版のまま書く全文編集。中身は本文と同じ組版の指定が効くので、
+   ここで足すのは編集面としての見え方だけ。 */
+.mg-pm {
+  outline: none;
+}
+.mg-pm .mg-raw,
+.mg-pm .mg-raw-inline {
+  font-family: var(--mg-font-mono);
+  font-size: 0.9em;
+  color: var(--mg-muted);
+  white-space: pre-wrap;
+}
+.mg-pm .mg-details-head {
+  font-weight: 600;
+}

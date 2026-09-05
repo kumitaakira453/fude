@@ -29,6 +29,7 @@ import {
   fontAtom,
   paletteOpenAtom,
   readingWidthAtom,
+  richEditorAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
   tocOpenAtom,
@@ -41,6 +42,7 @@ import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
+import { BodyEditor } from "./BodyEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
 import {
   recallViewpoint,
@@ -63,6 +65,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
   const editorial = useAtomValue(editorialAtom);
+  const rich = useAtomValue(richEditorAtom);
   const tocOpen = useAtomValue(tocOpenAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
@@ -661,7 +664,20 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
-        {editing && path ? (
+        {editing && path && rich ? (
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16">
+            <BodyEditor
+              key={path}
+              body={body}
+              prefix={fmPrefix}
+              onChange={setDraft}
+              onSave={save}
+              className={`mg-prose prose ${
+                editorial ? "mg-editorial" : ""
+              } ${WIDTH_CLASS[width]} mx-auto`}
+            />
+          </div>
+        ) : editing && path ? (
           <MarkdownEditor
             key={path}
             initialDoc={draft}
