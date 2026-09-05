@@ -88,14 +88,27 @@ function caretPainter(view: EditorView, host: HTMLElement) {
     bar.classList.add("is-idle");
   };
 
-  const onFocus = () => draw();
-  view.dom.addEventListener("focus", onFocus);
-  view.dom.addEventListener("blur", onFocus);
+  // 棒は組み直しのときだけ描き直すのでは足りない。位置が変わる契機は他にもある。
+  const again = () => draw();
+  view.dom.addEventListener("focus", again);
+  view.dom.addEventListener("blur", again);
+  // コードの塊のように中で横スクロールするものがある。scroll は上がって
+  // こないので捕まえる側で拾う。
+  view.dom.addEventListener("scroll", again, true);
+  // 組み直しを伴わない移動（⌘⌫ の既定動作など）はここで拾う。
+  document.addEventListener("selectionchange", again);
+  // 字体の読み込み・折り返し・塊の開閉で高さが変わったら測り直す。
+  const watch = new ResizeObserver(again);
+  watch.observe(view.dom);
+
   return {
     draw,
     stop: () => {
-      view.dom.removeEventListener("focus", onFocus);
-      view.dom.removeEventListener("blur", onFocus);
+      view.dom.removeEventListener("focus", again);
+      view.dom.removeEventListener("blur", again);
+      view.dom.removeEventListener("scroll", again, true);
+      document.removeEventListener("selectionchange", again);
+      watch.disconnect();
       bar.remove();
     },
   };
