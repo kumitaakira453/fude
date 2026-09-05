@@ -1890,7 +1890,9 @@ body.mg-dragging .mg-sel-menu {
 .mg-prose.mg-editorial table td {
   padding: 0.5rem 0.9rem;
 }
-.mg-prose.mg-editorial thead th {
+/* 見出しのセル。読むときは thead の中にあるが、編集面では行がすべて tbody に
+   入るので、th そのものを見る。 */
+.mg-prose.mg-editorial th {
   background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
   color: var(--mg-fg);
   font-weight: 650;
@@ -3628,4 +3630,15 @@ svg[id^="mmd-"] foreignObject p {
 /* 表のセルを選んでいる状態。prosemirror-tables が付ける印に色を当てる。 */
 .mg-pm .selectedCell {
   background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
+}
+/* 編集面の表は見出し行も tbody に入る。縞は見出しの次の行から数え直す。 */
+.mg-pm.mg-editorial tbody tr:nth-child(even) {
+  background: transparent;
+}
+.mg-pm.mg-editorial tbody tr:has(th) ~ tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
+}
+/* 囲みの中は箱として詰める。段落どうしが本文と同じだけ空くと間延びする。 */
+.mg-prose .mg-callout-body > * + * {
+  margin-top: 0.6em;
 }

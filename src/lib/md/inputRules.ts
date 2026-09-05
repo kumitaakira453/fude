@@ -32,7 +32,8 @@ function markRule(pattern: RegExp, type: MarkType) {
 }
 
 // 行内コードは中に別の装飾を持てないので、打ち直して mark を付ける。
-const codeRule = new InputRule(/(?<!`)`([^`\n]+)`$/, (state, match, start, end) => {
+// 日本語入力のままだと全角の ｀ が入ることがあるので、どちらも受ける。
+const codeRule = new InputRule(/(?<![`｀])[`｀]([^`｀\n]+)[`｀]$/, (state, match, start, end) => {
   const body = match[1];
   return state.tr
     .replaceWith(start, end, schema.text(body))
@@ -82,7 +83,7 @@ export const rules = [
   textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({
     level: match[1].length,
   })),
-  textblockTypeInputRule(/^```([a-zA-Z0-9_+-]*)\s$/, schema.nodes.codeBlock, (match) => ({
+  textblockTypeInputRule(/^[`｀]{3}([a-zA-Z0-9_+-]*)\s$/, schema.nodes.codeBlock, (match) => ({
     lang: match[1] || null,
     fenced: true,
     fence: "```",

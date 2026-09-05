@@ -137,3 +137,4 @@ describe("行内を装飾する", () => {
     expect(node.child(0).marks.map((m) => m.type.name)).toEqual(["strong"]);
   });
 });
+

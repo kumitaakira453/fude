@@ -3,7 +3,7 @@ import { inputRules, undoInputRule } from "prosemirror-inputrules";
 import { history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 import { useEffect, useRef } from "react";
@@ -46,6 +46,48 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
   }
   return null;
 }
+
+
+// ```lang と打って改行したときも、コードの塊にする。入力変換は空白で終わる
+// 打鍵しか見ないので、改行で確定する人には効かない。
+const fenceOnEnter: Command = (state, dispatch) => {
+  const { $from, empty } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parent.type.spec.code) return false;
+  const m = /^`{3,}([a-zA-Z0-9_+-]*)$/.exec($from.parent.textContent);
+  if (!m) return false;
+  if (dispatch) {
+    const at = $from.start();
+    dispatch(
+      state.tr
+        .delete(at, $from.end())
+        .setBlockType(at, at, schema.nodes.codeBlock, {
+          lang: m[1] || null,
+          fenced: true,
+          fence: "```",
+        })
+        .scrollIntoView(),
+    );
+  }
+  return true;
+};
+
+// 行の中の改行。表のセルでは <br> を置く（GFM の表は行を分けられない）。
+const lineBreak: Command = (state, dispatch) => {
+  const { $from } = state.selection;
+  const inCell = (() => {
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type === schema.nodes.tableCell) return true;
+    }
+    return false;
+  })();
+  if (dispatch) {
+    const node = inCell
+      ? schema.nodes.rawInline.create({ value: "<br>" })
+      : schema.nodes.hardBreak.create();
+    dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
+  }
+  return true;
+};
 
 export function BodyEditor({
   body,
@@ -106,7 +148,10 @@ export function BodyEditor({
           "Mod-z": undo,
           "Shift-Mod-z": redo,
           "Mod-y": redo,
-          Enter: splitListItem(item),
+          Enter: chainCommands(fenceOnEnter, splitListItem(item)),
+          "Shift-Enter": lineBreak,
+          "Mod-Enter": lineBreak,
+          "Shift-Mod-Enter": lineBreak,
           // 表の中では隣のセルへ。そうでなければ箇条書きの字下げ。
           Tab: chainCommands(goToNextCell(1), sinkListItem(item)),
           "Shift-Tab": chainCommands(goToNextCell(-1), liftListItem(item)),
