@@ -63,6 +63,8 @@ export function useHotkeys() {
         store.set(A.docFindOpenAtom, true);
         store.set(A.docFindNonceAtom, store.get(A.docFindNonceAtom) + 1);
       } else if (mod && (e.key === "b" || e.key === "B")) {
+        // 書いている最中は太字の付け外しに譲る。
+        if (inEditable(e.target)) return;
         e.preventDefault();
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {

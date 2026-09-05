@@ -522,3 +522,79 @@ describe("水平線", () => {
 
 
 });
+
+describe("行内の装飾を外す", () => {
+  // prosemirror-keymap は小文字で照合する（実機では keyCode から引き直すが、
+  // 作った event には keyCode が無い）。
+  const mod = (view: EditorView, key: string, shift = false) =>
+    press(view, key, { ctrlKey: true, shiftKey: shift });
+
+  it("行内コードの中にカーソルを置いて ⌘⇧C で囲みが外れる", () => {
+    const view = editor("これは `if` です。\n");
+    // "if" の中
+    const at = "これは ".length + 1 + 1;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    expect(mod(view, "c", true)).toBe(true);
+    expect(source()).toBe("これは if です。\n");
+  });
+
+  it("装飾の末尾でも外せる（そこで打つと続くので同じ範囲）", () => {
+    const view = editor("これは `if` です。\n");
+    const at = "これは ".length + 1 + "if".length;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    expect(mod(view, "c", true)).toBe(true);
+    expect(source()).toBe("これは if です。\n");
+  });
+
+  it("⌘B で太字が外れる", () => {
+    const view = editor("これは **強い** です。\n");
+    const at = "これは ".length + 2;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    expect(mod(view, "b")).toBe(true);
+    expect(source()).toBe("これは 強い です。\n");
+  });
+
+  it("選んだ範囲に ⌘B で太字が付く", () => {
+    const view = editor("ここを強くする\n");
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, 4, 6)),
+    );
+    expect(mod(view, "b")).toBe(true);
+    expect(source()).toBe("ここを**強く**する\n");
+  });
+
+  it("装飾の外では次に打つ字へ効く（範囲は変えない）", () => {
+    const view = editor("素の文\n");
+    caretAtEndOf(view, 0);
+    expect(mod(view, "b")).toBe(true);
+    expect(source()).toBe("素の文\n");
+    type(view, "太");
+    expect(source()).toBe("素の文**太**\n");
+  });
+});
+
+describe("コードの塊の中の Tab", () => {
+  it("Tab で字下げが入る", () => {
+    const view = editor("```ts\nx\n```\n");
+    // コードの中の頭
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)));
+    expect(press(view, "Tab")).toBe(true);
+    expect(source()).toBe("```ts\n    x\n```\n");
+  });
+
+  it("Shift-Tab で字下げが 1 段戻る", () => {
+    const view = editor("```ts\n    x\n```\n");
+    // "x" の直前
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 5)));
+    expect(press(view, "Tab", { shiftKey: true })).toBe(true);
+    expect(source()).toBe("```ts\nx\n```\n");
+  });
+
+  it("コードの外では表や箇条書きの働きを邪魔しない", () => {
+    const view = editor("- あ\n- い\n");
+    caretAtEndOf(view, 1);
+    // 2 番目の項目を字下げする
+    expect(press(view, "Tab")).toBe(true);
+    expect(source()).toBe("- あ\n  - い\n");
+  });
+});

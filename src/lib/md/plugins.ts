@@ -1,8 +1,14 @@
-import { baseKeymap, chainCommands } from "prosemirror-commands";
+import { baseKeymap, chainCommands, toggleMark } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { inputRules } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
-import { Fragment, Slice, type Node as PmNode } from "prosemirror-model";
+import {
+  Fragment,
+  Slice,
+  type MarkType,
+  type Node as PmNode,
+  type ResolvedPos,
+} from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { Plugin, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
@@ -203,6 +209,79 @@ const toSourceForward: Command = (state, dispatch, view) => {
   return hrToSource(tail, next, false)(state, dispatch, view);
 };
 
+// 行内の装飾を付け外しする。
+//
+// 記号を画面に出さないモードでは、入力変換で付けることはできても外す道が無い。
+// 選んでいなければ、カーソルの居る装飾の範囲まるごとを外す（`code` の囲みを
+// 消したいときに、いちいち選ばせない）。
+function markRun($pos: ResolvedPos, type: MarkType): { from: number; to: number } | null {
+  let at = $pos.start();
+  let found: { from: number; to: number } | null = null;
+  $pos.parent.forEach((child) => {
+    const from = at;
+    at += child.nodeSize;
+    if (found || !type.isInSet(child.marks)) return;
+    // 末尾も範囲に含める。そこで打つと装飾が続くので、同じ範囲と見なす。
+    if ($pos.pos > from && $pos.pos <= at) found = { from, to: at };
+  });
+  return found;
+}
+
+function toggleInline(type: MarkType): Command {
+  return (state, dispatch, view) => {
+    const { empty, $from } = state.selection;
+    if (empty) {
+      const run = markRun($from, type);
+      if (run) {
+        if (dispatch) {
+          dispatch(state.tr.removeMark(run.from, run.to, type).removeStoredMark(type));
+        }
+        return true;
+      }
+    }
+    return toggleMark(type)(state, dispatch, view);
+  };
+}
+
+// コードの塊の中の Tab。字下げとして扱う（他と同じ半角 4 つ）。
+const INDENT = "    ";
+
+const indentCode: Command = (state, dispatch) => {
+  const { $from, from, to, empty } = state.selection;
+  if (!$from.parent.type.spec.code) return false;
+  if (dispatch) {
+    if (empty) {
+      dispatch(state.tr.insertText(INDENT, from).scrollIntoView());
+    } else {
+      // 選んだ範囲は行ごとに送る。
+      const text = state.doc.textBetween(from, to, "\n");
+      const moved = text.replace(/^/gm, INDENT);
+      dispatch(state.tr.insertText(moved, from, to).scrollIntoView());
+    }
+  }
+  return true;
+};
+
+const outdentCode: Command = (state, dispatch) => {
+  const { $from, from, to, empty } = state.selection;
+  if (!$from.parent.type.spec.code) return false;
+  if (dispatch) {
+    if (empty) {
+      // カーソルの手前にある字下げを 1 段だけ削る。
+      const head = $from.start();
+      const before = state.doc.textBetween(head, from, "\n");
+      const back = /(?: {1,4}|\t)$/.exec(before);
+      if (!back) return true;
+      dispatch(state.tr.delete(from - back[0].length, from).scrollIntoView());
+    } else {
+      const text = state.doc.textBetween(from, to, "\n");
+      const moved = text.replace(/^(?: {1,4}|\t)/gm, "");
+      dispatch(state.tr.insertText(moved, from, to).scrollIntoView());
+    }
+  }
+  return true;
+};
+
 // 貼り付けた文字を Markdown として読む。
 //
 // そのまま文字として入れると、保存のときに # や - が原文へ戻るように逃がされて
@@ -281,12 +360,17 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       ArrowRight: cellRight,
       "Mod-ArrowLeft": cellStart,
       "Mod-ArrowRight": cellEnd,
+      // 行内の装飾。付けるだけでなく外せるようにする。
+      "Mod-b": toggleInline(schema.marks.strong),
+      "Mod-i": toggleInline(schema.marks.em),
+      "Shift-Mod-x": toggleInline(schema.marks.strike),
+      "Shift-Mod-c": toggleInline(schema.marks.code),
       "Shift-Enter": lineBreak,
       "Mod-Enter": lineBreak,
       "Shift-Mod-Enter": lineBreak,
-      // 表の中では隣のセルへ。そうでなければ箇条書きの字下げ。
-      Tab: chainCommands(goToNextCell(1), sinkListItem(item)),
-      "Shift-Tab": chainCommands(goToNextCell(-1), liftListItem(item)),
+      // コードの塊の中は字下げ。表の中では隣のセルへ。それ以外は箇条書きの字下げ。
+      Tab: chainCommands(indentCode, goToNextCell(1), sinkListItem(item)),
+      "Shift-Tab": chainCommands(outdentCode, goToNextCell(-1), liftListItem(item)),
     }),
     keymap(baseKeymap),
     // セルの選択と、いま触っているセルの印。

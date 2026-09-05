@@ -3669,7 +3669,8 @@ svg[id^="mmd-"] foreignObject p {
    同じ形をここで組む（.mg-prose pre は背景も余白も打ち消してある）。 */
 .mg-pm-code {
   position: relative;
-  overflow: hidden;
+  /* 切り抜き（overflow: hidden）は置かない。矢印でこの塊へ入れなくなる。
+     中の pre は自分で横スクロールを持つので、はみ出しはそちらが処理する。 */
   border: 1px solid var(--mg-border);
   border-radius: 0.75rem;
   background: var(--mg-code-bg);

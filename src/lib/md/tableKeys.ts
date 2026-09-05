@@ -1,6 +1,11 @@
 import type { Node as PmNode, ResolvedPos } from "prosemirror-model";
-import { Plugin } from "prosemirror-state";
-import { Selection, TextSelection, type Command } from "prosemirror-state";
+import {
+  Plugin,
+  Selection,
+  TextSelection,
+  type Command,
+  type EditorState,
+} from "prosemirror-state";
 import { cellAround, TableMap } from "prosemirror-tables";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { schema } from "./schema";
@@ -169,17 +174,25 @@ export const cellEnter: Command = (state, dispatch, view) => {
 };
 
 // いま居るセルに印を付ける。どのセルを触っているかが見て分かるようにする。
-export const focusedCell = new Plugin({
+// 印は状態に持つ（毎回作り直すと打鍵ごとに節点を描き直させてしまう）。
+function cellDecos(state: EditorState): DecorationSet {
+  const $cell = cellAround(state.selection.$head);
+  const cell = $cell?.nodeAfter;
+  if (!$cell || !cell) return DecorationSet.empty;
+  return DecorationSet.create(state.doc, [
+    Decoration.node($cell.pos, $cell.pos + cell.nodeSize, { class: "is-focused" }),
+  ]);
+}
+
+export const focusedCell = new Plugin<DecorationSet>({
+  state: {
+    init: (_, state) => cellDecos(state),
+    apply: (tr, prev, _old, next) =>
+      tr.docChanged || tr.selectionSet ? cellDecos(next) : prev,
+  },
   props: {
     decorations(state) {
-      const $cell = cellAround(state.selection.$head);
-      const cell = $cell?.nodeAfter;
-      if (!$cell || !cell) return null;
-      return DecorationSet.create(state.doc, [
-        Decoration.node($cell.pos, $cell.pos + cell.nodeSize, {
-          class: "is-focused",
-        }),
-      ]);
+      return this.getState(state);
     },
   },
 });

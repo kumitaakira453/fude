@@ -1,5 +1,5 @@
 import type { Node as PmNode } from "prosemirror-model";
-import { Plugin, TextSelection } from "prosemirror-state";
+import { Plugin, TextSelection, type EditorState } from "prosemirror-state";
 import {
   Decoration,
   DecorationSet,
@@ -493,18 +493,30 @@ export function nodeViews(deps: EditorDeps) {
 
 // カーソルの居るブロックに印を付ける。図だけを出しているときにカーソルが
 // 入ると見えなくなるので、そのときだけソースを出すのに使う。
-export const insideBlock = new Plugin({
+//
+// 印は状態に持つ。毎回作り直すと ProseMirror は「装飾が変わった」と見なして
+// 打鍵ごとに節点を描き直す。
+function insideDecos(state: EditorState): DecorationSet {
+  const { $head } = state.selection;
+  for (let d = $head.depth; d > 0; d--) {
+    if ($head.node(d).type !== schema.nodes.codeBlock) continue;
+    const at = $head.before(d);
+    return DecorationSet.create(state.doc, [
+      Decoration.node(at, at + $head.node(d).nodeSize, { class: "is-inside" }),
+    ]);
+  }
+  return DecorationSet.empty;
+}
+
+export const insideBlock = new Plugin<DecorationSet>({
+  state: {
+    init: (_, state) => insideDecos(state),
+    apply: (tr, prev, _old, next) =>
+      tr.docChanged || tr.selectionSet ? insideDecos(next) : prev,
+  },
   props: {
     decorations(state) {
-      const { $head } = state.selection;
-      for (let d = $head.depth; d > 0; d--) {
-        if ($head.node(d).type !== schema.nodes.codeBlock) continue;
-        const at = $head.before(d);
-        return DecorationSet.create(state.doc, [
-          Decoration.node(at, at + $head.node(d).nodeSize, { class: "is-inside" }),
-        ]);
-      }
-      return null;
+      return this.getState(state);
     },
   },
 });
