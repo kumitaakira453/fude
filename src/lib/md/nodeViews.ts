@@ -63,11 +63,15 @@ function pickLang(
   const menu = document.createElement("div");
   menu.className = "mg-lang-menu";
 
+  const find = document.createElement("div");
+  find.className = "mg-lang-find";
+  find.appendChild(icon("search", 17));
   const filter = document.createElement("input");
   filter.className = "mg-lang-filter";
   filter.type = "text";
-  filter.placeholder = "言語をしぼる";
-  menu.appendChild(filter);
+  filter.placeholder = "言語";
+  find.appendChild(filter);
+  menu.appendChild(find);
 
   const list = document.createElement("div");
   list.className = "mg-lang-list";
@@ -154,6 +158,7 @@ class CodeBlockView implements NodeView {
 
   private head: HTMLElement;
   private lang: HTMLButtonElement;
+  private name: HTMLElement;
   private copy: HTMLButtonElement;
   private tools: HTMLElement;
   private stage: HTMLElement;
@@ -191,6 +196,9 @@ class CodeBlockView implements NodeView {
     this.lang.type = "button";
     this.lang.className = "mg-code-lang";
     this.lang.title = "言語";
+    this.name = document.createElement("span");
+    this.lang.appendChild(this.name);
+    this.lang.appendChild(icon("expand_more", 16));
     this.lang.addEventListener("mousedown", (e) => e.preventDefault());
     this.lang.addEventListener("click", () =>
       pickLang(this.lang, this.node.attrs.lang as string | null, (value) =>
@@ -249,7 +257,7 @@ class CodeBlockView implements NodeView {
   private paint() {
     const lang = this.node.attrs.lang as string | null;
     const isMermaid = lang === MERMAID;
-    this.lang.textContent = lang ?? PLAIN;
+    this.name.textContent = lang ?? PLAIN;
 
     this.dom.classList.toggle("is-mermaid", isMermaid);
     const mode = this.mode();
