@@ -11,9 +11,11 @@ import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { rules } from "../lib/md/inputRules";
 import {
   cellDown,
+  cellEnd,
   cellEnter,
   cellLeft,
   cellRight,
+  cellStart,
   cellUp,
   focusedCell,
 } from "../lib/md/tableKeys";
@@ -211,6 +213,8 @@ export function BodyEditor({
           ArrowDown: cellDown,
           ArrowLeft: cellLeft,
           ArrowRight: cellRight,
+          "Mod-ArrowLeft": cellStart,
+          "Mod-ArrowRight": cellEnd,
           "Shift-Enter": lineBreak,
           "Mod-Enter": lineBreak,
           "Shift-Mod-Enter": lineBreak,

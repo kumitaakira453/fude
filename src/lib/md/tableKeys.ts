@@ -60,6 +60,26 @@ export const cellRight = step(1, 0);
 export const cellUp = step(0, -1);
 export const cellDown = step(0, 1);
 
+// ⌘← / ⌘→ はセルの中の端へ。表の外は既定の動きに任せる。
+function edge(dir: -1 | 1): Command {
+  return (state, dispatch, view) => {
+    if (view?.composing) return false;
+    if (!cellAt(state)) return false;
+    const { $head } = state.selection;
+    const at = dir < 0 ? $head.start() : $head.end();
+    if (at === $head.pos) return false;
+    if (dispatch) {
+      dispatch(
+        state.tr.setSelection(TextSelection.create(state.doc, at)).scrollIntoView(),
+      );
+    }
+    return true;
+  };
+}
+
+export const cellStart = edge(-1);
+export const cellEnd = edge(1);
+
 // Enter は下のセルへ。表の外や最下段では、いつもの働きに任せる。
 export const cellEnter: Command = (state, dispatch, view) => {
   if (view?.composing) return false;
