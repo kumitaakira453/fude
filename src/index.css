@@ -1886,8 +1886,9 @@ body.mg-dragging .mg-sel-menu {
   background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
   color: var(--mg-fg);
   font-weight: 650;
-  /* 平坦な地だけだと「禿げ」に見えるため、アクセントの下線で見出しを締める */
-  border-bottom: 2px solid color-mix(in srgb, var(--mg-accent) 50%, var(--mg-border));
+  /* 平坦な地だけだと「禿げ」に見えるため、アクセントの下線で見出しを締める。
+     太さは格子と同じ 1px にする。ここだけ太いと、格子の中で 1 本浮く。 */
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-accent) 50%, var(--mg-border));
 }
 .mg-prose.mg-editorial tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
