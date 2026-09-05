@@ -128,7 +128,14 @@ export const schema = new Schema({
         delim: { default: null as string | null },
       },
       parseDOM: [{ tag: "table" }],
-      toDOM: () => ["table", ["tbody", 0]] as DOMOutputSpec,
+      // 読むときと同じ入れ子にする。列幅はラッパーと .mg-cell が決めていて、
+      // 素の table だけを出すと桁が潰れて変なところで折り返す。
+      toDOM: () =>
+        [
+          "div",
+          { class: "mg-table-wrap overflow-x-auto" },
+          ["table", ["tbody", 0]],
+        ] as DOMOutputSpec,
     },
 
     tableRow: {
@@ -145,7 +152,8 @@ export const schema = new Schema({
         { tag: "td", attrs: { header: false } },
         { tag: "th", attrs: { header: true } },
       ],
-      toDOM: (node) => [node.attrs.header ? "th" : "td", 0] as DOMOutputSpec,
+      toDOM: (node) =>
+        [node.attrs.header ? "th" : "td", ["div", { class: "mg-cell" }, 0]] as DOMOutputSpec,
     },
 
     thematicBreak: {

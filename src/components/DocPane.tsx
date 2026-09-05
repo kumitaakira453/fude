@@ -670,6 +670,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               key={path}
               body={body}
               prefix={fmPrefix}
+              initialOffset={recallViewpoint(viewKey(pane.id, path))}
+              onOffset={(offset) => {
+                rememberViewpoint(viewKey(pane.id, path), offset);
+              }}
               onChange={setDraft}
               onSave={save}
               className={`mg-prose prose ${
