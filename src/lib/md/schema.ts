@@ -78,7 +78,10 @@ export const schema = new Schema({
       content: "listItem+",
       attrs: { ...id, tight: { default: true }, marker: { default: "-" } },
       parseDOM: [{ tag: "ul" }],
-      toDOM: () => ["ul", 0] as DOMOutputSpec,
+      // 詰まった箇条書きは、読むときは項目の中に段落が出ない。編集面では
+      // 段落を持つので、印を付けて余白を落とす。
+      toDOM: (node) =>
+        ["ul", node.attrs.tight ? { "data-tight": "true" } : {}, 0] as DOMOutputSpec,
     },
 
     orderedList: {
@@ -99,7 +102,14 @@ export const schema = new Schema({
         },
       ],
       toDOM: (node) =>
-        ["ol", node.attrs.start === 1 ? {} : { start: node.attrs.start }, 0] as DOMOutputSpec,
+        [
+          "ol",
+          {
+            ...(node.attrs.start === 1 ? {} : { start: node.attrs.start }),
+            ...(node.attrs.tight ? { "data-tight": "true" } : {}),
+          },
+          0,
+        ] as DOMOutputSpec,
     },
 
     // checked が null なら普通の項目、true / false ならタスク。

@@ -1,4 +1,5 @@
 import { baseKeymap } from "prosemirror-commands";
+import { inputRules, undoInputRule } from "prosemirror-inputrules";
 import { history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
@@ -6,6 +7,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { useEffect, useRef } from "react";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
+import { rules } from "../lib/md/inputRules";
 import { schema } from "../lib/md/schema";
 import { toMarkdown } from "../lib/md/toMarkdown";
 
@@ -89,7 +91,10 @@ export function BodyEditor({
         : undefined,
       plugins: [
         history(),
+        inputRules({ rules }),
         keymap({
+          // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
+          Backspace: undoInputRule,
           "Mod-s": () => {
             saved.current();
             return true;
@@ -107,7 +112,7 @@ export function BodyEditor({
 
     const view = new EditorView(at, {
       state,
-      attributes: { class: "mg-pm" },
+      attributes: { class: `mg-pm ${className ?? ""}`.trim() },
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
@@ -161,5 +166,5 @@ export function BodyEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={host} className={className} />;
+  return <div ref={host} />;
 }

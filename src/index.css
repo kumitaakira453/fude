@@ -3608,3 +3608,8 @@ svg[id^="mmd-"] foreignObject p {
 .mg-pm .mg-details-head {
   font-weight: 600;
 }
+/* 詰まった箇条書きの項目。読むときは項目の中が段落にならないので、
+   編集面でも段落の余白を落として同じ間隔にする。 */
+.mg-pm [data-tight="true"] > li > p {
+  margin-block: 0;
+}
