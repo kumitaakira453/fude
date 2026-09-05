@@ -672,6 +672,9 @@ button.mg-task-check:hover {
 .mg-prose table th,
 .mg-prose table td {
   padding-block: 0.4rem;
+  /* prose の既定は先頭・末尾のセルだけ外側の余白を落とす。枠を引くと字が
+     線に貼り付くので、どのセルも同じ余白にする。 */
+  padding-inline: 0.85rem;
 }
 /* 表の淵と列の区切り。行の区切りと同じ細さ・色で引く。枠があれば、中身の
    無いセルも「在る」ことが分かる。 */
