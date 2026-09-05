@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { throttled } from "../lib/later";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
+import { reload } from "../lib/md/reload";
 import { editorPlugins } from "../lib/md/plugins";
 import { toMarkdown } from "../lib/md/toMarkdown";
 import { MermaidModal } from "./MermaidModal";
@@ -246,15 +247,28 @@ export function BodyEditor({
     // 流せば、ProseMirror が古い doc と差分を取って変わったところの DOM だけ
     // 触る。スクロール位置も自然に保たれる。
     const adopt = (text: string) => {
-      const next = fromMarkdown(text);
-      loaded = next;
-      blocks = blocksOf(next);
-      // 外の変更は編集面の ⌘Z に積まない。自分が打ったものではない。
-      const tr = view.state.tr
-        .replaceWith(0, view.state.doc.content.size, next.doc.content)
-        .setMeta("addToHistory", false);
-      view.dispatch(tr);
-      // 取り込んだ本文はそのまま親の控えでもある。組み直しの予約は流す。
+      // 変わったところだけ読み直せるならそれで済ませる。大きいファイルでは
+      // 全体の読み直しが 350ms 掛かる（929 ブロックで実測）。
+      const spot = reload(loaded, text);
+      if (spot) {
+        loaded = spot.loaded;
+        view.dispatch(
+          view.state.tr
+            .replaceWith(spot.from, spot.to, spot.content)
+            // 外の変更は編集面の ⌘Z に積まない。自分が打ったものではない。
+            .setMeta("addToHistory", false),
+        );
+      } else {
+        const whole = fromMarkdown(text);
+        loaded = whole;
+        view.dispatch(
+          view.state.tr
+            .replaceWith(0, view.state.doc.content.size, whole.doc.content)
+            .setMeta("addToHistory", false),
+        );
+      }
+      blocks = blocksOf(loaded);
+      // 取り込んだ本文はそのまま親の控えでもある。組み直しの予約は捨てる。
       send.cancel();
       caret.draw();
     };
