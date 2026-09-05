@@ -260,6 +260,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [content],
   );
 
+  // 指摘を書いている間、対象のブロックが今どこに居るかを測る。小窓は
+  // 動いた分だけ一緒に動く。
+  const trackDraft = useCallback(() => {
+    const at = reviewRef.current?.draft?.blockIndex;
+    if (!content || at === undefined) return null;
+    const el = content.querySelector<HTMLElement>(`[data-mg-block="${at}"]`);
+    if (!el) return null;
+    const box = blockRect(el) ?? el.getBoundingClientRect();
+    return { top: box.top, left: box.left };
+  }, [content]);
+
   // 箇条書きの項目への指摘。項目の中身を選んでから通常の流れに乗せるので、
   // 印はその項目の箱で出る。
   const commentOnItem = useCallback(
@@ -813,6 +824,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             anchorRect={review.draft.hit}
             selection={review.draft.text}
             busy={review.busy}
+            track={trackDraft}
             onSubmit={(text) => void review.submit(text)}
             onClose={review.close}
           />

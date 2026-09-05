@@ -19,35 +19,85 @@ export function CommentComposer({
   anchorRect,
   selection,
   busy,
+  track,
   onSubmit,
   onClose,
 }: {
   anchorRect: AnchorHit;
   selection: string;
   busy: boolean;
+  // 対象が今どこに居るかを測る。スクロールで動いた分だけ小窓も動かす。
+  track?: () => { top: number; left: number } | null;
   onSubmit: (body: string) => void;
   onClose: () => void;
 }) {
   const [body, setBody] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 開いた時点からの対象のずれ。これを足して追いかける。
+  const [shift, setShift] = useState({ x: 0, y: 0 });
+  // 小窓の高さ。画面の端で止めるのに要る（入力欄が伸びると変わる）。
+  const [height, setHeight] = useState(0);
 
+  useEffect(() => {
+    const from = track?.() ?? null;
+    const update = () => {
+      const now = track?.() ?? null;
+      if (from && now) setShift({ x: now.left - from.left, y: now.top - from.top });
+      else setShift({ x: 0, y: 0 });
+    };
+    // 本文は内側の入れ物がスクロールするので、捕捉で全部の scroll を拾う。
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [track]);
+
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () => setHeight(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const anchor = {
+    top: anchorRect.top + shift.y,
+    bottom: anchorRect.bottom + shift.y,
+    left: anchorRect.left + shift.x,
+  };
   // 画面外に出ないように寄せる
-  const left = Math.min(Math.max(GAP, anchorRect.left), window.innerWidth - WIDTH - GAP);
+  const left = Math.min(Math.max(GAP, anchor.left), window.innerWidth - WIDTH - GAP);
   // 下に開いて下へ伸びるのが基本。書いた文が下に足されていく向きと揃う。
   // 上に開くのは、下では小窓が成り立たないほど狭く、かつ上の方が広いときだけ。
-  const roomBelow = window.innerHeight - anchorRect.bottom - GAP * 2;
-  const roomAbove = anchorRect.top - GAP * 2;
-  const openUpward = roomBelow < CHROME + MIN_INPUT && roomAbove > roomBelow;
-  const room = openUpward ? roomAbove : roomBelow;
-  // 入力欄の上限。空いている側に収まる高さと、画面の 45% の小さい方。
+  // 向きは開いた時点で決める。書いている途中で上下が入れ替わると読めなくなる。
+  const upwardRef = useRef<boolean | null>(null);
+  if (upwardRef.current === null) {
+    const below = window.innerHeight - anchor.bottom - GAP * 2;
+    const above = anchor.top - GAP * 2;
+    upwardRef.current = below < CHROME + MIN_INPUT && above > below;
+  }
+  const openUpward = upwardRef.current;
+  // 入力欄の上限。画面に収まる高さと、画面の 45% の小さい方。
   const maxInput = Math.max(
     MIN_INPUT,
-    Math.min(room - CHROME, window.innerHeight * MAX_INPUT_RATIO),
+    Math.min(
+      window.innerHeight - CHROME - GAP * 2,
+      window.innerHeight * MAX_INPUT_RATIO,
+    ),
   );
-  const style = openUpward
-    ? { left, bottom: window.innerHeight - anchorRect.top + GAP }
-    : { left, top: anchorRect.bottom + GAP };
+  // 対象について動き、画面の上端・下端で止まる。対象が画面から出ても、
+  // 小窓は端に留まって書き続けられる。
+  const wanted = openUpward ? anchor.top - GAP - height : anchor.bottom + GAP;
+  const top = Math.min(
+    Math.max(GAP, wanted),
+    Math.max(GAP, window.innerHeight - height - GAP),
+  );
+  const style = { left, top, visibility: height > 0 ? "visible" : "hidden" } as const;
 
   useEffect(() => {
     inputRef.current?.focus();

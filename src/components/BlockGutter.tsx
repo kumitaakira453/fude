@@ -139,7 +139,11 @@ function itemEdge(li: HTMLElement): number {
   const line = firstLine(li) ?? box;
   if (li.querySelector(".mg-task-check")) return line.left;
   const list = li.parentElement?.getBoundingClientRect();
-  const reserve = list ? Math.max(0, box.left - list.left) : 0;
+  // 行頭の印が占めている幅を空ける。印はリストの内側の字下げに入ることも
+  // （箇条書きの丸）、項目自身の字下げに入ることもある（番号の丸）。
+  // 空けないと、つまみが印の上に重なる。
+  const inset = parseFloat(getComputedStyle(li).paddingLeft) || 0;
+  const reserve = (list ? Math.max(0, box.left - list.left) : 0) + inset;
   return line.left - reserve;
 }
 
