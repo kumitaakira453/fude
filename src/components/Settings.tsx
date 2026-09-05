@@ -245,11 +245,11 @@ export function Settings() {
                     />
                     <span className="mg-set-row-main">
                       <span className="mg-set-row-name">
-                        組版のまま書く
+                        見たまま書く
                         <span className="mg-set-beta">Beta</span>
                       </span>
                       <span className="mg-set-note">
-                        ⌘E の全文編集を、記号ではなく組版された姿のまま書く形にする
+                        ⌘E の全文編集で、# や ** を出さずに表示のまま書く
                       </span>
                     </span>
                     <span className={`mg-switch${rich ? " is-on" : ""}`}>
