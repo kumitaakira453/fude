@@ -2441,8 +2441,11 @@ svg[id^="mmd-"] foreignObject p {
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.6rem 0.4rem 0.75rem;
-  border-bottom: 1px solid var(--mg-border);
-  background: var(--mg-panel);
+  /* 地をアクセントで塗る。選ばれている札（アクセント 10% 前後）よりはっきり
+     濃くしないと、面として読めず札に紛れる。選びの印は札の左の棒なので、
+     帯の方が濃くても取り違えない。 */
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--mg-accent) 26%, var(--mg-panel));
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
