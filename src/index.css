@@ -2441,32 +2441,18 @@ svg[id^="mmd-"] foreignObject p {
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.6rem 0.4rem 0.75rem;
-  /* 地はアクセントで塗り、字と印は地の色で抜く。薄い面では読み分けが
-     作れなかったので、面としてはっきり立てる。抜く色を --mg-bg にすると、
-     明るいテーマでは白、暗いテーマでは黒として出る（押しボタンと同じ組み方）。 */
-  background: var(--mg-accent);
+  /* 地はアクセントを薄く敷く。べた塗りは、画面の中でアクセントを使っている
+     他のもの（指摘の箱・返信のボタン・印）より強く出てしまう。札の面を
+     やめたので、この濃さでも面として読める。 */
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-panel));
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  color: color-mix(in srgb, var(--mg-bg) 80%, transparent);
+  color: var(--mg-muted);
 }
 .mg-review-group .mg-review-name {
-  color: var(--mg-bg);
-  font-weight: 700;
-}
-.mg-review-group .mg-review-dir {
-  color: color-mix(in srgb, var(--mg-bg) 78%, transparent);
-}
-.mg-review-group .mg-review-ico {
-  color: var(--mg-bg);
-  opacity: 0.9;
-}
-.mg-review-group .mg-bulk {
-  color: color-mix(in srgb, var(--mg-bg) 78%, transparent);
-}
-.mg-review-group .mg-bulk:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--mg-bg) 20%, transparent);
-  color: var(--mg-bg);
+  color: var(--mg-fg);
 }
 /* ファイルごとのまとまり。間を空けるより線で切ったほうが、どこまでが
    同じファイルの指摘か分かる。 */
@@ -2700,8 +2686,8 @@ svg[id^="mmd-"] foreignObject p {
   min-width: 1.15rem;
   padding: 0 0.3rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--mg-bg) 25%, transparent);
-  color: var(--mg-bg);
+  background: var(--mg-hover);
+  color: var(--mg-fg-dim);
   font-size: 10px;
   line-height: 1.15rem;
   text-align: center;
