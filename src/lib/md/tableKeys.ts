@@ -61,11 +61,16 @@ function step(dx: number, dy: number): Command {
     }
 
     if (dispatch) {
-      const at = here.start + here.map.map[row * here.map.width + col];
-      const $at = state.doc.resolve(at);
+      // TableMap が持つのはセルの「手前」の位置。そこから逆方向に探すと 1 つ前の
+      // セルに落ちるので、セルの中の位置を出してから置く。
+      const before = here.start + here.map.map[row * here.map.width + col];
+      const cell = state.doc.nodeAt(before);
+      const back = dx < 0 || dy < 0;
+      // 戻る向きなら移動先の末尾、進む向きなら頭。字を追う感覚に合わせる。
+      const at = before + 1 + (back ? (cell?.content.size ?? 0) : 0);
       dispatch(
         state.tr
-          .setSelection(TextSelection.near($at, dx < 0 || dy < 0 ? -1 : 1))
+          .setSelection(TextSelection.near(state.doc.resolve(at), back ? -1 : 1))
           .scrollIntoView(),
       );
     }

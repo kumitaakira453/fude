@@ -336,8 +336,9 @@ describe("セルの中の移動", () => {
     // 2 行目の左のセル
     caretAtEndOf(view, 2);
     expect(press(view, "ArrowUp")).toBe(true);
+    // 戻る向きなので移動先の末尾に着く。
     type(view, "z");
-    expect(source()).toBe("| za | b |\n| --- | --- |\n| c | d |\n");
+    expect(source()).toBe("| az | b |\n| --- | --- |\n| c | d |\n");
   });
 
   it("下矢印で下のセルへ移る", () => {
