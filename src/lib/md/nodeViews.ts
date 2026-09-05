@@ -9,7 +9,7 @@ import {
 } from "prosemirror-view";
 import { renderMermaid } from "../mermaid";
 import { MERMAID, PLAIN, languages } from "./highlight";
-import { schema } from "./schema";
+import { schema, summaryOf, withSummary } from "./schema";
 
 // 編集面の専用の描画。
 //
@@ -43,7 +43,7 @@ export interface EditorDeps {
   redraws: Set<() => void>;
 }
 
-function icon(name: string, size = 15): HTMLElement {
+export function icon(name: string, size = 15): HTMLElement {
   const el = document.createElement("span");
   el.className = "material-symbols-rounded select-none leading-none";
   el.style.fontSize = `${size}px`;
@@ -483,10 +483,115 @@ class ImageView implements NodeView {
   }
 }
 
+// トグルの見出し。原文では開きタグの中の <summary> なので、本文のブロックとして
+// は編集できない。入力欄として出し、打ったぶんを attrs へ差し戻す。
+class DetailsView implements NodeView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+
+  private node: PmNode;
+  private view: EditorView;
+  private getPos: () => number | undefined;
+  private head: HTMLElement;
+  private title: HTMLInputElement;
+
+  constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
+    this.node = node;
+    this.view = view;
+    this.getPos = getPos;
+
+    this.dom = document.createElement("div");
+    this.dom.className = "mg-details";
+
+    const head = document.createElement("div");
+    head.className = "mg-details-head";
+    // 入力欄は編集できないところに置いても打てる。ProseMirror には渡さない。
+    head.contentEditable = "false";
+    // 帯の余白を押したときも見出しを打てるようにする。
+    head.addEventListener("mousedown", (e) => {
+      if (e.target === head) {
+        e.preventDefault();
+        this.title.focus();
+      }
+    });
+    this.head = head;
+    this.title = document.createElement("input");
+    this.title.type = "text";
+    this.title.className = "mg-details-title";
+    this.title.placeholder = "トグル";
+    this.title.value = summaryOf(node.attrs.head as string);
+    this.title.addEventListener("input", () => this.push());
+    this.title.addEventListener("keydown", (e) => this.onKey(e));
+    head.appendChild(this.title);
+    this.dom.appendChild(head);
+
+    this.contentDOM = document.createElement("div");
+    this.contentDOM.className = "mg-details-body";
+    this.dom.appendChild(this.contentDOM);
+  }
+
+  private push() {
+    const at = this.getPos();
+    if (at === undefined) return;
+    // 原文では生 HTML なので、タグを作れる字は入れさせない。
+    const text = this.title.value.replace(/[<>]/g, "");
+    const caret = this.title.selectionStart;
+    if (text !== this.title.value) this.title.value = text;
+
+    this.view.dispatch(
+      this.view.state.tr.setNodeMarkup(at, undefined, {
+        ...this.node.attrs,
+        head: withSummary(this.node.attrs.head as string, text),
+      }),
+    );
+    // 書き換えで焦点が編集面へ戻ることがある。打っている場所へ返す。
+    if (document.activeElement !== this.title) {
+      this.title.focus();
+      if (caret !== null) this.title.setSelectionRange(caret, caret);
+    }
+  }
+
+  // Enter と下矢印で中身へ入る。Escape は編集面へ戻す。
+  private onKey(e: KeyboardEvent) {
+    if (e.key !== "Enter" && e.key !== "ArrowDown" && e.key !== "Escape") return;
+    e.preventDefault();
+    const at = this.getPos();
+    if (at === undefined) return;
+    const { state } = this.view;
+    this.view.dispatch(
+      state.tr.setSelection(TextSelection.near(state.doc.resolve(at + 1), 1)).scrollIntoView(),
+    );
+    this.view.focus();
+  }
+
+  update(node: PmNode): boolean {
+    if (node.type !== this.node.type) return false;
+    this.node = node;
+    const text = summaryOf(node.attrs.head as string);
+    // 打っている最中に入れ直すと、カーソルが頭へ戻る。
+    if (document.activeElement !== this.title && this.title.value !== text) {
+      this.title.value = text;
+    }
+    return true;
+  }
+
+  // 見出しの帯の操作は編集面に渡さない。中身を押したときは渡す。
+  stopEvent(event: Event): boolean {
+    const at = event.target;
+    return at instanceof Node && this.head.contains(at);
+  }
+
+  ignoreMutation(m: ViewMutationRecord): boolean {
+    return !this.contentDOM.contains(m.target);
+  }
+}
+
 export function nodeViews(deps: EditorDeps) {
   return {
     codeBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new CodeBlockView(node, view, getPos, deps),
+    details: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
+      new DetailsView(node, view, getPos),
     image: (node: PmNode) => new ImageView(node, deps),
   };
 }
