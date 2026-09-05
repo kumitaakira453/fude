@@ -86,21 +86,42 @@ const KEYWORDS = new Set([
 const LINK_START = /[-=.~<>|}*]/;
 const LINK_BODY = /[-=.~<>|{}()*ox+]/;
 const LINE = /[-=.~]/;
-// 名前とラベル。日本語もひとまとまりで進めたいので、記号以外をまとめて取る。
-const WORD = /^[\w\u00c0-\uffff-]+/;
+// 名前。日本語もひとまとまりで進める。`-` を含められるのは
+// stateDiagram-v2 のような綴りのためで、次が字のときだけ続きにする
+// （A-->B の `-` を名前に取り込ませない）。
+const WORD = /^[\w\u00c0-\uffff]+(?:-[\w\u00c0-\uffff]+)*/;
+
+// `:` の後ろは行末まで文章（関連の名前、送るメッセージ、工程の設定）。
+// 記号として読むと切れ切れになるので、まとめて 1 つの語として扱う。
+export interface MermaidState {
+  label: boolean;
+}
 
 export const mermaidMode = {
   name: "mermaid",
-  token(stream: StringStream): string | null {
+  startState(): MermaidState {
+    return { label: false };
+  },
+  token(stream: StringStream, state: MermaidState): string | null {
+    if (stream.sol()) state.label = false;
     if (stream.eatSpace()) return null;
     // 注記。%%{init: ...}%% の指示も同じ扱いでよい。
     if (stream.match("%%")) {
       stream.skipToEnd();
       return "comment";
     }
+    if (state.label) {
+      stream.skipToEnd();
+      return "labelName";
+    }
     const ch = stream.peek();
     if (ch === undefined) {
       stream.next();
+      return null;
+    }
+    if (ch === ":") {
+      stream.next();
+      state.label = true;
       return null;
     }
     if (ch === '"') {
@@ -141,7 +162,8 @@ export const mermaidLang = StreamLanguage.define(mermaidMode);
 const style = HighlightStyle.define([
   { tag: tags.comment, color: "var(--sx-comment)", fontStyle: "italic" },
   { tag: tags.string, color: "var(--sx-str)" },
-  { tag: tags.keyword, color: "var(--sx-key)" },
+  { tag: tags.keyword, color: "var(--sx-key)", fontWeight: "600" },
+  { tag: tags.labelName, color: "var(--sx-type)" },
   { tag: tags.number, color: "var(--sx-num)" },
   { tag: tags.operator, color: "var(--sx-fn)" },
 ]);

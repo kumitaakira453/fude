@@ -6,9 +6,15 @@ import {
   redo,
   undo,
 } from "@codemirror/commands";
-import { indentUnit } from "@codemirror/language";
+import { bracketMatching, indentUnit } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+import {
+  EditorView,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers,
+} from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { mermaidHighlight, mermaidLang } from "../lib/mermaidLang";
 
@@ -17,19 +23,28 @@ const theme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily: "var(--mg-font-mono)",
-    fontSize: "12.5px",
-    lineHeight: "1.75",
+    fontSize: "13px",
+    lineHeight: "1.8",
     overflow: "auto",
   },
   ".cm-content": { padding: "0.35rem 0", caretColor: "var(--mg-accent)" },
+  // 折り返した先を 1 段下げる。折り返しと次の行の区別が付かないと、
+  // どこからどこまでが 1 つの関連なのかが読めない。
+  ".cm-line": { textIndent: "-4ch", paddingLeft: "calc(4ch + 4px)" },
   ".cm-gutters": {
     backgroundColor: "transparent",
     border: "none",
     color: "var(--mg-muted)",
-    opacity: "0.55",
+    opacity: "0.5",
   },
-  ".cm-lineNumbers .cm-gutterElement": { padding: "0 0.5rem 0 0.25rem" },
-  ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "transparent" },
+  ".cm-lineNumbers .cm-gutterElement": { padding: "0 0.6rem 0 0.25rem" },
+  // 今いる行に薄く敷く。折り返しが続くと、どの行に居るかを見失いやすい。
+  ".cm-activeLine": { backgroundColor: "var(--mg-hover)" },
+  ".cm-activeLineGutter": { backgroundColor: "transparent", opacity: "1" },
+  ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
+    backgroundColor: "var(--mg-accent-soft)",
+    outline: "none",
+  },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--mg-accent)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
     backgroundColor: "var(--mg-accent-soft)",
@@ -68,6 +83,9 @@ export function MermaidSourceEditor({
         extensions: [
           history(),
           lineNumbers(),
+          highlightActiveLine(),
+          highlightActiveLineGutter(),
+          bracketMatching(),
           keymap.of([
             {
               key: "Mod-Enter",
