@@ -1,4 +1,4 @@
-import type { Node as PmNode } from "prosemirror-model";
+import { Fragment, type Node as PmNode } from "prosemirror-model";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
 import { toMarkdown, blockText } from "./toMarkdown";
@@ -121,5 +121,57 @@ describe("書き戻し", () => {
     // 行頭の "- " は箇条書きになってしまうので、逃がしたままにする。
     const { doc } = fromMarkdown("\\- これは段落");
     expect(blockText(doc.child(0))).toBe("\\- これは段落");
+  });
+});
+
+// 最初の文字列に文字を足した写しを返す。実際の打鍵に一番近い操作。
+const typeInto = (node: PmNode, add: string): PmNode | null => {
+  if (node.isText) return node.type.schema.text((node.text ?? "") + add, node.marks);
+  const children: PmNode[] = [];
+  let done = false;
+  node.forEach((child) => {
+    const next = done ? null : typeInto(child, add);
+    if (next) done = true;
+    children.push(next ?? child);
+  });
+  return done ? node.copy(Fragment.fromArray(children)) : null;
+};
+
+const typeFirst = (src: string, add: string) => {
+  const loaded = fromMarkdown(src);
+  const children: PmNode[] = [];
+  loaded.doc.forEach((node, _offset, index) => {
+    const typed = index === 0 ? typeInto(node, add) : null;
+    children.push(typed ?? node);
+  });
+  return toMarkdown(loaded.doc.copy(Fragment.fromArray(children)), loaded);
+};
+
+describe("1 文字打っても他は動かない", () => {
+  const cases: [string, string][] = [
+    ["桁を詰めた表", "| ケース     | 選ぶ方 |\n| --------- | ---- |\n| A         | B    |\n"],
+    ["引用の中", "> 引用の中身\n> つづき\n"],
+    ["字下げのコード", "\tひとつめ\n\tふたつめ\n"],
+    ["逃がしのある段落", "auto_creation.py の話\n"],
+    ["行の続き", "- 項目のつづきが\n字下げなしで書かれている\n"],
+    ["行末の空白", "行末に空白がある  \nつづき\n"],
+  ];
+  for (const [name, src] of cases) {
+    it(name, () => {
+      const out = typeFirst(src, "Ω");
+      expect(out.replace("Ω", "")).toBe(src);
+      expect(out).toContain("Ω");
+    });
+  }
+
+  it("行内コードの中は囲みを残したまま書き換わる", () => {
+    const out = typeFirst("`content_scripts` の話\n", "Ω");
+    expect(out).toBe("`content_scriptsΩ` の話\n");
+  });
+
+  it("記号を打っても壊れない", () => {
+    // "*" は読み直すと意味が変わりうるので、確かめてから採用する。
+    const out = typeFirst("ふつうの段落\n", "*");
+    expect(fromMarkdown(out).doc.child(0).textContent).toBe("ふつうの段落*");
   });
 });

@@ -13,6 +13,9 @@ import { splitRow } from "../blocks";
 // パーサ構成は projection.ts と同一にしてある。remark-cjk-friendly は
 // 「**強調**を」のような閉じ記号の直後が CJK のときの成立条件を変えるため、
 // 構成が違うと描画と編集で境界がずれる。
+//
+// ノードを作るのと同時に、原文のどこから来たかを同じ形の木（Span）で残す。
+// 保存のときはこれを頼りに、書き換わったところだけを原文へ差し込む。
 
 const processor = unified()
   .use(remarkParse)
@@ -23,12 +26,25 @@ const processor = unified()
 // 直列化した結果を読み直して確かめる側からも使う。
 export const parseTree = (text: string): Root => processor.parse(text) as Root;
 
+// ノードと同じ形をした、原文の範囲の木。children はノードの子と 1 対 1。
+export interface Span {
+  start: number;
+  end: number;
+  children: Span[];
+}
+
 export interface Loaded {
   doc: PmNode;
-  // frontmatter を除いた本文。id ごとの範囲はこの文字列の上の位置。
+  // frontmatter を除いた本文。範囲はこの文字列の上の位置。
   source: string;
   ranges: Map<string, [number, number]>;
   originals: Map<string, PmNode>;
+  spans: Map<string, Span>;
+}
+
+interface Built {
+  node: PmNode;
+  span: Span;
 }
 
 // ---- 囲み（callout / details）----
@@ -142,7 +158,7 @@ const cellsOf = (line: string): string[] => {
 
 // 桁揃えと区切り行を覚える。
 //
-// 実データの表 3,848 個のうち桁が揃っているのは 218 個だけで、残りは
+// 実データの表 3,848 個のうち桁が揃っているのは 76 個だけで、3,333 個は
 // "| a | b |" と素で書かれている。揃っている列だけ幅を覚え、揃っていない列は
 // 0 にして詰めない。揃えてあったものは揃ったまま、素のものは素のまま返る。
 function tableStyle(src: string): { widths: number[]; delim: string | null } {
@@ -162,137 +178,233 @@ function tableStyle(src: string): { widths: number[]; delim: string | null } {
 export function fromMarkdown(source: string): Loaded {
   const ranges = new Map<string, [number, number]>();
   const originals = new Map<string, PmNode>();
+  const spans = new Map<string, Span>();
   const blocks: PmNode[] = [];
   let seq = 0;
 
   for (const g of group(parseTree(source).children, source)) {
     const id = `b${seq++}`;
-    const node = nodeOf(g, source, id);
-    if (!node) continue;
-    ranges.set(id, [g.start, g.end]);
-    originals.set(id, node);
-    blocks.push(node);
+    const built = nodeOf(g, source, 0, id);
+    if (!built) continue;
+    ranges.set(id, [built.span.start, built.span.end]);
+    originals.set(id, built.node);
+    spans.set(id, built.span);
+    blocks.push(built.node);
   }
 
-  const doc = schema.nodes.doc.create(null, blocks.length ? blocks : [empty()]);
-  return { doc, source, ranges, originals };
+  const doc = schema.nodes.doc.create(null, blocks.length ? blocks : [empty().node]);
+  return { doc, source, ranges, originals, spans };
 }
 
-const empty = () => schema.nodes.paragraph.create();
+const span = (start: number, end: number, children: Span[] = []): Span => ({
+  start,
+  end,
+  children,
+});
 
-function nodeOf(g: Group, source: string, id: string | null): PmNode | null {
+const empty = (at = 0): Built => ({ node: schema.nodes.paragraph.create(), span: span(at, at) });
+
+function nodeOf(g: Group, source: string, base: number, id: string | null): Built | null {
   const attrs = id ? { id } : {};
-  if (g.kind === "plain") return blockOf(g.node!, source, id);
+  if (g.kind === "plain") return blockOf(g.node!, source, base, id);
 
-  const inner = blocksOfText(source.slice(g.innerStart!, g.innerEnd!));
+  const inner = blocksOfText(source.slice(g.innerStart!, g.innerEnd!), base + g.innerStart!);
+  const at = span(base + g.start, base + g.end, inner.spans);
   if (g.kind === "details") {
-    return schema.nodes.details.create({ ...attrs, head: g.head }, inner);
+    return { node: schema.nodes.details.create({ ...attrs, head: g.head }, inner.nodes), span: at };
   }
-  return schema.nodes.callout.create(
-    {
-      ...attrs,
-      icon: attrOf(g.attrs ?? "", "icon"),
-      color: attrOf(g.attrs ?? "", "color") || null,
-    },
-    inner,
-  );
+  return {
+    node: schema.nodes.callout.create(
+      {
+        ...attrs,
+        icon: attrOf(g.attrs ?? "", "icon"),
+        color: attrOf(g.attrs ?? "", "color") || null,
+      },
+      inner.nodes,
+    ),
+    span: at,
+  };
+}
+
+interface Blocks {
+  nodes: PmNode[];
+  spans: Span[];
 }
 
 // 囲みの中身は文字列から読み直す。入れ子も同じ道を通る。
-function blocksOfText(text: string): PmNode[] {
-  const out: PmNode[] = [];
-  for (const g of group(parseTree(text).children, text)) {
-    const node = nodeOf(g, text, null);
-    if (node) out.push(node);
-  }
-  return out.length ? out : [empty()];
+function blocksOfText(text: string, base: number): Blocks {
+  return collect(group(parseTree(text).children, text), text, base);
 }
 
-function blocksOf(nodes: RootContent[], source: string): PmNode[] {
-  const out: PmNode[] = [];
-  for (const g of group(nodes, source)) {
-    const node = nodeOf(g, source, null);
-    if (node) out.push(node);
+function blocksOf(nodes: RootContent[], source: string, base: number): Blocks {
+  return collect(group(nodes, source), source, base);
+}
+
+function collect(groups: Group[], source: string, base: number): Blocks {
+  const out: Blocks = { nodes: [], spans: [] };
+  for (const g of groups) {
+    const built = nodeOf(g, source, base, null);
+    if (!built) continue;
+    out.nodes.push(built.node);
+    out.spans.push(built.span);
   }
-  return out.length ? out : [empty()];
+  if (out.nodes.length) return out;
+  const blank = empty(base);
+  return { nodes: [blank.node], spans: [blank.span] };
 }
 
 const slice = (node: RootContent | PhrasingContent, source: string): string =>
   source.slice(node.position?.start.offset ?? 0, node.position?.end.offset ?? 0);
 
-function blockOf(node: RootContent, source: string, id: string | null): PmNode | null {
+const at = (node: RootContent | PhrasingContent, base: number): [number, number] => [
+  base + (node.position?.start.offset ?? 0),
+  base + (node.position?.end.offset ?? 0),
+];
+
+function blockOf(
+  node: RootContent,
+  source: string,
+  base: number,
+  id: string | null,
+): Built | null {
   const attrs = id ? { id } : {};
+  const [start, end] = at(node, base);
+
   switch (node.type) {
-    case "paragraph":
-      return schema.nodes.paragraph.create(attrs, inlineOf(node.children, source));
+    case "paragraph": {
+      const inline = inlineOf(node.children, source, base);
+      return {
+        node: schema.nodes.paragraph.create(attrs, inline.nodes),
+        span: span(start, end, inline.spans),
+      };
+    }
 
-    case "heading":
-      return schema.nodes.heading.create(
-        { ...attrs, level: node.depth },
-        inlineOf(node.children, source),
-      );
+    case "heading": {
+      const inline = inlineOf(node.children, source, base);
+      return {
+        node: schema.nodes.heading.create({ ...attrs, level: node.depth }, inline.nodes),
+        span: span(start, end, inline.spans),
+      };
+    }
 
-    case "blockquote":
-      return schema.nodes.blockquote.create(attrs, blocksOf(node.children, source));
+    case "blockquote": {
+      const inner = blocksOf(node.children, source, base);
+      return {
+        node: schema.nodes.blockquote.create(attrs, inner.nodes),
+        span: span(start, end, inner.spans),
+      };
+    }
 
     case "code": {
       const src = slice(node, source);
       const fence = /^\s*(`{3,}|~{3,})/.exec(src)?.[1] ?? null;
       const text = node.value === "" ? [] : [schema.text(node.value)];
-      return schema.nodes.codeBlock.create(
-        { ...attrs, lang: node.lang ?? null, fenced: fence !== null, fence: fence ?? "```" },
-        text,
-      );
+      // 中身が原文にそのまま現れていれば、その位置を覚える。字下げのコードは
+      // 行頭の空白が中身から落ちていて見つからないので、丸ごと組み直しになる。
+      const from = node.value === "" ? -1 : src.indexOf(node.value);
+      return {
+        node: schema.nodes.codeBlock.create(
+          { ...attrs, lang: node.lang ?? null, fenced: fence !== null, fence: fence ?? "```" },
+          text,
+        ),
+        span: span(
+          start,
+          end,
+          node.value === ""
+            ? []
+            : from < 0
+              ? // 字下げのコードは行頭の空白が中身から落ちていて見つからない。
+                // 範囲は塊のまま渡し、対応づけ側で空白を読み飛ばす。
+                [span(start, end)]
+              : [span(start + from, start + from + node.value.length)],
+        ),
+      };
     }
 
     case "list": {
       const src = slice(node, source);
-      const items = node.children.map((item) =>
-        schema.nodes.listItem.create(
-          { checked: item.checked ?? null },
-          blocksOf(item.children, source),
-        ),
-      );
+      const items: PmNode[] = [];
+      const itemSpans: Span[] = [];
+      for (const item of node.children) {
+        const inner = blocksOf(item.children, source, base);
+        const [s, e] = at(item, base);
+        items.push(
+          schema.nodes.listItem.create({ checked: item.checked ?? null }, inner.nodes),
+        );
+        itemSpans.push(span(s, e, inner.spans));
+      }
       const tight = !node.spread;
       if (node.ordered) {
         const marker = /^\s*\d+([.)])/.exec(src)?.[1] ?? ".";
-        return schema.nodes.orderedList.create(
-          { ...attrs, tight, start: node.start ?? 1, marker },
-          items,
-        );
+        return {
+          node: schema.nodes.orderedList.create(
+            { ...attrs, tight, start: node.start ?? 1, marker },
+            items,
+          ),
+          span: span(start, end, itemSpans),
+        };
       }
       const marker = /^\s*([-*+])/.exec(src)?.[1] ?? "-";
-      return schema.nodes.bulletList.create({ ...attrs, tight, marker }, items);
+      return {
+        node: schema.nodes.bulletList.create({ ...attrs, tight, marker }, items),
+        span: span(start, end, itemSpans),
+      };
     }
 
     case "table": {
       const { widths, delim } = tableStyle(slice(node, source));
-      const rows = node.children.map((row, r) =>
-        schema.nodes.tableRow.create(
-          null,
-          row.children.map((cell) =>
-            schema.nodes.tableCell.create({ header: r === 0 }, inlineOf(cell.children, source)),
-          ),
-        ),
-      );
-      return schema.nodes.table.create({ ...attrs, align: node.align ?? [], widths, delim }, rows);
+      const rows: PmNode[] = [];
+      const rowSpans: Span[] = [];
+      node.children.forEach((row, r) => {
+        const cells: PmNode[] = [];
+        const cellSpans: Span[] = [];
+        for (const cell of row.children) {
+          const inline = inlineOf(cell.children, source, base);
+          const [s, e] = at(cell, base);
+          cells.push(schema.nodes.tableCell.create({ header: r === 0 }, inline.nodes));
+          cellSpans.push(span(s, e, inline.spans));
+        }
+        const [s, e] = at(row, base);
+        rows.push(schema.nodes.tableRow.create(null, cells));
+        rowSpans.push(span(s, e, cellSpans));
+      });
+      return {
+        node: schema.nodes.table.create({ ...attrs, align: node.align ?? [], widths, delim }, rows),
+        span: span(start, end, rowSpans),
+      };
     }
 
     case "thematicBreak":
-      return schema.nodes.thematicBreak.create({ ...attrs, marker: slice(node, source).trim() });
+      return {
+        node: schema.nodes.thematicBreak.create({ ...attrs, marker: slice(node, source).trim() }),
+        span: span(start, end),
+      };
 
     default:
       // 生 HTML・定義・脚注・数式など。構造化せず原文のまま持つ。
-      return schema.nodes.rawBlock.create({ ...attrs, value: slice(node, source) });
+      return {
+        node: schema.nodes.rawBlock.create({ ...attrs, value: slice(node, source) }),
+        span: span(start, end),
+      };
   }
 }
 
-function inlineOf(nodes: PhrasingContent[], source: string): PmNode[] {
-  const out: PmNode[] = [];
+interface Inline {
+  nodes: PmNode[];
+  spans: Span[];
+}
+
+function inlineOf(nodes: PhrasingContent[], source: string, base: number): Inline {
+  const out: Inline = { nodes: [], spans: [] };
   const push = (node: PhrasingContent, marks: readonly Mark[]) => {
+    const [start, end] = at(node, base);
+    const add = (pm: PmNode) => {
+      out.nodes.push(pm);
+      out.spans.push(span(start, end));
+    };
     switch (node.type) {
       case "text":
-        if (node.value !== "") out.push(schema.text(node.value, marks));
+        if (node.value !== "") add(schema.text(node.value, marks));
         return;
       case "strong":
         node.children.forEach((c) => push(c, [...marks, schema.marks.strong.create()]));
@@ -311,11 +423,22 @@ function inlineOf(nodes: PhrasingContent[], source: string): PmNode[] {
           ]),
         );
         return;
-      case "inlineCode":
-        out.push(schema.text(node.value, [...marks, schema.marks.code.create()]));
+      case "inlineCode": {
+        // 範囲は囲みの ` を除いた中身に狭める。そうしないと、書き換えたときに
+        // 囲みごと差し替わってしまう。
+        const raw = source.slice(start - base, end - base);
+        const from = raw.indexOf(node.value);
+        const pm = schema.text(node.value, [...marks, schema.marks.code.create()]);
+        out.nodes.push(pm);
+        out.spans.push(
+          from < 0
+            ? span(start, end)
+            : span(start + from, start + from + node.value.length),
+        );
         return;
+      }
       case "image":
-        out.push(
+        add(
           schema.nodes.image.create({
             src: node.url,
             alt: node.alt ?? "",
@@ -324,10 +447,10 @@ function inlineOf(nodes: PhrasingContent[], source: string): PmNode[] {
         );
         return;
       case "break":
-        out.push(schema.nodes.hardBreak.create());
+        add(schema.nodes.hardBreak.create());
         return;
       default:
-        out.push(schema.nodes.rawInline.create({ value: slice(node, source) }));
+        add(schema.nodes.rawInline.create({ value: slice(node, source) }));
     }
   };
   nodes.forEach((node) => push(node, []));

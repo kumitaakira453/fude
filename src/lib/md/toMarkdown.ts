@@ -8,9 +8,9 @@ import type {
 } from "mdast";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { toMarkdown as mdastToMarkdown, type Options } from "mdast-util-to-markdown";
-import { parseTree, type Loaded } from "./fromMarkdown";
+import { fromMarkdown, parseTree, type Loaded, type Span } from "./fromMarkdown";
 import { splitRow } from "../blocks";
-import { pristineRange } from "./pristine";
+import { plainEdit, sameShape, spliceNode } from "./splice";
 
 // 編集モデルを Markdown へ戻す。
 //
@@ -42,20 +42,42 @@ export function toMarkdown(doc: PmNode, loaded: Loaded): string {
   let prevEnd: number | null = 0;
 
   doc.forEach((node, _offset, index) => {
-    const range = pristineRange(node, loaded);
+    const kept = keep(node, loaded);
     const gap =
-      prevEnd !== null && range && prevEnd <= range[0]
-        ? loaded.source.slice(prevEnd, range[0])
+      prevEnd !== null && kept && prevEnd <= kept.span.start
+        ? loaded.source.slice(prevEnd, kept.span.start)
         : index === 0
           ? ""
           : "\n\n";
-    out += gap;
-    out += range ? loaded.source.slice(range[0], range[1]) : blockText(node);
-    prevEnd = range ? range[1] : null;
+    out += gap + (kept ? kept.text : blockText(node));
+    prevEnd = kept ? kept.span.end : null;
   });
 
   if (prevEnd !== null) return out + loaded.source.slice(prevEnd);
   return out.endsWith("\n") ? out : `${out}\n`;
+}
+
+// 原文から出せるなら、その文字列と範囲を返す。
+//
+// 触られていなければ原文そのまま。書き換わっていても、形が同じなら変わった
+// ところだけを差し込む。差し込んだ結果を読み直して狙いどおりのときだけ採用し、
+// そうでなければ null を返して丸ごと組み直す経路へ渡す。
+function keep(node: PmNode, loaded: Loaded): { text: string; span: Span } | null {
+  const id = node.attrs.id as string | null;
+  if (!id) return null;
+  const before = loaded.originals.get(id);
+  const span = loaded.spans.get(id);
+  if (!before || !span) return null;
+  if (before.eq(node)) return { text: loaded.source.slice(span.start, span.end), span };
+
+  const text = spliceNode(before, node, span, loaded.source);
+  if (text === null) return null;
+  const raw = loaded.source.slice(span.start, span.end);
+  if (plainEdit(raw, text)) return { text, span };
+
+  const back = fromMarkdown(text).doc;
+  if (back.childCount !== 1 || !sameShape(back.child(0), node)) return null;
+  return { text, span };
 }
 
 // ---- ブロック ----
