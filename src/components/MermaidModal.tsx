@@ -1,12 +1,21 @@
 import { ask } from "@tauri-apps/plugin-dialog";
+import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMermaidSvg } from "../hooks/useMermaidSvg";
+import { mermaidPaneAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 import { MermaidSourceEditor } from "./MermaidSourceEditor";
 
-// ソース欄が占める幅（左右の余白を含む）。図はこのぶん右へ寄せる。
-const PANE = 432;
+// ソース欄の左右の余白と、幅の下限・図に残す下限。
+const GUTTER = 16;
+const MIN_PANE = 320;
+const MIN_STAGE = 420;
+
+// まだ動かしていないときの幅。図の記述は 1 行が長いので、窓が広いほど広く取る。
+function defaultPane(): number {
+  return Math.round(Math.min(680, Math.max(460, window.innerWidth * 0.38)));
+}
 // 打ち終わってから描き直すまでの待ち。打つたびに描くと図が跳ねる。
 const REDRAW_DELAY = 250;
 
@@ -40,7 +49,16 @@ export function MermaidModal({
   // 開いた直後(ダブルタップの2打目)で即閉じしないためのガード
   const closableRef = useRef(false);
 
-  const pane = edit ? PANE : 0;
+  const [stored, setStored] = useAtom(mermaidPaneAtom);
+  const fit = (w: number) =>
+    Math.min(
+      Math.max(w, MIN_PANE),
+      Math.max(MIN_PANE, window.innerWidth - MIN_STAGE - GUTTER * 2),
+    );
+  const paneW = edit ? fit(stored > 0 ? stored : defaultPane()) : 0;
+  // 図を寄せる量。欄の幅に左右の余白を足したもの。
+  const pane = edit ? paneW + GUTTER * 2 : 0;
+  const resize = useRef<{ x: number; w: number } | null>(null);
   // 開いた時点のソースは待たずに描く。待つのは打ち直した分だけ。
   const initial = useRef(edit?.src ?? "");
   const live = useMermaidSvg(
@@ -167,7 +185,11 @@ export function MermaidModal({
       onClick={handleBackground}
     >
       {edit && (
-        <div className="mg-mmd-pane" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="mg-mmd-pane"
+          style={{ width: paneW, left: GUTTER, top: GUTTER, bottom: GUTTER }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="mg-mmd-pane-head">
             <Icon name="account_tree" size={15} />
             <span>図のソース</span>
@@ -196,6 +218,27 @@ export function MermaidModal({
             </button>
           </div>
         </div>
+      )}
+      {edit && (
+        // 掴んで幅を変える帯。欄の外に置く（中だと編集欄のスクロールバーと重なる）。
+        <div
+          className="mg-mmd-grip"
+          title="幅を変える"
+          style={{ left: GUTTER + paneW, top: GUTTER, bottom: GUTTER }}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            resize.current = { x: e.clientX, w: paneW };
+          }}
+          onPointerMove={(e) => {
+            const r = resize.current;
+            if (!r) return;
+            setStored(fit(r.w + (e.clientX - r.x)));
+          }}
+          onPointerUp={() => {
+            resize.current = null;
+          }}
+        />
       )}
       <div className="mg-mmd-toolbar" onClick={(e) => e.stopPropagation()}>
         {onEdit && (

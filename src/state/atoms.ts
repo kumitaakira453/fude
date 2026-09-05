@@ -96,6 +96,9 @@ export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
 );
 // エディトリアル組版（ベータ）: 構造を読み取って組版を強化する描画モード
 export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
+// 図のソース欄の幅。図の記述は 1 行が長くなりやすいので掴んで広げられる。
+// 0 は「まだ動かしていない」で、窓の広さから決める。
+export const mermaidPaneAtom = atomWithStorage<number>("mdglow:mmdpane", 0);
 
 // 画面の使い方はウィンドウごと。片方でサイドバーを閉じても、もう片方は開いたまま。
 export const sidebarOpenAtom = atomWithStorage<boolean>(
