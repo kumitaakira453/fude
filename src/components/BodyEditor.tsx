@@ -60,30 +60,53 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
 
 // カーソルを自分で描く。
 //
-// 標準のカーソルは、明朝のように上下へ余裕のある書体と広い行間が重なると、
-// 字よりずっと大きく描かれる（ゴシックや行間を詰めたときは起きない）。高さを
-// 決める指定は CSS に無いので、字の箱に合わせた棒を自分で重ねる。
-// 変換中は標準のカーソルへ戻す。二重に見えるのと、変換の位置が遅れるのを防ぐ。
+// 標準のカーソルは行の高さで描かれるので、明朝のように上下へ余裕のある書体と
+// 広い行間が重なると字よりずっと大きくなる（ゴシックや行間を詰めたときは
+// 起きない）。高さを決める指定は CSS に無い（caret-color は色だけ）。
+// 字の箱に合わせた棒を自分で重ね、標準は caret-color で消す。
+// CodeMirror の drawSelection も同じ作りで、これが一般的な対応。
+//
+// 変換中も自分で描く。ただし変換中は編集モデルがまだ更新されていないので、
+// 位置は DOM 側の選択から測る（IME のカーソルはそこに出ている）。測れなければ
+// 標準へ戻す。
 function caretPainter(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
   bar.className = "mg-caret";
   bar.style.display = "none";
   host.appendChild(bar);
 
+  const hide = () => {
+    bar.style.display = "none";
+    host.classList.remove("mg-caret-on");
+  };
+
+  // 変換中の位置。DOM 側の選択はそのまま IME のカーソルを指している。
+  const fromDom = (): { left: number; top: number; bottom: number } | null => {
+    const sel = view.dom.ownerDocument.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed || !view.dom.contains(range.startContainer)) return null;
+    const rects = range.getClientRects();
+    const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+    if (!rect || rect.bottom - rect.top <= 0) return null;
+    return { left: rect.left, top: rect.top, bottom: rect.bottom };
+  };
+
   const draw = () => {
     const { selection } = view.state;
-    if (!selection.empty || !view.hasFocus() || view.composing) {
-      bar.style.display = "none";
-      host.classList.remove("mg-caret-on");
+    if (!selection.empty || !view.hasFocus()) {
+      hide();
       return;
     }
     // 隠れているところ（図だけを出している塊の中など）は測れない。
-    let at: { left: number; top: number; bottom: number };
+    let at: { left: number; top: number; bottom: number } | null = null;
     try {
-      at = view.coordsAtPos(selection.head);
+      at = view.composing ? fromDom() : view.coordsAtPos(selection.head);
     } catch {
-      bar.style.display = "none";
-      host.classList.remove("mg-caret-on");
+      at = null;
+    }
+    if (!at) {
+      hide();
       return;
     }
     const box = host.getBoundingClientRect();
