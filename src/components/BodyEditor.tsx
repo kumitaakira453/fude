@@ -9,6 +9,14 @@ import { EditorView } from "prosemirror-view";
 import { useEffect, useRef } from "react";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { rules } from "../lib/md/inputRules";
+import {
+  cellDown,
+  cellEnter,
+  cellLeft,
+  cellRight,
+  cellUp,
+  focusedCell,
+} from "../lib/md/tableKeys";
 import { schema } from "../lib/md/schema";
 import { toMarkdown } from "../lib/md/toMarkdown";
 
@@ -142,6 +150,7 @@ export function BodyEditor({
   fontFamily,
   viewpoint,
   onViewpoint,
+  onDom,
   onChange,
   onSave,
 }: {
@@ -155,6 +164,8 @@ export function BodyEditor({
   // 入り込んでいる画素）。
   viewpoint?: { at: number; into: number };
   onViewpoint?: (at: number, into: number) => void;
+  // 編集面の要素。目次のように本文の DOM を見る側へ渡す。
+  onDom?: (el: HTMLElement | null) => void;
   onChange: (raw: string) => void;
   onSave: () => void;
 }) {
@@ -195,7 +206,11 @@ export function BodyEditor({
           "Mod-z": undo,
           "Shift-Mod-z": redo,
           "Mod-y": redo,
-          Enter: chainCommands(fenceOnEnter, splitListItem(item)),
+          Enter: chainCommands(cellEnter, fenceOnEnter, splitListItem(item)),
+          ArrowUp: cellUp,
+          ArrowDown: cellDown,
+          ArrowLeft: cellLeft,
+          ArrowRight: cellRight,
           "Shift-Enter": lineBreak,
           "Mod-Enter": lineBreak,
           "Shift-Mod-Enter": lineBreak,
@@ -204,8 +219,9 @@ export function BodyEditor({
           "Shift-Tab": chainCommands(goToNextCell(-1), liftListItem(item)),
         }),
         keymap(baseKeymap),
-        // 矢印キーでの行き来とセルの選択を、見えている表の形に合わせる。
+        // セルの選択と、いま触っているセルの印。
         tableEditing(),
+        focusedCell,
       ],
     });
 
@@ -223,6 +239,7 @@ export function BodyEditor({
       },
     });
     const caret = caretPainter(view, at);
+    onDom?.(view.dom);
     view.focus();
     caret.draw();
 
@@ -272,6 +289,7 @@ export function BodyEditor({
       cancelAnimationFrame(tick);
       scroller?.removeEventListener("scroll", onScroll);
       caret.stop();
+      onDom?.(null);
       view.destroy();
     };
     // 本文を差し替えるのはファイルを開き直したときだけ。呼び出し側が key で作り直す。

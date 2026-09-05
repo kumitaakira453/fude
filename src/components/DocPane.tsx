@@ -115,6 +115,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [editingFm, setEditingFm] = useState<{ x: number; y: number } | null>(
     null,
   );
+  // 編集面の要素と、その入れ物。目次が本文の DOM を見るのに使う。
+  const [editContent, setEditContent] = useState<HTMLElement | null>(null);
+  const [editScroller, setEditScroller] = useState<HTMLElement | null>(null);
 
   const isActive = activeId === pane.id;
   const path = activePath(pane);
@@ -683,7 +686,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
         {editing && path && rich ? (
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16">
+          <div
+            ref={setEditScroller}
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
+          >
             <BodyEditor
               key={path}
               body={body}
@@ -692,6 +698,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               onViewpoint={(at, into) => {
                 rememberViewpoint(viewKey(pane.id, path), at, into);
               }}
+              onDom={setEditContent}
               onChange={setDraft}
               onSave={save}
               fontFamily={fontStack(font)}
@@ -783,11 +790,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           </div>
         )}
 
-        {!editing && !isSplit && tocOpen && path && (
+        {/* 目次は編集中も出す。見出しの増減は MutationObserver が拾うので、
+            打つそばから追従する。 */}
+        {(!editing || rich) && !isSplit && tocOpen && path && (
           <Toc
-            content={content}
-            scroller={scroller}
-            contentKey={path + (raw?.length ?? 0)}
+            content={editing ? editContent : content}
+            scroller={editing ? editScroller : scroller}
+            contentKey={path + (editing ? draft.length : (raw?.length ?? 0))}
           />
         )}
 
