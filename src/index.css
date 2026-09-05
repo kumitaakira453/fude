@@ -671,6 +671,11 @@ button.mg-task-check:hover {
 }
 .mg-prose table th,
 .mg-prose table td {
+  /* 中身を上に揃える。prose の既定（baseline）だと、文字を持たないセルは
+     baseline が無いぶん WebKit が余分な高さを足し、そのセルだけ行より高くなる。
+     すると他のセルは行の高さに届かず、格子の横線が 2 本に割れ、縦線は行の
+     境目で切れる。Chrome では起きないので、実機（WKWebView）で測って確かめる。 */
+  vertical-align: top;
   padding-block: 0.4rem;
   /* prose の既定は先頭・末尾のセルだけ外側の余白を落とす。枠を引くと字が
      線に貼り付くので、どのセルも同じ余白にする。 */
