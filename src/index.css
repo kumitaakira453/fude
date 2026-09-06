@@ -3714,6 +3714,31 @@ svg[id^="mmd-"] foreignObject p {
     animation: none;
   }
 }
+/* 自分で描く選択。カーソルと同じ事情で、標準の ::selection は行の箱に塗られ、
+   その高さは line-height で決まる。字の箱との差がそのまま余白として塗られて
+   字よりずっと高い帯になり、行内コードの箱や箇条書きの記号のまわりでは塗りが
+   途切れる。高さを決める指定は CSS に無いので、標準は編集面の中だけで消し、
+   字の箱に合わせた矩形を重ねる（読むとき側の選択はそのまま）。 */
+.mg-pm ::selection,
+.mg-pm::selection {
+  background: transparent;
+}
+.mg-sel {
+  position: absolute;
+  inset: 0;
+  /* 押した先はいつも本文。 */
+  pointer-events: none;
+  /* 本文より上に置く。コードの塊や囲みは不透明な地色を持つので、下に敷くと
+     そこだけ塗りが消える。 */
+  z-index: 1;
+}
+.mg-sel-box {
+  position: absolute;
+  /* 標準の ::selection と同じ色。指摘を書いている間も選んだところが分かる
+     よう、入力欄に焦点が移っても消さない。 */
+  background: color-mix(in srgb, var(--mg-accent) 28%, transparent);
+  border-radius: 2px;
+}
 /* いま触っているセル。どこを書いているかが表の中で見て分かるようにする。 */
 .mg-pm td.is-focused,
 .mg-pm th.is-focused {

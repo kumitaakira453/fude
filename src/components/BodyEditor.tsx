@@ -1,4 +1,5 @@
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState, NodeSelection, TextSelection } from "prosemirror-state";
+import { CellSelection } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 // ProseMirror が要る土台の指定。改行の前後に挟む見えない img を本文の img 指定から
 // 守るもの（無いと typography の余白が付いて、改行のたびに隙間が空く）や、
@@ -11,6 +12,7 @@ import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
 import { editorPlugins } from "../lib/md/plugins";
+import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
 import { IconBoard } from "./CalloutIcon";
 import { MermaidModal } from "./MermaidModal";
@@ -78,7 +80,7 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
 // 変換中も自分で描く。ただし変換中は編集モデルがまだ更新されていないので、
 // 位置は DOM 側の選択から測る（IME のカーソルはそこに出ている）。測れなければ
 // 標準へ戻す。
-function caretPainter(view: EditorView, host: HTMLElement) {
+function caretBar(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
   bar.className = "mg-caret is-idle";
   bar.style.display = "none";
@@ -151,17 +153,93 @@ function caretPainter(view: EditorView, host: HTMLElement) {
     for (const anim of bar.getAnimations()) anim.currentTime = 0;
   };
 
-  // 棒は組み直しのときだけ描き直すのでは足りない。位置が変わる契機は他にもある。
-  //
-  // ただし測るとレイアウトが走るので、来た合図は 1 枚にまとめる。打鍵ごとに
-  // 打鍵・選択の変化・大きさの変化の 3 経路から来るため、そのまま測ると
-  // 同期レイアウトが何度も走って重くなる。
+  return { draw, stop: () => bar.remove() };
+}
+
+// 選んだ範囲を自分で描く。
+//
+// 事情はカーソルと同じ。標準の ::selection は行の箱に塗られるので、字の箱との
+// 差がそのまま余白として塗られて字よりずっと高い帯になり、行内コードの箱や
+// 箇条書きの記号のまわりでは塗りが途切れる。標準は index.css で消し、字の箱に
+// 合わせた矩形をここで重ねる。
+//
+// 表のセルをまたぐ選択（.selectedCell）と塊そのものの選択
+// （.ProseMirror-selectednode）には既に指定があるので、そちらに任せる。
+function selectionBoxes(
+  view: EditorView,
+  host: HTMLElement,
+  scroller: HTMLElement | null,
+) {
+  const layer = document.createElement("div");
+  layer.className = "mg-sel";
+  host.appendChild(layer);
+  const boxes: HTMLDivElement[] = [];
+  // 直前に描いた形。同じなら書き直さない。style を書くだけでレイアウトが
+  // 無効になるので、動いていないときに書くのは丸損。
+  let was = "";
+
+  const measure = (): Rect[] => {
+    const { selection } = view.state;
+    if (
+      selection.empty ||
+      selection instanceof NodeSelection ||
+      selection instanceof CellSelection
+    ) {
+      return [];
+    }
+    const base = host.getBoundingClientRect();
+    // 見えている帯。選択が数千行に渡っても、矩形を作るのは画面のぶんだけ。
+    const seen = scroller?.getBoundingClientRect();
+    const band = seen
+      ? { top: seen.top, bottom: seen.bottom }
+      : { top: 0, bottom: host.ownerDocument.documentElement.clientHeight };
+    return selectionRects(view, selection.from, selection.to, band, base);
+  };
+
+  const draw = () => {
+    // 測り終えてから style を書く。書いた直後に測ると強制レイアウトが走る。
+    const rects = measure();
+    const now = rects.map((r) => `${r.left},${r.top},${r.width},${r.height}`).join("|");
+    if (now === was) return;
+    was = now;
+    while (boxes.length > rects.length) boxes.pop()?.remove();
+    while (boxes.length < rects.length) {
+      const box = document.createElement("div");
+      box.className = "mg-sel-box";
+      layer.appendChild(box);
+      boxes.push(box);
+    }
+    for (let i = 0; i < rects.length; i++) {
+      const { left, top, width, height } = rects[i];
+      const style = boxes[i].style;
+      style.left = `${left}px`;
+      style.top = `${top}px`;
+      style.width = `${width}px`;
+      style.height = `${height}px`;
+    }
+  };
+
+  return { draw, stop: () => layer.remove() };
+}
+
+// カーソルと選択の描き直しをまとめて受け持つ。
+//
+// 描き直すのは組み直しのときだけでは足りない。位置が変わる契機は他にもある。
+// ただし測るとレイアウトが走るので、来た合図は 1 枚にまとめる。打鍵ごとに
+// 打鍵・選択の変化・大きさの変化の 3 経路から来るため、そのまま測ると
+// 同期レイアウトが何度も走って重くなる。
+function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | null) {
+  // 選択を先に置く。同じ z-index なので、後から足したカーソルが上に来る。
+  const boxes = selectionBoxes(view, host, scroller);
+  const bar = caretBar(view, host);
+
   let frame = 0;
   const again = () => {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      draw();
+      boxes.draw();
+      bar.draw();
     });
   };
   view.dom.addEventListener("focus", again);
@@ -171,9 +249,11 @@ function caretPainter(view: EditorView, host: HTMLElement) {
   view.dom.addEventListener("scroll", again, true);
   // 組み直しを伴わない移動（⌘⌫ の既定動作など）はここで拾う。
   document.addEventListener("selectionchange", again);
-  // 字体の読み込み・折り返し・塊の開閉で高さが変わったら測り直す。
+  // 字体の読み込み・折り返し・塊の開閉で高さが変わったら測り直す。見えている
+  // 帯は入れ物の高さで決まるので、スクロール容器の大きさも見る。
   const watch = new ResizeObserver(again);
   watch.observe(view.dom);
+  if (scroller) watch.observe(scroller);
 
   return {
     draw: again,
@@ -184,7 +264,8 @@ function caretPainter(view: EditorView, host: HTMLElement) {
       document.removeEventListener("selectionchange", again);
       watch.disconnect();
       cancelAnimationFrame(frame);
-      bar.remove();
+      bar.stop();
+      boxes.stop();
     },
   };
 }
@@ -273,6 +354,7 @@ export function BodyEditor({
   useEffect(() => {
     const at = host.current;
     if (!at) return;
+    const scroller = scrollerOf(at);
 
     // 外で書き換わったら差し替えるので、土台は入れ替わる。
     let loaded = fromMarkdown(body);
@@ -328,10 +410,10 @@ export function BodyEditor({
         view.updateState(next);
         // 打鍵の経路に置くのはここまで。組み直しは手を止めてから。
         if (tr.docChanged) send();
-        caret.draw();
+        paint.draw();
       },
     });
-    const caret = caretPainter(view, at);
+    const paint = painter(view, at, scroller);
 
     // 組み直して親へ渡す。ここだけが重いので、打鍵の経路から外してある。
     const send = throttled(
@@ -371,7 +453,7 @@ export function BodyEditor({
       blocks = blocksOf(loaded);
       // 取り込んだ本文はそのまま親の控えでもある。組み直しの予約は捨てる。
       send.cancel();
-      caret.draw();
+      paint.draw();
     };
     if (adoptRef) adoptRef.current = adopt;
     // 窓を離れるときは待たずに流す。戻ってこないこともある。
@@ -381,9 +463,8 @@ export function BodyEditor({
 
     onDom?.(view.dom);
     view.focus();
-    caret.draw();
+    paint.draw();
 
-    const scroller = scrollerOf(at);
     // 開いた位置へ合わせる。字体や画像で高さが決まるまで数フレームかかる。
     let raf = 0;
     if (scroller && target) {
@@ -411,6 +492,9 @@ export function BodyEditor({
     // ドラッグで端まで引いたときの自動スクロールで体感に出る）。
     let tick = 0;
     const onScroll = () => {
+      // 選択の矩形は見えている範囲のぶんしか無いので、動いたら描き足す。
+      // 中で 1 フレームにまとめられるので、そのまま呼ぶ。
+      paint.draw();
       if (!scroller || !moved.current) return;
       cancelAnimationFrame(tick);
       tick = requestAnimationFrame(() => {
@@ -441,7 +525,7 @@ export function BodyEditor({
       send.flush();
       if (flushRef) flushRef.current = null;
       if (adoptRef) adoptRef.current = null;
-      caret.stop();
+      paint.stop();
       onDom?.(null);
       view.destroy();
     };
