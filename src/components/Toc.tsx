@@ -41,13 +41,23 @@ export function Toc({
     const collect = () => {
       const els = readHeadings(content);
       elsRef.current = els;
-      setHeadings(
-        els.map((h) => ({
+      setHeadings((was) => {
+        const now = els.map((h) => ({
           id: h.id,
           text: h.textContent ?? "",
           level: Number(h.tagName[1]),
-        })),
-      );
+        }));
+        // 編集面では打鍵のたびに DOM が動くが、見出しの並びはほとんど変わらない。
+        // 同じなら控えを差し替えず、目次の描き直しも起こさない（並びを毎回
+        // 作り直して渡すと、見出しの数だけ描き直しが乗る）。
+        const same =
+          was.length === now.length &&
+          was.every(
+            (h, i) =>
+              h.id === now[i].id && h.text === now[i].text && h.level === now[i].level,
+          );
+        return same ? was : now;
+      });
     };
     collect();
     let raf = 0;
@@ -69,15 +79,31 @@ export function Toc({
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const els = readHeadings(content);
-        elsRef.current = els;
-        const top = scroller.getBoundingClientRect().top;
-        let at = -1;
-        for (let i = 0; i < els.length; i++) {
-          if (els[i].getBoundingClientRect().top - top < SPY_OFFSET) at = i;
-          else break;
+        // 拾い直さずに控えを使う。見出しの増減は MutationObserver が拾うので、
+        // ここで毎フレーム全体を舐める必要はない。
+        const els = elsRef.current;
+        if (!els.length) {
+          setActiveAt(-1);
+          return;
         }
-        setActiveAt(at < 0 && els.length > 0 ? 0 : at);
+        const top = scroller.getBoundingClientRect().top;
+        // 見出しは本文の順に並ぶので上端も昇順。上から順に測ると、下へ行くほど
+        // 1 フレームの強制レイアウトが増える（本文が大きいほど遅くなり、
+        // 選択のドラッグで端まで引いたときの自動スクロールで体感に出る）。
+        // 境目を二分探索で挟み、測る回数を見出しの数の対数に抑える。
+        let lo = 0;
+        let hi = els.length - 1;
+        let at = -1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (els[mid].getBoundingClientRect().top - top < SPY_OFFSET) {
+            at = mid;
+            lo = mid + 1;
+          } else {
+            hi = mid - 1;
+          }
+        }
+        setActiveAt(at < 0 ? 0 : at);
       });
     };
     onScroll();
