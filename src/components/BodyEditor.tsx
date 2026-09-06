@@ -405,21 +405,27 @@ export function BodyEditor({
     }
 
     // 動かした位置を控える。読むときと同じ数え方（原文の先頭からの文字数）。
+    //
+    // 上端にあるブロックは DOM に聞く。先頭から順に測ると、1 フレームで
+    // ブロックの数だけ強制レイアウトが走る（本文が大きいほど遅くなり、
+    // ドラッグで端まで引いたときの自動スクロールで体感に出る）。
     let tick = 0;
     const onScroll = () => {
       if (!scroller || !moved.current) return;
       cancelAnimationFrame(tick);
       tick = requestAnimationFrame(() => {
-        const top = scroller.getBoundingClientRect().top;
-        let into = 0;
-        const seen = blocks.find((b) => {
-          const dom = view.nodeDOM(b.pos);
-          const el = dom instanceof HTMLElement ? dom : null;
-          if (!el || el.getBoundingClientRect().bottom <= top) return false;
-          into = Math.max(0, top - el.getBoundingClientRect().top);
-          return true;
-        });
-        if (seen) moved.current?.(prefix.length + seen.start, into);
+        const box = scroller.getBoundingClientRect();
+        const hit = view.posAtCoords({ left: box.left + 8, top: box.top + 1 });
+        const $at = hit
+          ? view.state.doc.resolve(Math.min(hit.pos, view.state.doc.content.size))
+          : null;
+        const start = $at && $at.depth > 0 ? $at.before(1) : 0;
+        const seen = blocks.find((b) => b.pos === start) ?? blocks[0];
+        if (!seen) return;
+        const dom = view.nodeDOM(seen.pos);
+        const el = dom instanceof HTMLElement ? dom : null;
+        const into = el ? Math.max(0, box.top - el.getBoundingClientRect().top) : 0;
+        moved.current?.(prefix.length + seen.start, into);
       });
     };
     scroller?.addEventListener("scroll", onScroll, { passive: true });
