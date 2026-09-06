@@ -8,6 +8,7 @@ import {
 } from "prosemirror-state";
 import { cellAround, TableMap } from "prosemirror-tables";
 import { Decoration, DecorationSet } from "prosemirror-view";
+import { covers } from "./decos";
 import { schema } from "./schema";
 
 // 表の中の移動を、見えているセルの並びに合わせる。
@@ -175,20 +176,26 @@ export const cellEnter: Command = (state, dispatch, view) => {
 
 // いま居るセルに印を付ける。どのセルを触っているかが見て分かるようにする。
 // 印は状態に持つ（毎回作り直すと打鍵ごとに節点を描き直させてしまう）。
-function cellDecos(state: EditorState): DecorationSet {
+// 同じセルの中を動いている間も作り直さない。
+function cellDecos(state: EditorState, prev: DecorationSet): DecorationSet {
   const $cell = cellAround(state.selection.$head);
   const cell = $cell?.nodeAfter;
   if (!$cell || !cell) return DecorationSet.empty;
+  const to = $cell.pos + cell.nodeSize;
+  if (covers(prev, $cell.pos, to)) return prev;
   return DecorationSet.create(state.doc, [
-    Decoration.node($cell.pos, $cell.pos + cell.nodeSize, { class: "is-focused" }),
+    Decoration.node($cell.pos, to, { class: "is-focused" }),
   ]);
 }
 
 export const focusedCell = new Plugin<DecorationSet>({
   state: {
-    init: (_, state) => cellDecos(state),
-    apply: (tr, prev, _old, next) =>
-      tr.docChanged || tr.selectionSet ? cellDecos(next) : prev,
+    init: (_, state) => cellDecos(state, DecorationSet.empty),
+    apply: (tr, prev, _old, next) => {
+      if (!tr.docChanged && !tr.selectionSet) return prev;
+      // 本文が動いたら位置が合わないので、使い回しの相手にはしない。
+      return cellDecos(next, tr.docChanged ? DecorationSet.empty : prev);
+    },
   },
   props: {
     decorations(state) {

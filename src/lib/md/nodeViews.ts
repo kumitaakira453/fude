@@ -8,6 +8,7 @@ import {
   type ViewMutationRecord,
 } from "prosemirror-view";
 import { renderMermaid } from "../mermaid";
+import { covers } from "./decos";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import { schema, summaryOf, withSummary } from "./schema";
 
@@ -693,14 +694,17 @@ export function nodeViews(deps: EditorDeps) {
 // 入ると見えなくなるので、そのときだけソースを出すのに使う。
 //
 // 印は状態に持つ。毎回作り直すと ProseMirror は「装飾が変わった」と見なして
-// 打鍵ごとに節点を描き直す。
-function insideDecos(state: EditorState): DecorationSet {
+// 打鍵ごとに節点を描き直す。同じ塊の中を動いている間も作り直さない
+// （範囲を引いている間は選択の変化が毎フレーム来る）。
+function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
   const { $head } = state.selection;
   for (let d = $head.depth; d > 0; d--) {
     if ($head.node(d).type !== schema.nodes.codeBlock) continue;
     const at = $head.before(d);
+    const to = at + $head.node(d).nodeSize;
+    if (covers(prev, at, to)) return prev;
     return DecorationSet.create(state.doc, [
-      Decoration.node(at, at + $head.node(d).nodeSize, { class: "is-inside" }),
+      Decoration.node(at, to, { class: "is-inside" }),
     ]);
   }
   return DecorationSet.empty;
@@ -708,9 +712,12 @@ function insideDecos(state: EditorState): DecorationSet {
 
 export const insideBlock = new Plugin<DecorationSet>({
   state: {
-    init: (_, state) => insideDecos(state),
-    apply: (tr, prev, _old, next) =>
-      tr.docChanged || tr.selectionSet ? insideDecos(next) : prev,
+    init: (_, state) => insideDecos(state, DecorationSet.empty),
+    apply: (tr, prev, _old, next) => {
+      if (!tr.docChanged && !tr.selectionSet) return prev;
+      // 本文が動いたら位置が合わないので、使い回しの相手にはしない。
+      return insideDecos(next, tr.docChanged ? DecorationSet.empty : prev);
+    },
   },
   props: {
     decorations(state) {
