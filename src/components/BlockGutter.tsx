@@ -224,8 +224,9 @@ export function BlockGutter({
     box: Box | null;
   } | null>(null);
   const toRef = useRef<number | null>(null);
-  // 掴んでいる種別。掴んでいる行・列を塗って示すために描画へも渡す。
-  const [holding, setHolding] = useState<Kind | null>(null);
+  // 掴んでいるあいだ薄くしている実体。離すときに元へ戻す。
+  const liftedRef = useRef<Element[]>([]);
+  const liftRafRef = useRef(0);
   // メニューを開いている間は相手を変えない。素の listener からも読む。
   const menuRef = useRef<boolean>(false);
   menuRef.current = menu !== null;
@@ -434,7 +435,7 @@ export function BlockGutter({
       heldRef.current = null;
       toRef.current = null;
       setGuide(null);
-      setHolding(null);
+      unlift();
       if (!held || to === null) return;
       e.preventDefault();
       if (held.kind === "block") onMove(held.at, to);
@@ -533,7 +534,6 @@ export function BlockGutter({
     (kind: Kind, index: number, at: number, box: Box | null = null) =>
     (e: React.DragEvent) => {
       heldRef.current = { kind, index, at, box };
-      setHolding(kind);
       e.dataTransfer.setData(MIME[kind], String(at));
       e.dataTransfer.effectAllowed = "move";
       // 掴んだものを薄い写しで見せる。大きすぎるときは名前の札に落ちる。
@@ -552,6 +552,7 @@ export function BlockGutter({
       } else {
         setDragPreview(e.dataTransfer, previewOf(kind, index, at), label(kind, index));
       }
+      lift(heldParts(kind, index, at));
       setMenu(null);
     };
 
@@ -586,10 +587,41 @@ export function BlockGutter({
     if (!text) return "ブロックを移動";
     return text.length > 24 ? `${text.slice(0, 24)}…` : text;
   };
+  // 掴んだものを薄くして、持ち上がったことをその場で見せる。元の位置に濃いまま
+  // 残っていると動いている実感が無いので、別に囲みを描いて示す必要が出る。
+  const lift = (els: (Element | null | undefined)[]) => {
+    const found = els.filter((el): el is Element => !!el);
+    // 写しは setDragImage の時点で取られる。薄くするのはその後の一枚から。
+    // 掴んですぐ離したときは、この一枚が来る前に取り消す（薄いまま残る）。
+    liftRafRef.current = requestAnimationFrame(() => {
+      liftedRef.current = found;
+      for (const el of found) el.classList.add("mg-lifting");
+    });
+  };
+
+  const unlift = () => {
+    cancelAnimationFrame(liftRafRef.current);
+    for (const el of liftedRef.current) el.classList.remove("mg-lifting");
+    liftedRef.current = [];
+  };
+
+  // 薄くする対象。ブロックと項目はその実体、表は掴んだ行・列の升目。
+  const heldParts = (kind: Kind, index: number, at: number): (Element | null)[] => {
+    if (kind === "block" || kind === "item") return [previewOf(kind, index, at)];
+    const table = content
+      .querySelector(`[data-mg-block="${index}"]`)
+      ?.querySelector("table");
+    if (!table) return [];
+    const rows = Array.from(table.rows);
+    // 行はソースの行番号で持っている（本体は 2 行目から）。
+    if (kind === "row") return [rows[at - 1] ?? null];
+    return rows.map((row) => row.cells[at] ?? null);
+  };
+
   const release = () => {
+    unlift();
     heldRef.current = null;
     toRef.current = null;
-    setHolding(null);
     setGuide(null);
     show(null);
   };
@@ -941,7 +973,7 @@ export function BlockGutter({
           {menu?.kind === "item" && view?.item && (
             <div className="mg-target" style={view.item.box} />
           )}
-          {(menu?.kind === "row" || holding === "row") &&
+          {menu?.kind === "row" &&
             view?.table &&
             view.row && (
               <div
@@ -954,7 +986,7 @@ export function BlockGutter({
                 }}
               />
             )}
-          {(menu?.kind === "col" || holding === "col") &&
+          {menu?.kind === "col" &&
             view?.table &&
             view.col && (
               <div

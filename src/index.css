@@ -1629,6 +1629,12 @@ body.mg-dragging .mg-sel-menu {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 40%, transparent);
 }
 
+/* 掴んでいるあいだ、実体を薄くする。持ち上がったことがその場で分かるので、
+   別に囲みを描いて「これを動かしている」と示す必要がない。 */
+.mg-lifting {
+  opacity: 0.35;
+}
+
 /* 落とす位置。ブロックと表の行は横線、表の列は縦線。 */
 .mg-guide-h {
   position: absolute;
