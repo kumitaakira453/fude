@@ -395,8 +395,10 @@ export function EditorGutter({
         setGuide({
           kind: "block",
           top: (after ? box.bottom : box.top) - base.top,
-          left: 0,
-          length: base.width,
+          // 線はブロックの幅で引く。編集面は幅を絞って中央寄せなので、
+          // 入れ物の幅で引くと左右へはみ出す。
+          left: box.left - base.left,
+          length: box.width,
         });
         return;
       }
