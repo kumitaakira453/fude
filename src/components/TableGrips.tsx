@@ -1,7 +1,7 @@
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { setDragPreview } from "../lib/dragImage";
+import { setDragColumn, setDragPreview } from "../lib/dragImage";
 import { schema } from "../lib/md/schema";
 import {
   tableActTr,
@@ -372,21 +372,30 @@ export function TableGrips({
       setHolding(kind);
       e.dataTransfer.setData(MIME[kind], String(at));
       e.dataTransfer.effectAllowed = "move";
-      setDragPreview(
-        e.dataTransfer,
-        previewOf(kind, at),
-        kind === "row" ? "行を移動" : "列を移動",
-      );
+      if (kind === "col") {
+        setDragColumn(e.dataTransfer, columnCells(at), "列を移動");
+      } else {
+        setDragPreview(e.dataTransfer, tableOf()?.rows[at] ?? null, "行を移動");
+      }
       setMenu(null);
     };
 
-  // 掴んだものの薄い写し。行はその行、列は見出しのセル。
-  const previewOf = (kind: TablePart, at: number): Element | null => {
+  // 出しているつまみの表。
+  const tableOf = (): HTMLTableElement | null => {
     const dom = view.nodeDOM(spot?.pos ?? -1);
-    const table = dom instanceof HTMLElement ? dom.querySelector("table") : null;
-    if (!table) return null;
-    if (kind === "row") return table.rows[at] ?? null;
-    return table.rows[0]?.cells[at] ?? null;
+    return dom instanceof HTMLElement ? dom.querySelector("table") : null;
+  };
+
+  // その列の升目を上から。掴んだときの写しに使う。
+  const columnCells = (at: number): HTMLElement[] => {
+    const table = tableOf();
+    if (!table) return [];
+    const out: HTMLElement[] = [];
+    for (const row of table.rows) {
+      const cell = row.cells[at];
+      if (cell) out.push(cell);
+    }
+    return out;
   };
 
   const release = () => {

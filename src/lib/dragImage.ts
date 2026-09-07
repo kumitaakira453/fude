@@ -30,3 +30,42 @@ export function setDragPreview(
   }
   setDragChip(data, label);
 }
+
+// 表の列を掴んだときの写し。
+//
+// 行は tr が 1 つの要素なのでそのまま写せるが、列は升目が行ごとに散っていて
+// まとまった要素が無い。見出しの升目だけを写すと、掴んでいるのが列だという
+// 感覚と合わない。升目の写しを縦に並べて 1 つの写しに組む。
+//
+// 全部を並べると画面を覆う写しが付いてくるので、上限までで切る。
+const STACK_MAX = 320;
+
+export function setDragColumn(
+  data: DataTransfer,
+  cells: readonly HTMLElement[],
+  label: string,
+): void {
+  const stack = document.createElement("div");
+  stack.className = "mg-drag-stack";
+  let height = 0;
+  for (const cell of cells) {
+    const box = cell.getBoundingClientRect();
+    if (box.height <= 0 || box.width <= 0) continue;
+    if (height > 0 && height + box.height > STACK_MAX) break;
+    const copy = cell.cloneNode(true) as HTMLElement;
+    // 升目は表の中でだけ table-cell として並ぶ。外へ出すので箱にする。
+    copy.style.display = "block";
+    copy.style.width = `${box.width}px`;
+    copy.style.height = `${box.height}px`;
+    stack.appendChild(copy);
+    height += box.height;
+  }
+  if (!stack.childElementCount) {
+    setDragChip(data, label);
+    return;
+  }
+  // 画面外に置く。setDragImage は描画済みの要素しか写せない。
+  document.body.appendChild(stack);
+  data.setDragImage(stack, 12, Math.min(height / 2, 22));
+  requestAnimationFrame(() => stack.remove());
+}

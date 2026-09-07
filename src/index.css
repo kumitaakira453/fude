@@ -3342,11 +3342,18 @@ svg[id^="mmd-"] foreignObject p {
   width: 10px;
   height: 10px;
 }
+/* つまみは外側の端に寄せる。左右に同じだけ隙間を空けると溝の真ん中に浮いて
+   見え、どの枠のバーなのか読み取りにくい。隙間は本文の側だけに空ける。 */
 *::-webkit-scrollbar-thumb {
   background: var(--mg-border);
   border-radius: 6px;
   border: 2px solid transparent;
+  border-right-width: 0;
   background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:horizontal {
+  border-right-width: 2px;
+  border-bottom-width: 0;
 }
 *::-webkit-scrollbar-thumb:hover {
   background: var(--mg-muted);
@@ -3367,6 +3374,19 @@ svg[id^="mmd-"] foreignObject p {
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+}
+
+/* 表の列を掴んだときの写し。升目が行ごとに散っていてまとまった要素が無いので、
+   写しを縦に並べて組む。地と枠は表の升目が持っているものをそのまま使う。 */
+.mg-drag-stack {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 8px;
+  background: var(--mg-panel);
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
 }
 
