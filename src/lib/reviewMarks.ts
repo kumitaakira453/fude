@@ -48,6 +48,9 @@ export interface Marked {
   marks: Mark[];
   // 書いている最中の対象。押せる印にはしない。
   pending: Rect[];
+  // その対象がブロック丸ごとか。丸ごとは囲みで、範囲は文字の上のマーカーで
+  // 示す（同じ見た目にすると、どちらを指しているのか読み取れない）。
+  pendingWhole?: boolean;
 }
 
 // 同じ行に並ぶ細切れの矩形を 1 本に畳む。文字ノードの切れ目でばらばらに
@@ -97,6 +100,60 @@ export function mergeRects(rects: DOMRect[]): DOMRect[] {
     if (cur) out.push(cur);
   }
   return out;
+}
+
+// 範囲の矩形を、文字ノードごとに測って集める。
+//
+// Range をまとめて測ると、仕様どおり「丸ごと入っている要素の枠」も返る。
+// 折り返した行や項目をまたいだ範囲では、行の箱の端まで伸びた矩形が混ざり、
+// 文字の無いところまで塗られる。文字ノードごとに測れば返るのは字の箱だけで、
+// 折り返しの分け方はブラウザに任せられる（選択の帯と同じ measure の仕方）。
+export function textRects(range: Range): DOMRect[] {
+  const root = range.commonAncestorContainer;
+  const doc = root.ownerDocument ?? document;
+  const from =
+    root.nodeType === Node.TEXT_NODE ? (root.parentNode ?? root) : root;
+  const walk = doc.createTreeWalker(from, NodeFilter.SHOW_TEXT);
+  const span = doc.createRange();
+  const out: DOMRect[] = [];
+  for (let node = walk.nextNode(); node; node = walk.nextNode()) {
+    const text = node as Text;
+    span.selectNodeContents(text);
+    // 範囲より後ろへ出た。文字ノードは本文の順に来るので、ここで終わり。
+    if (span.compareBoundaryPoints(Range.END_TO_START, range) >= 0) break;
+    // まだ範囲より前。
+    if (span.compareBoundaryPoints(Range.START_TO_END, range) <= 0) continue;
+    const s = text === range.startContainer ? range.startOffset : 0;
+    const e = text === range.endContainer ? range.endOffset : text.length;
+    if (e <= s) continue;
+    span.setStart(text, s);
+    span.setEnd(text, e);
+    for (const rc of span.getClientRects()) {
+      if (rc.height > 0 && rc.width > 0) out.push(rc);
+    }
+  }
+  return out;
+}
+
+// 表を出すときに印を切る範囲。
+//
+// 表の入れ物は本文の桁いっぱいに広がるので、それで切るとブロック丸ごとの印が
+// 表よりずっと広く出る。切るのは「見えている入れ物」と「表そのもの」の重なり
+// （表が桁より狭いときは表の幅、桁より広いときは入れ物の見えている幅）。
+export function tableClip(el: Element): DOMRect | null {
+  const wrap = el.querySelector(".mg-table-wrap");
+  if (!wrap) return null;
+  const box = wrap.getBoundingClientRect();
+  const table = wrap.querySelector("table");
+  if (!table) return box;
+  const rc = table.getBoundingClientRect();
+  const left = Math.max(box.left, rc.left);
+  const right = Math.min(box.right, rc.right);
+  const top = Math.max(box.top, rc.top);
+  const bottom = Math.min(box.bottom, rc.bottom);
+  return right > left && bottom > top
+    ? new DOMRect(left, top, right - left, bottom - top)
+    : box;
 }
 
 // 重ねる先の左上を原点にした矩形へ直す。
@@ -205,8 +262,7 @@ export function readingMarks(
     const outline = blockRect(el) ?? whole?.getBoundingClientRect() ?? null;
     if (!outline) continue;
 
-    const wrap = el.querySelector(".mg-table-wrap");
-    const clip = wrap ? wrap.getBoundingClientRect() : null;
+    const clip = tableClip(el);
     // 箇所の印は、その文字が入っている枠で切る（表だけでなくコードや数式も
     // 枠の中で横にスクロールする）。
     const inBox = inner ? scrollBoxOf(inner.startContainer) : null;
@@ -231,7 +287,7 @@ export function readingMarks(
       ? clipRects(
           cell
             ? [cell.getBoundingClientRect()]
-            : mergeRects(Array.from(inner.getClientRects())),
+            : mergeRects(textRects(inner)),
           spotClip,
         )
       : [];
@@ -277,8 +333,7 @@ export function readingPending(
     : rangeAt(bt, draft.offset, draft.offset + draft.length);
   if (!draft.whole && !range) return [];
 
-  const wrap = el.querySelector(".mg-table-wrap");
-  const clip = wrap ? wrap.getBoundingClientRect() : null;
+  const clip = tableClip(el);
   // 丸ごとの対象は目印で直に引く。文字の一致で見分けると、記法の囲みや
   // チェックの前後で当たらないことがある。
   const marked = draft.unit ? el.querySelector(draft.unit) : null;
@@ -303,7 +358,7 @@ export function readingPending(
       : cell
         ? [cell.getBoundingClientRect()]
         : range
-          ? mergeRects(Array.from(range.getClientRects()))
+          ? mergeRects(textRects(range))
           : [],
     boxes.length > 0 ? clip : inBox ? inBox.getBoundingClientRect() : clip,
   ).map((rc) => relTo(base, rc));

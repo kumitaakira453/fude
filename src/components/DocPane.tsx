@@ -63,6 +63,7 @@ import {
   targetOfBlock,
   targetOfSpan,
 } from "../lib/md/reviewAnchors";
+import { TextSelection } from "prosemirror-state";
 import { domSpan } from "../lib/md/domSpan";
 import { CommentComposer } from "./review/CommentComposer";
 import { Toc } from "./Toc";
@@ -616,6 +617,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const draft = review.draft;
       return {
         marks: readingMarks(content, base, review.threads, review.resolutions),
+        pendingWhole: !!draft && (draft.whole || draft.until !== undefined),
         pending: draft
           ? readingPending(content, base, {
               blockIndex: draft.blockIndex,
@@ -684,6 +686,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const draft = review.draft;
       return {
         marks: editorMarks(pm.view, base, list, review.threads),
+        pendingWhole: !draft?.spot,
         pending:
           draft?.pos === undefined
             ? []
@@ -764,6 +767,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     );
     setEditSel(null);
     if (!target) return;
+    // 選択は畳む。対象は下書きの印で示すので、範囲の帯を残すと印と二重に
+    // なるうえ、小窓を閉じたあとも選んだままに見える。DOM 側の選択だけを
+    // 解いても、編集モデルの選択から描き直されて戻ってくる。
+    const view = pm.view;
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.near(view.state.doc.resolve(editSel.to)),
+      ),
+    );
     reviewRef.current?.startDraftIn({ ...target, rect: editSel.rect });
   }, [pm, editSel, fmPrefix]);
 

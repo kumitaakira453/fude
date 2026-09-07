@@ -6,6 +6,8 @@ import {
   mergeRects,
   noteOf,
   relTo,
+  tableClip,
+  textRects,
   unitOf,
   type Mark,
   type Rect,
@@ -75,8 +77,7 @@ export function editorMarks(
 
     const boxes = boxesFrom(view, anchor.pos, anchor.covered);
     if (boxes.length === 0) continue;
-    const wrap = el.querySelector(".mg-table-wrap");
-    const clip = wrap ? wrap.getBoundingClientRect() : null;
+    const clip = tableClip(el);
     const inBox = inner ? scrollBoxOf(inner.startContainer) : null;
     const spotClip = inBox ? inBox.getBoundingClientRect() : clip;
 
@@ -86,7 +87,7 @@ export function editorMarks(
       ? clipRects(
           cell
             ? [cell.getBoundingClientRect()]
-            : mergeRects(Array.from(inner.getClientRects())),
+            : mergeRects(textRects(inner)),
           spotClip,
         )
       : [];
@@ -128,8 +129,7 @@ export function editorPending(
 ): Rect[] {
   const el = elementAt(view, draft.pos);
   if (!el) return [];
-  const wrap = el.querySelector(".mg-table-wrap");
-  const clip = wrap ? wrap.getBoundingClientRect() : null;
+  const clip = tableClip(el);
   if (!draft.spot) {
     const box = boxOf(view, draft.pos);
     return box ? clipRects([box], clip).map((rc) => relTo(base, rc)) : [];
@@ -141,7 +141,7 @@ export function editorPending(
   return clipRects(
     cell
       ? [cell.getBoundingClientRect()]
-      : mergeRects(Array.from(range.getClientRects())),
+      : mergeRects(textRects(range)),
     inBox ? inBox.getBoundingClientRect() : clip,
   ).map((rc) => relTo(base, rc));
 }

@@ -82,6 +82,8 @@ export function AnchorOverlay({
 }) {
   const [marks, setMarks] = useState<Mark[]>([]);
   const [pending, setPending] = useState<Rect[]>([]);
+  // 丸ごとの対象は囲みで、範囲は文字の上のマーカーで示す。
+  const [pendingWhole, setPendingWhole] = useState(false);
   // ホバーで出す指摘の中身。開くまでもなく読めるようにする。
   const [peek, setPeek] = useState<{
     id: string;
@@ -201,6 +203,7 @@ export function AnchorOverlay({
     const next = measure(content.getBoundingClientRect());
     setMarks(next.marks);
     setPending(next.pending);
+    setPendingWhole(!!next.pendingWhole);
   }, [content, measure]);
 
   // 漸進描画で後から出るブロックにも追従する。
@@ -270,7 +273,13 @@ export function AnchorOverlay({
   return createPortal(
     <div className="mg-review-layer not-prose">
       {pending.map((rc, i) => (
-        <div key={`d:${i}`} className="mg-review-draft" style={rc} />
+        <div
+          key={`d:${i}`}
+          className={
+            pendingWhole ? "mg-review-draft mg-review-draft-area" : "mg-review-draft"
+          }
+          style={rc}
+        />
       ))}
       {marks.map((mark) => {
         const hot = peek?.id === mark.id ? " mg-review-mark-active" : "";

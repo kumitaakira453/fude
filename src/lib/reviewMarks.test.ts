@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "./blocks";
 import type { Resolution } from "./blockDiff";
 import type { ReviewThread } from "./review";
-import { readingMarks, readingPending } from "./reviewMarks";
+import { readingMarks, readingPending, textRects } from "./reviewMarks";
 
 // 印の組み立て。jsdom は描画を持たないので矩形は当て木で置き、見るのは
 // 「箇所を塗るのか、枠で示すのか、そもそも出さないのか」の分かれ方。
@@ -204,5 +204,30 @@ describe("readingPending", () => {
     expect(
       readingPending(el, base, { blockIndex: 9, offset: 0, length: 1 }),
     ).toHaveLength(0);
+  });
+});
+
+describe("textRects", () => {
+  it("字の箱だけを返す（丸ごと入っている要素の枠は返さない）", () => {
+    const el = content("はじめの段落。");
+    const p = el.querySelector("p")!;
+    // 段落の中に囲みの要素を 1 つ置き、その箱には別の大きさを持たせる。
+    const code = document.createElement("code");
+    code.textContent = "コード";
+    p.appendChild(code);
+    rects.set(code, new DOMRect(0, 0, 999, 999));
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    // 文字ノードごとに測るので、置いた要素の箱（999）は混ざらない。
+    for (const rc of textRects(range)) expect(rc.width).toBeLessThan(999);
+  });
+
+  it("範囲の外の文字は数えない", () => {
+    const el = content("はじめの段落。", "つぎの段落。");
+    const first = el.querySelectorAll("p")[0].firstChild as Text;
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.setEnd(first, 3);
+    expect(textRects(range).length).toBeGreaterThan(0);
   });
 });

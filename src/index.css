@@ -2308,16 +2308,27 @@ svg[id^="mmd-"] foreignObject p {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 45%, transparent);
 }
 /* 書いている最中の指摘の対象。押す対象ではないので通り抜けさせる。
-   まだ確定していないので、付いている指摘より強めに出して区別する。 */
+   まだ確定していないので、付いている指摘より強めに出して区別する。
+
+   選んだ範囲は文字の上のマーカーとして出す。囲み線を足すと、字の箱の塗りと
+   二重になってどちらを指しているのか読み取れない。 */
 .mg-review-draft {
   position: absolute;
-  /* 端の文字に触れないよう少し外へ広げる（メニューの印と同じ扱い）。 */
-  margin: -3px 0 0 -5px;
-  padding: 3px 5px;
-  box-sizing: content-box;
+  padding: 0;
+  border: 0;
+  border-radius: 0.2em;
   background: color-mix(in srgb, var(--mg-accent) 26%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 55%, transparent);
   pointer-events: none;
+}
+/* ブロック丸ごとの対象。塗りだけでは「どこまでが対象か」が出ないので囲む。
+   文字の左端にぴったり付くと窮屈なので、左右に同じだけ余裕を持たせる。 */
+.mg-review-draft-area {
+  margin: -4px 0 0 -12px;
+  padding: 4px 12px;
+  box-sizing: content-box;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
 
 /* ホバーで出す指摘の中身。開かずに読めるようにする。 */
