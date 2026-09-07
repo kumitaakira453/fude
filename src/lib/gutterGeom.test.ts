@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { tableGeometry } from "./gutterGeom";
+import { addBelow, tableGeometry } from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -128,5 +128,30 @@ describe("表の行・列を矩形から決める", () => {
     const { wrap, table } = build("tbody", 3);
     rect(wrap, new DOMRect(1000, 1000, 10, 10));
     expect(tableGeometry(table, Array.from(table.rows), { x: 150, y: 210 }, BASE)).toBeNull();
+  });
+});
+
+describe("addBelow", () => {
+  const ADD = 16;
+  const GAP = 12;
+
+  it("空きが広ければ決めた分だけ離す", () => {
+    expect(addBelow(100, 60, GAP)).toBe(112);
+  });
+
+  it("空きが狭ければ収まるところまで寄せる", () => {
+    // 24px の空きに 16px のつまみ → 上下に 4px ずつ。
+    expect(addBelow(100, 24, GAP)).toBe(104);
+  });
+
+  it("空きがちょうどなら隙間なく収まる", () => {
+    expect(addBelow(100, ADD, GAP)).toBe(100);
+  });
+
+  it("空きが足りなければ表の下端をまたぐ（次のブロックへ入れない）", () => {
+    // 8px しか無い → 4px 分だけ表に乗り、残り 12px が空きに入る。
+    expect(addBelow(100, 8, GAP)).toBe(96);
+    // 空きが無ければ下端をまたいで半分ずつ。
+    expect(addBelow(100, 0, GAP)).toBe(100 - ADD / 2);
   });
 });

@@ -19,6 +19,8 @@ import {
   tableBands,
   tableGeometry,
   type Box,
+  addBelow,
+  roomBelow,
 } from "../lib/gutterGeom";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
@@ -42,6 +44,8 @@ interface View {
   index: number;
   atRight: boolean;
   bottom: number;
+  // 表の下に足すつまみを置ける高さ（次のブロックとの空き）。
+  below: number;
   // 非表のブロックの外枠。メニューの対象を塗るのに使う。
   box: Box | null;
   // 箇条書きの項目。Markdown ではリスト全体が 1 ブロックだが、掴む単位は項目。
@@ -97,6 +101,7 @@ function same(a: View | null, b: View): boolean {
     a.room === b.room &&
     a.atRight === b.atRight &&
     a.bottom === b.bottom &&
+    a.below === b.below &&
     (a.box?.top ?? -1) === (b.box?.top ?? -1) &&
     (a.item?.at ?? -1) === (b.item?.at ?? -1) &&
     Math.abs(a.y - b.y) < 0.5 &&
@@ -287,6 +292,7 @@ export function BlockGutter({
           room,
           atRight: geo.atRight,
           bottom: geo.bottom,
+          below: roomBelow(content, hit.index, hit.el),
           box: null,
           item: null,
           table: geo.table,
@@ -309,6 +315,7 @@ export function BlockGutter({
         index: hit.index,
         atRight: true,
         bottom: 0,
+        below: 0,
         box: relative(box, base),
         item:
           found && liBox && li
@@ -473,6 +480,7 @@ export function BlockGutter({
         ...held,
         atRight: geo.atRight,
         bottom: geo.bottom,
+        below: roomBelow(content, held.index, null),
         table: geo.table,
         row: geo.row ? { line: geo.row.index + 2, top: geo.row.top, height: geo.row.height } : null,
         col: geo.col,
@@ -953,7 +961,7 @@ export function BlockGutter({
                 title="行を追加"
                 className="mg-grip mg-grip-bar mg-grip-add"
                 style={{
-                  top: view.bottom + ADD_AWAY,
+                  top: addBelow(view.bottom, view.below, ADD_AWAY),
                   left: view.table.left,
                   width: view.table.width,
                   height: ADD,

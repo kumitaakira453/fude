@@ -26,6 +26,7 @@ import {
 import {
   ADD,
   ADD_AWAY,
+  addBelow,
   BAR,
   BOTH,
   EDGE,
@@ -86,8 +87,13 @@ interface Spot {
     edge: number;
     box: Box;
   } | null;
-  // 表のときだけ。
-  table: { rows: number; cols: number; geo: TableGeometry } | null;
+  // 表のときだけ。below は次のブロックとの空き（下のつまみの置き場所）。
+  table: {
+    rows: number;
+    cols: number;
+    below: number;
+    geo: TableGeometry;
+  } | null;
 }
 
 interface Guide {
@@ -120,6 +126,7 @@ function same(a: Spot | null, b: Spot | null): boolean {
   return (
     a.table.rows === b.table.rows &&
     a.table.cols === b.table.cols &&
+    a.table.below === b.table.below &&
     sameBox(x.table, y.table) &&
     x.atRight === y.atRight &&
     x.bottom === y.bottom &&
@@ -281,6 +288,18 @@ export function EditorGutter({
       const liBox = li?.getBoundingClientRect();
       const line = li && liBox ? itemLine(li, liBox) : null;
 
+      // 表の下につまみを置ける高さ。次のブロックの上端までの空きで決める。
+      const after =
+        hit.index + 1 < view.state.doc.childCount
+          ? view.nodeDOM(hit.pos + node.nodeSize)
+          : null;
+      const below = Math.max(
+        0,
+        (after instanceof HTMLElement
+          ? after.getBoundingClientRect().top
+          : host.getBoundingClientRect().bottom) - box.bottom,
+      );
+
       const el = hit.el.querySelector("table");
       const geo =
         el && node.type === schema.nodes.table
@@ -314,6 +333,7 @@ export function EditorGutter({
           ? {
               rows: node.childCount,
               cols: node.child(0)?.childCount ?? 0,
+              below,
               geo: {
                 ...geo,
                 // 行は左の縁、列は上の縁を指したときだけ出す。表の内側どこでも
@@ -783,7 +803,7 @@ export function EditorGutter({
                 title="行を追加"
                 className="mg-grip mg-grip-bar mg-grip-add"
                 style={{
-                  top: geo.bottom + ADD_GAP,
+                  top: addBelow(geo.bottom, spot.table.below, ADD_GAP),
                   left: geo.table.left,
                   width: geo.table.width,
                   height: ADD,

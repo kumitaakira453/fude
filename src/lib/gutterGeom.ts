@@ -233,3 +233,32 @@ export function tableGeometry(
     base,
   );
 }
+
+// 表の下に足すつまみの置き場所。
+//
+// 表の下端から決め打ちで離すと、次のブロックとの空きが狭い文書（表のすぐ下に
+// 見出しが来るなど）でつまみが次のブロックに重なる。空きに収まるところまで
+// 寄せ、それでも足りなければ表の下端をまたぐ（次のブロックへは入れない）。
+//
+// room は表の下端から次のブロックの上端までの画素。
+export function addBelow(bottom: number, room: number, gap: number): number {
+  return bottom + Math.max(-ADD / 2, Math.min(gap, (room - ADD) / 2));
+}
+
+// 表の下端から次のブロックの上端までの空き。読むとき側は目印で引ける。
+export function roomBelow(
+  content: HTMLElement,
+  index: number,
+  el: HTMLElement | null,
+): number {
+  const here = el ?? content.querySelector<HTMLElement>(`[data-mg-block="${index}"]`);
+  if (!here) return 0;
+  const next = content.querySelector<HTMLElement>(
+    `[data-mg-block="${index + 1}"]`,
+  );
+  const bottom = here.getBoundingClientRect().bottom;
+  const top = next
+    ? next.getBoundingClientRect().top
+    : content.getBoundingClientRect().bottom;
+  return Math.max(0, top - bottom);
+}
