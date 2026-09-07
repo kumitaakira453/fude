@@ -117,9 +117,14 @@ export function CommentComposer({
   );
   const style = { left, top, visibility: height > 0 ? "visible" : "hidden" } as const;
 
+  // 焦点は形が決まってから当てる。高さを測るまでは visibility: hidden で
+  // 置いてあり、見えない要素は焦点を取れない（focus() が黙って外れる）。
+  const focused = useRef(false);
   useEffect(() => {
+    if (focused.current || height <= 0) return;
+    focused.current = true;
     inputRef.current?.focus();
-  }, []);
+  }, [height]);
 
   // 書いた分だけ入力欄を伸ばす。固定の高さだと、長い指摘を書いている間に
   // 自分が書いた文が上へ流れて見えなくなる。上限に達したら中をスクロールする。
