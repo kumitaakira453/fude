@@ -27,10 +27,26 @@ export const ADD_AWAY = 6;
 export const BOTH = GRIP * 2 + 4 + AWAY;
 export const ONLY = GRIP + AWAY;
 
+// つまみを合わせる 1 行目の箱。
+//
+// 要素の中身をまとめて測ると、`Range.getClientRects()` が「丸ごと入っている
+// 要素の枠」も返すので、中に段落を抱えるもの（編集面の箇条書きの項目や
+// 囲み）では全行ぶんの箱が先に来る。それを 1 行目と取るとつまみが項目の
+// 真ん中に落ちる。字のところを直に測る。
 export function firstLine(el: Element): DOMRect | null {
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const rects = range.getClientRects();
+  const doc = el.ownerDocument;
+  const walk = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const span = doc.createRange();
+  for (let node = walk.nextNode(); node; node = walk.nextNode()) {
+    if (!node.nodeValue?.trim()) continue;
+    span.selectNodeContents(node);
+    for (const rect of span.getClientRects()) {
+      if (rect.height > 0) return rect;
+    }
+  }
+  // 字を持たないもの（空の項目、チェックだけの項目、図など）は枠から測る。
+  span.selectNodeContents(el);
+  const rects = span.getClientRects();
   return rects.length > 0 ? rects[0] : null;
 }
 

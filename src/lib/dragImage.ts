@@ -38,8 +38,9 @@ export function setDragPreview(
 // 別物に見えるので、表そのものを写して要らない行・列を落とす。桁は実測した
 // 幅で固定する。地と書体は本文の入れ物のクラスをそのまま被せて借りる。
 //
-// 全部を並べると画面を覆う写しが付いてくるので、高さは上限までで切る。
-const STACK_MAX = 320;
+// 掴んだ行・列は端まで写す。切ると「途中までしか付いてこない」ように見える。
+// 画面より大きい表だけは、画面に収まる分で止める（それ以上は写しが画面を
+// 覆って、どこへ運んでいるのか読めなくなる）。
 
 export function setDragTablePart(
   data: DataTransfer,
@@ -70,15 +71,28 @@ export function setDragTablePart(
     for (let i = kept.length - 1; i >= 0; i--) {
       if (i !== at) kept[i].remove();
     }
+    // 画面より広い表では、収まる分で止める（横に溢れる表で起きる）。
+    const row = copy.rows[0];
+    if (row) {
+      const cells = Array.from(row.cells);
+      let room = 0;
+      for (let i = 0; i < cells.length; i++) {
+        if (i > 0 && room + widths[i] > window.innerWidth) {
+          for (let j = cells.length - 1; j >= i; j--) cells[j].remove();
+          break;
+        }
+        room += widths[i];
+      }
+    }
   } else {
     if (at < 0 || at >= widths.length) {
       setDragChip(data, label);
       return;
     }
-    // 上限を超える行は落とす。表の頭から入る分だけを見せる。
+    // 画面より高い表では、収まる分で止める。
     let room = 0;
     for (let i = 0; i < kept.length; i++) {
-      if (i > 0 && room + heights[i] > STACK_MAX) {
+      if (i > 0 && room + heights[i] > window.innerHeight) {
         for (let j = kept.length - 1; j >= i; j--) kept[j].remove();
         break;
       }

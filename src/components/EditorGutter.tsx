@@ -26,6 +26,7 @@ import {
   BAR,
   BOTH,
   EDGE,
+  firstLine,
   GRIP,
   itemAtY,
   itemEdge,
@@ -301,9 +302,13 @@ export function EditorGutter({
                 box: relative(liBox, base),
               }
             : null,
-        // ブロックの上端から半行下げる。行箱を直に測ると、囲みのように中へ
-        // 別の箱を抱えるブロックで見当違いの行に付く。
-        line: box.top - base.top + Math.min(lineHeight(hit.el), box.height) / 2,
+        // 1 行目の字に合わせる。測れないもの（図・区切り線など）は、上端から
+        // 半行下げた高さで代わりにする。
+        line: (() => {
+          const head = firstLine(hit.el);
+          if (head && head.height > 0) return head.top - base.top + head.height / 2;
+          return box.top - base.top + Math.min(lineHeight(hit.el), box.height) / 2;
+        })(),
         table: geo
           ? {
               rows: node.childCount,
