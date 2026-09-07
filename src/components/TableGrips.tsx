@@ -14,6 +14,7 @@ import {
   ADD_AWAY,
   BAR,
   EDGE,
+  GRIP,
   tableGeometry,
   type Box,
   type TableGeometry,
@@ -66,6 +67,33 @@ function same(a: Spot | null, b: Spot | null): boolean {
     a.geo.col?.index === b.geo.col?.index &&
     a.geo.col?.left === b.geo.col?.left
   );
+}
+
+// 指している高さにある表。当たり判定だけでは足りない。
+//
+// つまみは表の外側（左と上）に置くので、そこへ手を伸ばす途中は表の上に居ない。
+// 当たり判定で拾うと相手を見失って消える。指している位置を本文の幅の中へ寄せ、
+// 編集モデルに「その高さは何か」を聞く。
+function tableAt(view: EditorView, x: number, y: number): HTMLTableElement | null {
+  const box = view.dom.getBoundingClientRect();
+  let hit: { pos: number } | null = null;
+  try {
+    hit = view.posAtCoords({
+      left: Math.min(Math.max(x, box.left + 1), box.right - 1),
+      top: Math.min(Math.max(y, box.top + 1), box.bottom - 1),
+    });
+  } catch {
+    return null;
+  }
+  if (!hit) return null;
+  const $at = view.state.doc.resolve(Math.min(hit.pos, view.state.doc.content.size));
+  for (let d = $at.depth; d > 0; d--) {
+    if ($at.node(d).type !== schema.nodes.table) continue;
+    const dom = view.nodeDOM($at.before(d));
+    const el = dom instanceof HTMLElement ? dom.querySelector("table") : null;
+    return el;
+  }
+  return null;
 }
 
 // その表の節点の位置。行から辿るので、表そのものを指していなくても当たる。
@@ -128,9 +156,24 @@ export function TableGrips({
       if (heldRef.current || menuRef.current) return;
       // つまみの上に来ても保つ。消えると押せない。
       if (target && layer.current?.contains(target)) return;
-      const el =
+      const inside =
         target instanceof Element ? target.closest<HTMLTableElement>("table") : null;
+      const el =
+        inside && view.dom.contains(inside) ? inside : tableAt(view, x, y);
       if (!el || !view.dom.contains(el)) {
+        // 出しているつまみの近くなら保つ。表とつまみの隙間を通る間に
+        // 消えると、そこへ手を伸ばせない。
+        const held = spotRef.current?.geo.table;
+        if (held) {
+          const box = host.getBoundingClientRect();
+          const pad = GRIP + ADD + ADD_AWAY;
+          const near =
+            x >= box.left + held.left - pad &&
+            x <= box.left + held.left + held.width + pad &&
+            y >= box.top + held.top - pad &&
+            y <= box.top + held.top + held.height + pad;
+          if (near) return;
+        }
         show(null);
         return;
       }
@@ -245,14 +288,17 @@ export function TableGrips({
     });
     settle.observe(view.dom);
 
-    view.dom.addEventListener("mousemove", onMouseMove);
-    view.dom.addEventListener("mouseleave", onMouseLeave);
+    // 合図は入れ物の側で拾う。編集面に付けると、つまみへ手を伸ばした時点で
+    // 編集面から出たことになり（つまみは編集面の外に置いてある）、
+    // mouseleave でつまみが消えて押せない。
+    host.addEventListener("mousemove", onMouseMove);
+    host.addEventListener("mouseleave", onMouseLeave);
     // 掴んでいる間の合図は、本文へ届く前に受け取る。
     host.addEventListener("dragover", onDragOver, true);
     host.addEventListener("drop", onDrop, true);
     return () => {
-      view.dom.removeEventListener("mousemove", onMouseMove);
-      view.dom.removeEventListener("mouseleave", onMouseLeave);
+      host.removeEventListener("mousemove", onMouseMove);
+      host.removeEventListener("mouseleave", onMouseLeave);
       host.removeEventListener("dragover", onDragOver, true);
       host.removeEventListener("drop", onDrop, true);
       settle.disconnect();
