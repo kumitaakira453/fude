@@ -15,7 +15,7 @@ import { editorPlugins } from "../lib/md/plugins";
 import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
 import { IconBoard } from "./CalloutIcon";
-import { TableGrips } from "./TableGrips";
+import { EditorGutter } from "./EditorGutter";
 import { MermaidModal } from "./MermaidModal";
 
 // 組版されたまま書く全文編集。
@@ -583,7 +583,7 @@ export function BodyEditor({
       {/* 編集面は ProseMirror が中の DOM を持つ。React の子は入れない。 */}
       <div ref={host} className="relative" />
       {built && (
-        <TableGrips
+        <EditorGutter
           view={built.view}
           host={built.host}
           scroller={built.scroller}

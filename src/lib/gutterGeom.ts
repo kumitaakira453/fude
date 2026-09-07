@@ -1,4 +1,6 @@
-// 表の行・列を、当たり判定ではなく矩形から決める。
+// つまみの置き場所を決める幾何。読むときと編集面の両方から使う。
+//
+// ブロックのつまみ・表の行と列の帯を、当たり判定ではなく矩形から決める。
 //
 // 重ねた層や余白、指摘の印に邪魔されず、指している高さの行・幅の列をそのまま
 // 選べる。表の外に居るときは一番近い行・列へ寄せる（つまみは表の外側に置くので、
@@ -21,6 +23,20 @@ export const EDGE = 26;
 // 行・列を足す帯。掴む帯と同じ太さに揃える。
 export const ADD = 16;
 export const ADD_AWAY = 6;
+// つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る左の余白。
+export const BOTH = GRIP * 2 + 4 + AWAY;
+export const ONLY = GRIP + AWAY;
+
+// ブロックの 1 行の高さ。見出しのように行が高いものでも文字の中心に並ぶよう、
+// 実際に組まれた行送りを読む。
+export function lineHeight(el: Element): number {
+  const target = el.firstElementChild ?? el;
+  const style = getComputedStyle(target);
+  const value = parseFloat(style.lineHeight);
+  if (Number.isFinite(value) && value > 0) return value;
+  const size = parseFloat(style.fontSize);
+  return Number.isFinite(size) && size > 0 ? size * 1.6 : 24;
+}
 
 export interface Box {
   top: number;

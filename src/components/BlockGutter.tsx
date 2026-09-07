@@ -6,14 +6,17 @@ import {
   ADD,
   ADD_AWAY,
   AWAY,
+  BOTH,
   BAR,
   EDGE,
   GRIP,
+  lineHeight,
+  ONLY,
   relative,
   tableBands,
   tableGeometry,
   type Box,
-} from "../lib/tableGeom";
+} from "../lib/gutterGeom";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 
@@ -31,9 +34,6 @@ const BLOCK_MIME = "application/x-fude-block";
 const ROW_MIME = "application/x-fude-trow";
 const COL_MIME = "application/x-fude-tcol";
 
-// つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る幅。
-const BOTH = GRIP * 2 + 4 + AWAY;
-const ONLY = GRIP + AWAY;
 
 interface View {
   index: number;
@@ -174,17 +174,6 @@ function blockAtY(
   const el = topmostBlock(content, y);
   const index = el ? blockIndexOf(el) : null;
   return el && index !== null ? { el, index } : null;
-}
-
-// ブロックの 1 行の高さ。見出しのように行が高いものでも文字の中心に並ぶよう、
-// 実際に組まれた行送りを読む。
-function lineHeight(el: Element): number {
-  const target = el.firstElementChild ?? el;
-  const style = getComputedStyle(target);
-  const value = parseFloat(style.lineHeight);
-  if (Number.isFinite(value) && value > 0) return value;
-  const size = parseFloat(style.fontSize);
-  return Number.isFinite(size) && size > 0 ? size * 1.6 : 24;
 }
 
 // 表のつまみの相手は、その表の DOM から測る。行の数え方はモードで違うので
