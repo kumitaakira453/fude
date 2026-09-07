@@ -8,7 +8,6 @@ import {
   AWAY,
   BOTH,
   BAR,
-  EDGE,
   GRIP,
   itemAtY,
   itemEdge,
@@ -21,6 +20,9 @@ import {
   type Box,
   addBelow,
   HOLD,
+  nearEdge,
+  NUB,
+  NUB_LONG,
   HOLD_GAP,
   holdAt,
   onLine,
@@ -50,6 +52,9 @@ interface View {
   bottom: number;
   // 表の下に足すつまみを置ける高さ（次のブロックとの空き）。
   below: number;
+  // 行・列のつまみを育てるか。寄っていないあいだは小さな棒だけを出す。
+  nearRow: boolean;
+  nearCol: boolean;
   // 非表のブロックの外枠。メニューの対象を塗るのに使う。
   box: Box | null;
   // 箇条書きの項目。Markdown ではリスト全体が 1 ブロックだが、掴む単位は項目。
@@ -106,6 +111,8 @@ function same(a: View | null, b: View): boolean {
     a.atRight === b.atRight &&
     a.bottom === b.bottom &&
     a.below === b.below &&
+    a.nearRow === b.nearRow &&
+    a.nearCol === b.nearCol &&
     (a.box?.top ?? -1) === (b.box?.top ?? -1) &&
     (a.item?.at ?? -1) === (b.item?.at ?? -1) &&
     Math.abs(a.y - b.y) < 0.5 &&
@@ -286,10 +293,10 @@ export function BlockGutter({
       const geo = isTable(hit.index) ? geometryOf(hit.el, x, y, base) : null;
 
       if (geo) {
-        // 行は左の縁、列は上の縁を指したときだけ出す。表の内側どこでも出すと
-        // 常に付いて回って読みにくい。外の帯の上も同じ判定で通る。
-        const onLeft = x <= base.left + geo.table.left + EDGE;
-        const onTop = y <= base.top + geo.table.top + EDGE;
+        // 縁に寄ったらつまみに育てる。寄っていないあいだは棒だけを出す
+        // （表の内側どこでもアイコンを出すと本文より目立つ）。
+        const onLeft = nearEdge(x, base.left + geo.table.left);
+        const onTop = nearEdge(y, base.top + geo.table.top);
         const next: View = {
           index: hit.index,
           y: 0,
@@ -300,8 +307,10 @@ export function BlockGutter({
           box: null,
           item: null,
           table: geo.table,
-          row: onLeft ? geo.row : null,
-          col: onTop ? geo.col : null,
+          nearRow: onLeft,
+          nearCol: onTop,
+          row: geo.row,
+          col: geo.col,
         };
         if (!same(viewRef.current, next)) show(next);
         return;
@@ -320,6 +329,8 @@ export function BlockGutter({
         atRight: true,
         bottom: 0,
         below: 0,
+        nearRow: false,
+        nearCol: false,
         box: relative(box, base),
         item:
           found && liBox && li
@@ -485,6 +496,8 @@ export function BlockGutter({
         atRight: geo.atRight,
         bottom: geo.bottom,
         below: roomBelow(content, held.index, null),
+        nearRow: true,
+        nearCol: true,
         table: geo.table,
         row: geo.row ? { line: geo.row.index + 2, top: geo.row.top, height: geo.row.height } : null,
         col: geo.col,
@@ -870,14 +883,25 @@ export function BlockGutter({
             <button
               type="button"
               title="ドラッグで移動 / クリックでメニュー"
-              className="mg-grip mg-grip-hold mg-grip-bar"
+              className={`mg-grip mg-grip-hold mg-grip-bar${
+                view.nearRow ? "" : " mg-nub"
+              }`}
               draggable
-              style={{
-                top: holdAt(view.row.top, view.row.height),
-                left: onLine(view.table.left, BAR),
-                width: BAR,
-                height: HOLD,
-              }}
+              style={
+                view.nearRow
+                  ? {
+                      top: holdAt(view.row.top, view.row.height),
+                      left: onLine(view.table.left, BAR),
+                      width: BAR,
+                      height: HOLD,
+                    }
+                  : {
+                      top: holdAt(view.row.top, view.row.height),
+                      left: onLine(view.table.left, NUB),
+                      width: NUB,
+                      height: NUB_LONG,
+                    }
+              }
               onDragStart={hold("row", view.index, view.row.line, view.table)}
               onDragEnd={release}
               onClick={(e) =>
@@ -900,7 +924,7 @@ export function BlockGutter({
                 });
               }}
             >
-              <Icon name="drag_indicator" size={15} />
+              {view.nearRow && <Icon name="drag_indicator" size={15} />}
             </button>
           )}
 
@@ -908,14 +932,25 @@ export function BlockGutter({
             <button
               type="button"
               title="ドラッグで移動 / クリックでメニュー"
-              className="mg-grip mg-grip-hold mg-grip-bar"
+              className={`mg-grip mg-grip-hold mg-grip-bar${
+                view.nearCol ? "" : " mg-nub"
+              }`}
               draggable
-              style={{
-                top: onLine(view.table.top, BAR),
-                left: holdAt(view.col.left, view.col.width),
-                width: HOLD,
-                height: BAR,
-              }}
+              style={
+                view.nearCol
+                  ? {
+                      top: onLine(view.table.top, BAR),
+                      left: holdAt(view.col.left, view.col.width),
+                      width: HOLD,
+                      height: BAR,
+                    }
+                  : {
+                      top: onLine(view.table.top, NUB),
+                      left: holdAt(view.col.left, view.col.width),
+                      width: NUB_LONG,
+                      height: NUB,
+                    }
+              }
               onDragStart={hold("col", view.index, view.col.index, view.table)}
               onDragEnd={release}
               onClick={(e) =>
@@ -938,7 +973,9 @@ export function BlockGutter({
                 });
               }}
             >
-              <Icon name="drag_indicator" size={15} className="rotate-90" />
+              {view.nearCol && (
+                <Icon name="drag_indicator" size={15} className="rotate-90" />
+              )}
             </button>
           )}
 

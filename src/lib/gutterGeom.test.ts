@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { addBelow, holdAt, onLine, tableGeometry } from "./gutterGeom";
+import { addBelow, holdAt, nearEdge, onLine, tableGeometry } from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -171,5 +171,23 @@ describe("onLine", () => {
   it("枠線の真ん中に載る", () => {
     // 幅 15 のつまみを x=100 の線に載せる → 92.5 から 107.5。
     expect(onLine(100, 15)).toBe(92.5);
+  });
+});
+
+describe("nearEdge", () => {
+  it("縁からの帯の中なら育てる", () => {
+    // 既定の帯は 26px。
+    expect(nearEdge(100, 100)).toBe(true);
+    expect(nearEdge(126, 100)).toBe(true);
+    expect(nearEdge(127, 100)).toBe(false);
+  });
+
+  it("縁より外（手前）でも育てる。つまみは縁の外に出ているので", () => {
+    expect(nearEdge(80, 100)).toBe(true);
+  });
+
+  it("帯の広さは変えられる", () => {
+    expect(nearEdge(110, 100, 5)).toBe(false);
+    expect(nearEdge(104, 100, 5)).toBe(true);
   });
 });

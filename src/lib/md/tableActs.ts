@@ -318,6 +318,40 @@ export function tableMoveTr(
 }
 
 // その行・列の升目が占める範囲。掴んでいるあいだ薄くする印に使う。
+// いま選ばれている行 / 列。つまみを押し込んで見せるのに使う。
+// セルの範囲を選んでいても、行 / 列を丸ごとでなければ null。
+export function pickedPart(
+  state: EditorState,
+): { kind: TablePart; at: number } | null {
+  const sel = state.selection;
+  if (!(sel instanceof CellSelection)) return null;
+  const row = sel.isRowSelection();
+  const col = sel.isColSelection();
+  if (row === col) return null; // どちらでもない / 表を丸ごと
+  const $cell = sel.$anchorCell;
+  const table = $cell.node(-1);
+  const map = TableMap.get(table);
+  const spot = map.findCell($cell.pos - $cell.start(-1));
+  return row ? { kind: "row", at: spot.top } : { kind: "col", at: spot.left };
+}
+
+// 行・列を丸ごと選ぶ。つまみを押したときの「行選択」がこれ。
+// 選べなければ null（表が無い / 範囲の外）。
+export function tableSelectTr(
+  state: EditorState,
+  pos: number,
+  kind: TablePart,
+  at: number,
+): Transaction | null {
+  const table = state.doc.nodeAt(pos);
+  // 表かどうかを見る。別の節点を渡されると TableMap が投げる。
+  if (!table || table.type !== schema.nodes.table) return null;
+  const map = TableMap.get(table);
+  const limit = kind === "row" ? map.height : map.width;
+  if (at < 0 || at >= limit) return null;
+  return selectPart(state.tr, pos, kind, at);
+}
+
 export function tableSpans(
   doc: PmNode,
   pos: number,

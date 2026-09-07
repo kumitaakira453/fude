@@ -3,7 +3,14 @@ import { CellSelection } from "prosemirror-tables";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
-import { tableActTr, tableMoveTr, type TableAct, type TablePart } from "./tableActs";
+import {
+  pickedPart,
+  tableActTr,
+  tableMoveTr,
+  tableSelectTr,
+  type TableAct,
+  type TablePart,
+} from "./tableActs";
 import { toMarkdown } from "./toMarkdown";
 
 // 表の行・列の操作。見るのは書き戻した原文で、桁幅と揃えが列に付いて回るかが肝。
@@ -248,5 +255,46 @@ describe("入れ替え", () => {
     const { state } = opened(SRC);
     expect(tableMoveTr(state, 0, "row", 1, 3)).toBeNull();
     expect(tableActTr(state, 0, "row", 1, "delete")).toBeNull();
+  });
+});
+
+describe("行・列を選ぶ", () => {
+  it("行を丸ごと選ぶ", () => {
+    const { state, pos } = opened(SRC);
+    const next = state.apply(tableSelectTr(state, pos, "row", 1)!);
+    const sel = next.selection as CellSelection;
+    expect(sel.isRowSelection()).toBe(true);
+    expect(pickedPart(next)).toEqual({ kind: "row", at: 1 });
+  });
+
+  it("列を丸ごと選ぶ", () => {
+    const { state, pos } = opened(SRC);
+    const next = state.apply(tableSelectTr(state, pos, "col", 1)!);
+    expect((next.selection as CellSelection).isColSelection()).toBe(true);
+    expect(pickedPart(next)).toEqual({ kind: "col", at: 1 });
+  });
+
+  it("見出しの行も選べる", () => {
+    const { state, pos } = opened(SRC);
+    expect(pickedPart(state.apply(tableSelectTr(state, pos, "row", 0)!))).toEqual({
+      kind: "row",
+      at: 0,
+    });
+  });
+
+  it("範囲の外では何もしない", () => {
+    const { state, pos } = opened(SRC);
+    expect(tableSelectTr(state, pos, "row", 9)).toBe(null);
+    expect(tableSelectTr(state, pos, "col", -1)).toBe(null);
+  });
+
+  it("表が無い位置では何もしない", () => {
+    const { state } = opened(SRC);
+    expect(tableSelectTr(state, 0, "row", 0)).toBe(null);
+  });
+
+  it("選んでいないときは相手が無い", () => {
+    const { state } = opened(SRC);
+    expect(pickedPart(state)).toBe(null);
   });
 });

@@ -1652,6 +1652,21 @@ body.mg-dragging .mg-sel-menu {
   background: color-mix(in srgb, var(--mg-fg) 8%, var(--mg-bg));
   border-radius: 999px;
 }
+/* 育つ前の合図。「ここから掴める」だけを示す細い棒。
+   つまみと同じ線に載っているので、育っても場所が動かない。 */
+.mg-nub {
+  background: color-mix(in srgb, var(--mg-fg) 22%, transparent);
+  border-radius: 999px;
+  transition: background 0.12s ease;
+}
+.mg-nub:hover {
+  background: color-mix(in srgb, var(--mg-accent) 55%, transparent);
+}
+/* 選ばれている行・列のつまみ。囲みと同じ色で、何を選んでいるかを揃える。 */
+.mg-grip-bar.is-on {
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+}
 .mg-grip-bar:hover {
   background: color-mix(in srgb, var(--mg-accent) 32%, transparent);
   color: var(--mg-fg);
@@ -1679,15 +1694,6 @@ body.mg-dragging .mg-sel-menu {
   border-radius: 4px;
   background: color-mix(in srgb, var(--mg-accent) 14%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 40%, transparent);
-}
-/* 表の行・列を指しているとき。選んでいる状態と同じ見た目にする（塗らずに
-   囲むだけ）。塗ると、選んでいる箱と二重に見える。 */
-.mg-target-cells {
-  margin: 0;
-  padding: 0;
-  border-radius: 2px;
-  background: transparent;
-  box-shadow: inset 0 0 0 2px var(--mg-accent);
 }
 
 /* 掴んでいるあいだ、実体を薄くする。持ち上がったことがその場で分かるので、

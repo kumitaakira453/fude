@@ -17,8 +17,10 @@ import {
 import { schema } from "../lib/md/schema";
 import { liftedKey, type LiftedSpans } from "../lib/md/lifted";
 import {
+  pickedPart,
   tableActTr,
   tableMoveTr,
+  tableSelectTr,
   tableSpans,
   type TableAct,
   type TablePart,
@@ -27,12 +29,14 @@ import {
   ADD,
   addBelow,
   HOLD,
+  nearEdge,
+  NUB,
+  NUB_LONG,
   HOLD_GAP,
   holdAt,
   onLine,
   BAR,
   BOTH,
-  EDGE,
   firstLine,
   GRIP,
   itemAtY,
@@ -91,10 +95,15 @@ interface Spot {
     box: Box;
   } | null;
   // 表のときだけ。below は次のブロックとの空き（下のつまみの置き場所）。
+  //
+  // 行・列は「どこから掴めるか」を小さな棒で常に示し、指が縁に寄ったときだけ
+  // つまみに育てる。nearRow / nearCol がその判定。
   table: {
     rows: number;
     cols: number;
     below: number;
+    nearRow: boolean;
+    nearCol: boolean;
     geo: TableGeometry;
   } | null;
 }
@@ -130,6 +139,8 @@ function same(a: Spot | null, b: Spot | null): boolean {
     a.table.rows === b.table.rows &&
     a.table.cols === b.table.cols &&
     a.table.below === b.table.below &&
+    a.table.nearRow === b.table.nearRow &&
+    a.table.nearCol === b.table.nearCol &&
     sameBox(x.table, y.table) &&
     x.atRight === y.atRight &&
     x.bottom === y.bottom &&
@@ -337,18 +348,15 @@ export function EditorGutter({
               rows: node.childCount,
               cols: node.child(0)?.childCount ?? 0,
               below,
+              // 縁に寄ったらつまみに育てる。寄っていないあいだは棒だけ。
+              nearRow: nearEdge(x, base.left + geo.table.left),
+              nearCol: nearEdge(y, base.top + geo.table.top),
               geo: {
                 ...geo,
-                // 行は左の縁、列は上の縁を指したときだけ出す。表の内側どこでも
-                // 出すと常に付いて回って読みにくい。1 行目は見出しなので
-                // 帯を出さない（GFM の表では動かせず消せない）。
-                row:
-                  x <= base.left + geo.table.left + EDGE &&
-                  geo.row &&
-                  geo.row.index > 0
-                    ? geo.row
-                    : null,
-                col: y <= base.top + geo.table.top + EDGE ? geo.col : null,
+                // 1 行目は見出しなので相手にしない（GFM の表では動かせず
+                // 消せない）。
+                row: geo.row && geo.row.index > 0 ? geo.row : null,
+                col: geo.col,
               },
             }
           : null,
@@ -618,6 +626,12 @@ export function EditorGutter({
 
   const open = (kind: Kind, where: Spot, at: number) => (e: React.MouseEvent) => {
     e.preventDefault();
+    // 行・列は押した時点で選ぶ。何を相手にしているかが囲みで出るので、
+    // メニューが離れた場所に出ても分かる。
+    if (kind === "row" || kind === "col") {
+      const tr = tableSelectTr(view.state, where.pos, kind, at);
+      if (tr) view.dispatch(tr);
+    }
     setMenu({ kind, spot: where, at, x: e.clientX, y: e.clientY });
   };
 
@@ -677,6 +691,8 @@ export function EditorGutter({
     ];
   };
 
+  // いま選ばれている行 / 列。押し込んで見せる相手。
+  const picked = pickedPart(view.state);
   const geo = spot?.table?.geo;
   // 箇条書きでは項目を相手にする。字下げの分だけ左に余裕があるので、
   // つまみを 2 つ並べられるかはそこも足して見る。
@@ -744,40 +760,65 @@ export function EditorGutter({
           )}
 
           {geo?.row && spot && (
+            // 縁に寄っていないあいだは棒だけ。押せるので、そこから直に掴める。
             <button
               type="button"
-              title="ドラッグで移動 / クリックでメニュー"
-              className="mg-grip mg-grip-hold mg-grip-bar"
-              style={{
-                top: holdAt(geo.row.top, geo.row.height),
-                left: onLine(geo.table.left, BAR),
-                width: BAR,
-                height: HOLD,
-              }}
+              title="ドラッグで移動 / クリックで行を選ぶ"
+              className={`mg-grip mg-grip-hold mg-grip-bar${
+                spot.table?.nearRow ? "" : " mg-nub"
+              }${picked?.kind === "row" && picked.at === geo.row.index ? " is-on" : ""}`}
+              style={
+                spot.table?.nearRow
+                  ? {
+                      top: holdAt(geo.row.top, geo.row.height),
+                      left: onLine(geo.table.left, BAR),
+                      width: BAR,
+                      height: HOLD,
+                    }
+                  : {
+                      top: holdAt(geo.row.top, geo.row.height),
+                      left: onLine(geo.table.left, NUB),
+                      width: NUB,
+                      height: NUB_LONG,
+                    }
+              }
               onMouseDown={hold("row", spot, geo.row.index)}
               onClick={open("row", spot, geo.row.index)}
               onContextMenu={open("row", spot, geo.row.index)}
             >
-              <Icon name="drag_indicator" size={15} />
+              {spot.table?.nearRow && <Icon name="drag_indicator" size={15} />}
             </button>
           )}
 
           {geo?.col && spot && (
             <button
               type="button"
-              title="ドラッグで移動 / クリックでメニュー"
-              className="mg-grip mg-grip-hold mg-grip-bar"
-              style={{
-                top: onLine(geo.table.top, BAR),
-                left: holdAt(geo.col.left, geo.col.width),
-                width: HOLD,
-                height: BAR,
-              }}
+              title="ドラッグで移動 / クリックで列を選ぶ"
+              className={`mg-grip mg-grip-hold mg-grip-bar${
+                spot.table?.nearCol ? "" : " mg-nub"
+              }${picked?.kind === "col" && picked.at === geo.col.index ? " is-on" : ""}`}
+              style={
+                spot.table?.nearCol
+                  ? {
+                      top: onLine(geo.table.top, BAR),
+                      left: holdAt(geo.col.left, geo.col.width),
+                      width: HOLD,
+                      height: BAR,
+                    }
+                  : {
+                      top: onLine(geo.table.top, NUB),
+                      left: holdAt(geo.col.left, geo.col.width),
+                      width: NUB_LONG,
+                      height: NUB,
+                    }
+              }
               onMouseDown={hold("col", spot, geo.col.index)}
               onClick={open("col", spot, geo.col.index)}
               onContextMenu={open("col", spot, geo.col.index)}
             >
-              <Icon name="drag_indicator" size={15} className="rotate-90" />
+              {spot.table?.nearCol && (
+                <Icon name="drag_indicator" size={15} className="rotate-90" />
+              )}
             </button>
           )}
 
@@ -828,28 +869,8 @@ export function EditorGutter({
           {menu?.kind === "item" && spot?.item && (
             <div className="mg-target" style={spot.item.box} />
           )}
-          {menu?.kind === "row" && geo?.row && (
-            <div
-              className="mg-target mg-target-cells"
-              style={{
-                top: geo.row.top,
-                left: geo.table.left,
-                width: geo.table.width,
-                height: geo.row.height,
-              }}
-            />
-          )}
-          {menu?.kind === "col" && geo?.col && (
-            <div
-              className="mg-target mg-target-cells"
-              style={{
-                top: geo.table.top,
-                left: geo.col.left,
-                width: geo.col.width,
-                height: geo.table.height,
-              }}
-            />
-          )}
+          {/* 行・列は押した時点で選ぶので、メニューの対象は塗らない
+              （選んだ囲みが同じ場所に同じ形で出て、二重になる）。 */}
 
           {guide && (
             <div
