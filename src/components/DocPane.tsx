@@ -1050,8 +1050,20 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {writing && path ? (
           <div
             ref={setEditScroller}
-            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
+            className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
           >
+            {/* 組み上がるまで骨組みを被せる。
+                編集面を組むのは React の効果の中で、それが走るのは骨組みを
+                外した一枚を描いた後。被せないと、その間（大きいファイルでは
+                140ms）は空の紙が「書ける状態」に見えて、打った字がどこにも
+                入らない。編集面が出来たかどうかは onBuilt で分かる。 */}
+            {!pm && (
+              <div className="absolute inset-0 z-10 bg-[var(--mg-bg)] px-10 py-8 sm:px-16">
+                <div className={`${WIDTH_CLASS[width]} mx-auto`}>
+                  <LoadingBody />
+                </div>
+              </div>
+            )}
             <BodyEditor
               key={path}
               body={body}
