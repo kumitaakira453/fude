@@ -57,8 +57,13 @@ import {
   type Marked,
 } from "../lib/reviewMarks";
 import { anchorsKey } from "../lib/md/anchors";
-import { editorMarks } from "../lib/md/editorMarks";
-import { anchorThreads } from "../lib/md/reviewAnchors";
+import { editorMarks, editorPending } from "../lib/md/editorMarks";
+import {
+  anchorThreads,
+  targetOfBlock,
+  targetOfSpan,
+} from "../lib/md/reviewAnchors";
+import { domSpan } from "../lib/md/domSpan";
 import { CommentComposer } from "./review/CommentComposer";
 import { Toc } from "./Toc";
 import { Tooltip } from "./Tooltip";
@@ -214,6 +219,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   };
   const toggleEdit = () => {
     if (switching) return;
+    // 書きかけの指摘は持ち越さない。対象の指し方が画面ごとに違う。
+    reviewRef.current?.close();
+    setEditSel(null);
     setSwitching(true);
     // 印を描いた後の一枚で切り替える。同じ一枚でやると印が出ないまま止まる。
     requestAnimationFrame(() => {
@@ -673,13 +681,127 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     (base: DOMRect): Marked => {
       if (!pm) return { marks: [], pending: [] };
       const list = anchorsKey.getState(pm.view.state) ?? [];
+      const draft = review.draft;
       return {
         marks: editorMarks(pm.view, base, list, review.threads),
-        pending: [],
+        pending:
+          draft?.pos === undefined
+            ? []
+            : editorPending(pm.view, base, {
+                pos: draft.pos,
+                spot: draft.spot ?? null,
+              }),
       };
     },
     // anchorSeq は測り直させるための合図。
-    [pm, review.threads, anchorSeq],
+    [pm, review.threads, review.draft, anchorSeq],
+  );
+
+  // 編集面で選んだところ。指摘の入口をここに出す。
+  //
+  // 読むのは DOM が今持っている選択。編集モデルの選択は selectionchange 経由で
+  // 次のタスクに更新されるので、離した番に見るとまだ前の範囲を指している。
+  const [editSel, setEditSel] = useState<{
+    from: number;
+    to: number;
+    rect: { top: number; bottom: number; left: number };
+  } | null>(null);
+
+  useEffect(() => {
+    if (!pm) {
+      setEditSel(null);
+      return;
+    }
+    const view = pm.view;
+    const read = () => {
+      const span = view.composing ? null : domSpan(view);
+      const sel = span && view.dom.ownerDocument.getSelection();
+      if (!span || !sel || sel.rangeCount === 0) {
+        setEditSel(null);
+        return;
+      }
+      const rects = sel.getRangeAt(0).getClientRects();
+      const rc = rects.length ? rects[rects.length - 1] : null;
+      if (!rc) {
+        setEditSel(null);
+        return;
+      }
+      setEditSel({
+        from: span.from,
+        to: span.to,
+        rect: { top: rc.top, bottom: rc.bottom, left: rc.left },
+      });
+    };
+    // 出すのは離したとき。引いている間に出すと、そのままドラッグの行き先を
+    // 奪って選択が飛ぶ。打ち始めたら消す。
+    const onUp = () => read();
+    const onDown = () => setEditSel(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key.startsWith("Arrow")) return;
+      setEditSel(null);
+    };
+    view.dom.addEventListener("mouseup", onUp);
+    view.dom.addEventListener("keyup", onUp);
+    window.addEventListener("mousedown", onDown);
+    view.dom.addEventListener("keydown", onKey);
+    return () => {
+      view.dom.removeEventListener("mouseup", onUp);
+      view.dom.removeEventListener("keyup", onUp);
+      window.removeEventListener("mousedown", onDown);
+      view.dom.removeEventListener("keydown", onKey);
+    };
+  }, [pm]);
+
+  // 編集面から指摘を始める。対象は編集モデルから組み立てる。
+  const commentOnSpan = useCallback(() => {
+    if (!pm || !editSel) return;
+    const target = targetOfSpan(
+      pm.view.state.doc,
+      pm.loaded(),
+      fmPrefix,
+      editSel.from,
+      editSel.to,
+    );
+    setEditSel(null);
+    if (!target) return;
+    reviewRef.current?.startDraftIn({ ...target, rect: editSel.rect });
+  }, [pm, editSel, fmPrefix]);
+
+  // ブロック全体への指摘。つまみのメニューから呼ぶ。図のように選べる文字を
+  // 持たないブロックでも付けられる。
+  const commentOnNode = useCallback(
+    (pos: number) => {
+      if (!pm) return;
+      const target = targetOfBlock(pm.view.state.doc, pm.loaded(), fmPrefix, pos);
+      if (!target) return;
+      const dom = pm.view.nodeDOM(pos);
+      const box =
+        dom instanceof HTMLElement ? dom.getBoundingClientRect() : null;
+      reviewRef.current?.startDraftIn({
+        ...target,
+        rect: {
+          top: box?.top ?? 0,
+          bottom: box?.bottom ?? 0,
+          left: box?.left ?? 0,
+        },
+      });
+    },
+    [pm, fmPrefix],
+  );
+
+  // 指摘を書いている間、対象が今どこに居るかを測る。小窓は動いた分だけ動く。
+  const trackEditDraft = useCallback(() => {
+    const at = reviewRef.current?.draft?.pos;
+    if (!pm || at === undefined) return null;
+    const dom = pm.view.nodeDOM(at);
+    if (!(dom instanceof HTMLElement)) return null;
+    const box = dom.getBoundingClientRect();
+    return { top: box.top, left: box.left };
+  }, [pm]);
+
+  const editArea = useCallback(
+    () => editScroller?.getBoundingClientRect() ?? null,
+    [editScroller],
   );
 
   // 編集面を出すのは、本文が読めていて、組む前の一枚を描き終えたときだけ。
@@ -940,6 +1062,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               }}
               onDom={setEditContent}
               onBuilt={setPm}
+              onComment={commentOnNode}
               onChange={(next) => {
                 setDraft(next);
                 if (path) autoSave(path, next);
@@ -1131,6 +1254,39 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               </>
             )}
           </div>
+        )}
+
+        {writing && pm && editSel && !review.draft && (
+          // 読むときと同じ入口。mousedown で処理するのも同じ理由で、click を
+          // 待つと押した時点で選択が解かれてメニュー自身が消える。
+          <div
+            style={{ top: editSel.rect.bottom + 6, left: editSel.rect.left }}
+            className="mg-sel-menu"
+          >
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                commentOnSpan();
+              }}
+            >
+              <Icon name="add_comment" size={14} />
+              指摘する
+            </button>
+          </div>
+        )}
+
+        {writing && review.draft && (
+          <CommentComposer
+            anchorRect={review.draft.hit}
+            selection={review.draft.text}
+            source={review.draft.whole ? review.draft.quote : undefined}
+            busy={review.busy}
+            track={trackEditDraft}
+            bounds={editArea}
+            onSubmit={(text) => void review.submit(text)}
+            onClose={review.close}
+          />
         )}
 
         {!editing && review.draft && (

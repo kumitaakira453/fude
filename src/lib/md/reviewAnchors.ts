@@ -115,3 +115,78 @@ export function sectionPathTo(doc: PmNode, pos: number): string[] {
   }
   return stack.map((s) => s.text);
 }
+
+// ---- 編集面から指摘を付けるときの対象 ----
+//
+// 台帳は「指摘した時点で画面に出ていた全文」を版として受け取る作りなので、
+// ディスクへ書き出さずに、いま編集面が持っている全文をそのまま渡せる。
+// 居場所は番号ではなく引用の突き合わせで出すため、これで足りる。
+
+export interface Target {
+  // 対象のトップレベルの節点。印を出す先。
+  pos: number;
+  // 選んだ範囲（編集モデルの位置）。ブロック丸ごとなら持たない。
+  spot: { from: number; to: number } | null;
+  // そのブロックの Markdown。
+  quote: string;
+  // 選んだ表示文字と、ブロックの中でのその位置。
+  text: string;
+  offset: number;
+  sectionPath: string[];
+  // 版として残す全文。フロントマターを前に付けたもの。
+  source: string;
+}
+
+// 選んだ範囲を対象にする。範囲がブロックをまたぐときは、始まったブロックの
+// 終わりまでに丸める（読むとき側の readSelection と同じ扱い）。
+export function targetOfSpan(
+  doc: PmNode,
+  loaded: Loaded,
+  prefix: string,
+  from: number,
+  to: number,
+): Target | null {
+  const $from = doc.resolve(from);
+  if ($from.depth === 0) return null;
+  const pos = $from.before(1);
+  const node = doc.nodeAt(pos);
+  if (!node) return null;
+  const end = Math.min(to, pos + node.nodeSize - 1);
+  if (end <= from) return null;
+  const built = build(doc, loaded, prefix, pos);
+  if (!built) return null;
+  return {
+    ...built,
+    spot: { from, to: end },
+    text: doc.textBetween(from, end, "", ""),
+    offset: doc.textBetween(pos + 1, from, "", "").length,
+  };
+}
+
+// ブロック丸ごとを対象にする。箇所を持たないので、印は外枠だけになる。
+export function targetOfBlock(
+  doc: PmNode,
+  loaded: Loaded,
+  prefix: string,
+  pos: number,
+): Target | null {
+  const built = build(doc, loaded, prefix, pos);
+  return built ? { ...built, spot: null, text: "", offset: 0 } : null;
+}
+
+function build(
+  doc: PmNode,
+  loaded: Loaded,
+  prefix: string,
+  pos: number,
+): Omit<Target, "spot" | "text" | "offset"> | null {
+  const { text, parts } = toMarkdownParts(doc, loaded);
+  const part = parts.find((p) => p.pos === pos);
+  if (!part) return null;
+  return {
+    pos,
+    quote: part.src,
+    sectionPath: sectionPathTo(doc, pos),
+    source: prefix + text,
+  };
+}

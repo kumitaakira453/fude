@@ -201,10 +201,13 @@ export function EditorGutter({
   view,
   host,
   scroller,
+  onComment,
 }: {
   view: EditorView;
   host: HTMLElement;
   scroller: HTMLElement | null;
+  // ブロック全体への指摘。渡されたときだけメニューに出す。
+  onComment?: (pos: number) => void;
 }) {
   const [spot, setSpot] = useState<Spot | null>(null);
   const [menu, setMenu] = useState<{
@@ -629,11 +632,21 @@ export function EditorGutter({
     ];
   };
 
-  // ブロックのメニュー。読むとき側にある「指摘する」「編集する」は入れない
-  // （指摘はまだ編集面へ繋がっておらず、編集は編集面そのもの）。
+  // ブロックのメニュー。読むとき側にある「編集する」は入れない
+  // （編集は編集面そのもの）。
   const blockItems = (where: Spot): MenuItem[] => {
     const act = (a: BlockAct) => () => runBlock(where.index, a);
+    const comment: MenuItem[] = onComment
+      ? [
+          {
+            icon: "chat_bubble",
+            label: "指摘する",
+            run: () => onComment(where.pos),
+          },
+        ]
+      : [];
     return [
+      ...comment,
       { icon: "vertical_align_top", label: "上に挿入", run: act("insertBefore") },
       { icon: "vertical_align_bottom", label: "下に挿入", run: act("insertAfter") },
       { icon: "content_copy", label: "複製", run: act("duplicate") },

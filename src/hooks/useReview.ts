@@ -22,6 +22,7 @@ import {
 import { runReviewUndo, setReviewUndo } from "../lib/reviewUndo";
 import { notify } from "../state/toast";
 import { parseFrontmatter } from "../lib/frontmatter";
+import type { Target } from "../lib/md/reviewAnchors";
 import {
   createThread,
   isOpen,
@@ -61,6 +62,11 @@ interface Draft {
   unit?: boolean;
   cellStart?: number;
   itemAnchor?: number;
+  // 編集面から書いているとき。印はこの位置で出し、版はこの全文を渡す
+  // （編集面の内容はまだディスクに無い）。
+  pos?: number;
+  spot?: { from: number; to: number } | null;
+  source?: string;
 }
 
 export function useReview({
@@ -332,6 +338,42 @@ export function useReview({
     [selection, content, absPath, body, getBlocks],
   );
 
+  // 編集面から指摘を付ける。対象は呼び出し側が編集モデルから組み立てて渡す
+  // （読むとき側の目印は編集面の DOM に無い）。
+  const startDraftIn = useCallback(
+    (target: Target & { rect: { top: number; bottom: number; left: number } }) => {
+      if (!absPath) {
+        void message(
+          "ファイルの場所を特定できませんでした。フォルダを開き直してください。",
+          { title: "fude", kind: "error" },
+        );
+        return;
+      }
+      setDraft({
+        hit: {
+          id: "",
+          top: target.rect.top,
+          bottom: target.rect.bottom,
+          left: target.rect.left,
+        },
+        // 読むとき側のブロック番号は編集面では意味を持たない。印は pos で出す。
+        blockIndex: -1,
+        offset: target.offset,
+        text: target.text,
+        quote: target.quote,
+        sectionPath: target.sectionPath,
+        whole: target.spot === null,
+        pos: target.pos,
+        spot: target.spot,
+        source: target.source,
+      });
+      // 対象は下書きの印で示すので、ネイティブの選択は解く。
+      window.getSelection()?.removeAllRanges();
+      setSelection(null);
+    },
+    [absPath],
+  );
+
   const submit = useCallback(
     async (text: string) => {
       if (!draft || !absPath || busy) return;
@@ -346,8 +388,9 @@ export function useReview({
           selectionOffset: draft.whole ? 0 : draft.offset,
           sectionPath: draft.sectionPath,
           // 画面に出ていた全文を版として残す。ディスクの内容ではなくこれを
-          // 渡すので、指摘とその基準版が食い違わない。
-          source: raw ?? body,
+          // 渡すので、指摘とその基準版が食い違わない。編集面から付けたときは
+          // まだ書き出していないので、編集面が組み直した分を渡す。
+          source: draft.source ?? raw ?? body,
           author: REVIEW_AUTHOR,
           body: text,
         });
@@ -371,6 +414,7 @@ export function useReview({
     draft,
     busy,
     startDraft,
+    startDraftIn,
     inspect,
     submit,
     close,

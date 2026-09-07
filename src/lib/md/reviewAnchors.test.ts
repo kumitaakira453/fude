@@ -6,7 +6,12 @@ import { splitBlocks } from "../blocks";
 import type { ReviewThread } from "../review";
 import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
-import { anchorThreads, sectionPathTo } from "./reviewAnchors";
+import {
+  anchorThreads,
+  sectionPathTo,
+  targetOfBlock,
+  targetOfSpan,
+} from "./reviewAnchors";
 
 // 指摘を編集面の節点へ当てる。原文の突き合わせで決めるので、番号ではなく
 // 「そのブロックの Markdown」が手がかり。
@@ -196,5 +201,75 @@ describe("sectionPathTo", () => {
     const body = `## あ\n\n段落。\n\n## い\n\n段落。\n`;
     const { state } = opened(body);
     expect(sectionPathTo(state.doc, posOf(state.doc, 3))).toEqual(["い"]);
+  });
+});
+
+describe("targetOfSpan / targetOfBlock", () => {
+  it("選んだ範囲から、そのブロックの Markdown と表示文字の位置を出す", () => {
+    const { loaded, state } = opened(SRC);
+    const at = posOf(state.doc, 3);
+    // 「まんなかの段落。」の 3 文字目から 4 文字。
+    const target = targetOfSpan(state.doc, loaded, "", at + 3, at + 7);
+    expect(target?.pos).toBe(at);
+    expect(target?.quote).toBe("まんなかの段落。");
+    expect(target?.text).toBe("なかの段");
+    expect(target?.offset).toBe(2);
+    expect(target?.sectionPath).toEqual(["題", "中の見出し"]);
+    expect(target?.source).toBe(SRC);
+  });
+
+  it("フロントマターは版の前に付け直す", () => {
+    const { loaded, state } = opened(SRC);
+    const at = posOf(state.doc, 3);
+    const fm = "---\ntitle: あ\n---\n\n";
+    expect(targetOfSpan(state.doc, loaded, fm, at + 1, at + 3)?.source).toBe(
+      fm + SRC,
+    );
+  });
+
+  it("ブロックをまたいだ範囲は、始まったブロックの終わりまでに丸める", () => {
+    const { loaded, state } = opened(SRC);
+    const at = posOf(state.doc, 3);
+    const far = state.doc.content.size;
+    const target = targetOfSpan(state.doc, loaded, "", at + 3, far);
+    expect(target?.quote).toBe("まんなかの段落。");
+    expect(target?.text).toBe("なかの段落。");
+  });
+
+  it("ブロック丸ごとは箇所を持たない", () => {
+    const { loaded, state } = opened(SRC);
+    const at = posOf(state.doc, 3);
+    const target = targetOfBlock(state.doc, loaded, "", at);
+    expect(target?.spot).toBe(null);
+    expect(target?.text).toBe("");
+    expect(target?.offset).toBe(0);
+    expect(target?.quote).toBe("まんなかの段落。");
+  });
+
+  it("コードの塊も丸ごと対象にできる", () => {
+    const body = "本文。\n\n```ts\nconst a = 1;\n```\n";
+    const { loaded, state } = opened(body);
+    const at = posOf(state.doc, 1);
+    expect(targetOfBlock(state.doc, loaded, "", at)?.quote).toBe(
+      "```ts\nconst a = 1;\n```",
+    );
+  });
+
+  it("コードの塊の中を選んでも対象にできる", () => {
+    const body = "本文。\n\n```ts\nconst a = 1;\n```\n";
+    const { loaded, state } = opened(body);
+    const at = posOf(state.doc, 1);
+    const target = targetOfSpan(state.doc, loaded, "", at + 1, at + 6);
+    expect(target?.pos).toBe(at);
+    expect(target?.text).toBe("const");
+    expect(target?.offset).toBe(0);
+  });
+
+  it("表のセルの中を選んでも、対象は表そのもの", () => {
+    const body = "| a  | b  |\n| -- | -- |\n| 1  | 2  |\n";
+    const { loaded, state } = opened(body);
+    const target = targetOfSpan(state.doc, loaded, "", 5, 6);
+    expect(target?.pos).toBe(0);
+    expect(target?.quote).toBe(body.trimEnd());
   });
 });
