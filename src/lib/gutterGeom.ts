@@ -273,6 +273,19 @@ export const HOLD = 20;
 // 表そのものを掴むつまみと、表の縁の間。
 export const HOLD_GAP = 5;
 
+// 「ここから掴める」だけを示す小さな棒。太さと長さ。
+//
+// つまみをいきなり出さないのは、表の真ん中を指しているあいだ何も出ないと
+// 掴めることが画面から分からず、かといって常にアイコンを出すと本文より
+// 目立つため。棒で場所だけ示し、寄ったら育てる（Notion と同じ二段）。
+export const NUB = 3;
+export const NUB_LONG = 18;
+
+// つまみを育てるか。縁からこの帯の中に指があれば育てる。
+export function nearEdge(at: number, edge: number, band = EDGE): boolean {
+  return at <= edge + band;
+}
+
 // 行・列のつまみは、帯の外に離して置かずに**枠線の上へ載せる**。
 // 外へ出すと表からも離れて、どの行のものか読み取りにくい。線をまたぐと
 // 「その線から掴む」ように見える（Notion と同じ）。

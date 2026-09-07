@@ -10,6 +10,12 @@
   --mg-font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", Georgia, "Times New Roman",
     serif;
   --mg-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+
+  /* ブロックを丸ごと囲む箱が、文字から外へ広がる分。文字にぴったり付くと
+     窮屈で、どこまでが対象かも読み取りにくい。囲む箱（指摘の枠・下書きの枠・
+     メニューの対象）はすべてこの 2 つから出す。 */
+  --mg-box-out: -5px 0 0 -12px;
+  --mg-box-in: 5px 12px;
 }
 
 html,
@@ -1664,12 +1670,11 @@ body.mg-dragging .mg-sel-menu {
   box-shadow: inset 0 0 0 1px
     color-mix(in srgb, var(--mg-accent) 45%, transparent);
 }
-/* メニューの対象。どこを指しているかを薄く塗って示す。
-   文字にぴったり付くと窮屈なので、左右に同じだけ余裕を持たせる。 */
+/* メニューの対象。どこを指しているかを薄く塗って示す。 */
 .mg-target {
   position: absolute;
-  margin: -5px 0 0 -12px;
-  padding: 5px 12px;
+  margin: var(--mg-box-out);
+  padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 4px;
   background: color-mix(in srgb, var(--mg-accent) 14%, transparent);
@@ -2379,8 +2384,8 @@ svg[id^="mmd-"] foreignObject p {
 /* ブロック丸ごとの対象。塗りだけでは「どこまでが対象か」が出ないので囲む。
    文字の左端にぴったり付くと窮屈なので、左右に同じだけ余裕を持たせる。 */
 .mg-review-draft-area {
-  margin: -4px 0 0 -12px;
-  padding: 4px 12px;
+  margin: var(--mg-box-out);
+  padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 0.4rem;
   background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
@@ -2508,6 +2513,9 @@ svg[id^="mmd-"] foreignObject p {
 /* 文字単位で特定できない指摘。ブロック全体に付くので、塗らずに外枠で示す。
    塗ると「そこを選んだ」ように見えてしまう。 */
 .mg-review-mark-area {
+  margin: var(--mg-box-out);
+  padding: var(--mg-box-in);
+  box-sizing: content-box;
   border-radius: 0.4rem;
   /* どのブロックへの指摘かが分かる程度に、ごく薄く敷く。 */
   background: color-mix(in srgb, var(--mg-accent) 5%, transparent);
