@@ -15,6 +15,7 @@ import {
   BAR,
   EDGE,
   GRIP,
+  tableBands,
   tableGeometry,
   type Box,
   type TableGeometry,
@@ -69,29 +70,41 @@ function same(a: Spot | null, b: Spot | null): boolean {
   );
 }
 
+// つまみへ手が届く範囲。表の外側に置いた帯（掴む帯・足す帯）まで含める。
+const REACH = ADD + ADD_AWAY + 6;
+
+// 追加の帯を表から離す幅。表の枠と重ならないよう、読むとき側より広く取る
+// （編集面では升目に焦点の枠が付くので、詰めると枠に重なって見える）。
+const ADD_GAP = 12;
+
 // 指している高さにある表。当たり判定だけでは足りない。
 //
-// つまみは表の外側（左と上）に置くので、そこへ手を伸ばす途中は表の上に居ない。
-// 当たり判定で拾うと相手を見失って消える。指している位置を本文の幅の中へ寄せ、
-// 編集モデルに「その高さは何か」を聞く。
-function tableAt(view: EditorView, x: number, y: number): HTMLTableElement | null {
-  const box = view.dom.getBoundingClientRect();
-  let hit: { pos: number } | null = null;
-  try {
-    hit = view.posAtCoords({
-      left: Math.min(Math.max(x, box.left + 1), box.right - 1),
-      top: Math.min(Math.max(y, box.top + 1), box.bottom - 1),
-    });
-  } catch {
-    return null;
+// つまみは表の外側（左・上・右・下）に置くので、そこへ手を伸ばしている間は
+// 表の上に居ない。ブロックは縦に並んでいて上端が昇順なので、その高さの
+// ブロックを二分探索で挟む（上から順に測ると本文の大きさに比例して遅くなる）。
+function tableNear(view: EditorView, y: number): HTMLTableElement | null {
+  const kids = view.dom.children;
+  if (!kids.length) return null;
+  let lo = 0;
+  let hi = kids.length - 1;
+  let at = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (kids[mid].getBoundingClientRect().top <= y) {
+      at = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
-  if (!hit) return null;
-  const $at = view.state.doc.resolve(Math.min(hit.pos, view.state.doc.content.size));
-  for (let d = $at.depth; d > 0; d--) {
-    if ($at.node(d).type !== schema.nodes.table) continue;
-    const dom = view.nodeDOM($at.before(d));
-    const el = dom instanceof HTMLElement ? dom.querySelector("table") : null;
-    return el;
+  // 挟んだブロックと、その次。ブロックの間の余白では次の方が近い。
+  for (const i of [at, at + 1]) {
+    const el = kids[i];
+    if (!el) continue;
+    const box = el.getBoundingClientRect();
+    if (y < box.top - REACH || y > box.bottom + REACH) continue;
+    const table = el.querySelector("table");
+    if (table) return table;
   }
   return null;
 }
@@ -139,8 +152,10 @@ export function TableGrips({
   const menuRef = useRef(false);
   const heldRef = useRef<{ kind: TablePart; pos: number; at: number } | null>(null);
   const toRef = useRef<number | null>(null);
-  // 最後に指していた場所。中身の高さが変わったとき、そこで測り直す。
+  // 最後に指していた場所。中身が動いたとき、そこで測り直す。
   const atRef = useRef<{ x: number; y: number } | null>(null);
+  // 最後に指していた場所で測り直す口。行や列を足した直後にも使う。
+  const againRef = useRef<(() => void) | null>(null);
   spotRef.current = spot;
   menuRef.current = menu !== null;
 
@@ -158,14 +173,17 @@ export function TableGrips({
       }
     };
 
-    const measure = (x: number, y: number, target: Node | null) => {
+    // keep を落とすと、つまみの上を指していても測り直す。表の形が変わったとき
+    // （行や列を足した直後）は、つまみが指の下に来ているので保つ側に回ると
+    // 古い置き場所のまま残り、表に重なって見える。
+    const measure = (x: number, y: number, target: Node | null, keep = true) => {
       if (heldRef.current || menuRef.current) return;
       // つまみの上に来ても保つ。消えると押せない。
-      if (target && layer.current?.contains(target)) return;
+      if (keep && target && layer.current?.contains(target)) return;
       const inside =
         target instanceof Element ? target.closest<HTMLTableElement>("table") : null;
       const el =
-        inside && view.dom.contains(inside) ? inside : tableAt(view, x, y);
+        inside && view.dom.contains(inside) ? inside : tableNear(view, y);
       if (!el || !view.dom.contains(el)) {
         // 出しているつまみの近くなら保つ。表とつまみの隙間を通る間に
         // 消えると、そこへ手を伸ばせない。
@@ -280,6 +298,36 @@ export function TableGrips({
       if (tr) view.dispatch(tr);
     };
 
+    const again = () => {
+      const at = atRef.current;
+      if (at) measure(at.x, at.y, document.elementFromPoint(at.x, at.y), false);
+    };
+    againRef.current = again;
+
+    // 表は枠の中で横へスクロールする。列の位置が変わっても入れ物の大きさは
+    // 変わらないので、大きさの見張りでは気付けない。scroll は上がってこない
+    // ので捕まえる側で拾う。
+    //
+    // ここで相手を選び直さない。手は動いていないし、メニューを開いている間は
+    // 何行目・何列目が決まっている。置き場所だけを測り直す（測り直さないと
+    // 塗りだけが表と別に動いて、選んでいる場所からずれていく）。
+    const onScroll = (e: Event) => {
+      const from = e.target instanceof Element ? e.target : null;
+      if (!from?.closest(".mg-table-wrap")) return;
+      const held = spotRef.current;
+      if (!held) return;
+      const dom = view.nodeDOM(held.pos);
+      const el = dom instanceof HTMLElement ? dom.querySelector("table") : null;
+      if (!el) return;
+      const geo = tableBands(
+        el,
+        Array.from(el.rows),
+        { row: held.geo.row?.index ?? null, col: held.geo.col?.index ?? null },
+        host.getBoundingClientRect(),
+      );
+      if (geo) show({ ...held, geo });
+    };
+
     // 行を足すと表が下へ伸びる。出したままの帯は前の位置に取り残されるので、
     // 最後に指していた場所で測り直す。掴んでいる間は動かさない。
     let seen = { w: 0, h: 0 };
@@ -289,19 +337,21 @@ export function TableGrips({
       if (Math.abs(box.width - seen.w) < 1 && Math.abs(box.height - seen.h) < 1) return;
       seen = { w: box.width, h: box.height };
       if (heldRef.current) return;
-      const at = atRef.current;
-      if (at) measure(at.x, at.y, document.elementFromPoint(at.x, at.y));
+      again();
     });
     settle.observe(view.dom);
 
     watching.addEventListener("mousemove", onMouseMove);
     watching.addEventListener("mouseleave", onMouseLeave);
+    watching.addEventListener("scroll", onScroll, true);
     // 掴んでいる間の合図は、本文へ届く前に受け取る。
     watching.addEventListener("dragover", onDragOver, true);
     watching.addEventListener("drop", onDrop, true);
     return () => {
+      againRef.current = null;
       watching.removeEventListener("mousemove", onMouseMove);
       watching.removeEventListener("mouseleave", onMouseLeave);
+      watching.removeEventListener("scroll", onScroll, true);
       watching.removeEventListener("dragover", onDragOver, true);
       watching.removeEventListener("drop", onDrop, true);
       settle.disconnect();
@@ -312,6 +362,8 @@ export function TableGrips({
     const tr = tableActTr(view.state, pos, kind, at, act);
     if (tr) view.dispatch(tr);
     view.focus();
+    // 表の形が変わったので置き場所を測り直す。組版が終わった次の一枚で測る。
+    requestAnimationFrame(() => againRef.current?.());
   };
 
   const hold =
@@ -456,7 +508,7 @@ export function TableGrips({
                   className="mg-grip mg-grip-bar mg-grip-add"
                   style={{
                     top: geo.table.top,
-                    left: geo.table.left + geo.table.width + ADD_AWAY,
+                    left: geo.table.left + geo.table.width + ADD_GAP,
                     width: ADD,
                     height: geo.table.height,
                   }}
@@ -470,7 +522,7 @@ export function TableGrips({
                 title="行を追加"
                 className="mg-grip mg-grip-bar mg-grip-add"
                 style={{
-                  top: geo.bottom + ADD_AWAY,
+                  top: geo.bottom + ADD_GAP,
                   left: geo.table.left,
                   width: geo.table.width,
                   height: ADD,

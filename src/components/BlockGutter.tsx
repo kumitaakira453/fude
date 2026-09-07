@@ -10,6 +10,7 @@ import {
   EDGE,
   GRIP,
   relative,
+  tableBands,
   tableGeometry,
   type Box,
 } from "../lib/tableGeom";
@@ -502,6 +503,42 @@ export function BlockGutter({
       else onTableMove(held.index, held.kind, held.at, to);
     };
 
+    // 表は枠の中で横へスクロールする。列の位置が変わっても入れ物の大きさは
+    // 変わらないので、大きさの見張りでは気付けない。scroll は上がってこない
+    // ので捕まえる側で拾う。
+    //
+    // ここで相手を選び直さない。手は動いていないし、メニューを開いている間は
+    // 何行目・何列目が決まっている。置き場所だけを測り直す（測り直さないと
+    // 塗りだけが表と別に動いて、選んでいる場所からずれていく）。
+    const onScroll = (e: Event) => {
+      const from = e.target instanceof Element ? e.target : null;
+      if (!from?.closest(".mg-table-wrap")) return;
+      const held = viewRef.current;
+      if (!held?.table) return;
+      const blockEl = content.querySelector(`[data-mg-block="${held.index}"]`);
+      const el = blockEl?.querySelector("table");
+      if (!el) return;
+      const geo = tableBands(
+        el,
+        Array.from(el.tBodies[0]?.rows ?? []),
+        {
+          // 行の相手はソースの行番号で持っている（本体は 2 行目から）。
+          row: held.row ? held.row.line - 2 : null,
+          col: held.col?.index ?? null,
+        },
+        content.getBoundingClientRect(),
+      );
+      if (!geo) return;
+      show({
+        ...held,
+        atRight: geo.atRight,
+        bottom: geo.bottom,
+        table: geo.table,
+        row: geo.row ? { line: geo.row.index + 2, top: geo.row.top, height: geo.row.height } : null,
+        col: geo.col,
+      });
+    };
+
     // 右押しでセルのメニューを出す。空のセルは選ぶ文字が無いので、
     // 選択から入る道（⌘E・⌘⇧I）が使えない。ここが唯一の入口になる。
     const onContextMenu = (e: MouseEvent) => {
@@ -536,12 +573,14 @@ export function BlockGutter({
 
     host.addEventListener("mousemove", onMouseMove);
     host.addEventListener("mouseleave", onMouseLeave);
+    host.addEventListener("scroll", onScroll, true);
     host.addEventListener("dragover", onDragOver);
     host.addEventListener("drop", onDrop);
     host.addEventListener("contextmenu", onContextMenu);
     return () => {
       host.removeEventListener("mousemove", onMouseMove);
       host.removeEventListener("mouseleave", onMouseLeave);
+      host.removeEventListener("scroll", onScroll, true);
       host.removeEventListener("dragover", onDragOver);
       host.removeEventListener("drop", onDrop);
       host.removeEventListener("contextmenu", onContextMenu);

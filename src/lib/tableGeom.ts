@@ -70,6 +70,47 @@ export function relative(r: DOMRect, base: DOMRect): Box {
   };
 }
 
+// 出しているつまみの置き場所を、相手（何行目・何列目）を変えずに測り直す。
+//
+// 表は枠の中で横へスクロールする。指す場所が変わらなくても列の位置は動くので、
+// 掴んでいる間やメニューを開いている間も、これで塗りを合わせ直す。
+export function tableBands(
+  table: HTMLTableElement,
+  rows: readonly HTMLTableRowElement[],
+  want: { row: number | null; col: number | null },
+  base: DOMRect,
+): TableGeometry | null {
+  const head = table.tHead?.rows[0] ?? table.rows[0];
+  if (!head) return null;
+  // 横に溢れる表は枠の中でスクロールする。つまみと線は見えている範囲で切る。
+  // 表そのものの幅で引くと、隠れている部分まで画面の端まで伸びてしまう。
+  const wrap = table.closest(".mg-table-wrap") ?? table;
+  const clip = wrap.getBoundingClientRect();
+  const box = table.getBoundingClientRect();
+  const visible = overlap(box, clip);
+  if (!visible) return null;
+
+  const rowEl = want.row === null ? null : rows[want.row];
+  const cellEl = want.col === null ? null : head.cells[want.col];
+  const rowBox = rowEl ? overlap(rowEl.getBoundingClientRect(), clip) : null;
+  const colBox = cellEl ? overlap(cellEl.getBoundingClientRect(), clip) : null;
+  const scrolls = wrap !== table && wrap.scrollWidth > wrap.clientWidth + 1;
+
+  return {
+    table: relative(visible, base),
+    atRight: box.right <= clip.right + 1,
+    bottom: (scrolls ? clip.bottom : visible.bottom) - base.top,
+    row:
+      want.row !== null && rowBox
+        ? { index: want.row, top: rowBox.top - base.top, height: rowBox.height }
+        : null,
+    col:
+      want.col !== null && colBox
+        ? { index: want.col, left: colBox.left - base.left, width: colBox.width }
+        : null,
+  };
+}
+
 export function tableGeometry(
   table: HTMLTableElement,
   rows: readonly HTMLTableRowElement[],
@@ -78,8 +119,6 @@ export function tableGeometry(
 ): TableGeometry | null {
   const head = table.tHead?.rows[0] ?? table.rows[0];
   if (!head) return null;
-  // 横に溢れる表は枠の中でスクロールする。つまみと線は見えている範囲で切る。
-  // 表そのものの幅で引くと、隠れている部分まで画面の端まで伸びてしまう。
   const wrap = table.closest(".mg-table-wrap") ?? table;
   const clip = wrap.getBoundingClientRect();
   const visible = overlap(table.getBoundingClientRect(), clip);
@@ -91,22 +130,13 @@ export function tableGeometry(
   // 指している位置を見えている範囲へ寄せる。隠れた列を選ばせない。
   const cx = Math.min(Math.max(at.x, visible.left + 1), visible.right - 1);
   const cy = Math.min(Math.max(at.y, visible.top + 1), visible.bottom - 1);
-  const colIndex = pick(cells, cx, "x");
-  const rowIndex = rowBoxes.length > 0 ? pick(rowBoxes, cy, "y") : -1;
-  const colBox = overlap(cells[colIndex], clip);
-  const rowBox = rowIndex >= 0 ? overlap(rowBoxes[rowIndex], clip) : null;
-
-  const scrolls = wrap !== table && wrap.scrollWidth > wrap.clientWidth + 1;
-  return {
-    table: relative(visible, base),
-    atRight: table.getBoundingClientRect().right <= clip.right + 1,
-    bottom: (scrolls ? clip.bottom : visible.bottom) - base.top,
-    row:
-      rowIndex >= 0 && rowBox
-        ? { index: rowIndex, top: rowBox.top - base.top, height: rowBox.height }
-        : null,
-    col: colBox
-      ? { index: colIndex, left: colBox.left - base.left, width: colBox.width }
-      : null,
-  };
+  return tableBands(
+    table,
+    rows,
+    {
+      row: rowBoxes.length > 0 ? pick(rowBoxes, cy, "y") : null,
+      col: pick(cells, cx, "x"),
+    },
+    base,
+  );
 }
