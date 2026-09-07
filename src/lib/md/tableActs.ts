@@ -1,5 +1,6 @@
 import type { Attrs, Node as PmNode } from "prosemirror-model";
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
+import { CellSelection, TableMap } from "prosemirror-tables";
 import { schema } from "./schema";
 
 // 編集面の表の行・列の操作。
@@ -35,6 +36,10 @@ interface Shape {
   style: Style;
   // 操作のあとカーソルを置く升目。
   at: { row: number; col: number } | null;
+  // 操作のあと丸ごと選ぶ行・列。運んだあとは、どれを動かしたのかが見えて
+  // いる方が分かる（升目 1 つにカーソルを置くと、行や列を動かしたことが
+  // 読み取れない）。
+  select?: { kind: TablePart; at: number };
 }
 
 const empty = () => schema.nodes.tableCell.create();
@@ -65,6 +70,31 @@ function shapeOf(table: PmNode): Shape {
     },
     at: null,
   };
+}
+
+// その行・列を丸ごと選んだ状態にする。
+function selectPart(
+  tr: Transaction,
+  pos: number,
+  kind: TablePart,
+  at: number,
+): Transaction {
+  const table = tr.doc.nodeAt(pos);
+  if (!table) return tr;
+  const map = TableMap.get(table);
+  const start = pos + 1;
+  const cell = (row: number, col: number) =>
+    tr.doc.resolve(start + map.map[row * map.width + col]);
+  if (kind === "row") {
+    if (at < 0 || at >= map.height) return tr;
+    return tr.setSelection(
+      CellSelection.rowSelection(cell(at, 0), cell(at, map.width - 1)),
+    );
+  }
+  if (at < 0 || at >= map.width) return tr;
+  return tr.setSelection(
+    CellSelection.colSelection(cell(0, at), cell(map.height - 1, at)),
+  );
 }
 
 // 升目から表を組む。1 行目のセルだけ見出しの印を立てる。
@@ -224,6 +254,7 @@ function replace(
 ): Transaction {
   const next = build({ ...was.attrs, ...shape.style }, shape.rows);
   const tr = state.tr.replaceWith(pos, pos + was.nodeSize, next);
+  if (shape.select) return selectPart(tr, pos, shape.select.kind, shape.select.at);
   const spot = shape.at;
   if (spot && spot.row >= 0 && spot.col >= 0) {
     const table = tr.doc.nodeAt(pos);
@@ -271,7 +302,7 @@ export function tableMoveTr(
     if (from < 1 || from >= height || to < 1 || to > height) return null;
     if (to === from || to === from + 1) return null;
     slide(shape.rows, from, to);
-    shape.at = { row: to > from ? to - 1 : to, col: 0 };
+    shape.select = { kind: "row", at: to > from ? to - 1 : to };
     return replace(state, pos, was, shape);
   }
 
@@ -282,6 +313,6 @@ export function tableMoveTr(
   slide(shape.style.widths, from, to);
   // 区切り行には列ごとの揃えが書かれている。並びに合わせて引き直す。
   shape.style.delim = delimOf(shape.style.align, shape.style.widths);
-  shape.at = { row: 0, col: to > from ? to - 1 : to };
+  shape.select = { kind: "col", at: to > from ? to - 1 : to };
   return replace(state, pos, was, shape);
 }

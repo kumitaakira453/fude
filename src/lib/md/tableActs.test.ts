@@ -1,4 +1,5 @@
 import { EditorState } from "prosemirror-state";
+import { CellSelection } from "prosemirror-tables";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
@@ -220,6 +221,27 @@ describe("入れ替え", () => {
   it("見出しは動かさず、見出しの上へも運ばせない", () => {
     expect(move(SRC, "row", 0, 2)).toBeNull();
     expect(move(SRC, "row", 2, 0)).toBeNull();
+  });
+
+  it("運んだ行を丸ごと選んだ状態にする", () => {
+    const { state, pos } = opened(SRC);
+    const tr = tableMoveTr(state, pos, "row", 1, 3)!;
+    const sel = state.apply(tr).selection;
+    expect(sel).toBeInstanceOf(CellSelection);
+    const cells = (sel as CellSelection).ranges.length;
+    // 3 列ぶんの升目が選ばれている。
+    expect(cells).toBe(3);
+    expect((sel as CellSelection).isRowSelection()).toBe(true);
+  });
+
+  it("運んだ列を丸ごと選んだ状態にする", () => {
+    const { state, pos } = opened(SRC);
+    const tr = tableMoveTr(state, pos, "col", 0, 3)!;
+    const sel = state.apply(tr).selection;
+    expect(sel).toBeInstanceOf(CellSelection);
+    // 見出しを含めて 3 行ぶん。
+    expect((sel as CellSelection).ranges.length).toBe(3);
+    expect((sel as CellSelection).isColSelection()).toBe(true);
   });
 
   it("表の外を指したら何もしない", () => {
