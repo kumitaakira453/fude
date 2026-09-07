@@ -8,7 +8,7 @@ import {
   searchActiveHitAtom,
 } from "../state/atoms";
 import { clipRects, scrollBoxOf } from "../lib/domText";
-import { buildMatcher } from "../lib/search";
+import { buildMatcher, stepHit, type HitStep } from "../lib/search";
 import { Icon } from "./Icon";
 
 interface RectBox {
@@ -42,7 +42,10 @@ export function DocSearchOverlay({
   const activeHit = useAtomValue(searchActiveHitAtom);
   const docFindNonce = useAtomValue(docFindNonceAtom);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [active, setActive] = useState(0);
+  // 送り先と、送った回数。回数を一緒に持つのは、ヒットが 1 件だけのときに
+  // 「次へ」で位置が変わらないため（search.ts の stepHit を参照）。
+  const [step, setStep] = useState<HitStep>({ at: 0, went: 0 });
+  const active = step.at;
   const rangesRef = useRef<Range[]>([]);
   // ファイル内検索ウィジェット（⌘F）。open は共有（⌘⇧F 等で閉じられる）、q は入力値。
   const [open, setOpen] = useAtom(docFindOpenAtom);
@@ -132,7 +135,7 @@ export function DocSearchOverlay({
 
   // 新しい検索語（nonce 変化）で先頭ヒットへ
   useLayoutEffect(() => {
-    setActive(0);
+    setStep({ at: 0, went: 0 });
   }, [highlight?.nonce]);
 
   // レイアウト確定後に矩形を計算。内容・幅・フォント変更やリサイズにも追従。
@@ -185,7 +188,13 @@ export function DocSearchOverlay({
   useLayoutEffect(() => {
     if (!isActive || !activeHit || activeHit.path !== path) return;
     if (!matches.length) return;
-    setActive(Math.min(Math.max(activeHit.hitIndex, 0), matches.length - 1));
+    // 行き先が同じなら控えを差し替えない。測り直しでこの効果が走るたびに
+    // 差し替えると、追従 → スクロール → 測り直しで回り続ける。
+    // 同じ場所へもう一度送るのは一覧側の合図（activeHit.nonce）が担う。
+    setStep((now) => {
+      const at = Math.min(Math.max(activeHit.hitIndex, 0), matches.length - 1);
+      return now.at === at ? now : { at, went: now.went + 1 };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeHit, matches, path, isActive]);
 
@@ -200,18 +209,14 @@ export function DocSearchOverlay({
   );
 
   useLayoutEffect(() => {
-    if (matches.length) scrollToActive(active);
-    // active/検索/ナビの変化時に追従
+    if (matches.length) scrollToActive(step.at);
+    // 送るたびに追従させる。位置だけを見ると、ヒットが 1 件のときに動かない。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, highlight?.nonce, activeHit?.nonce]);
+  }, [step, highlight?.nonce, activeHit?.nonce]);
 
   const go = useCallback(
     (dir: 1 | -1) => {
-      setActive((a) => {
-        const n = matches.length;
-        if (!n) return 0;
-        return (a + dir + n) % n;
-      });
+      setStep((now) => stepHit(now, dir, matches.length));
     },
     [matches.length],
   );

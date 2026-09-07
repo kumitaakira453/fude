@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { TreeNode } from "./fsAccess";
-import { quickOpen, recencyBonus } from "./search";
+import { quickOpen, recencyBonus,
+  stepHit,
+} from "./search";
 
 const file = (path: string): TreeNode => ({
   name: path.split("/").pop() ?? path,
@@ -86,5 +88,31 @@ describe("quickOpen", () => {
 
   it("件数を絞る", () => {
     expect(quickOpen(FILES, "", { touched: TOUCHED, now: NOW, limit: 2 })).toHaveLength(2);
+  });
+});
+
+describe("stepHit", () => {
+  it("次へ / 前へで送り、端で回り込む", () => {
+    expect(stepHit({ at: 0, went: 0 }, 1, 3).at).toBe(1);
+    expect(stepHit({ at: 2, went: 0 }, 1, 3).at).toBe(0);
+    expect(stepHit({ at: 0, went: 0 }, -1, 3).at).toBe(2);
+  });
+
+  it("ヒットが 1 件でも「送った」ことは残る", () => {
+    // ここが肝。位置は変わらないので、位置だけを見ていると画面が動かない
+    // （1 件だけヒットしたときに Enter で飛べなかった原因）。
+    const next = stepHit({ at: 0, went: 4 }, 1, 1);
+    expect(next.at).toBe(0);
+    expect(next.went).toBe(5);
+  });
+
+  it("同じ位置へ何度でも送れる", () => {
+    let now = { at: 0, went: 0 };
+    for (let i = 0; i < 3; i++) now = stepHit(now, 1, 1);
+    expect(now).toEqual({ at: 0, went: 3 });
+  });
+
+  it("ヒットが無ければ先頭のまま", () => {
+    expect(stepHit({ at: 0, went: 1 }, 1, 0)).toEqual({ at: 0, went: 2 });
   });
 });

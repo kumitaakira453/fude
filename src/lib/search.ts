@@ -149,3 +149,20 @@ export function searchContents(
   results.sort((a, b) => a.path.localeCompare(b.path, "ja", { numeric: true }));
   return { results, total, error: false };
 }
+
+// ファイル内検索で「次のヒットへ」を送るときの位置。
+//
+// 位置だけでは足りない。ヒットが 1 件だけのとき、次へ送っても行き先は同じ
+// 位置になる。位置の変化を合図に画面を動かしていると、**1 件のときだけ
+// 何も起きない**（文字を消して検索がやり直されると別の合図で動くので、
+// 気づきにくい）。送った回数も一緒に持ち、押したこと自体を合図にする。
+export interface HitStep {
+  at: number;
+  went: number;
+}
+
+export function stepHit(now: HitStep, dir: 1 | -1, total: number): HitStep {
+  const went = now.went + 1;
+  if (total <= 0) return { at: 0, went };
+  return { at: (now.at + dir + total) % total, went };
+}
