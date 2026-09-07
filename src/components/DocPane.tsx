@@ -45,6 +45,7 @@ import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
 import { BodyEditor, type Editing } from "./BodyEditor";
+import { SelectionBar } from "./SelectionBar";
 import {
   recallViewpoint,
   rememberViewpoint,
@@ -740,7 +741,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     const onUp = () => read();
     const onDown = () => setEditSel(null);
     const onKey = (e: KeyboardEvent) => {
+      // 選択を伸ばす操作と、ショートカット（装飾の付け外しなど）では消さない。
+      // 消すのは字が入るとき（対象がずれる）。
       if (e.shiftKey && e.key.startsWith("Arrow")) return;
+      if (e.metaKey || e.ctrlKey) return;
       setEditSel(null);
     };
     view.dom.addEventListener("mouseup", onUp);
@@ -754,6 +758,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       view.dom.removeEventListener("keydown", onKey);
     };
   }, [pm]);
+
+  // ⌘K でリンクの入力を開く。帯を出している側が受け取る。
+  const [linkNonce, setLinkNonce] = useState(0);
+  useEffect(() => {
+    // 帯を出しているときだけ受ける（editSel が入るのは編集面が組めていて、
+    // かつ範囲を選んでいるときだけ）。
+    if (!pm || !editSel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key !== "k" && e.key !== "K") return;
+      e.preventDefault();
+      setLinkNonce((n) => n + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pm, editSel]);
 
   // 編集面から指摘を始める。対象は編集モデルから組み立てる。
   const commentOnSpan = useCallback(() => {
@@ -1281,23 +1301,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
 
         {writing && pm && editSel && !review.draft && (
-          // 読むときと同じ入口。mousedown で処理するのも同じ理由で、click を
-          // 待つと押した時点で選択が解かれてメニュー自身が消える。
-          <div
-            style={{ top: editSel.rect.bottom + 6, left: editSel.rect.left }}
-            className="mg-sel-menu"
-          >
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                commentOnSpan();
-              }}
-            >
-              <Icon name="add_comment" size={14} />
-              指摘する
-            </button>
-          </div>
+          <SelectionBar
+            view={pm.view}
+            at={editSel.rect}
+            linkNonce={linkNonce}
+            onComment={commentOnSpan}
+          />
         )}
 
         {writing && review.draft && (

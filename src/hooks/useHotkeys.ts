@@ -62,9 +62,10 @@ export function useHotkeys() {
         }
         store.set(A.docFindOpenAtom, true);
         store.set(A.docFindNonceAtom, store.get(A.docFindNonceAtom) + 1);
-      } else if (mod && (e.key === "b" || e.key === "B")) {
-        // 書いている最中は太字の付け外しに譲る。
-        if (inEditable(e.target)) return;
+      } else if (mod && !e.shiftKey && (e.key === "d" || e.key === "D")) {
+        // ⌘B は太字だけに使う。押し間違いで左のペインが開閉しないように、
+        // 開閉はここへ移した（編集面の中でだけ譲る作りだと、書いていない
+        // ときに太字のつもりで押してペインが動く）。
         e.preventDefault();
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {

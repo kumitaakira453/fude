@@ -2613,6 +2613,31 @@ svg[id^="mmd-"] foreignObject p {
   width: 1px;
   background: var(--mg-border);
 }
+/* 選んだ文字への操作の帯。アイコンだけのボタンは正方に寄せ、名前を出す
+   ボタン（ブロックの種別・指摘する）だけ横に伸ばす。 */
+.mg-sel-bar > button {
+  padding: 0.3rem 0.45rem;
+  color: var(--mg-fg);
+}
+/* いま付いている装飾は押し込んで見せる。押すと外れることが分かるように、
+   地色ではなくアクセントで示す。 */
+.mg-sel-bar > button.is-on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+/* リンクの行き先を聞く入力。帯の下に続けて出す。 */
+.mg-sel-link {
+  padding: 0.3rem 0.5rem;
+}
+.mg-sel-link > input {
+  width: 18rem;
+  background: transparent;
+  color: var(--mg-fg);
+  outline: none;
+}
+.mg-sel-link > input::placeholder {
+  color: var(--mg-muted);
+}
 
 /* 操作が付いた知らせだけ押せるようにする。素の知らせは押す対象を持たない。 */
 .mg-toast.has-action {

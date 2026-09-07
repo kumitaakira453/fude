@@ -1,4 +1,4 @@
-import { baseKeymap, chainCommands, toggleMark } from "prosemirror-commands";
+import { baseKeymap, chainCommands } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { inputRules } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
@@ -6,9 +6,7 @@ import {
   Fragment,
   Slice,
   type Mark,
-  type MarkType,
   type Node as PmNode,
-  type ResolvedPos,
 } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { Plugin, TextSelection, type Command } from "prosemirror-state";
@@ -18,6 +16,7 @@ import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
 import { anchors } from "./anchors";
+import { toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { insideBlock } from "./nodeViews";
 import { nestOf, schema } from "./schema";
@@ -249,43 +248,6 @@ const eraseInMark: Command = (state, dispatch) => {
 
 // カーソルの居る装飾の範囲。隣り合っていれば、原文で分かれて書かれていても
 // 1 つの範囲として返す。続いている装飾を 1 回で外せる。
-function markRun($pos: ResolvedPos, type: MarkType): { from: number; to: number } | null {
-  const parts: { from: number; to: number; on: boolean }[] = [];
-  let at = $pos.start();
-  $pos.parent.forEach((child) => {
-    parts.push({ from: at, to: at + child.nodeSize, on: !!type.isInSet(child.marks) });
-    at += child.nodeSize;
-  });
-
-  // 末尾も範囲に含める。囲みの終わりに居るときも、その囲みを外せるようにする。
-  const hit = parts.findIndex((p) => p.on && $pos.pos > p.from && $pos.pos <= p.to);
-  if (hit < 0) return null;
-  let head = hit;
-  let tail = hit;
-  while (head > 0 && parts[head - 1].on) head--;
-  while (tail < parts.length - 1 && parts[tail + 1].on) tail++;
-  return { from: parts[head].from, to: parts[tail].to };
-}
-
-function toggleInline(type: MarkType): Command {
-  return (state, dispatch, view) => {
-    const { empty, $from } = state.selection;
-    if (empty) {
-      const run = markRun($from, type);
-      if (run) {
-        if (dispatch) {
-          dispatch(state.tr.removeMark(run.from, run.to, type).removeStoredMark(type));
-        }
-        return true;
-      }
-    }
-    // 一部にしか付いていない範囲は、外すのではなく全部に付ける。既定は
-    // 「どこかに付いていれば外す」で、囲みと囲みの外を一緒に選んで付け直す
-    // ときに、選んだところが丸ごと素に戻ってしまう。
-    return toggleMark(type, null, { removeWhenPresent: false })(state, dispatch, view);
-  };
-}
-
 // 打った字が継ぐ装飾を、入れ子として書ける組み合わせに直す。
 //
 // ProseMirror は装飾ごとに「範囲の末尾で継ぐか」を決める。link は継がず
