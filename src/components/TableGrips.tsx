@@ -145,6 +145,12 @@ export function TableGrips({
   menuRef.current = menu !== null;
 
   useEffect(() => {
+    // 見張るのはスクロール枠。つまみは本文の外の余白に置くので、編集面の要素
+    // だけを見ていると、そこへ手を伸ばした時点で編集面から出たことになり
+    // （mouseleave が走る）触る前に消える。余白に直接入ってきた時にも
+    // 何も起きない。
+    const watching = scroller ?? host;
+
     const show = (next: Spot | null) => {
       if (!same(spotRef.current, next)) {
         spotRef.current = next;
@@ -288,34 +294,19 @@ export function TableGrips({
     });
     settle.observe(view.dom);
 
-    // 合図は入れ物の側で拾う。編集面に付けると、つまみへ手を伸ばした時点で
-    // 編集面から出たことになり（つまみは編集面の外に置いてある）、
-    // mouseleave でつまみが消えて押せない。
-    host.addEventListener("mousemove", onMouseMove);
-    host.addEventListener("mouseleave", onMouseLeave);
+    watching.addEventListener("mousemove", onMouseMove);
+    watching.addEventListener("mouseleave", onMouseLeave);
     // 掴んでいる間の合図は、本文へ届く前に受け取る。
-    host.addEventListener("dragover", onDragOver, true);
-    host.addEventListener("drop", onDrop, true);
+    watching.addEventListener("dragover", onDragOver, true);
+    watching.addEventListener("drop", onDrop, true);
     return () => {
-      host.removeEventListener("mousemove", onMouseMove);
-      host.removeEventListener("mouseleave", onMouseLeave);
-      host.removeEventListener("dragover", onDragOver, true);
-      host.removeEventListener("drop", onDrop, true);
+      watching.removeEventListener("mousemove", onMouseMove);
+      watching.removeEventListener("mouseleave", onMouseLeave);
+      watching.removeEventListener("dragover", onDragOver, true);
+      watching.removeEventListener("drop", onDrop, true);
       settle.disconnect();
     };
-  }, [view, host]);
-
-  // 出したままスクロールすると置き場所がずれる。まとめて測り直す。
-  useEffect(() => {
-    if (!scroller) return;
-    const off = () => {
-      if (heldRef.current || menuRef.current) return;
-      spotRef.current = null;
-      setSpot(null);
-    };
-    scroller.addEventListener("scroll", off, { passive: true });
-    return () => scroller.removeEventListener("scroll", off);
-  }, [scroller]);
+  }, [view, host, scroller]);
 
   const run = (kind: TablePart, pos: number, at: number, act: TableAct) => {
     const tr = tableActTr(view.state, pos, kind, at, act);

@@ -258,7 +258,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 一度だけ効かせるので、⌘E で読む側へ戻ったあと勝手に書く側へは戻らない。
   const began = useRef<string | null>(null);
   useEffect(() => {
-    if (!startEditing || !path || !loaded || began.current === path) return;
+    if (!startEditing || !path || !loaded) return;
+    if (began.current === path) {
+      // 既に始めたファイル。印が残っていたら下ろす（読み込みの印のまま
+      // 止まらないように）。
+      if (opening) setOpening(false);
+      return;
+    }
     began.current = path;
     setDraft(raw ?? "");
     base.current = raw ?? "";
@@ -274,7 +280,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         setEditing(true);
       }),
     );
-  }, [startEditing, path, loaded, raw]);
+  }, [startEditing, path, loaded, raw, opening]);
 
   // ドキュメント全体の Undo/Redo（アクティブペインのみ、CM 編集中は CM に任せる）
   useEffect(() => {
@@ -586,6 +592,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // フロントマター（本文の前にある --- ブロック）の生ソース
   const fmPrefix = (raw ?? "").slice(0, (raw ?? "").length - body.length);
+
+  // 編集面を出すのは、本文が読めていて、組む前の一枚を描き終えたときだけ。
+  // 読めていないうちに出すと、前のファイルの中身が消えたところへ空の紙が
+  // 立ち、切り替わったのか読み込み中なのか分からない。
+  const writing = editing && !!path && loaded && !opening;
   const saveFm = (newFm: string) => {
     if (!path || newFm === fmPrefix) return;
     write(path, newFm + body);
@@ -825,7 +836,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
-        {editing && path ? (
+        {writing && path ? (
           <div
             ref={setEditScroller}
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
