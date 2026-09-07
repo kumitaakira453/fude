@@ -234,6 +234,12 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   const bar = caretBar(view, host);
 
   let frame = 0;
+  const paint = () => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    boxes.draw();
+    bar.draw();
+  };
   const again = () => {
     if (frame) return;
     frame = requestAnimationFrame(() => {
@@ -256,6 +262,11 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   if (scroller) watch.observe(scroller);
 
   return {
+    // 打鍵と選択の変化はその場で描く。フレームをまたぐと、標準の塗りを
+    // 消してある編集面では帯だけが 1 枚遅れて付いてきて、引いている手に
+    // 対して重く見える。測るのは 900 ブロックでも 0.4ms で、待つ理由が無い。
+    now: paint,
+    // 位置が変わるだけの合図（スクロール・折り返し・焦点）はまとめる。
     draw: again,
     stop: () => {
       view.dom.removeEventListener("focus", again);
@@ -410,7 +421,7 @@ export function BodyEditor({
         view.updateState(next);
         // 打鍵の経路に置くのはここまで。組み直しは手を止めてから。
         if (tr.docChanged) send();
-        paint.draw();
+        paint.now();
       },
     });
     const paint = painter(view, at, scroller);
@@ -453,7 +464,7 @@ export function BodyEditor({
       blocks = blocksOf(loaded);
       // 取り込んだ本文はそのまま親の控えでもある。組み直しの予約は捨てる。
       send.cancel();
-      paint.draw();
+      paint.now();
     };
     if (adoptRef) adoptRef.current = adopt;
     // 窓を離れるときは待たずに流す。戻ってこないこともある。
