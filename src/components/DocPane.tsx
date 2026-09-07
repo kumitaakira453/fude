@@ -71,6 +71,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const width = useAtomValue(readingWidthAtom);
   const editorial = useAtomValue(editorialAtom);
   const startEditing = useAtomValue(startEditingAtom);
+  // 設定の切り替えでファイル切替の手順を走らせないよう、控えから読む。
+  const startRef = useRef(startEditing);
+  startRef.current = startEditing;
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
   const tocOpen = useAtomValue(tocOpenAtom);
@@ -108,6 +111,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 読む / 書くの切り替えは本文を丸ごと組み直すので、その間は画面が止まる。
   // 先に印を出しておく。
   const [switching, setSwitching] = useState(false);
+  // 新しいファイルを編集面で開く途中。組むのに時間がかかる（大きい本文で
+  // 300ms 台）ので、先に読み込みの印を描いてから組む。ツリーで選んだ瞬間に
+  // 選択と画面が切り替わって見えるようにするため、ここを同じ一枚でやらない。
+  const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState("");
   // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
   // 選択メニューの「編集する」から立てる編集の頼み。
@@ -241,6 +248,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     marked.current = false;
     setEditing(false);
     setEditingFm(null);
+    // 編集から始める設定なら、この後すぐ編集面を組む。前のファイルの中身を
+    // 残さず読み込みの印に切り替えておく（設定の切り替えでここを走らせない
+    // ように、設定は控えから読む）。
+    setOpening(startRef.current);
   }, [path]);
 
   // 「開いたら編集から始める」。本文が読めた時点で切り替える。同じファイルで
@@ -252,7 +263,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setDraft(raw ?? "");
     base.current = raw ?? "";
     marked.current = false;
-    setEditing(true);
+    setSwitching(true);
+    // 印を描いた後の一枚で組む。同じ一枚でやると印が出ないまま止まる。
+    const want = path;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        // 組んでいる間に別のファイルへ移っていたら、そちらの手順に任せる。
+        if (pathRef.current !== want) return;
+        setOpening(false);
+        setEditing(true);
+      }),
+    );
   }, [startEditing, path, loaded, raw]);
 
   // ドキュメント全体の Undo/Redo（アクティブペインのみ、CM 編集中は CM に任せる）
@@ -839,9 +860,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             ref={setScroller}
             className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
           >
-            {path && !loaded ? (
+            {path && (!loaded || opening) ? (
               <div className="px-10 py-8 sm:px-16">
-                {showLoading && (
+                {/* 読んでいる間は少し待ってから出す（一瞬で読めるときに
+                    ちらつかせない）。編集面を組む一枚では待たずに出す
+                    ── 組み始めると画面が止まるので、その前に描いておく。 */}
+                {(showLoading || opening) && (
                   <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                     <LoadingBody />
                   </div>
