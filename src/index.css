@@ -3377,17 +3377,21 @@ svg[id^="mmd-"] foreignObject p {
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
 }
 
-/* 表の列を掴んだときの写し。升目が行ごとに散っていてまとまった要素が無いので、
-   写しを縦に並べて組む。地と枠は表の升目が持っているものをそのまま使う。 */
-.mg-drag-stack {
+/* 表の行・列を掴んだときの写し。表そのものを写して要らない行・列を落とした
+   ものが入る。本文の入れ物のクラスを被せてあるので、地と書体と枠線はそのまま。
+   余白だけは打ち消して、掴んだ行・列の大きさで写らせる。 */
+.mg-drag-table {
   position: fixed;
   top: -9999px;
   left: -9999px;
-  overflow: hidden;
-  border: 1px solid var(--mg-border);
-  border-radius: 8px;
-  background: var(--mg-panel);
+  width: max-content;
+  padding: 0;
+  background: var(--mg-bg);
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+}
+.mg-drag-table .mg-table-wrap {
+  margin: 0;
+  overflow: visible;
 }
 
 /* タブの列は高さが狭く、スクロールバーがタブそのものに重なって読みにくい。

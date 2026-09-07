@@ -31,41 +31,97 @@ export function setDragPreview(
   setDragChip(data, label);
 }
 
-// 表の列を掴んだときの写し。
+// 表の行・列を掴んだときの写し。
 //
-// 行は tr が 1 つの要素なのでそのまま写せるが、列は升目が行ごとに散っていて
-// まとまった要素が無い。見出しの升目だけを写すと、掴んでいるのが列だという
-// 感覚と合わない。升目の写しを縦に並べて 1 つの写しに組む。
+// 行は tr、列は行ごとに散った升目で、どちらも単体では表として組まれない
+// （table の外に出すと桁の決め方が効かない）。升目を並べ直すと組みが崩れて
+// 別物に見えるので、表そのものを写して要らない行・列を落とす。桁は実測した
+// 幅で固定する。地と書体は本文の入れ物のクラスをそのまま被せて借りる。
 //
-// 全部を並べると画面を覆う写しが付いてくるので、上限までで切る。
+// 全部を並べると画面を覆う写しが付いてくるので、高さは上限までで切る。
 const STACK_MAX = 320;
 
-export function setDragColumn(
+export function setDragTablePart(
   data: DataTransfer,
-  cells: readonly HTMLElement[],
+  table: HTMLTableElement | null,
+  kind: "row" | "col",
+  at: number,
   label: string,
 ): void {
-  const stack = document.createElement("div");
-  stack.className = "mg-drag-stack";
-  let height = 0;
-  for (const cell of cells) {
-    const box = cell.getBoundingClientRect();
-    if (box.height <= 0 || box.width <= 0) continue;
-    if (height > 0 && height + box.height > STACK_MAX) break;
-    const copy = cell.cloneNode(true) as HTMLElement;
-    // 升目は表の中でだけ table-cell として並ぶ。外へ出すので箱にする。
-    copy.style.display = "block";
-    copy.style.width = `${box.width}px`;
-    copy.style.height = `${box.height}px`;
-    stack.appendChild(copy);
-    height += box.height;
-  }
-  if (!stack.childElementCount) {
+  const rows = table ? Array.from(table.rows) : [];
+  if (!table || rows.length === 0) {
     setDragChip(data, label);
     return;
   }
+
+  // 桁と高さを先に測る。写しを組んだ後では元の表を測れない。
+  const widths = Array.from(rows[0].cells).map(
+    (cell) => cell.getBoundingClientRect().width,
+  );
+  const heights = rows.map((row) => row.getBoundingClientRect().height);
+
+  const copy = table.cloneNode(true) as HTMLTableElement;
+  const kept = Array.from(copy.rows);
+  if (kind === "row") {
+    if (at < 0 || at >= kept.length) {
+      setDragChip(data, label);
+      return;
+    }
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (i !== at) kept[i].remove();
+    }
+  } else {
+    if (at < 0 || at >= widths.length) {
+      setDragChip(data, label);
+      return;
+    }
+    // 上限を超える行は落とす。表の頭から入る分だけを見せる。
+    let room = 0;
+    for (let i = 0; i < kept.length; i++) {
+      if (i > 0 && room + heights[i] > STACK_MAX) {
+        for (let j = kept.length - 1; j >= i; j--) kept[j].remove();
+        break;
+      }
+      room += heights[i];
+    }
+    for (const row of Array.from(copy.rows)) {
+      for (const cell of Array.from(row.cells)) {
+        if (cell.cellIndex !== at) cell.remove();
+      }
+    }
+  }
+
+  // 残した升目の桁を実測の幅で固定する。
+  for (const row of Array.from(copy.rows)) {
+    for (const cell of Array.from(row.cells)) {
+      const width = widths[kind === "col" ? at : cell.cellIndex];
+      if (width) cell.style.width = `${width}px`;
+    }
+  }
+
+  // 本文の入れ物のクラスを被せて、地と書体と枠線をそのまま借りる。
+  const skin = table.closest(".mg-prose");
+  const shell = document.createElement("div");
+  shell.className = `mg-drag-table ${skin?.className ?? ""}`.trim();
+  const style = getComputedStyle(skin ?? table);
+  shell.style.fontFamily = style.fontFamily;
+  shell.style.fontSize = style.fontSize;
+
+  const wrap = table.closest(".mg-table-wrap");
+  const inner = document.createElement("div");
+  inner.className = wrap?.className ?? "mg-table-wrap";
+  inner.appendChild(copy);
+  shell.appendChild(inner);
+
   // 画面外に置く。setDragImage は描画済みの要素しか写せない。
-  document.body.appendChild(stack);
-  data.setDragImage(stack, 12, Math.min(height / 2, 22));
-  requestAnimationFrame(() => stack.remove());
+  document.body.appendChild(shell);
+  const box = shell.getBoundingClientRect();
+  if (box.height <= 0 || box.width <= 0) {
+    shell.remove();
+    setDragChip(data, label);
+    return;
+  }
+  data.setDragImage(shell, 12, Math.min(box.height / 2, 22));
+  // 写しは同期で取られるので、次のフレームには捨ててよい。
+  requestAnimationFrame(() => shell.remove());
 }

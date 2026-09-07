@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
-import { setDragColumn, setDragPreview } from "../lib/dragImage";
+import { setDragPreview, setDragTablePart } from "../lib/dragImage";
 import {
   ADD,
   ADD_AWAY,
@@ -537,27 +537,23 @@ export function BlockGutter({
       e.dataTransfer.setData(MIME[kind], String(at));
       e.dataTransfer.effectAllowed = "move";
       // 掴んだものを薄い写しで見せる。大きすぎるときは名前の札に落ちる。
-      if (kind === "col") {
-        setDragColumn(e.dataTransfer, columnCells(index, at), label(kind, index));
+      if (kind === "col" || kind === "row") {
+        setDragTablePart(
+          e.dataTransfer,
+          content
+            .querySelector(`[data-mg-block="${index}"]`)
+            ?.querySelector("table") ?? null,
+          kind,
+          // 行はソースの行番号で持っている（本体は 2 行目から）。写しは
+          // table.rows で数えるので、見出しの 1 行ぶんだけ戻す。
+          kind === "row" ? at - 1 : at,
+          label(kind, index),
+        );
       } else {
         setDragPreview(e.dataTransfer, previewOf(kind, index, at), label(kind, index));
       }
       setMenu(null);
     };
-
-  // 掴んだ列の升目を上から。列は升目が行ごとに散っていて、まとまった要素が無い。
-  const columnCells = (index: number, at: number): HTMLElement[] => {
-    const table = content
-      .querySelector(`[data-mg-block="${index}"]`)
-      ?.querySelector("table");
-    if (!table) return [];
-    const out: HTMLElement[] = [];
-    for (const row of table.rows) {
-      const cell = row.cells[at];
-      if (cell) out.push(cell);
-    }
-    return out;
-  };
 
   // 写しに使う要素。ブロックはその中身、表は掴んだ行。
   const previewOf = (kind: Kind, index: number, at: number): Element | null => {

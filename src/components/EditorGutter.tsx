@@ -1,7 +1,7 @@
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { setDragColumn, setDragPreview } from "../lib/dragImage";
+import { setDragPreview, setDragTablePart } from "../lib/dragImage";
 import {
   blockActTr,
   blockMoveTr,
@@ -533,27 +533,19 @@ export function EditorGutter({
     return dom instanceof HTMLElement ? dom.querySelector("table") : null;
   };
 
-  // その列の升目を上から。掴んだときの写しに使う。
-  const columnCells = (pos: number, at: number): HTMLElement[] => {
-    const table = tableOf(pos);
-    if (!table) return [];
-    const out: HTMLElement[] = [];
-    for (const row of table.rows) {
-      const cell = row.cells[at];
-      if (cell) out.push(cell);
-    }
-    return out;
-  };
-
   const hold = (kind: Kind, where: Spot, at: number) => (e: React.DragEvent) => {
     heldRef.current = { kind, spot: where, at };
     setHolding(kind);
     e.dataTransfer.setData(MIME[kind], String(at));
     e.dataTransfer.effectAllowed = "move";
-    if (kind === "col") {
-      setDragColumn(e.dataTransfer, columnCells(where.pos, at), "列を移動");
-    } else if (kind === "row") {
-      setDragPreview(e.dataTransfer, tableOf(where.pos)?.rows[at] ?? null, "行を移動");
+    if (kind === "col" || kind === "row") {
+      setDragTablePart(
+        e.dataTransfer,
+        tableOf(where.pos),
+        kind,
+        at,
+        kind === "row" ? "行を移動" : "列を移動",
+      );
     } else {
       // 項目の at は「リストの中で何番目か」なので、写しは位置から引く。
       const dom = view.nodeDOM(
