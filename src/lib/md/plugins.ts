@@ -17,6 +17,7 @@ import type { Transform } from "prosemirror-transform";
 import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
+import { lifted } from "./lifted";
 import { insideBlock } from "./nodeViews";
 import { nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
@@ -455,5 +456,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     // コードの色と、カーソルの居る塊の印（図だけを出しているときに使う）。
     highlightCode,
     insideBlock,
+    // 掴んでいるあいだ実体を薄くする印。
+    lifted,
   ];
 }

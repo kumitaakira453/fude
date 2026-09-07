@@ -316,3 +316,30 @@ export function tableMoveTr(
   shape.select = { kind: "col", at: to > from ? to - 1 : to };
   return replace(state, pos, was, shape);
 }
+
+// その行・列の升目が占める範囲。掴んでいるあいだ薄くする印に使う。
+export function tableSpans(
+  doc: PmNode,
+  pos: number,
+  kind: TablePart,
+  at: number,
+): [number, number][] {
+  const table = doc.nodeAt(pos);
+  if (!table || table.type !== schema.nodes.table) return [];
+  const map = TableMap.get(table);
+  const start = pos + 1;
+  const span = (offset: number): [number, number] => {
+    const cell = table.nodeAt(offset);
+    return [start + offset, start + offset + (cell?.nodeSize ?? 0)];
+  };
+  if (kind === "row") {
+    if (at < 0 || at >= map.height) return [];
+    return Array.from({ length: map.width }, (_, col) =>
+      span(map.map[at * map.width + col]),
+    );
+  }
+  if (at < 0 || at >= map.width) return [];
+  return Array.from({ length: map.height }, (_, row) =>
+    span(map.map[row * map.width + at]),
+  );
+}

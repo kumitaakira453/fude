@@ -42,18 +42,13 @@ export function setDragPreview(
 // 画面より大きい表だけは、画面に収まる分で止める（それ以上は写しが画面を
 // 覆って、どこへ運んでいるのか読めなくなる）。
 
-export function setDragTablePart(
-  data: DataTransfer,
+export function tablePartCopy(
   table: HTMLTableElement | null,
   kind: "row" | "col",
   at: number,
-  label: string,
-): void {
+): HTMLElement | null {
   const rows = table ? Array.from(table.rows) : [];
-  if (!table || rows.length === 0) {
-    setDragChip(data, label);
-    return;
-  }
+  if (!table || rows.length === 0) return null;
 
   // 桁と高さを先に測る。写しを組んだ後では元の表を測れない。
   const widths = Array.from(rows[0].cells).map(
@@ -64,10 +59,7 @@ export function setDragTablePart(
   const copy = table.cloneNode(true) as HTMLTableElement;
   const kept = Array.from(copy.rows);
   if (kind === "row") {
-    if (at < 0 || at >= kept.length) {
-      setDragChip(data, label);
-      return;
-    }
+    if (at < 0 || at >= kept.length) return null;
     for (let i = kept.length - 1; i >= 0; i--) {
       if (i !== at) kept[i].remove();
     }
@@ -85,10 +77,7 @@ export function setDragTablePart(
       }
     }
   } else {
-    if (at < 0 || at >= widths.length) {
-      setDragChip(data, label);
-      return;
-    }
+    if (at < 0 || at >= widths.length) return null;
     // 画面より高い表では、収まる分で止める。
     let room = 0;
     for (let i = 0; i < kept.length; i++) {
@@ -117,21 +106,58 @@ export function setDragTablePart(
     }
   }
 
-  // 本文の入れ物のクラスを被せて、地と書体と枠線をそのまま借りる。
-  const skin = table.closest(".mg-prose");
-  const shell = document.createElement("div");
-  shell.className = `mg-drag-table ${skin?.className ?? ""}`.trim();
-  const style = getComputedStyle(skin ?? table);
-  shell.style.fontFamily = style.fontFamily;
-  shell.style.fontSize = style.fontSize;
-
+  const shell = skinned(table, "mg-drag-table");
   const wrap = table.closest(".mg-table-wrap");
   const inner = document.createElement("div");
   inner.className = wrap?.className ?? "mg-table-wrap";
   inner.appendChild(copy);
   shell.appendChild(inner);
+  return shell;
+}
 
+// 本文の入れ物のクラスを被せた殻。地・書体・枠線をそのまま借りる。
+function skinned(from: Element, className: string): HTMLElement {
+  const skin = from.closest(".mg-prose");
+  const shell = document.createElement("div");
+  shell.className = `${className} ${skin?.className ?? ""}`.trim();
+  const style = getComputedStyle(skin ?? from);
+  shell.style.fontFamily = style.fontFamily;
+  shell.style.fontSize = style.fontSize;
+  return shell;
+}
+
+// ブロック・項目の写し。
+//
+// 生の要素をそのまま渡すと、本文の入れ物の外では桁が決まらず、背の高いものは
+// 名前の札に落ちていた。表の行・列と同じ扱いにして、実測した幅で固定した
+// 写しを組む。画面より高いものだけ、収まる分で切る。
+export function blockCopy(el: HTMLElement | null): HTMLElement | null {
+  if (!el) return null;
+  const box = el.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return null;
+  const shell = skinned(el, "mg-drag-block");
+  shell.style.width = `${box.width}px`;
+  if (box.height > window.innerHeight) {
+    shell.style.maxHeight = `${window.innerHeight}px`;
+    shell.style.overflow = "hidden";
+  }
+  const copy = el.cloneNode(true) as HTMLElement;
+  // 本文の中では上下の余白が隣のブロックと打ち消し合う。写しでは要らない。
+  copy.style.margin = "0";
+  shell.appendChild(copy);
+  return shell;
+}
+
+// 写しを setDragImage へ渡す。HTML5 のドラッグを使う側（読むとき）から呼ぶ。
+function handOver(data: DataTransfer, shell: HTMLElement | null, label: string): void {
+  if (!shell) {
+    setDragChip(data, label);
+    return;
+  }
   // 画面外に置く。setDragImage は描画済みの要素しか写せない。
+  shell.style.position = "fixed";
+  shell.style.top = "-9999px";
+  shell.style.left = "-9999px";
   document.body.appendChild(shell);
   const box = shell.getBoundingClientRect();
   if (box.height <= 0 || box.width <= 0) {
@@ -142,4 +168,14 @@ export function setDragTablePart(
   data.setDragImage(shell, 12, Math.min(box.height / 2, 22));
   // 写しは同期で取られるので、次のフレームには捨ててよい。
   requestAnimationFrame(() => shell.remove());
+}
+
+export function setDragTablePart(
+  data: DataTransfer,
+  table: HTMLTableElement | null,
+  kind: "row" | "col",
+  at: number,
+  label: string,
+): void {
+  handOver(data, tablePartCopy(table, kind, at), label);
 }

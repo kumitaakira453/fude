@@ -3392,6 +3392,33 @@ svg[id^="mmd-"] foreignObject p {
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
 }
 
+/* マウスで運んでいる間の写し。カーソルに付いてくる。
+   HTML5 のドラッグを使わないので、位置も濃さもこちらで持つ。 */
+.mg-carry {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.7;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+}
+body.mg-carrying,
+body.mg-carrying * {
+  cursor: grabbing !important;
+}
+/* 運んでいる間は本文の選択を始めさせない。 */
+body.mg-carrying {
+  user-select: none;
+}
+
+/* ブロック・項目を掴んだときの写し。本文の入れ物のクラスを被せてあるので、
+   地と書体はそのまま。余白だけ打ち消して掴んだものの大きさで写らせる。 */
+.mg-drag-block {
+  padding: 0;
+  background: var(--mg-bg);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 /* 表の行・列を掴んだときの写し。表そのものを写して要らない行・列を落とした
    ものが入る。本文の入れ物のクラスを被せてあるので、地と書体と枠線はそのまま。
    余白だけは打ち消して、掴んだ行・列の大きさで写らせる。 */

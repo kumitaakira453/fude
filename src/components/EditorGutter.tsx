@@ -1,7 +1,8 @@
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { setDragPreview, setDragTablePart } from "../lib/dragImage";
+import { startCarry } from "../lib/carry";
+import { blockCopy, tablePartCopy } from "../lib/dragImage";
 import {
   blockActTr,
   blockMoveTr,
@@ -14,9 +15,11 @@ import {
   type ItemAct,
 } from "../lib/md/itemActs";
 import { schema } from "../lib/md/schema";
+import { liftedKey, type LiftedSpans } from "../lib/md/lifted";
 import {
   tableActTr,
   tableMoveTr,
+  tableSpans,
   type TableAct,
   type TablePart,
 } from "../lib/md/tableActs";
@@ -51,19 +54,7 @@ import { Icon } from "./Icon";
 // React が要素を差し込むとそれを本文の書き換えと取り違える。入れ物（host）の
 // 側に置き、編集面とは兄弟にする。
 
-const BLOCK_MIME = "application/x-fude-pmblock";
-const ITEM_MIME = "application/x-fude-pmitem";
-const ROW_MIME = "application/x-fude-pmrow";
-const COL_MIME = "application/x-fude-pmcol";
-
 type Kind = "block" | "item" | TablePart;
-
-const MIME: Record<Kind, string> = {
-  block: BLOCK_MIME,
-  item: ITEM_MIME,
-  row: ROW_MIME,
-  col: COL_MIME,
-};
 
 // 追加の帯を表から離す幅。表の枠と重ならないよう、読むとき側より広く取る
 // （編集面では升目に焦点の枠が付くので、詰めると枠に重なって見える）。
@@ -224,7 +215,6 @@ export function EditorGutter({
     y: number;
   } | null>(null);
   const [guide, setGuide] = useState<Guide | null>(null);
-  const [holding, setHolding] = useState<Kind | null>(null);
 
   const layer = useRef<HTMLDivElement>(null);
   // 出しているものは描き直しを待たずに読みたい（測る側は React の外に居る）。
@@ -236,6 +226,14 @@ export function EditorGutter({
   const atRef = useRef<{ x: number; y: number } | null>(null);
   // 最後に指していた場所で測り直す口。行や列を足した直後にも使う。
   const againRef = useRef<(() => void) | null>(null);
+  // 運んでいる間の受け口。押し下げから呼ぶので、効果の外へ出しておく。
+  const carryRef = useRef<{
+    move: (x: number, y: number) => void;
+    land: () => void;
+  } | null>(null);
+  // 運びを途中でやめる口と、薄くしたものを戻す口。
+  const stopRef = useRef<(() => void) | null>(null);
+  const unliftRef = useRef<(() => void) | null>(null);
   spotRef.current = spot;
   menuRef.current = menu !== null;
 
@@ -376,21 +374,17 @@ export function EditorGutter({
       if (geo) show({ ...held, table: { ...held.table, geo } });
     };
 
-    // 落とす先を決める。掴んでいる間だけ本文へ渡さない（ProseMirror の
-    // 取り込みが走ると、掴んだ帯の代わりに文字が動く）。
-    const onDragOver = (e: DragEvent) => {
+    // 運んでいる間、指している場所から落とす先を決めて線を出す。
+    const onCarry = (x: number, y: number) => {
       const held = heldRef.current;
-      if (!held || !e.dataTransfer?.types.includes(MIME[held.kind])) return;
+      if (!held) return;
       const base = host.getBoundingClientRect();
 
       if (held.kind === "block") {
-        const hit = blockAtY(view, e.clientY);
+        const hit = blockAtY(view, y);
         if (!hit) return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = "move";
         const box = hit.el.getBoundingClientRect();
-        const after = e.clientY > box.top + box.height / 2;
+        const after = y > box.top + box.height / 2;
         toRef.current = after ? hit.index + 1 : hit.index;
         setGuide({
           kind: "block",
@@ -404,16 +398,13 @@ export function EditorGutter({
       }
 
       if (held.kind === "item") {
-        const hit = blockAtY(view, e.clientY);
-        const li = hit ? itemAtY(hit.el, e.clientY, "li") : null;
+        const hit = blockAtY(view, y);
+        const li = hit ? itemAtY(hit.el, y, "li") : null;
         const spot = li ? itemPosOf(view, li) : null;
         // 同じリストの中だけで動かす。
         if (!li || !spot || spot.listPos !== held.spot.item?.listPos) return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = "move";
         const box = li.getBoundingClientRect();
-        const after = e.clientY > box.top + box.height / 2;
+        const after = y > box.top + box.height / 2;
         toRef.current = after ? spot.at + 1 : spot.at;
         setGuide({
           kind: "item",
@@ -425,25 +416,17 @@ export function EditorGutter({
       }
 
       // 行・列は掴んだ表の中だけで動かす。
-      const hit = blockAtY(view, e.clientY);
+      const hit = blockAtY(view, y);
       const el = hit?.el.querySelector("table");
       if (!hit || !el || hit.pos !== held.spot.pos) return;
-      const geo = tableGeometry(
-        el,
-        Array.from(el.rows),
-        { x: e.clientX, y: e.clientY },
-        base,
-      );
+      const geo = tableGeometry(el, Array.from(el.rows), { x, y }, base);
       if (!geo) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = "move";
 
       if (held.kind === "row") {
         const row = geo.row;
         // 見出しの上へは運ばせない。
         if (!row || row.index < 1) return;
-        const after = e.clientY > base.top + row.top + row.height / 2;
+        const after = y > base.top + row.top + row.height / 2;
         toRef.current = after ? row.index + 1 : row.index;
         setGuide({
           kind: "row",
@@ -455,7 +438,7 @@ export function EditorGutter({
       }
       const col = geo.col;
       if (!col) return;
-      const after = e.clientX > base.left + col.left + col.width / 2;
+      const after = x > base.left + col.left + col.width / 2;
       toRef.current = after ? col.index + 1 : col.index;
       setGuide({
         kind: "col",
@@ -465,16 +448,14 @@ export function EditorGutter({
       });
     };
 
-    const onDrop = (e: DragEvent) => {
+    const onLand = () => {
       const held = heldRef.current;
       const to = toRef.current;
       heldRef.current = null;
       toRef.current = null;
       setGuide(null);
-      setHolding(null);
+      unliftRef.current?.();
       if (!held || to === null) return;
-      e.preventDefault();
-      e.stopPropagation();
       const tr =
         held.kind === "block"
           ? blockMoveTr(view.state, held.spot.index, to)
@@ -484,8 +465,11 @@ export function EditorGutter({
               : null
             : tableMoveTr(view.state, held.spot.pos, held.kind, held.at, to);
       if (tr) view.dispatch(tr);
+      view.focus();
       requestAnimationFrame(() => againRef.current?.());
     };
+
+    carryRef.current = { move: onCarry, land: onLand };
 
     // 中身の高さが変わると、出したままのつまみは前の位置に取り残される。
     // 最後に指していた場所で測り直す。大きさが変わっていない知らせでは
@@ -505,16 +489,13 @@ export function EditorGutter({
     watching.addEventListener("mousemove", onMouseMove);
     watching.addEventListener("mouseleave", onMouseLeave);
     watching.addEventListener("scroll", onScroll, true);
-    // 掴んでいる間の合図は、本文へ届く前に受け取る。
-    watching.addEventListener("dragover", onDragOver, true);
-    watching.addEventListener("drop", onDrop, true);
     return () => {
       againRef.current = null;
+      carryRef.current = null;
+      stopRef.current?.();
       watching.removeEventListener("mousemove", onMouseMove);
       watching.removeEventListener("mouseleave", onMouseLeave);
       watching.removeEventListener("scroll", onScroll, true);
-      watching.removeEventListener("dragover", onDragOver, true);
-      watching.removeEventListener("drop", onDrop, true);
       settle.disconnect();
     };
   }, [view, host, scroller]);
@@ -540,39 +521,74 @@ export function EditorGutter({
     return dom instanceof HTMLElement ? dom.querySelector("table") : null;
   };
 
-  const hold = (kind: Kind, where: Spot, at: number) => (e: React.DragEvent) => {
-    heldRef.current = { kind, spot: where, at };
-    setHolding(kind);
-    e.dataTransfer.setData(MIME[kind], String(at));
-    e.dataTransfer.effectAllowed = "move";
-    if (kind === "col" || kind === "row") {
-      setDragTablePart(
-        e.dataTransfer,
-        tableOf(where.pos),
-        kind,
-        at,
-        kind === "row" ? "行を移動" : "列を移動",
-      );
-    } else {
-      // 項目の at は「リストの中で何番目か」なので、写しは位置から引く。
-      const dom = view.nodeDOM(
-        kind === "item" ? (where.item?.pos ?? where.pos) : where.pos,
-      );
-      setDragPreview(
-        e.dataTransfer,
-        dom instanceof HTMLElement ? dom : null,
-        kind === "item" ? "項目を移動" : "ブロックを移動",
-      );
+  // 薄くする範囲。ブロックと項目はその節点、表は掴んだ行・列の升目。
+  const heldSpans = (kind: Kind, where: Spot, at: number): LiftedSpans => {
+    if (kind === "row" || kind === "col") {
+      return tableSpans(view.state.doc, where.pos, kind, at);
     }
-    setMenu(null);
+    const from = kind === "item" ? (where.item?.pos ?? where.pos) : where.pos;
+    const node = view.state.doc.nodeAt(from);
+    return node ? [[from, from + node.nodeSize]] : [];
   };
 
-  const release = () => {
-    heldRef.current = null;
-    toRef.current = null;
-    setHolding(null);
-    setGuide(null);
+  // 付いてくる写し。掴んだものの組みをそのまま保つ。
+  const copyOf = (kind: Kind, where: Spot, at: number): HTMLElement | null => {
+    if (kind === "col" || kind === "row") {
+      return tablePartCopy(tableOf(where.pos), kind, at);
+    }
+    // 項目の at は「リストの中で何番目か」なので、実体は位置から引く。
+    const dom = view.nodeDOM(
+      kind === "item" ? (where.item?.pos ?? where.pos) : where.pos,
+    );
+    return blockCopy(dom instanceof HTMLElement ? dom : null);
   };
+
+  // つまみを押したら運びを構える。数 px 動くまでは始まらないので、押しただけ
+  // ならメニューが出る。
+  //
+  // HTML5 のドラッグは使わない。WebKit は離したときに写しを掴んだ場所へ戻す
+  // アニメーションを出し、止められない。本文はその場で入れ替わっているので、
+  // 目には「戻ってから入れ替わった」と映る。
+  const hold =
+    (kind: Kind, where: Spot, at: number) => (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const ghost = copyOf(kind, where, at);
+      const box = e.currentTarget.getBoundingClientRect();
+      stopRef.current = startCarry({
+        from: { x: e.clientX, y: e.clientY },
+        ghost,
+        // 掴んだつまみと写しの位置関係を保つ。
+        grip: { x: e.clientX - box.left + 8, y: e.clientY - box.top },
+        onStart: () => {
+          heldRef.current = { kind, spot: where, at };
+          setMenu(null);
+          lift(heldSpans(kind, where, at));
+        },
+        onMove: (x, y) => carryRef.current?.move(x, y),
+        onDrop: () => carryRef.current?.land(),
+        onCancel: () => {
+          unlift();
+          heldRef.current = null;
+          toRef.current = null;
+          setGuide(null);
+        },
+      });
+    };
+
+  // 掴んだものを薄くして、持ち上がったことをその場で見せる。元の位置に濃いまま
+  // 残っていると動いている実感が無いので、別に囲みを描いて示す必要が出る。
+  //
+  // 印は装飾で渡す。クラスを DOM へ直に足すと、ProseMirror が属性の変化を
+  // 本文の書き換えと見て節点を描き直し、消えてしまう。
+  const mark = (spans: LiftedSpans) => {
+    view.dispatch(
+      view.state.tr.setMeta(liftedKey, spans).setMeta("addToHistory", false),
+    );
+  };
+  const lift = (spans: LiftedSpans) => mark(spans);
+  const unlift = () => mark([]);
+  unliftRef.current = unlift;
 
   const open = (kind: Kind, where: Spot, at: number) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -682,9 +698,7 @@ export function EditorGutter({
                     : "ドラッグで移動 / クリックでメニュー"
                 }
                 className="mg-grip mg-grip-hold"
-                draggable
-                onDragStart={hold(grabs, spot, grabAt)}
-                onDragEnd={release}
+                onMouseDown={hold(grabs, spot, grabAt)}
                 onClick={open(grabs, spot, grabAt)}
                 onContextMenu={open(grabs, spot, grabAt)}
               >
@@ -698,15 +712,13 @@ export function EditorGutter({
               type="button"
               title="ドラッグで移動 / クリックでメニュー"
               className="mg-grip mg-grip-hold mg-grip-bar"
-              draggable
               style={{
                 top: geo.row.top,
                 left: geo.table.left - BAR - ADD_AWAY,
                 width: BAR,
                 height: geo.row.height,
               }}
-              onDragStart={hold("row", spot, geo.row.index)}
-              onDragEnd={release}
+              onMouseDown={hold("row", spot, geo.row.index)}
               onClick={open("row", spot, geo.row.index)}
               onContextMenu={open("row", spot, geo.row.index)}
             >
@@ -719,15 +731,13 @@ export function EditorGutter({
               type="button"
               title="ドラッグで移動 / クリックでメニュー"
               className="mg-grip mg-grip-hold mg-grip-bar"
-              draggable
               style={{
                 top: geo.table.top - BAR - ADD_AWAY,
                 left: geo.col.left,
                 width: geo.col.width,
                 height: BAR,
               }}
-              onDragStart={hold("col", spot, geo.col.index)}
-              onDragEnd={release}
+              onMouseDown={hold("col", spot, geo.col.index)}
               onClick={open("col", spot, geo.col.index)}
               onContextMenu={open("col", spot, geo.col.index)}
             >
@@ -776,13 +786,13 @@ export function EditorGutter({
 
           {/* 何に対するメニューかを塗って示す。メニューへ動かすと相手から
               離れるので、印が無いとどのブロック・行・列だったか分からなくなる。 */}
-          {(menu?.kind === "block" || holding === "block") && spot && (
+          {menu?.kind === "block" && spot && (
             <div className="mg-target" style={spot.box} />
           )}
-          {(menu?.kind === "item" || holding === "item") && spot?.item && (
+          {menu?.kind === "item" && spot?.item && (
             <div className="mg-target" style={spot.item.box} />
           )}
-          {(menu?.kind === "row" || holding === "row") && geo?.row && (
+          {menu?.kind === "row" && geo?.row && (
             <div
               className="mg-target"
               style={{
@@ -793,7 +803,7 @@ export function EditorGutter({
               }}
             />
           )}
-          {(menu?.kind === "col" || holding === "col") && geo?.col && (
+          {menu?.kind === "col" && geo?.col && (
             <div
               className="mg-target"
               style={{
