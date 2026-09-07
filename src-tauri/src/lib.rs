@@ -57,7 +57,7 @@ async fn review_create_thread(
         })
     })
     .await
-    .map_err(|e| format!("指摘の作成に失敗しました: {e}"))?
+    .map_err(|e| format!("コメントの作成に失敗しました: {e}"))?
 }
 
 // 版の本文を返す。差分表示のために、指摘を付けた時点の全文を読む。
@@ -93,7 +93,7 @@ async fn review_reply(thread: String, author: String, body: String) -> Result<()
 async fn review_remove(thread: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::remove(&thread))
         .await
-        .map_err(|e| format!("指摘の取り消しに失敗しました: {e}"))?
+        .map_err(|e| format!("コメントの取り消しに失敗しました: {e}"))?
 }
 
 #[tauri::command]
@@ -118,7 +118,7 @@ async fn review_resolve(thread: String, by: String) -> Result<(), String> {
 async fn review_put_thread(thread: review::store::Thread) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::put_thread(thread))
         .await
-        .map_err(|e| format!("指摘を戻せませんでした: {e}"))?
+        .map_err(|e| format!("コメントを戻せませんでした: {e}"))?
 }
 
 #[tauri::command]

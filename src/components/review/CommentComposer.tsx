@@ -198,7 +198,7 @@ export function CommentComposer({
             }
           }}
           style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
-          placeholder="指摘を書く…（⌘Enter で送信）"
+          placeholder="コメントを書く…（⌘Enter で送信）"
           className="block w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] leading-relaxed outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
         />
         <div className="mt-1.5 flex items-center gap-1.5">
@@ -215,7 +215,7 @@ export function CommentComposer({
             className="flex items-center gap-1 rounded-lg bg-[var(--mg-accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--mg-bg)] transition disabled:opacity-40"
           >
             <Icon name="add_comment" size={14} />
-            指摘する
+            コメント
           </button>
         </div>
       </div>

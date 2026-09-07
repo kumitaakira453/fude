@@ -678,7 +678,7 @@ export function BlockGutter({
     return [
       {
         icon: "add_comment",
-        label: "指摘する",
+        label: "コメント",
         keys: "⌘⇧I",
         run: () => onItemComment(index, at),
       },
@@ -699,7 +699,7 @@ export function BlockGutter({
   const cellItems = (index: number, at: number): MenuItem[] => [
     {
       icon: "add_comment",
-      label: "指摘する",
+      label: "コメント",
       keys: "⌘⇧I",
       run: () => onCellComment(index, at),
     },
@@ -723,7 +723,7 @@ export function BlockGutter({
         : [
             {
               icon: "add_comment",
-              label: "指摘する",
+              label: "コメント",
               keys: "⌘⇧I",
               run: () => onComment(menu.index),
             },

@@ -279,7 +279,7 @@ export function ReviewScreen() {
       );
       navigator.clipboard.writeText(text).then(
         () => {
-          notify(store, "指摘を写しました");
+          notify(store, "コメントを写しました");
           setCopiedFile(file);
           window.clearTimeout(copyTimer.current);
           copyTimer.current = window.setTimeout(() => setCopiedFile(null), 1400);
@@ -335,7 +335,7 @@ export function ReviewScreen() {
           <div className="text-[13px] font-medium leading-tight">
             {threads.length > 0
               ? `未解決 ${threads.length} 件`
-              : "このフォルダに未解決の指摘はありません"}
+              : "このフォルダに未解決のコメントはありません"}
             {elsewhere > 0 && (
               <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">
                 他のフォルダに {elsewhere} 件
@@ -358,8 +358,8 @@ export function ReviewScreen() {
           {groups.length === 0 && (
             <p className="px-3 py-4 text-[12px] text-[var(--mg-muted)]">
               {elsewhere > 0
-                ? "このフォルダには未解決の指摘がありません。他のフォルダの指摘は、そのフォルダを開くと出ます。"
-                : "指摘が付くとここに並びます。"}
+                ? "このフォルダには未解決のコメントがありません。他のフォルダのコメントは、そのフォルダを開くと出ます。"
+                : "コメントが付くとここに並びます。"}
             </p>
           )}
           {groups.map(([file, list]) => {
@@ -375,7 +375,7 @@ export function ReviewScreen() {
                   <span className="mg-count">{list.length}</span>
                   <button
                     onClick={() => copyPrompt(file, list)}
-                    title="このファイルの指摘を AI 用のプロンプトとして写す"
+                    title="このファイルのコメントを AI 用のプロンプトとして写す"
                     className="mg-bulk"
                   >
                     <Icon
@@ -386,7 +386,7 @@ export function ReviewScreen() {
                   <button
                     onClick={() => void resolveFile(file, list)}
                     disabled={bulkFile !== null}
-                    title="このファイルの指摘をすべて解決にする"
+                    title="このファイルのコメントをすべて解決にする"
                     className="mg-bulk"
                   >
                     <Icon
@@ -414,7 +414,7 @@ export function ReviewScreen() {
 
         {threads.length === 0 ? (
           <p className="p-8 text-[13px] text-[var(--mg-muted)]">
-            指摘を選ぶと、その箇所が今どうなっているかを本文の中で示します。
+            コメントを選ぶと、その箇所が今どうなっているかを本文の中で示します。
           </p>
         ) : !shown ? (
           <DetailSkeleton />
@@ -565,15 +565,15 @@ function locate(thread: ReviewThread, head: Block[], baseText: string | null): A
 function stateNote(anchor: Anchor): string {
   switch (anchor.state) {
     case "unchanged":
-      return "指摘の箇所はまだ書き換わっていません。";
+      return "コメントの箇所はまだ書き換わっていません。";
     case "rewritten":
-      return "指摘の箇所は書き換わっています。指摘した時点の文を上に並べています。";
+      return "コメントの箇所は書き換わっています。コメントした時点の文を上に並べています。";
     case "removed":
-      return "指摘の箇所は今の本文から削除されています。";
+      return "コメントの箇所は今の本文から削除されています。";
     default:
       return anchor.candidates.length === 0
-        ? "指摘の文は今の本文に見当たらず、近そうな箇所も見つかりませんでした。"
-        : `指摘の文は今の本文に見当たりません。近そうな箇所を ${anchor.candidates.length} つ挙げています。`;
+        ? "コメントの文は今の本文に見当たらず、近そうな箇所も見つかりませんでした。"
+        : `コメントの文は今の本文に見当たりません。近そうな箇所を ${anchor.candidates.length} つ挙げています。`;
   }
 }
 
@@ -725,10 +725,10 @@ function ThreadDetail({
           if (!(await restoreThread(before))) return;
           setSelectedId(before.id);
           await syncLedger(store);
-          notify(store, "指摘を戻しました");
+          notify(store, "コメントを戻しました");
         };
         setReviewUndo(restore);
-        notify(store, "指摘を削除しました", "center", {
+        notify(store, "コメントを削除しました", "center", {
           label: "元に戻す",
           run: () => void restore(),
         });
@@ -802,10 +802,10 @@ function ThreadDetail({
             disabled={!hasTarget}
             title={
               !hasTarget
-                ? "指摘の箇所も、近そうな箇所も見つかっていません"
+                ? "コメントの箇所も、近そうな箇所も見つかっていません"
                 : candidates > 1
                   ? "次の候補へ送る"
-                  : "本文の指摘の箇所へ戻る"
+                  : "本文のコメントの箇所へ戻る"
             }
             className="mg-side-open"
           >
@@ -928,7 +928,7 @@ function ThreadDetail({
           <button
             onClick={() => void drop()}
             disabled={removing}
-            title="指摘そのものを取り消す（解決の記録は残らない）"
+            title="コメントそのものを取り消す（解決の記録は残らない）"
             className="mg-act is-drop"
           >
             <Icon

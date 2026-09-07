@@ -140,8 +140,8 @@ export function Toolbar() {
           onClick={() => setReviewOpen(true)}
           title={
             openTotal > 0
-              ? `レビュー — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
-              : "レビュー (⌘⇧R)"
+              ? `コメント — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
+              : "コメント (⌘⇧R)"
           }
           className="relative flex h-8 items-center gap-1 rounded-lg px-2 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
         >

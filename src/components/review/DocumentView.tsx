@@ -30,8 +30,8 @@ export type Anchor =
   | { state: "unknown"; candidates: number[] };
 
 const SPOT_LABEL: Record<string, string> = {
-  unchanged: "指摘の箇所",
-  rewritten: "指摘の箇所（書き換え済み）",
+  unchanged: "コメントの箇所",
+  rewritten: "コメントの箇所（書き換え済み）",
   removed: "ここに在った",
 };
 
@@ -204,7 +204,7 @@ export function DocumentView({
             )}
             {isSpot && anchor.state === "rewritten" && (
               <div className="mg-before">
-                <div className="mg-before-label">指摘した時点</div>
+                <div className="mg-before-label">コメントした時点</div>
                 <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
                   <Markdown body={anchor.before} editorial={editorial} />
                 </div>

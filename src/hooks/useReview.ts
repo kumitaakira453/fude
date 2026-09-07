@@ -218,10 +218,10 @@ export function useReview({
         setReviewUndo(null);
         if (!(await restoreThread(thread))) return;
         await syncLedger(store);
-        notify(store, "指摘を戻しました", "right");
+        notify(store, "コメントを戻しました", "right");
       };
       setReviewUndo(restore);
-      notify(store, "指摘を削除しました", "right", {
+      notify(store, "コメントを削除しました", "right", {
         label: "元に戻す",
         run: () => void restore(),
       });
@@ -398,7 +398,7 @@ export function useReview({
           await syncLedger(store);
           setDraft(null);
           // この操作はレビュー画面の外（本文の上）で行うので、右下でも何とも重ならない。
-          notify(store, "指摘しました", "right");
+          notify(store, "コメントしました", "right");
         }
       } finally {
         setBusy(false);

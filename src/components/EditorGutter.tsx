@@ -669,7 +669,7 @@ export function EditorGutter({
         ? [
             {
               icon: "chat_bubble",
-              label: "指摘する",
+              label: "コメント",
               run: () =>
                 onComment(where.pos, {
                   from: at.pos + 1,
@@ -695,7 +695,7 @@ export function EditorGutter({
       ? [
           {
             icon: "chat_bubble",
-            label: "指摘する",
+            label: "コメント",
             run: () => onComment(where.pos),
           },
         ]

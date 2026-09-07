@@ -1268,7 +1268,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               }}
             >
               <Icon name="add_comment" size={14} />
-              指摘する
+              コメント
             </button>
             {review.selection.cellStart !== undefined && (
               <>
@@ -1281,7 +1281,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                   }}
                 >
                   <Icon name="table" size={14} />
-                  セルに指摘
+                  セルにコメント
                 </button>
               </>
             )}

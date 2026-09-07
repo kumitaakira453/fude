@@ -148,7 +148,7 @@ export function SelectionBar({
         <span className="mg-sel-menu-sep" />
         <button type="button" onMouseDown={run(() => onComment(), { keep: false })}>
           <Icon name="add_comment" size={14} />
-          指摘する
+          コメント
         </button>
       </div>
 

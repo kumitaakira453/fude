@@ -145,7 +145,7 @@ export interface NewThreadInput {
 // 版は「画面に出ていた全文」から作る。ディスクの内容ではなくこれを渡すので、
 // 指摘とその基準版が食い違わない。
 export async function createThread(input: NewThreadInput): Promise<string | null> {
-  return call(() => invoke<string>("review_create_thread", { ...input }), "指摘を作成できませんでした");
+  return call(() => invoke<string>("review_create_thread", { ...input }), "コメントを作成できませんでした");
 }
 
 export async function replyToThread(
@@ -163,7 +163,7 @@ export async function replyToThread(
 export async function removeThread(thread: string): Promise<boolean> {
   return attempt(
     () => invoke("review_remove", { thread }),
-    "指摘を取り消せませんでした",
+    "コメントを取り消せませんでした",
   );
 }
 
@@ -197,7 +197,7 @@ export async function resolveThread(thread: string, by: string): Promise<boolean
 export async function restoreThread(thread: ReviewThread): Promise<boolean> {
   return attempt(
     () => invoke("review_put_thread", { thread }),
-    "指摘を戻せませんでした",
+    "コメントを戻せませんでした",
   );
 }
 
@@ -249,7 +249,7 @@ export function reviewPrompt(
       .join("\n    ");
     const lines = [spot ? `- ${spot}` : "-"];
     if (target) lines.push(`    該当箇所: ${target}`);
-    if (says) lines.push(`    指摘: ${says}`);
+    if (says) lines.push(`    コメント: ${says}`);
     return lines.join("\n");
   });
   return `${file}\n\n${items.join(`\n\n${SEPARATOR}\n\n`)}\n`;

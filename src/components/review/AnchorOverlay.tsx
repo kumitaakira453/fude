@@ -130,7 +130,7 @@ export function AnchorOverlay({
       state: mark.guess
         ? "元の箇所が見つかりません。近いブロックに出しています"
         : mark.moved
-          ? "指摘のあと本文が書き換わっています"
+          ? "コメントのあと本文が書き換わっています"
           : "",
     });
   }, []);
@@ -316,7 +316,7 @@ export function AnchorOverlay({
             <span className="mg-peek-face">
               <Icon name="format_quote" size={12} fill />
             </span>
-            <span className="mg-peek-who">{peek.who || "指摘"}</span>
+            <span className="mg-peek-who">{peek.who || "コメント"}</span>
             {peek.at > 0 && <span className="mg-peek-when">{ago(peek.at)}</span>}
           </div>
           <div className="mg-review-peek-body">
@@ -347,7 +347,7 @@ export function AnchorOverlay({
             <button
               type="button"
               className="mg-peek-done"
-              title="この指摘を解決にする"
+              title="このコメントを解決にする"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
@@ -360,7 +360,7 @@ export function AnchorOverlay({
             <button
               type="button"
               className="mg-peek-drop"
-              title="この指摘を削除"
+              title="このコメントを削除"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();

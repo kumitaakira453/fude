@@ -280,7 +280,7 @@ function TreeItem({
       <span className="truncate">{displayName(node.name)}</span>
       {reviewCount > 0 && (
         <span
-          title={`未解決の指摘 ${reviewCount} 件`}
+          title={`未解決のコメント ${reviewCount} 件`}
           className="ml-auto shrink-0 rounded-full bg-[var(--mg-accent-soft)] px-1.5 text-[10.5px] font-medium text-[var(--mg-accent)]"
         >
           {reviewCount}

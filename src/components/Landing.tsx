@@ -121,7 +121,7 @@ export function Landing() {
                     {(counts.get(f.id) ?? 0) > 0 && (
                       <span
                         className="mg-landing-count"
-                        title={`未解決の指摘 ${counts.get(f.id)} 件`}
+                        title={`未解決のコメント ${counts.get(f.id)} 件`}
                       >
                         <Icon name="chat_bubble" size={11} fill />
                         {counts.get(f.id)}
