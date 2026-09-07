@@ -660,7 +660,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 走らせるのは開いたとき・台帳が変わったとき・本文が落ち着いたときだけで、
   // 打鍵の経路には乗せない。決めた位置はプラグインが transaction で写す。
   useEffect(() => {
-    if (!pm) return;
+    // 片付けた編集面には流さない。
+    //
+    // pm は控えなので、ファイルを切り替えた一枚では**まだ古い編集面を
+    // 指している**（子の後片付けが view を捨てても、setPm(null) が届くのは
+    // 次の描画）。同じ一枚で本文（draft）も変わるためこの効果が走り、
+    // 捨てた編集面へ transaction を流して ProseMirror の中で落ちていた
+    // （実機で再現: TypeError: null is not an object — this.docView）。
+    if (!pm || pm.view.isDestroyed) return;
     const view = pm.view;
     const list =
       review.threads.length === 0
@@ -781,7 +788,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // 編集面から指摘を始める。対象は編集モデルから組み立てる。
   const commentOnSpan = useCallback(() => {
-    if (!pm || !editSel) return;
+    if (!pm || pm.view.isDestroyed || !editSel) return;
     const target = targetOfSpan(
       pm.view.state.doc,
       pm.loaded(),
@@ -810,7 +817,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 受け取り、その範囲を対象にする。
   const commentOnNode = useCallback(
     (pos: number, span?: { from: number; to: number }) => {
-      if (!pm) return;
+      if (!pm || pm.view.isDestroyed) return;
       const doc = pm.view.state.doc;
       const target = span
         ? targetOfSpan(doc, pm.loaded(), fmPrefix, span.from, span.to)

@@ -25,7 +25,14 @@ export class ErrorBoundary extends Component<
             レンダリングエラーが発生しました
           </div>
           <pre className="mb-4 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--mg-border)] bg-[var(--mg-panel)] p-3 text-[11px] leading-relaxed text-[var(--mg-fg-dim)]">
-            {String(error.stack || error.message || error)}
+            {/* 名前と文を必ず頭に出す。WebKit の stack には文が入らないので、
+                stack だけを出すと「何が起きたか」が消える。 */}
+            {[
+              `${error.name ?? "Error"}: ${error.message || String(error)}`,
+              error.stack,
+            ]
+              .filter(Boolean)
+              .join("\n\n")}
           </pre>
           <button
             onClick={() => this.setState({ error: null })}
