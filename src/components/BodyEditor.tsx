@@ -591,11 +591,17 @@ export function BodyEditor({
       cancelAnimationFrame(tick);
       tick = requestAnimationFrame(() => {
         const box = scroller.getBoundingClientRect();
-        const hit = view.posAtCoords({ left: box.left + 8, top: box.top + 1 });
-        const $at = hit
-          ? view.state.doc.resolve(Math.min(hit.pos, view.state.doc.content.size))
-          : null;
-        const start = $at && $at.depth > 0 ? $at.before(1) : 0;
+        // 聞く点は本文の中に置く。入れ物の左端は横の余白と中央寄せのぶん
+        // 本文より外側にあり（実測で 166px）、そこを聞くと posAtCoords は
+        // 毎回 null を返す。null を 0 と同じに扱うと、控えは常に本文の先頭に
+        // なり「戻ってくると頭に居る」になる。聞けなかったら控えを触らない。
+        const inner = view.dom.getBoundingClientRect();
+        const hit = view.posAtCoords({ left: inner.left + 8, top: box.top + 1 });
+        if (!hit) return;
+        const $at = view.state.doc.resolve(
+          Math.min(hit.pos, view.state.doc.content.size),
+        );
+        const start = $at.depth > 0 ? $at.before(1) : 0;
         const seen = seenAt(view.state.doc, loaded, start);
         if (!seen) return;
         const dom = view.nodeDOM(seen.pos);
