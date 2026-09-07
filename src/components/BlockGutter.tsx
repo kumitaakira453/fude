@@ -20,6 +20,9 @@ import {
   tableGeometry,
   type Box,
   addBelow,
+  HOLD,
+  HOLD_GAP,
+  holdAt,
   roomBelow,
 } from "../lib/gutterGeom";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
@@ -831,8 +834,8 @@ export function BlockGutter({
               className="mg-grip mg-grip-hold"
               draggable
               style={{
-                top: view.table.top - ADD_AWAY - BAR / 2 - GRIP / 2,
-                left: view.table.left - ADD_AWAY - BAR / 2 - GRIP / 2,
+                top: view.table.top - HOLD_GAP - BAR / 2 - GRIP / 2,
+                left: view.table.left - HOLD_GAP - BAR / 2 - GRIP / 2,
                 width: GRIP,
                 height: GRIP,
               }}
@@ -869,10 +872,10 @@ export function BlockGutter({
               className="mg-grip mg-grip-hold mg-grip-bar"
               draggable
               style={{
-                top: view.row.top,
-                left: view.table.left - BAR - ADD_AWAY,
+                top: holdAt(view.row.top, view.row.height),
+                left: view.table.left - BAR - HOLD_GAP,
                 width: BAR,
-                height: view.row.height,
+                height: HOLD,
               }}
               onDragStart={hold("row", view.index, view.row.line, view.table)}
               onDragEnd={release}
@@ -907,9 +910,9 @@ export function BlockGutter({
               className="mg-grip mg-grip-hold mg-grip-bar"
               draggable
               style={{
-                top: view.table.top - BAR - ADD_AWAY,
-                left: view.col.left,
-                width: view.col.width,
+                top: view.table.top - BAR - HOLD_GAP,
+                left: holdAt(view.col.left, view.col.width),
+                width: HOLD,
                 height: BAR,
               }}
               onDragStart={hold("col", view.index, view.col.index, view.table)}

@@ -251,9 +251,80 @@ function selectionBoxes(
 //
 // 2 つ目は、カーソルと選択をまとめて測ってからまとめて書くこと。style を
 // 書くとレイアウトが無効になるので、書いた直後に測ると同期レイアウトが走る。
+// 表のセルの範囲（行・列の選択を含む）を、丸ごと囲んで示す。
+//
+// 選んだセルを 1 つずつ塗ると、行を選んだときに桁の切れ目が透けて「何を
+// 選んでいるのか」が読み取りにくい。Notion と同じく、塗らずに範囲を囲む。
+// 囲みは 1 つなので、触っているセルの枠（is-focused）は選んでいるあいだ
+// 出さない（tableKeys.ts）。
+function cellsBox(view: EditorView, host: HTMLElement) {
+  const box = document.createElement("div");
+  box.className = "mg-cells";
+  box.style.display = "none";
+  host.appendChild(box);
+  let was = "";
+
+  const measure = (): Rect | null => {
+    const { selection } = view.state;
+    if (!(selection instanceof CellSelection)) return null;
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    selection.forEachCell((_node, pos) => {
+      const dom = view.nodeDOM(pos);
+      if (!(dom instanceof HTMLElement)) return;
+      const rc = dom.getBoundingClientRect();
+      if (rc.height <= 0) return;
+      left = Math.min(left, rc.left);
+      top = Math.min(top, rc.top);
+      right = Math.max(right, rc.right);
+      bottom = Math.max(bottom, rc.bottom);
+    });
+    if (right <= left || bottom <= top) return null;
+    // 横に溢れる表は枠の中でスクロールする。見えている範囲で切る。
+    const wrap = view.dom.querySelector(".mg-table-wrap");
+    const base = host.getBoundingClientRect();
+    const clip = wrap?.contains(view.nodeDOM(selection.$anchorCell.pos) as Node)
+      ? wrap.getBoundingClientRect()
+      : null;
+    if (clip) {
+      left = Math.max(left, clip.left);
+      right = Math.min(right, clip.right);
+      if (right <= left) return null;
+    }
+    return {
+      left: left - base.left,
+      top: top - base.top,
+      width: right - left,
+      height: bottom - top,
+    };
+  };
+
+  const apply = (at: Rect | null) => {
+    if (!at) {
+      if (was === "") return;
+      was = "";
+      box.style.display = "none";
+      return;
+    }
+    const now = `${at.left},${at.top},${at.width},${at.height}`;
+    if (now === was) return;
+    was = now;
+    box.style.left = `${at.left}px`;
+    box.style.top = `${at.top}px`;
+    box.style.width = `${at.width}px`;
+    box.style.height = `${at.height}px`;
+    box.style.display = "block";
+  };
+
+  return { measure, apply, stop: () => box.remove() };
+}
+
 function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | null) {
   // 選択を先に置く。同じ z-index なので、後から足したカーソルが上に来る。
   const boxes = selectionBoxes(view, host, scroller);
+  const cells = cellsBox(view, host);
   const bar = caretBar(view, host);
 
   // 位置が変わる合図（スクロール・折り返し・焦点）の数。選択が同じでも
@@ -273,9 +344,11 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     if (now === sig) return;
     sig = now;
     const rects = boxes.measure(live);
+    const cellsAt = cells.measure();
     // 引いている間はカーソルの棒を出さない（範囲を選んでいるので要らない）。
     const at = live ? null : bar.measure();
     boxes.apply(rects);
+    cells.apply(cellsAt);
     bar.apply(at);
   };
 
@@ -340,6 +413,7 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
       watch.disconnect();
       cancelAnimationFrame(frame);
       bar.stop();
+      cells.stop();
       boxes.stop();
     },
   };

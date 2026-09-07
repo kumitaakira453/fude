@@ -1618,15 +1618,25 @@ body.mg-dragging .mg-sel-menu {
   box-shadow: inset 0 0 0 1px
     color-mix(in srgb, var(--mg-accent) 45%, transparent);
 }
-/* メニューの対象。どこを指しているかを薄く塗って示す。角は丸めず、
-   端の文字に触れないよう少し外へ広げる。 */
+/* メニューの対象。どこを指しているかを薄く塗って示す。
+   文字にぴったり付くと窮屈なので、左右に同じだけ余裕を持たせる。 */
 .mg-target {
   position: absolute;
-  margin: -4px 0 0 -6px;
-  padding: 4px 6px;
+  margin: -5px 0 0 -12px;
+  padding: 5px 12px;
   box-sizing: content-box;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--mg-accent) 14%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 40%, transparent);
+}
+/* 表の行・列を指しているとき。選んでいる状態と同じ見た目にする（塗らずに
+   囲むだけ）。塗ると、選んでいる箱と二重に見える。 */
+.mg-target-cells {
+  margin: 0;
+  padding: 0;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--mg-accent);
 }
 
 /* 掴んでいるあいだ、実体を薄くする。持ち上がったことがその場で分かるので、
@@ -3764,9 +3774,13 @@ body.mg-carrying {
   background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-panel));
   border-bottom-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
 }
-/* 表のセルを選んでいる状態。prosemirror-tables が付ける印に色を当てる。 */
-.mg-pm .selectedCell {
-  background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
+/* 表のセルを選んでいる状態。塗らずに、選んだ範囲を丸ごと囲んで示す
+   （囲みは編集面が重ねる .mg-cells。塗りと囲みを両方出すと二重に見える）。 */
+.mg-cells {
+  position: absolute;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 2px var(--mg-accent);
+  pointer-events: none;
 }
 /* 編集面の表は見出し行も tbody に入る。縞は見出しの次の行から数え直す。 */
 .mg-pm.mg-editorial tbody tr:nth-child(even) {

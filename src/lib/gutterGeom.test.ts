@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { addBelow, tableGeometry } from "./gutterGeom";
+import { addBelow, holdAt, tableGeometry } from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -153,5 +153,16 @@ describe("addBelow", () => {
     expect(addBelow(100, 8, GAP)).toBe(96);
     // 空きが無ければ下端をまたいで半分ずつ。
     expect(addBelow(100, 0, GAP)).toBe(100 - ADD / 2);
+  });
+});
+
+describe("holdAt", () => {
+  it("帯の真ん中に置く", () => {
+    // 高さ 60 の行に 20 のつまみ → 上下に 20 ずつ。
+    expect(holdAt(100, 60)).toBe(120);
+  });
+
+  it("帯がつまみより短ければ端に寄せる", () => {
+    expect(holdAt(100, 12)).toBe(100);
   });
 });

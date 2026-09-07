@@ -6,7 +6,7 @@ import {
   type Command,
   type EditorState,
 } from "prosemirror-state";
-import { cellAround, TableMap } from "prosemirror-tables";
+import { cellAround, CellSelection, TableMap } from "prosemirror-tables";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { covers } from "./decos";
 import { schema } from "./schema";
@@ -178,6 +178,9 @@ export const cellEnter: Command = (state, dispatch, view) => {
 // 印は状態に持つ（毎回作り直すと打鍵ごとに節点を描き直させてしまう）。
 // 同じセルの中を動いている間も作り直さない。
 function cellDecos(state: EditorState, prev: DecorationSet): DecorationSet {
+  // 行・列（セルの範囲）を選んでいるあいだは出さない。選んだ範囲は丸ごと
+  // 囲んで示すので、その中の 1 つに枠が残ると二重に見える。
+  if (state.selection instanceof CellSelection) return DecorationSet.empty;
   const $cell = cellAround(state.selection.$head);
   const cell = $cell?.nodeAfter;
   if (!$cell || !cell) return DecorationSet.empty;

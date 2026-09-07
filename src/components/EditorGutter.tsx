@@ -25,8 +25,10 @@ import {
 } from "../lib/md/tableActs";
 import {
   ADD,
-  ADD_AWAY,
   addBelow,
+  HOLD,
+  HOLD_GAP,
+  holdAt,
   BAR,
   BOTH,
   EDGE,
@@ -689,8 +691,8 @@ export function EditorGutter({
     ? null
     : geo
       ? {
-          top: geo.table.top - ADD_AWAY - BAR / 2 - GRIP / 2,
-          left: geo.table.left - ADD_AWAY - BAR / 2 - GRIP / 2,
+          top: geo.table.top - HOLD_GAP - BAR / 2 - GRIP / 2,
+          left: geo.table.left - HOLD_GAP - BAR / 2 - GRIP / 2,
         }
       : {
           top: (spot.item ? spot.item.mid : spot.line) - GRIP / 2,
@@ -746,10 +748,10 @@ export function EditorGutter({
               title="ドラッグで移動 / クリックでメニュー"
               className="mg-grip mg-grip-hold mg-grip-bar"
               style={{
-                top: geo.row.top,
-                left: geo.table.left - BAR - ADD_AWAY,
+                top: holdAt(geo.row.top, geo.row.height),
+                left: geo.table.left - BAR - HOLD_GAP,
                 width: BAR,
-                height: geo.row.height,
+                height: HOLD,
               }}
               onMouseDown={hold("row", spot, geo.row.index)}
               onClick={open("row", spot, geo.row.index)}
@@ -765,9 +767,9 @@ export function EditorGutter({
               title="ドラッグで移動 / クリックでメニュー"
               className="mg-grip mg-grip-hold mg-grip-bar"
               style={{
-                top: geo.table.top - BAR - ADD_AWAY,
-                left: geo.col.left,
-                width: geo.col.width,
+                top: geo.table.top - BAR - HOLD_GAP,
+                left: holdAt(geo.col.left, geo.col.width),
+                width: HOLD,
                 height: BAR,
               }}
               onMouseDown={hold("col", spot, geo.col.index)}
@@ -827,7 +829,7 @@ export function EditorGutter({
           )}
           {menu?.kind === "row" && geo?.row && (
             <div
-              className="mg-target"
+              className="mg-target mg-target-cells"
               style={{
                 top: geo.row.top,
                 left: geo.table.left,
@@ -838,7 +840,7 @@ export function EditorGutter({
           )}
           {menu?.kind === "col" && geo?.col && (
             <div
-              className="mg-target"
+              className="mg-target mg-target-cells"
               style={{
                 top: geo.table.top,
                 left: geo.col.left,

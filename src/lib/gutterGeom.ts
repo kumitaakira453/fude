@@ -262,3 +262,18 @@ export function roomBelow(
     : content.getBoundingClientRect().bottom;
   return Math.max(0, top - bottom);
 }
+
+// 行・列を掴むつまみの短辺。行は高さ、列は幅がこれになる。
+//
+// 表の縁いっぱいに伸ばすと、どの行を掴んでいるのかは分かるが、選んでいる
+// 範囲の囲みと二重の主張になる。Notion と同じく短いつまみにして、囲みに
+// 「どこが対象か」を任せる。
+export const HOLD = 20;
+
+// つまみと表の縁の間。
+export const HOLD_GAP = 5;
+
+// 帯の真ん中に短いつまみを置く。start は行の上端 / 列の左端。
+export function holdAt(start: number, length: number): number {
+  return start + Math.max(0, length - HOLD) / 2;
+}
