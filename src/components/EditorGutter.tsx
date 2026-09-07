@@ -643,8 +643,10 @@ export function EditorGutter({
         }
       : {
           top: (spot.item ? spot.item.mid : spot.line) - GRIP / 2,
+          // 置き始めはブロック自身の左端。編集面は幅を絞って中央寄せなので、
+          // 入れ物の左端から置くと余白のぶんだけ離れて出る。
           left:
-            (spot.item ? spot.item.edge : 0) +
+            (spot.item ? spot.item.edge : spot.box.left) +
             (room >= ONLY ? -(wide ? BOTH : ONLY) : 2),
         };
 
