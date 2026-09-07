@@ -84,18 +84,22 @@ export function setDragTablePart(
       }
       room += heights[i];
     }
+    // 数えるのは控えの並びで。消すたびに残った升目の cellIndex がずれるので、
+    // それを見ると狙った列まで消える（先頭の列だけ偶然通っていた）。
     for (const row of Array.from(copy.rows)) {
-      for (const cell of Array.from(row.cells)) {
-        if (cell.cellIndex !== at) cell.remove();
+      const cells = Array.from(row.cells);
+      for (let i = cells.length - 1; i >= 0; i--) {
+        if (i !== at) cells[i].remove();
       }
     }
   }
 
   // 残した升目の桁を実測の幅で固定する。
   for (const row of Array.from(copy.rows)) {
-    for (const cell of Array.from(row.cells)) {
-      const width = widths[kind === "col" ? at : cell.cellIndex];
-      if (width) cell.style.width = `${width}px`;
+    const cells = Array.from(row.cells);
+    for (let i = 0; i < cells.length; i++) {
+      const width = widths[kind === "col" ? at : i];
+      if (width) cells[i].style.width = `${width}px`;
     }
   }
 
