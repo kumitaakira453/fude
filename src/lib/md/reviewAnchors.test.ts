@@ -273,3 +273,46 @@ describe("targetOfSpan / targetOfBlock", () => {
     expect(target?.quote).toBe(body.trimEnd());
   });
 });
+
+describe("箇条書きの項目を対象にする", () => {
+  const LIST = `- ひとつめ\n- ふたつめ\n- みつめ\n`;
+
+  // 項目の中身の範囲。つまみのメニューが渡すもの。
+  function itemSpan(state: EditorState, index: number) {
+    const list = state.doc.child(0);
+    let at = 1;
+    for (let i = 0; i < index; i++) at += list.child(i).nodeSize;
+    const item = list.child(index);
+    return { from: at + 1, to: at + item.nodeSize - 1 };
+  }
+
+  it("相手はリストの塊で、範囲はその項目", () => {
+    const { loaded, state } = opened(LIST);
+    const span = itemSpan(state, 1);
+    const target = targetOfSpan(state.doc, loaded, "", span.from, span.to);
+    expect(target?.pos).toBe(0);
+    expect(target?.quote).toBe(LIST.trimEnd());
+    expect(target?.text).toBe("ふたつめ");
+  });
+
+  it("項目の位置は、リストの中の表示文字の位置になる", () => {
+    const { loaded, state } = opened(LIST);
+    const target = targetOfSpan(
+      state.doc,
+      loaded,
+      "",
+      itemSpan(state, 1).from,
+      itemSpan(state, 1).to,
+    );
+    // 1 つめの「ひとつめ」（4 文字）の次から。
+    expect(target?.offset).toBe(4);
+  });
+
+  it("最後の項目でも範囲が丸まらない", () => {
+    const { loaded, state } = opened(LIST);
+    const span = itemSpan(state, 2);
+    expect(
+      targetOfSpan(state.doc, loaded, "", span.from, span.to)?.text,
+    ).toBe("みつめ");
+  });
+});

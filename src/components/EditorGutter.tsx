@@ -227,8 +227,9 @@ export function EditorGutter({
   view: EditorView;
   host: HTMLElement;
   scroller: HTMLElement | null;
-  // ブロック全体への指摘。渡されたときだけメニューに出す。
-  onComment?: (pos: number) => void;
+  // 指摘する。ブロック丸ごとなら pos だけ、箇条書きの項目のように中の一部を
+  // 相手にするなら範囲も渡す。渡されたときだけメニューに出す。
+  onComment?: (pos: number, span?: { from: number; to: number }) => void;
 }) {
   const [spot, setSpot] = useState<Spot | null>(null);
   const [menu, setMenu] = useState<{
@@ -661,7 +662,24 @@ export function EditorGutter({
     const at = where.item;
     if (!at) return [];
     const run = (a: ItemAct) => () => runItem(at.pos, a);
+    // 項目への指摘。相手はリストの塊で、範囲はその項目の中身。
+    const node = view.state.doc.nodeAt(at.pos);
+    const comment: MenuItem[] =
+      onComment && node
+        ? [
+            {
+              icon: "chat_bubble",
+              label: "指摘する",
+              run: () =>
+                onComment(where.pos, {
+                  from: at.pos + 1,
+                  to: at.pos + node.nodeSize - 1,
+                }),
+            },
+          ]
+        : [];
     return [
+      ...comment,
       { icon: "arrow_upward", label: "上に挿入", run: run("insertBefore") },
       { icon: "arrow_downward", label: "下に挿入", run: run("insertAfter") },
       { icon: "content_copy", label: "複製", run: run("duplicate") },

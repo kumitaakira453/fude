@@ -803,24 +803,36 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     reviewRef.current?.startDraftIn({ ...target, rect: editSel.rect });
   }, [pm, editSel, fmPrefix]);
 
-  // ブロック全体への指摘。つまみのメニューから呼ぶ。図のように選べる文字を
-  // 持たないブロックでも付けられる。
+  // つまみのメニューからの指摘。
+  //
+  // ブロック丸ごとなら pos だけ（図のように選べる文字を持たないブロックにも
+  // 付けられる）。箇条書きの項目のように中の一部を相手にするときは範囲も
+  // 受け取り、その範囲を対象にする。
   const commentOnNode = useCallback(
-    (pos: number) => {
+    (pos: number, span?: { from: number; to: number }) => {
       if (!pm) return;
-      const target = targetOfBlock(pm.view.state.doc, pm.loaded(), fmPrefix, pos);
+      const doc = pm.view.state.doc;
+      const target = span
+        ? targetOfSpan(doc, pm.loaded(), fmPrefix, span.from, span.to)
+        : targetOfBlock(doc, pm.loaded(), fmPrefix, pos);
       if (!target) return;
-      const dom = pm.view.nodeDOM(pos);
-      const box =
-        dom instanceof HTMLElement ? dom.getBoundingClientRect() : null;
-      reviewRef.current?.startDraftIn({
-        ...target,
-        rect: {
-          top: box?.top ?? 0,
-          bottom: box?.bottom ?? 0,
-          left: box?.left ?? 0,
-        },
-      });
+      // 小窓を出す位置。範囲のときはその頭、丸ごとのときはブロックの箱。
+      let rect = { top: 0, bottom: 0, left: 0 };
+      if (span) {
+        try {
+          const at = pm.view.coordsAtPos(span.from);
+          rect = { top: at.top, bottom: at.bottom, left: at.left };
+        } catch {
+          /* 測れない場所では画面の左上から出す */
+        }
+      } else {
+        const dom = pm.view.nodeDOM(pos);
+        if (dom instanceof HTMLElement) {
+          const box = dom.getBoundingClientRect();
+          rect = { top: box.top, bottom: box.bottom, left: box.left };
+        }
+      }
+      reviewRef.current?.startDraftIn({ ...target, rect });
     },
     [pm, fmPrefix],
   );
