@@ -1284,7 +1284,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             busy={review.busy}
             track={trackEditDraft}
             bounds={editArea}
-            onSubmit={(text) => void review.submit(text)}
+            onSubmit={(text) => {
+              // 先に書き出す。版はいま画面に出ている全文なので、ファイルが
+              // それより古いままだと、対応付けが古い本文と突き合わせて
+              // 付けた直後だけ居場所を見失う。
+              flushRef.current?.();
+              void review.submit(text);
+            }}
             onClose={review.close}
           />
         )}
