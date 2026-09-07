@@ -11,12 +11,13 @@ import { calloutIcoAt, setCalloutIcon } from "../lib/md/calloutIcon";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
+import { closeEmoji, emojiKey, takeEmoji } from "../lib/md/emoji";
 import { editorPlugins } from "../lib/md/plugins";
 import { domSpan, type Span } from "../lib/md/domSpan";
 import { seenAt } from "../lib/md/seenAt";
 import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
-import { IconBoard } from "./CalloutIcon";
+import { EmojiBoard } from "./EmojiBoard";
 import { EditorGutter } from "./EditorGutter";
 import { MermaidModal } from "./MermaidModal";
 
@@ -489,6 +490,16 @@ export function BodyEditor({
     null,
   );
 
+  // ":" と /emoji から出す盤。位置と絞り込みはプラグインが持っているので、
+  // ここは出す場所だけを控える。
+  const [emoji, setEmoji] = useState<{
+    x: number;
+    y: number;
+    query: string;
+    active: number;
+    bare?: boolean;
+  } | null>(null);
+
   // 開いているアイコンの盤。押されたときに差し替えの手ごと持つので、後から
   // 節点を探し直さない。seq は開くたびに増やし、盤を作り直させる。
   const [picking, setPicking] = useState<{
@@ -576,9 +587,40 @@ export function BodyEditor({
         // 打鍵の経路に置くのはここまで。組み直しは手を止めてから。
         if (tr.docChanged) send();
         paint.now();
+        showEmoji(view);
       },
     });
     const paint = painter(view, at, scroller);
+
+    // 絵文字の盤を出す / 消す。打鍵のたびに React を描き直さないよう、
+    // 変わったときだけ控えを差し替える。
+    let shown = "";
+    const showEmoji = (v: EditorView) => {
+      const now = emojiKey.getState(v.state);
+      const sig = now
+        ? `${now.from},${now.query},${now.active},${now.bare ? 1 : 0}`
+        : "";
+      if (sig === shown) return;
+      shown = sig;
+      if (!now) {
+        setEmoji(null);
+        return;
+      }
+      let spot: { top: number; bottom: number; left: number };
+      try {
+        spot = v.coordsAtPos(now.from);
+      } catch {
+        setEmoji(null);
+        return;
+      }
+      setEmoji({
+        x: spot.left,
+        y: spot.bottom + 6,
+        query: now.query,
+        active: now.active,
+        bare: now.bare,
+      });
+    };
 
     // 組み直して親へ渡す。ここだけが重いので、打鍵の経路から外してある。
     const send = throttled(
@@ -720,7 +762,7 @@ export function BodyEditor({
         />
       )}
       {picking && (
-        <IconBoard
+        <EmojiBoard
           key={picking.seq}
           x={picking.x}
           y={picking.y}
@@ -728,7 +770,23 @@ export function BodyEditor({
             picking.apply(value);
             setPicking(null);
           }}
+          onClear={() => {
+            picking.apply("");
+            setPicking(null);
+          }}
           onClose={() => setPicking(null)}
+        />
+      )}
+
+      {/* 本文の ":" と /emoji から出す盤。位置と絞り込みはプラグインが持つ。 */}
+      {built && emoji && (
+        <EmojiBoard
+          x={emoji.x}
+          y={emoji.y}
+          query={emoji.bare ? undefined : emoji.query}
+          active={emoji.bare ? undefined : emoji.active}
+          onPick={(char) => takeEmoji(built.view, char)}
+          onClose={() => closeEmoji(built.view)}
         />
       )}
       {zoomed && (

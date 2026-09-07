@@ -17,6 +17,7 @@ import {
 } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { icon } from "./nodeViews";
+import { openEmojiBoard } from "./emoji";
 import { DETAILS_HEAD, schema } from "./schema";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
@@ -208,6 +209,18 @@ export const SLASH_ITEMS: SlashItem[] = [
     hint: "",
     aliases: ["callout", "note", "info", "kooruauto", "囲み"],
     run: toWrapper(schema.nodes.callout, { icon: "💡", color: null }),
+  },
+  {
+    id: "emoji",
+    label: "絵文字",
+    icon: "mood",
+    hint: ":",
+    aliases: ["emoji", "emo", "icon", "絵文字", "顔"],
+    run: (_state, _dispatch, view) => {
+      if (!view) return false;
+      openEmojiBoard(view);
+      return true;
+    },
   },
   {
     id: "table",

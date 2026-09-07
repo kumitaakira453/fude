@@ -278,6 +278,8 @@ const CASES: { id: string; query: string; want: string }[] = [
     want: "あ\n\n<details>\n<summary>トグル</summary>\n\nい\n\n</details>\n",
   },
   { id: "callout", query: "callout", want: 'あ\n\n<callout icon="💡">\nい\n</callout>\n' },
+  // 絵文字は構造を作らない。盤を出すだけなので、本文は打った分だけになる。
+  { id: "emoji", query: "emoji", want: "あ\n\nい\n" },
   {
     id: "table",
     query: "table",
@@ -392,5 +394,12 @@ describe("テキストに戻す", () => {
     expect(press(view, "Enter")).toBe(true);
     expect(view.state.doc.child(0).type.name).toBe("paragraph");
     expect(source()).toBe("題\n");
+  });
+});
+
+describe("絵文字", () => {
+  it("一覧に出て、別名でも当たる", () => {
+    expect(slashItems("emoji").map((i) => i.id)).toContain("emoji");
+    expect(slashItems("絵文字")[0]?.id).toBe("emoji");
   });
 });

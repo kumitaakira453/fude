@@ -857,8 +857,52 @@ button.mg-task-check:hover {
   font-size: 1rem;
   line-height: 1;
 }
-.mg-ico-grid > button:hover {
+.mg-ico-grid > button:hover,
+.mg-ico-grid > button.is-on {
   background: var(--mg-hover);
+}
+/* 絵文字の盤。分類ごとに並べるので縦に長い。中だけをスクロールさせ、
+   検索欄と分類のタブは端に留める。 */
+.mg-emoji-pick {
+  display: flex;
+  width: 20.5rem;
+  max-height: 23rem;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mg-emoji-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.mg-emoji-pick .mg-ico-grid > button {
+  height: 1.85rem;
+  font-size: 1.05rem;
+}
+.mg-emoji-wait {
+  padding: 1.5rem 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--mg-muted);
+}
+.mg-emoji-tabs {
+  display: flex;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--mg-border);
+  gap: 0.1rem;
+}
+.mg-emoji-tabs > button {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  color: var(--mg-muted);
+}
+.mg-emoji-tabs > button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-accent);
 }
 
 /* 書き込みの書き直し。吹き出しに重ねて、普段は薄く置く。 */

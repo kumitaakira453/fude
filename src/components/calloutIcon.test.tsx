@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { loadEmoji } from "../lib/emoji";
 import { BodyEditor } from "./BodyEditor";
 import { CalloutIcon } from "./CalloutIcon";
 import { Markdown } from "./Markdown";
@@ -57,6 +58,30 @@ afterEach(() => {
 
 const board = () => document.querySelector(".mg-ico-pick");
 
+// 盤の中身（絵文字の一覧）は必要になってから読む。読み終わるまで格子は空なので、
+// 中を見る前に待つ。
+async function settle() {
+  await loadEmoji();
+  // 盤は読み終わりを .then で受けるので、React が描き直すまで 1 手待つ。
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 0));
+  });
+}
+
+// 格子の 1 つを選ぶ。押しても本文のカーソルを動かさないよう、盤は押し下げで
+// 決めている。
+//
+// 探すのは頭の一致。emojibase の字には「絵として出す」印（U+FE0F）が付いて
+// いるものがあり、素の字と逐語では当たらない。選んだ字そのものを返す。
+const choose = (glyph: string): string => {
+  const cell = [...board()!.querySelectorAll(".mg-ico-grid > button")].find((b) =>
+    b.textContent?.startsWith(glyph),
+  );
+  expect(cell).toBeDefined();
+  send(cell!, "mousedown");
+  return cell!.textContent!;
+};
+
 // 押下を配る。盤は click で出し、閉じるのは mousedown を見ているので、
 // どちらを配ったかで結果が変わる。
 const send = (el: Element, type: string) =>
@@ -98,20 +123,16 @@ describe("編集面", () => {
     expect(board()).not.toBeNull();
   });
 
-  it("盤から選ぶとアイコンが差し替わる", () => {
+  it("盤から選ぶとアイコンが差し替わる", async () => {
     const at = editor();
     const ico = at.querySelector(".mg-callout-ico")!;
     send(ico, "mousedown");
     send(ico, "click");
+    await settle();
 
-    const pick = [...board()!.querySelectorAll(".mg-ico-grid > button")].find(
-      (b) => b.textContent === "✅",
-    );
-    expect(pick).toBeDefined();
-    send(pick!, "click");
-
+    const picked = choose("✅");
     expect(board()).toBeNull();
-    expect(at.querySelector(".mg-callout-ico")?.textContent).toBe("✅");
+    expect(at.querySelector(".mg-callout-ico")?.textContent).toBe(picked);
   });
 
   it("外すと属性ごと落ちる", () => {
@@ -126,7 +147,7 @@ describe("編集面", () => {
 });
 
 describe("読むとき", () => {
-  it("印が出ていて、押すとその塊の番号で盤が出る", () => {
+  it("印が出ていて、押すとその塊の番号で盤が出る", async () => {
     const picked: [number, string][] = [];
     const at = mount(
       <div className="mg-prose">
@@ -162,13 +183,9 @@ describe("読むとき", () => {
 
     send(at.querySelector("[data-mg-callout-ico]")!, "click");
     expect(board()).not.toBeNull();
+    await settle();
 
-    send(
-      [...board()!.querySelectorAll(".mg-ico-grid > button")].find(
-        (b) => b.textContent === "✅",
-      )!,
-      "click",
-    );
-    expect(picked).toEqual([[3, "✅"]]);
+    const glyph = choose("✅");
+    expect(picked).toEqual([[3, glyph]]);
   });
 });
