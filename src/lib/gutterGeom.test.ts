@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { addBelow, holdAt, tableGeometry } from "./gutterGeom";
+import { addBelow, holdAt, onLine, tableGeometry } from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -164,5 +164,12 @@ describe("holdAt", () => {
 
   it("帯がつまみより短ければ端に寄せる", () => {
     expect(holdAt(100, 12)).toBe(100);
+  });
+});
+
+describe("onLine", () => {
+  it("枠線の真ん中に載る", () => {
+    // 幅 15 のつまみを x=100 の線に載せる → 92.5 から 107.5。
+    expect(onLine(100, 15)).toBe(92.5);
   });
 });

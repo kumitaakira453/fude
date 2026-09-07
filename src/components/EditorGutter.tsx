@@ -29,6 +29,7 @@ import {
   HOLD,
   HOLD_GAP,
   holdAt,
+  onLine,
   BAR,
   BOTH,
   EDGE,
@@ -691,8 +692,8 @@ export function EditorGutter({
     ? null
     : geo
       ? {
-          top: geo.table.top - HOLD_GAP - BAR / 2 - GRIP / 2,
-          left: geo.table.left - HOLD_GAP - BAR / 2 - GRIP / 2,
+          top: geo.table.top,
+          left: geo.table.left - GRIP - HOLD_GAP,
         }
       : {
           top: (spot.item ? spot.item.mid : spot.line) - GRIP / 2,
@@ -749,7 +750,7 @@ export function EditorGutter({
               className="mg-grip mg-grip-hold mg-grip-bar"
               style={{
                 top: holdAt(geo.row.top, geo.row.height),
-                left: geo.table.left - BAR - HOLD_GAP,
+                left: onLine(geo.table.left, BAR),
                 width: BAR,
                 height: HOLD,
               }}
@@ -767,7 +768,7 @@ export function EditorGutter({
               title="ドラッグで移動 / クリックでメニュー"
               className="mg-grip mg-grip-hold mg-grip-bar"
               style={{
-                top: geo.table.top - BAR - HOLD_GAP,
+                top: onLine(geo.table.top, BAR),
                 left: holdAt(geo.col.left, geo.col.width),
                 width: HOLD,
                 height: BAR,

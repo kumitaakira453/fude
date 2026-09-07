@@ -668,29 +668,58 @@ export function BodyEditor({
     document.addEventListener("visibilitychange", onLeave);
 
     onDom?.(view.dom);
-    onBuilt?.({ view, host: at, loaded: () => loaded });
     setBuilt({ view, host: at, scroller });
     view.focus();
     paint.draw();
 
+    // 触れる状態になったと親へ知らせる。
+    //
+    // 組み上がった時点ではまだ言えない。この後に見ていた場所へ合わせ込みが
+    // 走り、実測で 800ms ほど本文が流れ続ける（900 ブロックで組み上がり
+    // 351ms → 落ち着き 1444ms）。そこで骨組みを外すと、字は出ていて焦点も
+    // あるのに本文が動いていく状態になる。**落ち着いてから知らせる。**
+    const ready = () => onBuilt?.({ view, host: at, loaded: () => loaded });
+
     // 開いた位置へ合わせる。字体や画像で高さが決まるまで数フレームかかる。
+    // 動かなくなったら打ち切る（回数で決め打ちすると、落ち着いた後も待つ）。
     let raf = 0;
     if (scroller && target) {
-      let left = 8;
+      // 打ち切りまでの枚数。合わせ込みは 1 度では終わらない（上のブロックの
+      // 高さが字体や画像で決まっていく分だけ狙いが動く）。実測で 900 ブロック
+      // では落ち着くまで 500ms ほどかかるので、そこを待てる枚数にしておく。
+      let left = 45;
+      let still = 0;
       const align = () => {
-        const dom = view.nodeDOM(target.pos);
-        const el = dom instanceof HTMLElement ? dom : null;
-        if (el) {
-          const delta =
-            el.getBoundingClientRect().top -
-            scroller.getBoundingClientRect().top +
-            (viewpoint?.into ?? 0);
-          if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
+        let moved = false;
+        try {
+          const dom = view.nodeDOM(target.pos);
+          const el = dom instanceof HTMLElement ? dom : null;
+          if (el) {
+            const delta =
+              el.getBoundingClientRect().top -
+              scroller.getBoundingClientRect().top +
+              (viewpoint?.into ?? 0);
+            if (Math.abs(delta) > 0.5) {
+              scroller.scrollTop += delta;
+              moved = true;
+            }
+          }
+        } catch {
+          // 測れないときは合わせるのを諦める。ここで止まると骨組みが
+          // 外れないまま残る（触れないより、ずれて出す方がまし）。
+          ready();
+          return;
         }
-        if (--left > 0) raf = requestAnimationFrame(align);
+        still = moved ? 0 : still + 1;
+        if (still >= 3 || --left <= 0) {
+          ready();
+          return;
+        }
+        raf = requestAnimationFrame(align);
       };
-      align();
       raf = requestAnimationFrame(align);
+    } else {
+      ready();
     }
 
     // 動かした位置を控える。読むときと同じ数え方（原文の先頭からの文字数）。

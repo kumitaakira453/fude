@@ -270,8 +270,15 @@ export function roomBelow(
 // 「どこが対象か」を任せる。
 export const HOLD = 20;
 
-// つまみと表の縁の間。
+// 表そのものを掴むつまみと、表の縁の間。
 export const HOLD_GAP = 5;
+
+// 行・列のつまみは、帯の外に離して置かずに**枠線の上へ載せる**。
+// 外へ出すと表からも離れて、どの行のものか読み取りにくい。線をまたぐと
+// 「その線から掴む」ように見える（Notion と同じ）。
+export function onLine(edge: number, thick: number): number {
+  return edge - thick / 2;
+}
 
 // 帯の真ん中に短いつまみを置く。start は行の上端 / 列の左端。
 export function holdAt(start: number, length: number): number {

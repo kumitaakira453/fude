@@ -254,11 +254,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return () => window.clearTimeout(t);
   }, [editing, raw, draft]);
 
-  // 組み上がったら印を消す。子の効果が先に走るので、この時点で編集面はできている。
-  useEffect(() => {
-    setSwitching(false);
-  }, [editing]);
-
 
   // ファイル切替で編集モード解除。書きかけは編集面の後片付けが流すので、
   // ここでは何も書かない（切り替える前の path 向けの onChange が呼ばれる）。
@@ -648,6 +643,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // 組み立てた編集面。指摘の印は本文の DOM ではなく編集モデルから位置を出す。
   const [pm, setPm] = useState<Editing | null>(null);
+  // 印を下ろすのは、行き先が触れる状態になったとき。
+  //
+  // 編集面は組み上がりでは足りない（この後に見ていた場所への合わせ込みが
+  // 走る）。骨組みを外す合図（pm）と同じものを見て、2 つの印が食い違わない
+  // ようにする。読むときは本文の入れ物が出たとき。
+  useEffect(() => {
+    if (editing ? pm : content) setSwitching(false);
+  }, [editing, pm, content]);
+
   // 当て直した回数。印を測り直させる合図（当て直しでは DOM が動かないので、
   // AnchorOverlay の observer には何も届かない）。
   const [anchorSeq, setAnchorSeq] = useState(0);

@@ -1640,8 +1640,10 @@ body.mg-dragging .mg-sel-menu {
 }
 /* 表の行・列のつまみ。掴める帯だと分かるよう、薄く地を敷く。 */
 /* 表の行・列を掴む帯。Notion に倣って角を丸めた小さな帯にする。 */
+/* 行・列を掴むつまみ。枠線の上に載せるので、地は透かさない
+   （線が透けると、つまみが線に埋まって見える）。 */
 .mg-grip-bar {
-  background: color-mix(in srgb, var(--mg-fg) 7%, transparent);
+  background: color-mix(in srgb, var(--mg-fg) 8%, var(--mg-bg));
   border-radius: 999px;
 }
 .mg-grip-bar:hover {

@@ -23,6 +23,7 @@ import {
   HOLD,
   HOLD_GAP,
   holdAt,
+  onLine,
   roomBelow,
 } from "../lib/gutterGeom";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
@@ -834,8 +835,8 @@ export function BlockGutter({
               className="mg-grip mg-grip-hold"
               draggable
               style={{
-                top: view.table.top - HOLD_GAP - BAR / 2 - GRIP / 2,
-                left: view.table.left - HOLD_GAP - BAR / 2 - GRIP / 2,
+                top: view.table.top,
+                left: view.table.left - GRIP - HOLD_GAP,
                 width: GRIP,
                 height: GRIP,
               }}
@@ -873,7 +874,7 @@ export function BlockGutter({
               draggable
               style={{
                 top: holdAt(view.row.top, view.row.height),
-                left: view.table.left - BAR - HOLD_GAP,
+                left: onLine(view.table.left, BAR),
                 width: BAR,
                 height: HOLD,
               }}
@@ -910,7 +911,7 @@ export function BlockGutter({
               className="mg-grip mg-grip-hold mg-grip-bar"
               draggable
               style={{
-                top: view.table.top - BAR - HOLD_GAP,
+                top: onLine(view.table.top, BAR),
                 left: holdAt(view.col.left, view.col.width),
                 width: HOLD,
                 height: BAR,
