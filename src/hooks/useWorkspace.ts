@@ -274,8 +274,10 @@ export function useWorkspace() {
 
   // フォルダを開く。file を渡すと、そのファイルはツリーの走査を待たずに出す。
   // 走査は数百〜千のファイルを辿るので、待つと本文が出るまでが目に見えて遅い。
+  //
+  // only を渡すと「そのファイルだけの窓」として開く。控えのレイアウトは使わない。
   const openFolder = useCallback(
-    async (path: string, opts: { file?: string } = {}) => {
+    async (path: string, opts: { file?: string; only?: boolean } = {}) => {
       const now = Math.floor(performance.timeOrigin + performance.now());
       const folders = await registerFolder(path, now);
       store.set(A.foldersAtom, folders);
@@ -286,9 +288,11 @@ export function useWorkspace() {
       });
       // 永続化 effect に上書きされる前に保存レイアウトを先読みしておく。
       // このウィンドウでの控えが無ければ、ウィンドウを問わない控えを使う。
+      // ただし「そのファイルだけの窓」を頼まれているときは落ちない。他の
+      // ウィンドウで開いていたタブを並べ直すと、窓を複製しただけになる。
       const saved =
         store.get(A.savedLayoutsAtom)[activeId] ??
-        store.get(A.sessionLayoutsAtom)[activeId];
+        (opts.only ? undefined : store.get(A.sessionLayoutsAtom)[activeId]);
       store.set(A.activeFolderIdAtom, activeId);
       resetLayout(store);
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化

@@ -27,12 +27,12 @@ export function useUrlSync() {
 
   const applyUrl = useRef(
     async (
-      state: { folderId?: string; file?: string },
+      state: { folderId?: string; file?: string; only?: boolean },
       opts: { force?: boolean } = {},
     ) => {
       applyingRef.current = true;
       try {
-        const { folderId, file } = state;
+        const { folderId, file, only } = state;
         if (!folderId) {
           store.set(A.activeFolderIdAtom, null);
           return;
@@ -44,7 +44,9 @@ export function useUrlSync() {
         }
         if (store.get(A.activeFolderIdAtom) !== folderId) {
           // 開くファイルが決まっているなら、ツリーの走査より先に出させる
-          await openFolder(entry.path, { file });
+          // only は「そのファイルだけの窓」として開かれた印。控えの
+          // レイアウトを並べ直さず、頼まれたファイルだけを出す。
+          await openFolder(entry.path, { file, only });
         }
         // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
         // 戻る/進む(popstate)では force で必ず切り替える。

@@ -52,7 +52,8 @@ export async function openDocWindow(
   at?: DropPoint,
 ): Promise<void> {
   await invoke("open_doc_window", {
-    url: `index.html${buildHash(folderId, file)}`,
+    // ファイルを指しているなら「そのファイルだけの窓」として印を付ける。
+    url: `index.html${buildHash(folderId, file, !!file)}`,
     title,
     x: at?.x ?? null,
     y: at?.y ?? null,
