@@ -28,9 +28,16 @@ export const reviewScreenAtom = atom(false);
 export const reviewThreadAtom = atom<string | null>(null);
 
 // 未解決の総数。ツールバーの入口に出す。
-export const openTotalAtom = atom(
-  (get) => get(ledgerAtom).threads.filter(isOpen).length,
-);
+//
+// 台帳はマシンに 1 つで、他のフォルダの指摘も入っている。入口の数はいま開いて
+// いるフォルダの分だけにする（他のフォルダの分はレビュー画面が「他のフォルダに
+// N 件」として別に出す）。ファイルごとの数から足して、ツリーの数字と必ず
+// 合うようにする。
+export const openTotalAtom = atom((get) => {
+  let total = 0;
+  for (const count of get(openCountsAtom).values()) total += count;
+  return total;
+});
 
 export async function refreshLedger(store: Store): Promise<void> {
   store.set(ledgerAtom, await loadLedger());

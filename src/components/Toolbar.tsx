@@ -138,7 +138,11 @@ export function Toolbar() {
         <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
         <button
           onClick={() => setReviewOpen(true)}
-          title="レビュー (⌘⇧R)"
+          title={
+            openTotal > 0
+              ? `レビュー — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
+              : "レビュー (⌘⇧R)"
+          }
           className="relative flex h-8 items-center gap-1 rounded-lg px-2 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
         >
           <Icon name="rate_review" size={18} />
