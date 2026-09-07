@@ -70,6 +70,39 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
 
 
 
+// 選んでいる範囲。編集モデルの位置で数える。
+interface Span {
+  from: number;
+  to: number;
+}
+
+// DOM が今持っている選択。編集モデルの位置に直して返す。
+//
+// 範囲を引いている間の描き直しはここから測る。selectionchange は仕様で
+// 「次のタスク」に配られるので、mousemove と同じ番では来ない。編集モデルの
+// 選択はそれを見て更新されるため、そこから描くと必ず 1 番遅れて、引いている
+// 手に塗りが付いてこない。標準の塗りはブラウザが自分で塗るので遅れない。
+// DOM 側の選択はドラッグに合わせてその場で伸びているので、それを測る。
+function domSpan(view: EditorView): Span | null {
+  const sel = view.dom.ownerDocument.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  if (
+    !view.dom.contains(range.startContainer) ||
+    !view.dom.contains(range.endContainer)
+  ) {
+    return null;
+  }
+  try {
+    const a = view.posAtDOM(range.startContainer, range.startOffset);
+    const b = view.posAtDOM(range.endContainer, range.endOffset);
+    if (a < 0 || b < 0 || a === b) return null;
+    return { from: Math.min(a, b), to: Math.max(a, b) };
+  } catch {
+    return null;
+  }
+}
+
 // カーソルを自分で描く。
 //
 // 標準のカーソルは行の高さで描かれるので、明朝のように上下へ余裕のある書体と
@@ -182,22 +215,28 @@ function selectionBoxes(
   // 無効になるので、動いていないときに書くのは丸損。
   let was = "";
 
-  const measure = (): Rect[] => {
+  // live を渡すと、編集モデルの選択ではなくその範囲を測る。範囲を引いている
+  // 間に使う（下の painter を参照）。
+  const measure = (live: Span | null): Rect[] => {
     const { selection } = view.state;
     if (
-      selection.empty ||
-      selection instanceof NodeSelection ||
-      selection instanceof CellSelection
+      !live &&
+      (selection.empty ||
+        selection instanceof NodeSelection ||
+        selection instanceof CellSelection)
     ) {
       return [];
     }
+    const from = live ? live.from : selection.from;
+    const to = live ? live.to : selection.to;
+    if (to <= from) return [];
     const base = host.getBoundingClientRect();
     // 見えている帯。選択が数千行に渡っても、矩形を作るのは画面のぶんだけ。
     const seen = scroller?.getBoundingClientRect();
     const band = seen
       ? { top: seen.top, bottom: seen.bottom }
       : { top: 0, bottom: host.ownerDocument.documentElement.clientHeight };
-    return selectionRects(view, selection.from, selection.to, band, base);
+    return selectionRects(view, from, to, band, base);
   };
 
   const apply = (rects: Rect[]) => {
@@ -246,13 +285,19 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   // 直前に描いたときの手掛かり。
   let sig = "";
 
+  // 範囲を引いている間か。引いている間だけ DOM 側の選択から測る。
+  let drawing = false;
+
   const paint = () => {
+    const live = drawing ? domSpan(view) : null;
     const { from, to, head } = view.state.selection;
-    const now = `${from},${to},${head},${view.composing ? 1 : 0},${gen}`;
+    const span = live ?? { from, to };
+    const now = `${span.from},${span.to},${head},${view.composing ? 1 : 0},${gen}`;
     if (now === sig) return;
     sig = now;
-    const rects = boxes.measure();
-    const at = bar.measure();
+    const rects = boxes.measure(live);
+    // 引いている間はカーソルの棒を出さない（範囲を選んでいるので要らない）。
+    const at = live ? null : bar.measure();
     boxes.apply(rects);
     bar.apply(at);
   };
@@ -270,6 +315,23 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     gen++;
     again();
   };
+  // 引いている間は mousemove で描く。編集モデルの更新（selectionchange 経由）を
+  // 待つと 1 番遅れる。
+  const onMove = () => paint();
+  const onUp = () => {
+    if (!drawing) return;
+    drawing = false;
+    window.removeEventListener("mousemove", onMove, true);
+    window.removeEventListener("mouseup", onUp, true);
+    paint();
+  };
+  const onDown = (e: MouseEvent) => {
+    if (e.button !== 0 || drawing) return;
+    drawing = true;
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+  };
+  view.dom.addEventListener("mousedown", onDown);
   view.dom.addEventListener("focus", moved);
   view.dom.addEventListener("blur", moved);
   // コードの塊のように中で横スクロールするものがある。scroll は上がって
@@ -292,6 +354,8 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     // 位置が変わるだけの合図（スクロール・折り返し・焦点）はまとめる。
     draw: moved,
     stop: () => {
+      onUp();
+      view.dom.removeEventListener("mousedown", onDown);
       view.dom.removeEventListener("focus", moved);
       view.dom.removeEventListener("blur", moved);
       view.dom.removeEventListener("scroll", moved, true);
