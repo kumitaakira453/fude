@@ -12,6 +12,7 @@ import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
 import { editorPlugins } from "../lib/md/plugins";
+import { seenAt } from "../lib/md/seenAt";
 import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
 import { IconBoard } from "./CalloutIcon";
@@ -465,7 +466,7 @@ export function BodyEditor({
 
     // 外で書き換わったら差し替えるので、土台は入れ替わる。
     let loaded = fromMarkdown(body);
-    let blocks = blocksOf(loaded);
+    const blocks = blocksOf(loaded);
     const want = Math.max(0, (viewpoint?.at ?? 0) - prefix.length);
     const target = want > 0 ? (blocks.find((b) => b.end > want) ?? null) : null;
 
@@ -557,7 +558,6 @@ export function BodyEditor({
             .setMeta("addToHistory", false),
         );
       }
-      blocks = blocksOf(loaded);
       // 取り込んだ本文はそのまま親の控えでもある。組み直しの予約は捨てる。
       send.cancel();
       paint.now();
@@ -612,12 +612,12 @@ export function BodyEditor({
           ? view.state.doc.resolve(Math.min(hit.pos, view.state.doc.content.size))
           : null;
         const start = $at && $at.depth > 0 ? $at.before(1) : 0;
-        const seen = blocks.find((b) => b.pos === start) ?? blocks[0];
+        const seen = seenAt(view.state.doc, loaded, start);
         if (!seen) return;
         const dom = view.nodeDOM(seen.pos);
         const el = dom instanceof HTMLElement ? dom : null;
         const into = el ? Math.max(0, box.top - el.getBoundingClientRect().top) : 0;
-        moved.current?.(prefix.length + seen.start, into);
+        moved.current?.(prefix.length + seen.at, into);
       });
     };
     scroller?.addEventListener("scroll", onScroll, { passive: true });
