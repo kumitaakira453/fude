@@ -1,5 +1,5 @@
 import { atom } from "jotai";
-import { atomWithStorage } from "jotai/utils";
+import { atomFamily, atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
 import type { FolderEntry } from "../lib/idb";
 import { windowScopedKey } from "../lib/windows";
@@ -85,6 +85,16 @@ export const activePaneAtom = atom((get) => {
 export function activePath(pane: Pane | LeafNode | undefined): string | null {
   return pane?.tabs[pane.active] ?? null;
 }
+// 「この path がいま出しているファイルか」を path ごとに引く。
+//
+// 行がこれを購読すると、選択が変わったときに起きるのは真偽が変わった 2 行
+// だけになる。ペインそのものを購読すると全行が起き、1000 ファイルのフォルダ
+// では押してから色が付くまで実測で 100〜200ms かかっていた。
+export const isShownAtom = atomFamily((path: string) =>
+  atom((get) => activePath(get(activePaneAtom)) === path),
+);
+
+
 
 // ---- UI / テーマ（永続化） ----
 // 見た目の好みはアプリ全体で 1 つ。どのウィンドウで変えても揃う。

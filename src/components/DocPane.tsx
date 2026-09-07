@@ -155,18 +155,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const path = activePath(pane);
   const raw = path ? cache.get(path) : undefined;
 
-  // 本文が未読込のあいだはローディングを出す。ただし一瞬で読める場合に
-  // ちらつかせないよう、遅延してから表示する（読めたら即座に消す）。
+  // 本文が読めていないあいだは骨組みを出す。
+  //
+  // 待たずに出す。以前は「一瞬で読めるときにちらつかせない」ために 180ms
+  // 遅らせていたが、その間は骨組みも本文も無い白紙になり、押した手応えが
+  // まるで無かった。速く読めたときに一瞬光る方を採る。
   const loaded = !!path && raw !== undefined;
-  const [showLoading, setShowLoading] = useState(false);
-  useEffect(() => {
-    if (!path || loaded) {
-      setShowLoading(false);
-      return;
-    }
-    const t = window.setTimeout(() => setShowLoading(true), 180);
-    return () => window.clearTimeout(t);
-  }, [path, loaded]);
 
   // 保存の途中が分かるようにする。件数で数えるのは、続けて保存したときに
   // 先に終わった 1 件で印が消えないため。
@@ -1152,15 +1146,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
           >
             {path && (!loaded || opening) ? (
+              // 読めていないあいだは骨組み。押した手応えを先に返すため、
+              // 待たずに出す。
               <div className="px-10 py-8 sm:px-16">
-                {/* 読んでいる間は少し待ってから出す（一瞬で読めるときに
-                    ちらつかせない）。編集面を組む一枚では待たずに出す
-                    ── 組み始めると画面が止まるので、その前に描いておく。 */}
-                {(showLoading || opening) && (
-                  <div className={`${WIDTH_CLASS[width]} mx-auto`}>
-                    <LoadingBody />
-                  </div>
-                )}
+                <div className={`${WIDTH_CLASS[width]} mx-auto`}>
+                  <LoadingBody />
+                </div>
               </div>
             ) : path ? (
               <div className="px-10 py-8 sm:px-16">

@@ -1,7 +1,8 @@
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
+import type { DropPoint } from "../lib/windows";
 import { openCountsAtom } from "../state/review";
 import {
   DND_MIME,
@@ -18,13 +19,12 @@ import {
   type TreeNode,
 } from "../lib/fsAccess";
 import {
-  activePath,
   activeFolderIdAtom,
-  activePaneAtom,
   expandedByFolderAtom,
   revealInTreeAtom,
   treeAtom,
   treeFilterAtom,
+  isShownAtom,
 } from "../state/atoms";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
@@ -37,6 +37,12 @@ interface Creating {
 interface ItemCtx {
   expanded: Set<string>;
   filtering: boolean;
+  // path ごとの未解決のコメントの数。
+  counts: Map<string, number>;
+  // ファイルを開く。行ごとに useWorkspace を呼ぶと、その中の useCallback
+  // 29 個が行数だけ作り直される。
+  openFile: (path: string) => void;
+  openInNewWindow: (path: string, at?: DropPoint) => void;
   toggle: (path: string) => void;
   onContext: (e: React.MouseEvent, node: TreeNode) => void;
   editingPath: string | null;
@@ -94,7 +100,10 @@ function NameInput({
   );
 }
 
-function TreeItem({
+// 行は memo で包む。選択が変わったときに描き直すのは、真偽が変わった 2 行だけ。
+//
+// ctx は親で useMemo して同じものを渡す。毎回作り直すと memo が素通りになる。
+const TreeItem = memo(function TreeItem({
   node,
   depth,
   ctx,
@@ -103,9 +112,8 @@ function TreeItem({
   depth: number;
   ctx: ItemCtx;
 }) {
-  const activePane = useAtomValue(activePaneAtom);
-  const openCounts = useAtomValue(openCountsAtom);
-  const { openFile, openInNewWindow } = useWorkspace();
+  // 自分が出ているかだけを購読する。ペインを購読すると全行が起きる。
+  const active = useAtomValue(isShownAtom(node.path));
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
   const basePad = depth * 14 + 8;
 
@@ -241,8 +249,7 @@ function TreeItem({
     );
   }
 
-  const active = activePath(activePane) === node.path;
-  const reviewCount = openCounts.get(node.path) ?? 0;
+  const reviewCount = ctx.counts.get(node.path) ?? 0;
   return (
     <button
       draggable
@@ -250,10 +257,10 @@ function TreeItem({
       onDragStart={startDrag}
       // ウィンドウの外へ引き出したら、そのファイルで新しいウィンドウを開く
       onDragEnd={(e) => {
-        if (droppedOutside(e)) void openInNewWindow(node.path, dropPoint(e));
+        if (droppedOutside(e)) ctx.openInNewWindow(node.path, dropPoint(e));
       }}
       onClick={(e) =>
-        e.metaKey ? void openInNewWindow(node.path) : openFile(node.path)
+        e.metaKey ? ctx.openInNewWindow(node.path) : ctx.openFile(node.path)
       }
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
@@ -288,7 +295,7 @@ function TreeItem({
       )}
     </button>
   );
-}
+});
 
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
@@ -300,7 +307,14 @@ export function FileTree() {
   const [creating, setCreating] = useState<Creating | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
-  const { createFile, createFolder, renameEntry, moveEntry } = useWorkspace();
+  const { createFile, createFolder, renameEntry, moveEntry, openFile, openInNewWindow } =
+    useWorkspace();
+  // コメントの数はここで 1 回だけ購読して下へ渡す。
+  //
+  // 「いま出しているファイル」は**渡さない**。ctx に入れると選択が変わる
+  // たびに ctx の識別が変わり、行の memo が素通りして全行が描き直される。
+  // 行は自分の分（isShownAtom）だけを購読する。
+  const counts = useAtomValue(openCountsAtom);
   const filtered = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
   // 初回は畳んだ状態で出す。1,000 ファイル規模のフォルダで最上位を全部
@@ -317,24 +331,30 @@ export function FileTree() {
     [expandedByFolder, activeFolderId],
   );
 
-  const setExpandedOpen = (path: string) => {
-    if (!activeFolderId) return;
-    setExpandedByFolder((prev) => {
-      const set = new Set(prev[activeFolderId] ?? []);
-      set.add(path);
-      return { ...prev, [activeFolderId]: [...set] };
-    });
-  };
+  const setExpandedOpen = useCallback(
+    (path: string) => {
+      if (!activeFolderId) return;
+      setExpandedByFolder((prev) => {
+        const set = new Set(prev[activeFolderId] ?? []);
+        set.add(path);
+        return { ...prev, [activeFolderId]: [...set] };
+      });
+    },
+    [activeFolderId, setExpandedByFolder],
+  );
 
-  const toggle = (path: string) => {
-    if (!activeFolderId) return;
-    setExpandedByFolder((prev) => {
-      const set = new Set(prev[activeFolderId] ?? []);
-      if (set.has(path)) set.delete(path);
-      else set.add(path);
-      return { ...prev, [activeFolderId]: [...set] };
-    });
-  };
+  const toggle = useCallback(
+    (path: string) => {
+      if (!activeFolderId) return;
+      setExpandedByFolder((prev) => {
+        const set = new Set(prev[activeFolderId] ?? []);
+        if (set.has(path)) set.delete(path);
+        else set.add(path);
+        return { ...prev, [activeFolderId]: [...set] };
+      });
+    },
+    [activeFolderId, setExpandedByFolder],
+  );
 
   // パンくず等からの「ツリーで表示」: 祖先を展開し、対象行へスクロール＋強調
   const listRef = useRef<HTMLDivElement>(null);
@@ -376,49 +396,75 @@ export function FileTree() {
     };
   }, [reveal, activeFolderId, setExpandedByFolder]);
 
-  const startCreate = (parentPath: string, kind: "file" | "dir") => {
-    if (parentPath) setExpandedOpen(parentPath);
-    setCreating({ parentPath, kind });
-  };
+  const startCreate = useCallback(
+    (parentPath: string, kind: "file" | "dir") => {
+      if (parentPath) setExpandedOpen(parentPath);
+      setCreating({ parentPath, kind });
+    },
+    [setExpandedOpen],
+  );
 
-  const ctx: ItemCtx = {
-    expanded,
-    filtering: !!filter,
-    toggle,
-    onContext: (e, node) => {
-      e.preventDefault();
-      setMenu({ x: e.clientX, y: e.clientY, node });
-    },
-    editingPath,
-    commitRename: (node, name) => {
-      setEditingPath(null);
-      void renameEntry(node.path, name, node.kind === "dir");
-    },
-    cancelRename: () => setEditingPath(null),
-    creating,
-    commitCreate: (name) => {
-      if (creating && name.trim()) {
-        if (creating.kind === "dir")
-          void createFolder(creating.parentPath, name);
-        else void createFile(creating.parentPath, name);
-      }
-      setCreating(null);
-    },
-    cancelCreate: () => setCreating(null),
-    dragOverPath,
-    setDragOverPath,
-    onMoveDrop: (destDir, e) => {
-      // タブを掴んだものはファイルの移動として扱わない
-      const payload = readDragPayload(e.dataTransfer);
-      setDragOverPath(null);
-      if (payload && !payload.from) {
+  // 行へ渡す道具。**識別を保つのが肝**。毎回作り直すと行の memo が素通りして、
+  // 選択が変わるたびに全行が描き直される（実測で 1000 行 200ms）。
+  const ctx: ItemCtx = useMemo(
+    () => ({
+      expanded,
+      filtering: !!filter,
+      counts,
+      openFile,
+      openInNewWindow,
+      toggle,
+      onContext: (e, node) => {
         e.preventDefault();
-        void moveEntry(payload.path, destDir);
-      }
-    },
-    onNewFile: (parentPath) => startCreate(parentPath, "file"),
-    onNewFolder: (parentPath) => startCreate(parentPath, "dir"),
-  };
+        setMenu({ x: e.clientX, y: e.clientY, node });
+      },
+      editingPath,
+      commitRename: (node, name) => {
+        setEditingPath(null);
+        void renameEntry(node.path, name, node.kind === "dir");
+      },
+      cancelRename: () => setEditingPath(null),
+      creating,
+      commitCreate: (name) => {
+        if (creating && name.trim()) {
+          if (creating.kind === "dir")
+            void createFolder(creating.parentPath, name);
+          else void createFile(creating.parentPath, name);
+        }
+        setCreating(null);
+      },
+      cancelCreate: () => setCreating(null),
+      dragOverPath,
+      setDragOverPath,
+      onMoveDrop: (destDir, e) => {
+        // タブを掴んだものはファイルの移動として扱わない
+        const payload = readDragPayload(e.dataTransfer);
+        setDragOverPath(null);
+        if (payload && !payload.from) {
+          e.preventDefault();
+          void moveEntry(payload.path, destDir);
+        }
+      },
+      onNewFile: (parentPath) => startCreate(parentPath, "file"),
+      onNewFolder: (parentPath) => startCreate(parentPath, "dir"),
+    }),
+    [
+      expanded,
+      filter,
+      counts,
+      openFile,
+      openInNewWindow,
+      toggle,
+      editingPath,
+      creating,
+      dragOverPath,
+      renameEntry,
+      createFile,
+      createFolder,
+      moveEntry,
+      startCreate,
+    ],
+  );
 
   const onRootDrop = (e: React.DragEvent) => {
     setRootDragOver(false);
