@@ -44,13 +44,21 @@ import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
-import { BodyEditor } from "./BodyEditor";
+import { BodyEditor, type Editing } from "./BodyEditor";
 import {
   recallViewpoint,
   rememberViewpoint,
   viewKey,
 } from "../lib/viewpoint";
 import { AnchorOverlay } from "./review/AnchorOverlay";
+import {
+  readingMarks,
+  readingPending,
+  type Marked,
+} from "../lib/reviewMarks";
+import { anchorsKey } from "../lib/md/anchors";
+import { editorMarks } from "../lib/md/editorMarks";
+import { anchorThreads } from "../lib/md/reviewAnchors";
 import { CommentComposer } from "./review/CommentComposer";
 import { Toc } from "./Toc";
 import { Tooltip } from "./Tooltip";
@@ -593,6 +601,87 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // フロントマター（本文の前にある --- ブロック）の生ソース
   const fmPrefix = (raw ?? "").slice(0, (raw ?? "").length - body.length);
 
+  // 読むときの印。矩形の作り方は reviewMarks が持ち、出し方は AnchorOverlay。
+  const measureMarks = useCallback(
+    (base: DOMRect): Marked => {
+      if (!content) return { marks: [], pending: [] };
+      const draft = review.draft;
+      return {
+        marks: readingMarks(content, base, review.threads, review.resolutions),
+        pending: draft
+          ? readingPending(content, base, {
+              blockIndex: draft.blockIndex,
+              offset: draft.offset,
+              length: draft.text.length,
+              // またいだ指摘は箇所を線で示せないので、覆っているブロックの
+              // 枠で出す。
+              whole: draft.whole || draft.until !== undefined,
+              until: draft.until,
+              // セル・項目を丸ごと対象にしたときの引き先。行ごとの矩形では
+              // なくこの箱で示す。
+              unit: !draft.unit
+                ? undefined
+                : draft.itemAnchor !== undefined
+                  ? `li[data-mg-item="${draft.itemAnchor}"]`
+                  : draft.cellStart !== undefined
+                    ? `[data-mg-cell="${draft.cellStart}"]`
+                    : undefined,
+            })
+          : [],
+      };
+    },
+    // 指摘や下書きが変わったら測り直させる。合図は AnchorOverlay が
+    // これの識別で見ている。
+    [content, review.threads, review.resolutions, review.draft],
+  );
+
+  // 組み立てた編集面。指摘の印は本文の DOM ではなく編集モデルから位置を出す。
+  const [pm, setPm] = useState<Editing | null>(null);
+  // 当て直した回数。印を測り直させる合図（当て直しでは DOM が動かないので、
+  // AnchorOverlay の observer には何も届かない）。
+  const [anchorSeq, setAnchorSeq] = useState(0);
+
+  // 指摘の居場所を編集面の節点へ当てる。本文を丸ごと直列化するので重い。
+  // 走らせるのは開いたとき・台帳が変わったとき・本文が落ち着いたときだけで、
+  // 打鍵の経路には乗せない。決めた位置はプラグインが transaction で写す。
+  useEffect(() => {
+    if (!pm) return;
+    const view = pm.view;
+    const list =
+      review.threads.length === 0
+        ? []
+        : anchorThreads(
+            view.state.doc,
+            pm.loaded(),
+            review.threads,
+            review.resolutions,
+          );
+    const was = anchorsKey.getState(view.state) ?? [];
+    if (was.length === 0 && list.length === 0) return;
+    view.dispatch(
+      view.state.tr
+        .setMeta(anchorsKey, list)
+        // 指摘の居場所は自分が打ったものではない。⌘Z に積まない。
+        .setMeta("addToHistory", false),
+    );
+    setAnchorSeq((n) => n + 1);
+  }, [pm, review.threads, review.resolutions, draft]);
+
+  // 編集面の印。位置はプラグインが持っている今の値を引く（打っている間も
+  // 写されているので、当て直しを待たずに合う）。
+  const measureEditMarks = useCallback(
+    (base: DOMRect): Marked => {
+      if (!pm) return { marks: [], pending: [] };
+      const list = anchorsKey.getState(pm.view.state) ?? [];
+      return {
+        marks: editorMarks(pm.view, base, list, review.threads),
+        pending: [],
+      };
+    },
+    // anchorSeq は測り直させるための合図。
+    [pm, review.threads, anchorSeq],
+  );
+
   // 編集面を出すのは、本文が読めていて、組む前の一枚を描き終えたときだけ。
   // 読めていないうちに出すと、前のファイルの中身が消えたところへ空の紙が
   // 立ち、切り替わったのか読み込み中なのか分からない。
@@ -850,6 +939,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 rememberViewpoint(viewKey(pane.id, path), at, into);
               }}
               onDom={setEditContent}
+              onBuilt={setPm}
               onChange={(next) => {
                 setDraft(next);
                 if (path) autoSave(path, next);
@@ -954,32 +1044,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {!editing && path && (
           <AnchorOverlay
             content={content}
-            threads={review.threads}
-            resolutions={review.resolutions}
             contentKey={path + (raw?.length ?? 0)}
-            draft={
-              review.draft
-                ? {
-                    blockIndex: review.draft.blockIndex,
-                    offset: review.draft.offset,
-                    length: review.draft.text.length,
-                    // またいだ指摘は箇所を線で示せないので、覆っている
-                    // ブロックの枠で出す。
-                    whole:
-                      review.draft.whole || review.draft.until !== undefined,
-                    until: review.draft.until,
-                    // セル・項目を丸ごと対象にしたときの引き先。行ごとの
-                    // 矩形ではなくこの箱で示す。
-                    unit: !review.draft.unit
-                      ? undefined
-                      : review.draft.itemAnchor !== undefined
-                        ? `li[data-mg-item="${review.draft.itemAnchor}"]`
-                        : review.draft.cellStart !== undefined
-                          ? `[data-mg-cell="${review.draft.cellStart}"]`
-                          : undefined,
-                  }
-                : null
-            }
+            measure={measureMarks}
+            onPick={review.inspect}
+            onRemove={(id) => void review.remove(id)}
+            onResolve={(id) => void review.resolve(id)}
+          />
+        )}
+
+        {/* 編集面の印。重ねる先は編集面そのものではなくその外側の入れ物。
+            ProseMirror が持つ DOM の中に React の要素を入れると、本文の
+            書き換えと見なされて消される。 */}
+        {writing && pm && (
+          <AnchorOverlay
+            content={pm.host}
+            contentKey={path ?? ""}
+            measure={measureEditMarks}
             onPick={review.inspect}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}

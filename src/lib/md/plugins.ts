@@ -17,6 +17,7 @@ import type { Transform } from "prosemirror-transform";
 import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
+import { anchors } from "./anchors";
 import { lifted } from "./lifted";
 import { insideBlock } from "./nodeViews";
 import { nestOf, schema } from "./schema";
@@ -458,5 +459,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     insideBlock,
     // 掴んでいるあいだ実体を薄くする印。
     lifted,
+    // 指摘の居場所。打っても付いてくるように、位置を写していく。
+    anchors,
   ];
 }

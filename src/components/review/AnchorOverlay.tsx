@@ -7,117 +7,17 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { headOf, quoteBlocks, type Resolution } from "../../lib/blockDiff";
-import {
-  blockRect,
-  clipRects,
-  rangeAt,
-  readBlockText,
-  scrollBoxOf,
-} from "../../lib/domText";
-import { findPlain } from "../../lib/projection";
-import { answeredByAgent, type AnchorHit, type ReviewThread } from "../../lib/review";
+import type { AnchorHit } from "../../lib/review";
+import type { Mark, Marked, Rect } from "../../lib/reviewMarks";
 import { Icon } from "../Icon";
 
 // 指摘が付いている箇所に印を重ねる。DOM は書き換えず、矩形を絶対配置で
 // 載せるだけなので本文の組版に影響しない。
 //
-// 位置は「基準版のブロック → 対応付け → 現在のブロック」で決める。現在の本文から
-// 引用文字列を探すと、指摘に応えて本文が書き換えられた瞬間に位置を失う。
-
-interface Rect {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
-
-interface Mark {
-  id: string;
-  moved: boolean; // 対象が書き換わっている
-  guess: boolean; // 位置が特定できず、近いブロックに出している
-  // ブロック全体の外枠。どのブロックへの指摘かを示す。またいだ指摘では
-  // 覆っているブロックの数だけ並ぶ。
-  areas: Rect[];
-  // 指摘した箇所そのもの。書き換わっていても見つかれば出す。
-  spots: Rect[];
-  hit: AnchorHit;
-  // ホバーで出す指摘の中身（1 件目の書き込みと、続きの件数）。
-  note: string;
-  more: number;
-  who: string;
-  at: number;
-  // 最後の書き込みがエージェント。返事が返ってきていることを示す。
-  answered: boolean;
-}
-
-// 同じ行に並ぶ細切れの矩形を 1 本に畳む。文字ノードの切れ目でばらばらに
-// 出ると継ぎ目が見えてしまう。表のセルの間（広く空く）は畳まない。
-const GAP = 8;
-
-// 同じ行に載っているか。`コード` や数式の囲みは上端も高さも本文と揃わないので、
-// 一致で見ると同じ行が別の行として残り、印が細切れになる。上下の重なりで見る。
-function sameLine(a: { top: number; bottom: number }, b: DOMRect): boolean {
-  const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-  return overlap > Math.min(a.bottom - a.top, b.height) * 0.5;
-}
-
-function mergeRects(rects: DOMRect[]): DOMRect[] {
-  // まず行に分ける。左右の並び替えは行ごとに行う（先に上端で並べると、
-  // 囲みの分だけずれた矩形が行をまたいで前後する）。
-  const lines: { top: number; bottom: number; parts: DOMRect[] }[] = [];
-  for (const rc of [...rects].sort((a, b) => a.top - b.top)) {
-    const line = lines[lines.length - 1];
-    if (line && sameLine(line, rc)) {
-      line.parts.push(rc);
-      line.top = Math.min(line.top, rc.top);
-      line.bottom = Math.max(line.bottom, rc.bottom);
-      continue;
-    }
-    lines.push({ top: rc.top, bottom: rc.bottom, parts: [rc] });
-  }
-
-  const out: DOMRect[] = [];
-  for (const line of lines) {
-    let cur: DOMRect | null = null;
-    for (const rc of line.parts.sort((a, b) => a.left - b.left)) {
-      if (cur && rc.left - cur.right <= GAP) {
-        const top = Math.min(cur.top, rc.top);
-        const bottom = Math.max(cur.bottom, rc.bottom);
-        cur = new DOMRect(
-          cur.left,
-          top,
-          Math.max(cur.right, rc.right) - cur.left,
-          bottom - top,
-        );
-        continue;
-      }
-      if (cur) out.push(cur);
-      cur = rc;
-    }
-    if (cur) out.push(cur);
-  }
-  return out;
-}
-
-// 位置が特定できない指摘の行き先。引用の一部を含むブロックを画面から探す。
-// 何も出さないと、本文を書き換えたとたんに指摘そのものが消えたように見える。
-const PROBE = 40;
-const PROBE_MIN = 6;
-
-function guessBlock(
-  content: HTMLElement,
-  ...needles: string[]
-): HTMLElement | null {
-  for (const needle of needles) {
-    const probe = needle.replace(/\s+/g, "").slice(0, PROBE);
-    if (probe.length < PROBE_MIN) continue;
-    for (const el of content.querySelectorAll<HTMLElement>("[data-mg-block]")) {
-      if ((el.textContent ?? "").replace(/\s+/g, "").includes(probe)) return el;
-    }
-  }
-  return null;
-}
+// 矩形をどう組むかは画面ごとに違う（読むときは目印のブロックから、編集面は
+// 編集モデルの位置から）。それは measure に任せ、ここは出し方だけを持つ。
+// 測り直す合図・当たり判定・ホバーのカードを 1 か所にまとめて、どちらの
+// 画面でも同じ見た目・同じ操作にする。
 
 // 印を離れてからカードを閉じるまでの猶予。印とカードの間を指が渡れる長さ。
 const HOVER_GRACE = 160;
@@ -140,7 +40,7 @@ function viewportOf(el: HTMLElement): { top: number; bottom: number } {
   return { top: 0, bottom: window.innerHeight };
 }
 
-// 重ねた矩形の中に居るか。位置は本文の左上からの座標で持っている。
+// 重ねた矩形の中に居るか。位置は重ねる先の左上からの座標で持っている。
 function inside(rc: Rect, x: number, y: number): boolean {
   return (
     x >= rc.left &&
@@ -160,46 +60,20 @@ function ago(at: number): string {
   return day < 30 ? `${day} 日前` : `${Math.floor(day / 30)} か月前`;
 }
 
-// セルや箇条書きの項目の文字を丸ごと覆っている指摘は、文字の行ではなく
-// その箱で示す。行ごとの矩形だと、`コード` の囲みやチェックの前後で切れて
-// 散らかって見える。
-const UNIT = "td,th,li[data-mg-item]";
-
-function unitOf(range: Range): Element | null {
-  const start = range.startContainer.parentElement?.closest(UNIT);
-  const end = range.endContainer.parentElement?.closest(UNIT);
-  if (!start || start !== end) return null;
-  // 比べるのは画面に出る文字。チェックのアイコンは文字として数えない。
-  const full = readBlockText(start as HTMLElement).plain.trim();
-  const text = range.toString().trim();
-  return full.length > 0 && text === full ? start : null;
-}
-
 export function AnchorOverlay({
   content,
-  threads,
-  resolutions,
   contentKey,
-  draft,
+  measure,
   onPick,
   onRemove,
   onResolve,
 }: {
+  // 矩形を重ねる先。測る基準もこれで、印はこの中へ入れる。
   content: HTMLElement | null;
-  threads: ReviewThread[];
-  resolutions: Map<string, Resolution>;
+  // これが変わったら測り直す。ファイルの切り替えを拾う。
   contentKey: string;
-  // 書いている最中の指摘。どこへの指摘かが分かるように印を出す。
-  draft?: {
-    blockIndex: number;
-    offset: number;
-    length: number;
-    whole?: boolean;
-    // ブロックをまたいで選んでいるときの、最後のブロックの番号。
-    until?: number;
-    // セル・項目を丸ごと対象にしたときの引き先（目印の CSS 選択子）。
-    unit?: string;
-  } | null;
+  // 何をどこに出すか。重ねる先の矩形を渡すので、返す矩形はその左上を原点にする。
+  measure: (base: DOMRect) => Marked;
   onPick: (hit: AnchorHit) => void;
   // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
   onRemove: (id: string) => void;
@@ -324,162 +198,10 @@ export function AnchorOverlay({
       return;
     }
     // 指摘が 1 件も無くても、書いている最中の印は出す。
-    const base = content.getBoundingClientRect();
-    const next: Mark[] = [];
-
-    for (const thread of threads) {
-      const resolution = resolutions.get(thread.id);
-      if (!resolution) continue;
-      const head = headOf(resolution);
-      const placed = head
-        ? content.querySelector<HTMLElement>(`[data-mg-block="${head.index}"]`)
-        : null;
-      // 特定できないものは、引用を含むブロックへ寄せて出す（点線で区別する）。
-      const el = placed ?? guessBlock(content, thread.selection, thread.quote);
-      if (!el) continue; // 漸進描画でまだ出ていない / 手がかりが無い
-      const guess = placed === null;
-
-      const bt = readBlockText(el);
-      // またいだ指摘は引用に複数のブロックが入っている。箇所の線ではなく、
-      // 覆っているブロックの枠で示す。
-      const covered = quoteBlocks(thread.quote).length;
-      // 書き換わっていても、指摘した文字列が残っていれば場所は出せる。
-      // 見つかった箇所は塗り、ブロック全体は枠で示す（2 段で見せる）。
-      const span =
-        covered > 1 || !thread.selection
-          ? null
-          : findPlain(bt.plain, thread.selection, thread.selection_offset);
-      const whole = rangeAt(bt, 0, bt.plain.length);
-      const inner = span ? rangeAt(bt, span.start, span.end) : null;
-      // 図のように選べる文字を持たないブロックは範囲を作れない。枠で示す。
-      const outline = blockRect(el) ?? whole?.getBoundingClientRect() ?? null;
-      if (!outline) continue;
-
-      const wrap = el.querySelector(".mg-table-wrap");
-      const clip = wrap ? wrap.getBoundingClientRect() : null;
-      // 箇所の印は、その文字が入っている枠で切る（表だけでなくコードや数式も
-      // 枠の中で横にスクロールする）。
-      const inBox = inner ? scrollBoxOf(inner.startContainer) : null;
-      const spotClip = inBox ? inBox.getBoundingClientRect() : clip;
-      // ブロック全体の印は箱で測る。文字の範囲だと、コールアウトのように
-      // 内側に余白を持つブロックで枠より内側に縮む。
-      const boxes: DOMRect[] = [];
-      for (let i = 0; i < covered; i++) {
-        const part =
-          i === 0
-            ? el
-            : content.querySelector<HTMLElement>(
-                `[data-mg-block="${(head?.index ?? -1) + i}"]`,
-              );
-        const box = part ? blockRect(part) : null;
-        if (box) boxes.push(box);
-      }
-      if (boxes.length === 0) boxes.push(outline);
-      const areas = clipRects(boxes, clip);
-      const cell = inner ? unitOf(inner) : null;
-      const spots = inner
-        ? clipRects(
-            cell
-              ? [cell.getBoundingClientRect()]
-              : mergeRects(Array.from(inner.getClientRects())),
-            spotClip,
-          )
-        : [];
-      // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
-      // いつも二重に出すと、どこへの指摘か読み取りにくい。
-      const moved = guess || resolution.state === "rewritten";
-      const shown = spots.length === 0 || moved ? areas : [];
-      if (shown.length === 0 && spots.length === 0) continue;
-
-      const rel = (rc: DOMRect): Rect => ({
-        top: rc.top - base.top,
-        left: rc.left - base.left,
-        width: rc.width,
-        height: rc.height,
-      });
-      const anchor = spots[0] ?? areas[0];
-      const last = spots[spots.length - 1] ?? areas[0];
-      const first = thread.comments[0];
-      next.push({
-        id: thread.id,
-        moved,
-        guess,
-        areas: shown.map(rel),
-        spots: spots.map(rel),
-        note: first ? first.body : "",
-        more: Math.max(0, thread.comments.length - 1),
-        who: first ? first.author : "",
-        at: first ? first.created_at : 0,
-        answered: answeredByAgent(thread),
-        hit: {
-          id: thread.id,
-          top: anchor.top,
-          bottom: last.bottom,
-          left: anchor.left,
-        },
-      });
-    }
-    setMarks(next);
-
-    // 書いている最中の対象。押せる印にはしない（本文の上を塞がない）。
-    if (!draft) {
-      setPending([]);
-      return;
-    }
-    const el = content.querySelector<HTMLElement>(
-      `[data-mg-block="${draft.blockIndex}"]`,
-    );
-    if (!el) {
-      setPending([]);
-      return;
-    }
-    const bt = readBlockText(el);
-    const range = draft.whole
-      ? null
-      : rangeAt(bt, draft.offset, draft.offset + draft.length);
-    if (!draft.whole && !range) {
-      setPending([]);
-      return;
-    }
-    const wrap = el.querySelector(".mg-table-wrap");
-    const clip = wrap ? wrap.getBoundingClientRect() : null;
-    // 丸ごとの対象は目印で直に引く。文字の一致で見分けると、記法の囲みや
-    // チェックの前後で当たらないことがある。
-    const marked = draft.unit ? el.querySelector(draft.unit) : null;
-    const cell = marked ?? (range ? unitOf(range) : null);
-    // またいで選んでいるときは、覆っているブロックの枠を並べる。
-    const boxes: DOMRect[] = [];
-    if (draft.whole) {
-      const until = Math.max(draft.until ?? draft.blockIndex, draft.blockIndex);
-      for (let i = draft.blockIndex; i <= until; i++) {
-        const part =
-          i === draft.blockIndex
-            ? el
-            : content.querySelector<HTMLElement>(`[data-mg-block="${i}"]`);
-        const box = part ? blockRect(part) : null;
-        if (box) boxes.push(box);
-      }
-    }
-    const inBox = range ? scrollBoxOf(range.startContainer) : null;
-    const rects = clipRects(
-      boxes.length > 0
-        ? boxes
-        : cell
-          ? [cell.getBoundingClientRect()]
-          : range
-            ? mergeRects(Array.from(range.getClientRects()))
-            : [],
-      boxes.length > 0 ? clip : inBox ? inBox.getBoundingClientRect() : clip,
-    );
-    setPending(
-      rects.map((rc) => ({
-        top: rc.top - base.top,
-        left: rc.left - base.left,
-        width: rc.width,
-        height: rc.height,
-      })),
-    );
-  }, [content, threads, resolutions, draft]);
+    const next = measure(content.getBoundingClientRect());
+    setMarks(next.marks);
+    setPending(next.pending);
+  }, [content, measure]);
 
   // 漸進描画で後から出るブロックにも追従する。
   useLayoutEffect(() => {

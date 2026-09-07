@@ -36,7 +36,25 @@ const OPTIONS: Options = {
   tightDefinitions: true,
 };
 
+// トップレベルのブロック 1 つと、そこから出た Markdown。
+//
+// 指摘の居場所は「引用のブロックの原文」で決めるので、編集面ではこの対で
+// 突き合わせる。全文の中での位置は持たない（消したブロックの分を詰めるとき、
+// 後ろの位置が全部動くため）。
+export interface Part {
+  pos: number;
+  src: string;
+}
+
 export function toMarkdown(doc: PmNode, loaded: Loaded): string {
+  return toMarkdownParts(doc, loaded).text;
+}
+
+export function toMarkdownParts(
+  doc: PmNode,
+  loaded: Loaded,
+): { text: string; parts: Part[] } {
+  const parts: Part[] = [];
   let out = "";
   // 直前のブロックが原文のどこで終わったか。続けて原文から出すときは、
   // 間の空行もそのまま持ってくる。
@@ -67,7 +85,7 @@ export function toMarkdown(doc: PmNode, loaded: Loaded): string {
     return text + loaded.source.slice(at, to);
   };
 
-  doc.forEach((node, _offset, index) => {
+  doc.forEach((node, offset, index) => {
     const kept = keep(node, loaded);
     const gap =
       prevEnd !== null && kept && prevEnd <= kept.span.start
@@ -75,7 +93,9 @@ export function toMarkdown(doc: PmNode, loaded: Loaded): string {
         : index === 0
           ? ""
           : "\n\n";
-    out += gap + (kept ? kept.text : blockText(node));
+    const src = kept ? kept.text : blockText(node);
+    parts.push({ pos: offset, src });
+    out += gap + src;
     prevEnd = kept ? kept.span.end : null;
   });
 
@@ -85,13 +105,16 @@ export function toMarkdown(doc: PmNode, loaded: Loaded): string {
       : out.endsWith("\n")
         ? out
         : `${out}\n`;
-  if (!dropped) return text;
+  if (!dropped) return { text, parts };
   // 抜いたあとに空行が余る。詰めるのは消したときだけ（原文が持っている空行を
   // 勝手に詰めない）。
-  return text
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/^\n+/, "")
-    .replace(/\n*$/, "\n");
+  return {
+    text: text
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/^\n+/, "")
+      .replace(/\n*$/, "\n"),
+    parts,
+  };
 }
 
 // 原文から出せるなら、その文字列と範囲を返す。

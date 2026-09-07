@@ -71,6 +71,14 @@ function scrollerOf(from: HTMLElement | null): HTMLElement | null {
 
 
 
+// 組み立てた編集面。中の DOM は ProseMirror が持つので、重ねるものは
+// host（その外側の入れ物）へ入れる。
+export interface Editing {
+  view: EditorView;
+  host: HTMLElement;
+  loaded: () => Loaded;
+}
+
 // 選んでいる範囲。編集モデルの位置で数える。
 interface Span {
   from: number;
@@ -380,6 +388,7 @@ export function BodyEditor({
   viewpoint,
   onViewpoint,
   onDom,
+  onBuilt,
   onChange,
   onSave,
   flushRef,
@@ -402,6 +411,9 @@ export function BodyEditor({
   onViewpoint?: (at: number, into: number) => void;
   // 編集面の要素。目次のように本文の DOM を見る側へ渡す。
   onDom?: (el: HTMLElement | null) => void;
+  // 組み立てた編集面。指摘の印のように、編集モデルを見て本文の上へ重ねる
+  // 側へ渡す。原文の控えは差し替わるので、値ではなく引く関数で渡す。
+  onBuilt?: (built: Editing | null) => void;
   // 組み直した本文。打鍵ごとではなく、手を止めてから届く。
   onChange: (raw: string) => void;
   onSave: () => void;
@@ -569,6 +581,7 @@ export function BodyEditor({
     document.addEventListener("visibilitychange", onLeave);
 
     onDom?.(view.dom);
+    onBuilt?.({ view, host: at, loaded: () => loaded });
     setBuilt({ view, host: at, scroller });
     view.focus();
     paint.draw();
@@ -635,6 +648,7 @@ export function BodyEditor({
       if (adoptRef) adoptRef.current = null;
       paint.stop();
       setBuilt(null);
+      onBuilt?.(null);
       onDom?.(null);
       view.destroy();
     };

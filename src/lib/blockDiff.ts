@@ -215,7 +215,7 @@ function indicesWhere(diff: BlockChange[], match: (src: string) => boolean): num
 
 // 突き合わせ用に記法と空白の違いを均す。描画結果を復元するものではなく、
 // 同じ箇所かどうかを判定するためだけの正規化。
-function stripMarkup(src: string): string {
+export function stripMarkup(src: string): string {
   return src
     .replace(/```[^\n]*\n?/g, "")
     .replace(/[`*_~]/g, "")
