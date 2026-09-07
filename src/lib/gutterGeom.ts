@@ -27,6 +27,67 @@ export const ADD_AWAY = 6;
 export const BOTH = GRIP * 2 + 4 + AWAY;
 export const ONLY = GRIP + AWAY;
 
+export function firstLine(el: Element): DOMRect | null {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const rects = range.getClientRects();
+  return rects.length > 0 ? rects[0] : null;
+}
+
+// つまみを置く基準になる、項目の左端。1 行目で最も左にある字に合わせる。
+// 箇条書きの記号（•）は箱を持たないので、リストが記号のために空けている
+// 幅の分だけ左へ寄せる。チェックリストはチェックが項目の中にあるので、
+// 1 行目の左端がそのまま基準になる。
+export function itemEdge(li: HTMLElement): number {
+  const box = li.getBoundingClientRect();
+  const line = firstLine(li) ?? box;
+  if (li.querySelector(".mg-task-check")) return line.left;
+  const list = li.parentElement?.getBoundingClientRect();
+  // 行頭の印が占めている幅を空ける。印はリストの内側の字下げに入ることも
+  // （箇条書きの丸）、項目自身の字下げに入ることもある（番号の丸）。
+  // 空けないと、つまみが印の上に重なる。
+  const inset = parseFloat(getComputedStyle(li).paddingLeft) || 0;
+  const reserve = (list ? Math.max(0, box.left - list.left) : 0) + inset;
+  return line.left - reserve;
+}
+
+// 指している高さの項目。項目の外（間の余白など）を指していても、一番近い
+// 項目に寄せる。箇条書きで掴む相手は常に項目にする（リスト全体のつまみと
+// 並べると、どちらを掴んでいるのか分からなくなる）。
+export function itemAtY(
+  blockEl: Element,
+  y: number,
+  selector: string,
+): HTMLElement | null {
+  let hit: HTMLElement | null = null;
+  let best = Infinity;
+  let near: HTMLElement | null = null;
+  let gap = Infinity;
+  for (const li of blockEl.querySelectorAll<HTMLElement>(selector)) {
+    const r = li.getBoundingClientRect();
+    const away = y < r.top ? r.top - y : y >= r.bottom ? y - r.bottom : 0;
+    if (away === 0) {
+      // 入れ子では内側（小さい方）を採る。
+      if (r.height < best) {
+        best = r.height;
+        hit = li;
+      }
+      continue;
+    }
+    if (away < gap) {
+      gap = away;
+      near = li;
+    }
+  }
+  return hit ?? near;
+}
+
+// つまみを合わせる 1 行目。項目全体の真ん中だと、2 行以上の項目で行の間に
+// 落ちる。
+export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {
+  return firstLine(li) ?? box;
+}
+
 // ブロックの 1 行の高さ。見出しのように行が高いものでも文字の中心に並ぶよう、
 // 実際に組まれた行送りを読む。
 export function lineHeight(el: Element): number {

@@ -10,6 +10,9 @@ import {
   BAR,
   EDGE,
   GRIP,
+  itemAtY,
+  itemEdge,
+  itemLine,
   lineHeight,
   ONLY,
   relative,
@@ -109,56 +112,6 @@ function same(a: View | null, b: View): boolean {
 // 当たり判定で拾うと、余白に出た瞬間に相手を見失う。
 // 要素の 1 行目の箱。行の高さを読むより確実で、チェックボックスの行送りや
 // 項目の余白に引っ張られない。
-function firstLine(el: Element): DOMRect | null {
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const rects = range.getClientRects();
-  return rects.length > 0 ? rects[0] : null;
-}
-
-// つまみを置く基準になる、項目の左端。1 行目で最も左にある字に合わせる。
-// 箇条書きの記号（•）は箱を持たないので、リストが記号のために空けている
-// 幅の分だけ左へ寄せる。チェックリストはチェックが項目の中にあるので、
-// 1 行目の左端がそのまま基準になる。
-function itemEdge(li: HTMLElement): number {
-  const box = li.getBoundingClientRect();
-  const line = firstLine(li) ?? box;
-  if (li.querySelector(".mg-task-check")) return line.left;
-  const list = li.parentElement?.getBoundingClientRect();
-  // 行頭の印が占めている幅を空ける。印はリストの内側の字下げに入ることも
-  // （箇条書きの丸）、項目自身の字下げに入ることもある（番号の丸）。
-  // 空けないと、つまみが印の上に重なる。
-  const inset = parseFloat(getComputedStyle(li).paddingLeft) || 0;
-  const reserve = (list ? Math.max(0, box.left - list.left) : 0) + inset;
-  return line.left - reserve;
-}
-
-// 指している高さの項目。項目の外（間の余白など）を指していても、一番近い
-// 項目に寄せる。箇条書きで掴む相手は常に項目にする（リスト全体のつまみと
-// 並べると、どちらを掴んでいるのか分からなくなる）。
-function itemAtY(blockEl: Element, y: number): HTMLElement | null {
-  let hit: HTMLElement | null = null;
-  let best = Infinity;
-  let near: HTMLElement | null = null;
-  let gap = Infinity;
-  for (const li of blockEl.querySelectorAll<HTMLElement>("li[data-mg-item]")) {
-    const r = li.getBoundingClientRect();
-    const away = y < r.top ? r.top - y : y >= r.bottom ? y - r.bottom : 0;
-    if (away === 0) {
-      // 入れ子では内側（小さい方）を採る。
-      if (r.height < best) {
-        best = r.height;
-        hit = li;
-      }
-      continue;
-    }
-    if (away < gap) {
-      gap = away;
-      near = li;
-    }
-  }
-  return hit ?? near;
-}
 
 function numberOf(el: Element | null, key: string): number | null {
   const raw = (el as HTMLElement | null)?.dataset?.[key];
@@ -346,7 +299,7 @@ export function BlockGutter({
       const box = blockRect(hit.el);
       if (!box) return;
       // 箇条書きは項目ごとに掴む。指している高さの li から行番号を引く。
-      const li = itemAtY(hit.el, y);
+      const li = itemAtY(hit.el, y, "li[data-mg-item]");
       const anchorAt = numberOf(li, "mgItem");
       const found =
         li && anchorAt !== null ? itemAt(hit.index, anchorAt) : null;
@@ -362,10 +315,7 @@ export function BlockGutter({
                 at: found.from,
                 top: liBox.top - base.top,
                 height: liBox.height,
-                mid: (() => {
-                  const line = firstLine(li) ?? liBox;
-                  return line.top - base.top + line.height / 2;
-                })(),
+                mid: itemLine(li, liBox).top - base.top + itemLine(li, liBox).height / 2,
                 edge: itemEdge(li) - base.left,
                 box: relative(liBox, base),
               }
@@ -417,7 +367,7 @@ export function BlockGutter({
 
       if (held.kind === "item") {
         const hit = blockAtY(content, e.clientY);
-        const li = hit && hit.index === held.index ? itemAtY(hit.el, e.clientY) : null;
+        const li = hit && hit.index === held.index ? itemAtY(hit.el, e.clientY, "li[data-mg-item]") : null;
         const anchorAt = numberOf(li, "mgItem");
         const found = anchorAt === null ? null : itemAt(held.index, anchorAt);
         if (!li || !found) return;

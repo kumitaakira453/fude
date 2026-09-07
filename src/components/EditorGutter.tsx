@@ -7,6 +7,12 @@ import {
   blockMoveTr,
   type BlockAct,
 } from "../lib/md/blockActs";
+import {
+  itemActTr,
+  itemMoveTr,
+  itemSpotAt,
+  type ItemAct,
+} from "../lib/md/itemActs";
 import { schema } from "../lib/md/schema";
 import {
   tableActTr,
@@ -21,6 +27,9 @@ import {
   BOTH,
   EDGE,
   GRIP,
+  itemAtY,
+  itemEdge,
+  itemLine,
   lineHeight,
   ONLY,
   relative,
@@ -42,13 +51,15 @@ import { Icon } from "./Icon";
 // 側に置き、編集面とは兄弟にする。
 
 const BLOCK_MIME = "application/x-fude-pmblock";
+const ITEM_MIME = "application/x-fude-pmitem";
 const ROW_MIME = "application/x-fude-pmrow";
 const COL_MIME = "application/x-fude-pmcol";
 
-type Kind = "block" | TablePart;
+type Kind = "block" | "item" | TablePart;
 
 const MIME: Record<Kind, string> = {
   block: BLOCK_MIME,
+  item: ITEM_MIME,
   row: ROW_MIME,
   col: COL_MIME,
 };
@@ -68,6 +79,21 @@ interface Spot {
   box: Box;
   // 1 行目の中心。ブロックのつまみをこの高さに揃える。
   line: number;
+  // 箇条書きのときだけ。Markdown ではリスト全体が 1 ブロックだが、掴む単位は
+  // 項目に合わせる（リスト全体のつまみと並べると、どちらを掴んでいるのか
+  // 分からなくなるので、箇条書きでは常に項目を相手にする）。
+  item: {
+    // その項目が始まる位置。
+    pos: number;
+    // 親のリストが始まる位置と、その中で何番目か。
+    listPos: number;
+    at: number;
+    // 1 行目の中心。つまみをこの高さに揃える。
+    mid: number;
+    // 項目の左端（記号を含む）。つまみはここから左へ置く。
+    edge: number;
+    box: Box;
+  } | null;
   // 表のときだけ。
   table: { rows: number; cols: number; geo: TableGeometry } | null;
 }
@@ -86,6 +112,16 @@ function same(a: Spot | null, b: Spot | null): boolean {
   if (!a || !b) return a === b;
   if (a.index !== b.index || a.pos !== b.pos || a.line !== b.line) return false;
   if (a.room !== b.room || !sameBox(a.box, b.box)) return false;
+  if (!a.item || !b.item) {
+    if (a.item !== b.item) return false;
+  } else if (
+    a.item.pos !== b.item.pos ||
+    a.item.mid !== b.item.mid ||
+    a.item.edge !== b.item.edge ||
+    !sameBox(a.item.box, b.item.box)
+  ) {
+    return false;
+  }
   if (!a.table || !b.table) return a.table === b.table;
   const x = a.table.geo;
   const y = b.table.geo;
@@ -143,6 +179,30 @@ function blockAtY(view: EditorView, y: number): Hit | null {
   let pos = 0;
   for (let i = 0; i < at; i++) pos += view.state.doc.child(i).nodeSize;
   return { el, index: at, pos };
+}
+
+// その li に対応する編集モデルの位置。項目そのものと、親のリストと並び。
+function itemPosOf(
+  view: EditorView,
+  li: HTMLElement,
+): { pos: number; listPos: number; at: number } | null {
+  let inside: number;
+  try {
+    inside = view.posAtDOM(li, 0);
+  } catch {
+    return null;
+  }
+  if (inside < 0) return null;
+  const $at = view.state.doc.resolve(
+    Math.min(inside, view.state.doc.content.size),
+  );
+  for (let d = $at.depth; d > 0; d--) {
+    if ($at.node(d).type !== schema.nodes.listItem) continue;
+    const pos = $at.before(d);
+    const spot = itemSpotAt(view.state.doc, pos);
+    return spot ? { pos, listPos: spot.listPos, at: spot.index } : null;
+  }
+  return null;
 }
 
 export function EditorGutter({
@@ -211,8 +271,15 @@ export function EditorGutter({
         ? box.left - scroller.getBoundingClientRect().left
         : BOTH;
 
-      const el = hit.el.querySelector("table");
       const node = view.state.doc.child(hit.index);
+
+      // 箇条書きは項目ごとに掴む。指している高さの li から編集モデルの位置を引く。
+      const li = itemAtY(hit.el, y, "li");
+      const spot = li ? itemPosOf(view, li) : null;
+      const liBox = li?.getBoundingClientRect();
+      const line = li && liBox ? itemLine(li, liBox) : null;
+
+      const el = hit.el.querySelector("table");
       const geo =
         el && node.type === schema.nodes.table
           ? tableGeometry(el, Array.from(el.rows), { x, y }, base)
@@ -223,6 +290,17 @@ export function EditorGutter({
         pos: hit.pos,
         room,
         box: relative(box, base),
+        item:
+          li && liBox && spot && line
+            ? {
+                pos: spot.pos,
+                listPos: spot.listPos,
+                at: spot.at,
+                mid: line.top - base.top + line.height / 2,
+                edge: itemEdge(li) - base.left,
+                box: relative(liBox, base),
+              }
+            : null,
         // ブロックの上端から半行下げる。行箱を直に測ると、囲みのように中へ
         // 別の箱を抱えるブロックで見当違いの行に付く。
         line: box.top - base.top + Math.min(lineHeight(hit.el), box.height) / 2,
@@ -318,6 +396,27 @@ export function EditorGutter({
         return;
       }
 
+      if (held.kind === "item") {
+        const hit = blockAtY(view, e.clientY);
+        const li = hit ? itemAtY(hit.el, e.clientY, "li") : null;
+        const spot = li ? itemPosOf(view, li) : null;
+        // 同じリストの中だけで動かす。
+        if (!li || !spot || spot.listPos !== held.spot.item?.listPos) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "move";
+        const box = li.getBoundingClientRect();
+        const after = e.clientY > box.top + box.height / 2;
+        toRef.current = after ? spot.at + 1 : spot.at;
+        setGuide({
+          kind: "item",
+          top: (after ? box.bottom : box.top) - base.top,
+          left: box.left - base.left,
+          length: box.width,
+        });
+        return;
+      }
+
       // 行・列は掴んだ表の中だけで動かす。
       const hit = blockAtY(view, e.clientY);
       const el = hit?.el.querySelector("table");
@@ -372,7 +471,11 @@ export function EditorGutter({
       const tr =
         held.kind === "block"
           ? blockMoveTr(view.state, held.spot.index, to)
-          : tableMoveTr(view.state, held.spot.pos, held.kind, held.at, to);
+          : held.kind === "item"
+            ? held.spot.item
+              ? itemMoveTr(view.state, held.spot.item.listPos, held.at, to)
+              : null
+            : tableMoveTr(view.state, held.spot.pos, held.kind, held.at, to);
       if (tr) view.dispatch(tr);
       requestAnimationFrame(() => againRef.current?.());
     };
@@ -422,6 +525,8 @@ export function EditorGutter({
   const runTable = (kind: TablePart, pos: number, at: number, act: TableAct) =>
     after(tableActTr(view.state, pos, kind, at, act));
 
+  const runItem = (pos: number, act: ItemAct) => after(itemActTr(view.state, pos, act));
+
   // 出しているつまみの表。
   const tableOf = (pos: number): HTMLTableElement | null => {
     const dom = view.nodeDOM(pos);
@@ -450,11 +555,14 @@ export function EditorGutter({
     } else if (kind === "row") {
       setDragPreview(e.dataTransfer, tableOf(where.pos)?.rows[at] ?? null, "行を移動");
     } else {
-      const dom = view.nodeDOM(where.pos);
+      // 項目の at は「リストの中で何番目か」なので、写しは位置から引く。
+      const dom = view.nodeDOM(
+        kind === "item" ? (where.item?.pos ?? where.pos) : where.pos,
+      );
       setDragPreview(
         e.dataTransfer,
         dom instanceof HTMLElement ? dom : null,
-        "ブロックを移動",
+        kind === "item" ? "項目を移動" : "ブロックを移動",
       );
     }
     setMenu(null);
@@ -493,6 +601,19 @@ export function EditorGutter({
     ];
   };
 
+  // 箇条書きの項目のメニュー。ブロックと同じ並びに揃える。
+  const itemItems = (where: Spot): MenuItem[] => {
+    const at = where.item;
+    if (!at) return [];
+    const run = (a: ItemAct) => () => runItem(at.pos, a);
+    return [
+      { icon: "arrow_upward", label: "上に挿入", run: run("insertBefore") },
+      { icon: "arrow_downward", label: "下に挿入", run: run("insertAfter") },
+      { icon: "content_copy", label: "複製", run: run("duplicate") },
+      { icon: "delete", label: "削除", run: run("delete"), danger: true },
+    ];
+  };
+
   // ブロックのメニュー。読むとき側にある「指摘する」「編集する」は入れない
   // （指摘はまだ編集面へ繋がっておらず、編集は編集面そのもの）。
   const blockItems = (where: Spot): MenuItem[] => {
@@ -506,9 +627,16 @@ export function EditorGutter({
   };
 
   const geo = spot?.table?.geo;
+  // 箇条書きでは項目を相手にする。字下げの分だけ左に余裕があるので、
+  // つまみを 2 つ並べられるかはそこも足して見る。
+  const grabs: Kind = spot?.item ? "item" : "block";
+  const grabAt = spot?.item ? spot.item.at : (spot?.index ?? 0);
+  const room = spot ? spot.room + (spot.item ? spot.item.edge : 0) : 0;
   // 使える幅。2 つ並べる余裕が無ければ掴みだけにする。
-  const wide = !!spot && spot.room >= BOTH;
-  // ブロックのつまみの置き場所。表は行と列の帯が交わる点、それ以外は 1 行目の左。
+  const wide = !!spot && room >= BOTH;
+  // つまみの置き場所。表は行と列の帯が交わる点、それ以外は 1 行目の左。
+  // 箇条書きは項目の 1 行目に高さを合わせ、左は項目の左端に寄せる（本文の
+  // 左端に合わせると、字下げの分だけ離れて見える）。
   const anchor = !spot
     ? null
     : geo
@@ -517,8 +645,10 @@ export function EditorGutter({
           left: geo.table.left - ADD_AWAY - BAR / 2 - GRIP / 2,
         }
       : {
-          top: spot.line - GRIP / 2,
-          left: spot.room >= ONLY ? -(wide ? BOTH : ONLY) : 2,
+          top: (spot.item ? spot.item.mid : spot.line) - GRIP / 2,
+          left:
+            (spot.item ? spot.item.edge : 0) +
+            (room >= ONLY ? -(wide ? BOTH : ONLY) : 2),
         };
 
   return (
@@ -531,23 +661,31 @@ export function EditorGutter({
               {wide && !geo && (
                 <button
                   type="button"
-                  title="下に挿入"
+                  title={spot.item ? "下に項目を挿入" : "下に挿入"}
                   className="mg-grip"
                   onContextMenu={(e) => e.preventDefault()}
-                  onClick={() => runBlock(spot.index, "insertAfter")}
+                  onClick={() =>
+                    spot.item
+                      ? runItem(spot.item.pos, "insertAfter")
+                      : runBlock(spot.index, "insertAfter")
+                  }
                 >
                   <Icon name="add" size={17} />
                 </button>
               )}
               <button
                 type="button"
-                title="ドラッグで移動 / クリックでメニュー"
+                title={
+                  spot.item
+                    ? "ドラッグで項目を移動 / クリックでメニュー"
+                    : "ドラッグで移動 / クリックでメニュー"
+                }
                 className="mg-grip mg-grip-hold"
                 draggable
-                onDragStart={hold("block", spot, spot.index)}
+                onDragStart={hold(grabs, spot, grabAt)}
                 onDragEnd={release}
-                onClick={open("block", spot, spot.index)}
-                onContextMenu={open("block", spot, spot.index)}
+                onClick={open(grabs, spot, grabAt)}
+                onContextMenu={open(grabs, spot, grabAt)}
               >
                 <Icon name="drag_indicator" size={17} />
               </button>
@@ -640,6 +778,9 @@ export function EditorGutter({
           {(menu?.kind === "block" || holding === "block") && spot && (
             <div className="mg-target" style={spot.box} />
           )}
+          {(menu?.kind === "item" || holding === "item") && spot?.item && (
+            <div className="mg-target" style={spot.item.box} />
+          )}
           {(menu?.kind === "row" || holding === "row") && geo?.row && (
             <div
               className="mg-target"
@@ -684,7 +825,9 @@ export function EditorGutter({
           items={
             menu.kind === "block"
               ? blockItems(menu.spot)
-              : partItems(menu.kind, menu.spot, menu.at)
+              : menu.kind === "item"
+                ? itemItems(menu.spot)
+                : partItems(menu.kind, menu.spot, menu.at)
           }
           onClose={() => setMenu(null)}
         />
