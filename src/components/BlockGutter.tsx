@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
 import { setDragPreview } from "../lib/dragImage";
+import {
+  ADD,
+  ADD_AWAY,
+  AWAY,
+  BAR,
+  EDGE,
+  GRIP,
+  relative,
+  tableGeometry,
+  type Box,
+} from "../lib/tableGeom";
+import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 
 // ブロックを掴んで動かすための層。表のときは行と列のつまみも出す。
@@ -18,28 +30,9 @@ const BLOCK_MIME = "application/x-fude-block";
 const ROW_MIME = "application/x-fude-trow";
 const COL_MIME = "application/x-fude-tcol";
 
-// つまみの大きさ。掴み損ねないよう、見た目より広く取る。
-const GRIP = 24;
-// 本文・表の縁からつまみまでの隙間。詰めると文字と一体に見えてしまう。
-const AWAY = 10;
 // つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る幅。
 const BOTH = GRIP * 2 + 4 + AWAY;
 const ONLY = GRIP + AWAY;
-// 表の行・列の帯。掴む面は要るが、太いと表より目立ってしまう。
-const BAR = 15;
-// 帯を出す縁の幅。表の真ん中を指している間は出さない（Notion と同じ）。
-const EDGE = 26;
-// 行・列を足す帯。掴む帯と同じ太さに揃える。表の下の余白（1.4rem）に
-// 収まる範囲で、押しやすさを優先する。
-const ADD = 16;
-const ADD_AWAY = 6;
-
-interface Box {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
 
 interface View {
   index: number;
@@ -71,14 +64,6 @@ interface View {
 
 type Kind = "block" | "row" | "col" | "item";
 
-// 右押しやつまみから出すメニューの 1 項目。
-interface MenuItem {
-  icon: string;
-  label: string;
-  keys?: string;
-  danger?: boolean;
-  run: () => void;
-}
 export type Part = "row" | "col";
 export type TableAct =
   "insertBefore" | "insertAfter" | "duplicate" | "clear" | "delete";
@@ -115,15 +100,6 @@ function same(a: View | null, b: View): boolean {
     (a.col?.index ?? -1) === (b.col?.index ?? -1) &&
     (a.table?.top ?? -1) === (b.table?.top ?? -1)
   );
-}
-
-function relative(r: DOMRect, base: DOMRect): Box {
-  return {
-    top: r.top - base.top,
-    left: r.left - base.left,
-    width: r.width,
-    height: r.height,
-  };
 }
 
 // 相手のブロックは縦位置から決める。当たり判定で拾うと、重ねた層や指摘の印、
@@ -210,90 +186,19 @@ function lineHeight(el: Element): number {
   return Number.isFinite(size) && size > 0 ? size * 1.6 : 24;
 }
 
-// 表の中の行と列は、当たり判定ではなく矩形から決める。重ねた層や余白に
-// 邪魔されず、指している高さの行・幅の列をそのまま選べる。
-// 表の外に居るときは、一番近い行・列に寄せる。
-interface Geometry {
-  table: Box;
-  // 表の右端まで見えているか。横に隠れているうちは列を足す帯を出さない。
-  atRight: boolean;
-  // 行を足す帯を置く高さ。横スクロールする表では、枠の下（スクロールバーの
-  // 外側）に置く。表の下端に置くとバーの上に重なる。
-  bottom: number;
-  row: { line: number; top: number; height: number } | null;
-  col: { index: number; left: number; width: number } | null;
-}
-
-// 2 つの矩形の重なり。重なりが無ければ null。
-function overlap(a: DOMRect, b: DOMRect): DOMRect | null {
-  const left = Math.max(a.left, b.left);
-  const right = Math.min(a.right, b.right);
-  const top = Math.max(a.top, b.top);
-  const bottom = Math.min(a.bottom, b.bottom);
-  if (right <= left || bottom <= top) return null;
-  return new DOMRect(left, top, right - left, bottom - top);
-}
-
-function pick(boxes: DOMRect[], at: number, axis: "x" | "y"): number {
-  for (let i = 0; i < boxes.length; i++) {
-    const start = axis === "y" ? boxes[i].top : boxes[i].left;
-    const end = axis === "y" ? boxes[i].bottom : boxes[i].right;
-    if (at < end || i === boxes.length - 1)
-      return at < start && i === 0 ? 0 : i;
-  }
-  return boxes.length - 1;
-}
-
-function tableGeometry(
-  blockEl: Element,
-  x: number,
-  y: number,
-  base: DOMRect,
-): Geometry | null {
+// 表のつまみの相手は、その表の DOM から測る。行の数え方はモードで違うので
+// 候補の行を渡す形になっている（読むときは見出しが <thead> に入る）。
+function geometryOf(blockEl: Element, x: number, y: number, base: DOMRect) {
   const table = blockEl.querySelector("table");
   if (!table) return null;
-  const head = table.tHead?.rows[0] ?? table.rows[0];
-  if (!head) return null;
-  // 横に溢れる表は枠の中でスクロールする。つまみと線は見えている範囲で切る。
-  // 表そのものの幅で引くと、隠れている部分まで画面の端まで伸びてしまう。
-  const wrap = table.closest(".mg-table-wrap") ?? table;
-  const clip = wrap.getBoundingClientRect();
-  const visible = overlap(table.getBoundingClientRect(), clip);
-  if (!visible) return null;
-
-  const cells = Array.from(head.cells).map((c) => c.getBoundingClientRect());
-  if (cells.length === 0) return null;
-  const bodyRows = Array.from(table.tBodies[0]?.rows ?? []);
-  const rowBoxes = bodyRows.map((r) => r.getBoundingClientRect());
-  // 指している位置を見えている範囲へ寄せる。隠れた列を選ばせない。
-  const cx = Math.min(Math.max(x, visible.left + 1), visible.right - 1);
-  const cy = Math.min(Math.max(y, visible.top + 1), visible.bottom - 1);
-  const colIndex = pick(cells, cx, "x");
-  const rowIndex = rowBoxes.length > 0 ? pick(rowBoxes, cy, "y") : -1;
-  const colBox = overlap(cells[colIndex], clip);
-  const rowBox = rowIndex >= 0 ? overlap(rowBoxes[rowIndex], clip) : null;
-
-  const scrolls = wrap !== table && wrap.scrollWidth > wrap.clientWidth + 1;
+  const rows = Array.from(table.tBodies[0]?.rows ?? []);
+  const geo = tableGeometry(table, rows, { x, y }, base);
+  if (!geo) return null;
+  // GFM の表はソースの 1 行が 1 つの tr になる。本体は 2 行目から
+  // （0 行目が見出し、1 行目が区切り）。
   return {
-    table: relative(visible, base),
-    atRight: table.getBoundingClientRect().right <= clip.right + 1,
-    bottom: (scrolls ? clip.bottom : visible.bottom) - base.top,
-    row:
-      rowIndex >= 0 && rowBox
-        ? {
-            // 0 行目が見出し、1 行目が区切り。本体は 2 行目から。
-            line: rowIndex + 2,
-            top: rowBox.top - base.top,
-            height: rowBox.height,
-          }
-        : null,
-    col: colBox
-      ? {
-          index: colIndex,
-          left: colBox.left - base.left,
-          width: colBox.width,
-        }
-      : null,
+    ...geo,
+    row: geo.row ? { ...geo.row, line: geo.row.index + 2 } : null,
   };
 }
 
@@ -353,7 +258,6 @@ export function BlockGutter({
   ) => { from: number; to: number } | null;
 }) {
   const layerRef = useRef<HTMLDivElement>(null);
-  const menuBox = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
   const [guide, setGuide] = useState<Guide | null>(null);
   // 何のメニューか。ブロックのつまみは項目一式、行・列は削除だけ。
@@ -426,9 +330,7 @@ export function BlockGutter({
       const room = scroller
         ? base.left - scroller.getBoundingClientRect().left
         : BOTH;
-      const geo = isTable(hit.index)
-        ? tableGeometry(hit.el, x, y, base)
-        : null;
+      const geo = isTable(hit.index) ? geometryOf(hit.el, x, y, base) : null;
 
       if (geo) {
         // 行は左の縁、列は上の縁を指したときだけ出す。表の内側どこでも出すと
@@ -556,7 +458,7 @@ export function BlockGutter({
       );
       const geo =
         hit && hit.index === held.index
-          ? tableGeometry(hit.el, e.clientX, e.clientY, base)
+          ? geometryOf(hit.el, e.clientX, e.clientY, base)
           : null;
       if (!geo) return;
       e.preventDefault();
@@ -1092,49 +994,14 @@ export function BlockGutter({
         content,
       )}
 
-      {menu &&
-        createPortal(
-          <div
-            ref={menuBox}
-            style={{
-              left: Math.min(menu.x, window.innerWidth - 190),
-              top: Math.min(
-                menu.y,
-                window.innerHeight - items.length * 32 - 20,
-              ),
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="fixed z-50 w-[11.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
-          >
-            {items.map((it) => (
-              <button
-                key={it.label}
-                type="button"
-                onClick={() => {
-                  it.run();
-                  setMenu(null);
-                }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
-                  it.danger
-                    ? "text-[var(--mg-danger)]"
-                    : "text-[var(--mg-fg-dim)]"
-                }`}
-              >
-                <Icon
-                  name={it.icon}
-                  size={16}
-                  className={it.danger ? "" : "text-[var(--mg-muted)]"}
-                />
-                {it.label}
-                {"keys" in it && it.keys && (
-                  <span className="mg-menu-keys">{it.keys}</span>
-                )}
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )}
-      {menu && <Dismiss box={menuBox} onClose={() => setMenu(null)} />}
+      {menu && (
+        <BlockMenu
+          x={menu.x}
+          y={menu.y}
+          items={items}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </>
   );
 }
@@ -1144,28 +1011,3 @@ export function BlockGutter({
 // 見張るのは click ではなく mousedown。click で見張ると、メニューを開いた
 // その 1 回のクリックがそのまま「外側を押した」として届き、開いた瞬間に
 // 閉じてしまう（左クリックでメニューが出ないのはこれが原因だった）。
-function Dismiss({
-  box,
-  onClose,
-}: {
-  box: React.RefObject<HTMLDivElement>;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (box.current?.contains(e.target as Node)) return;
-      onClose();
-    };
-    const close = () => onClose();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("resize", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [box, onClose]);
-  return null;
-}

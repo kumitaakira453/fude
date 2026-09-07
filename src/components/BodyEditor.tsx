@@ -15,6 +15,7 @@ import { editorPlugins } from "../lib/md/plugins";
 import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
 import { IconBoard } from "./CalloutIcon";
+import { TableGrips } from "./TableGrips";
 import { MermaidModal } from "./MermaidModal";
 
 // 組版されたまま書く全文編集。
@@ -330,6 +331,15 @@ export function BodyEditor({
   saved.current = onSave;
   moved.current = onViewpoint;
 
+  // 組み上がった編集面。表のつまみのように、編集面の外側に重ねる React の
+  // 部品へ渡す（層を編集面の中に置くと、ProseMirror が本文の書き換えと
+  // 取り違える）。
+  const [built, setBuilt] = useState<{
+    view: EditorView;
+    host: HTMLElement;
+    scroller: HTMLElement | null;
+  } | null>(null);
+
   // 拡大中の図。モーダルは React の側にあるので、NodeView からは合図だけ受ける。
   const [zoomed, setZoomed] = useState<{ svg: string; onEdit: () => void } | null>(
     null,
@@ -473,6 +483,7 @@ export function BodyEditor({
     document.addEventListener("visibilitychange", onLeave);
 
     onDom?.(view.dom);
+    setBuilt({ view, host: at, scroller });
     view.focus();
     paint.draw();
 
@@ -537,6 +548,7 @@ export function BodyEditor({
       if (flushRef) flushRef.current = null;
       if (adoptRef) adoptRef.current = null;
       paint.stop();
+      setBuilt(null);
       onDom?.(null);
       view.destroy();
     };
@@ -548,6 +560,13 @@ export function BodyEditor({
     <>
       {/* 編集面は ProseMirror が中の DOM を持つ。React の子は入れない。 */}
       <div ref={host} className="relative" />
+      {built && (
+        <TableGrips
+          view={built.view}
+          host={built.host}
+          scroller={built.scroller}
+        />
+      )}
       {picking && (
         <IconBoard
           key={picking.seq}
