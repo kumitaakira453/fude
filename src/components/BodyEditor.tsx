@@ -115,12 +115,9 @@ function caretBar(view: EditorView, host: HTMLElement) {
     return { left: rect.left, top: rect.top, bottom: rect.bottom };
   };
 
-  const draw = () => {
+  const measure = (): { left: number; top: number; height: number } | null => {
     const { selection } = view.state;
-    if (!selection.empty || !view.hasFocus()) {
-      hide();
-      return;
-    }
+    if (!selection.empty || !view.hasFocus()) return null;
     // 隠れているところ（図だけを出している塊の中など）は測れない。
     let at: { left: number; top: number; bottom: number } | null = null;
     try {
@@ -128,21 +125,27 @@ function caretBar(view: EditorView, host: HTMLElement) {
     } catch {
       at = null;
     }
+    if (!at) return null;
+    const box = host.getBoundingClientRect();
+    return {
+      left: at.left - box.left,
+      top: at.top - box.top,
+      height: at.bottom - at.top,
+    };
+  };
+
+  const apply = (at: { left: number; top: number; height: number } | null) => {
     if (!at) {
       hide();
       return;
     }
-    const box = host.getBoundingClientRect();
-    const left = at.left - box.left;
-    const top = at.top - box.top;
-    const height = at.bottom - at.top;
-    const now = `${left},${top},${height}`;
+    const now = `${at.left},${at.top},${at.height}`;
     if (now === was && shown) return;
     was = now;
 
-    bar.style.left = `${left}px`;
-    bar.style.top = `${top}px`;
-    bar.style.height = `${height}px`;
+    bar.style.left = `${at.left}px`;
+    bar.style.top = `${at.top}px`;
+    bar.style.height = `${at.height}px`;
     if (!shown) {
       shown = true;
       bar.style.display = "block";
@@ -154,7 +157,7 @@ function caretBar(view: EditorView, host: HTMLElement) {
     for (const anim of bar.getAnimations()) anim.currentTime = 0;
   };
 
-  return { draw, stop: () => bar.remove() };
+  return { measure, apply, stop: () => bar.remove() };
 }
 
 // 選んだ範囲を自分で描く。
@@ -197,9 +200,7 @@ function selectionBoxes(
     return selectionRects(view, selection.from, selection.to, band, base);
   };
 
-  const draw = () => {
-    // 測り終えてから style を書く。書いた直後に測ると強制レイアウトが走る。
-    const rects = measure();
+  const apply = (rects: Rect[]) => {
     const now = rects.map((r) => `${r.left},${r.top},${r.width},${r.height}`).join("|");
     if (now === was) return;
     was = now;
@@ -220,45 +221,66 @@ function selectionBoxes(
     }
   };
 
-  return { draw, stop: () => layer.remove() };
+  return { measure, apply, stop: () => layer.remove() };
 }
 
 // カーソルと選択の描き直しをまとめて受け持つ。
 //
 // 描き直すのは組み直しのときだけでは足りない。位置が変わる契機は他にもある。
-// ただし測るとレイアウトが走るので、来た合図は 1 枚にまとめる。打鍵ごとに
-// 打鍵・選択の変化・大きさの変化の 3 経路から来るため、そのまま測ると
-// 同期レイアウトが何度も走って重くなる。
+// 測るとレイアウトが走るので、無駄に測らないための工夫が 2 つ入っている。
+//
+// 1 つ目は、測る前に「測らずに分かること」で足りるかを見ること。打鍵ごとに
+// 打鍵・選択の変化・大きさの変化の 3 経路から合図が来るので、選択が同じで
+// 位置も動いていないなら測らずに戻る。
+//
+// 2 つ目は、カーソルと選択をまとめて測ってからまとめて書くこと。style を
+// 書くとレイアウトが無効になるので、書いた直後に測ると同期レイアウトが走る。
 function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | null) {
   // 選択を先に置く。同じ z-index なので、後から足したカーソルが上に来る。
   const boxes = selectionBoxes(view, host, scroller);
   const bar = caretBar(view, host);
 
-  let frame = 0;
+  // 位置が変わる合図（スクロール・折り返し・焦点）の数。選択が同じでも
+  // これが動いたら測り直す。
+  let gen = 0;
+  // 直前に描いたときの手掛かり。
+  let sig = "";
+
   const paint = () => {
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
-    boxes.draw();
-    bar.draw();
+    const { from, to, head } = view.state.selection;
+    const now = `${from},${to},${head},${view.composing ? 1 : 0},${gen}`;
+    if (now === sig) return;
+    sig = now;
+    const rects = boxes.measure();
+    const at = bar.measure();
+    boxes.apply(rects);
+    bar.apply(at);
   };
+
+  let frame = 0;
   const again = () => {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      boxes.draw();
-      bar.draw();
+      paint();
     });
   };
-  view.dom.addEventListener("focus", again);
-  view.dom.addEventListener("blur", again);
+  // 位置が動いた合図。選択が同じでも測り直させる。
+  const moved = () => {
+    gen++;
+    again();
+  };
+  view.dom.addEventListener("focus", moved);
+  view.dom.addEventListener("blur", moved);
   // コードの塊のように中で横スクロールするものがある。scroll は上がって
   // こないので捕まえる側で拾う。
-  view.dom.addEventListener("scroll", again, true);
-  // 組み直しを伴わない移動（⌘⌫ の既定動作など）はここで拾う。
+  view.dom.addEventListener("scroll", moved, true);
+  // 組み直しを伴わない移動（⌘⌫ の既定動作など）はここで拾う。標準の選択が
+  // 動いただけのときは、編集モデルの選択と同じなら測らずに戻る。
   document.addEventListener("selectionchange", again);
   // 字体の読み込み・折り返し・塊の開閉で高さが変わったら測り直す。見えている
   // 帯は入れ物の高さで決まるので、スクロール容器の大きさも見る。
-  const watch = new ResizeObserver(again);
+  const watch = new ResizeObserver(moved);
   watch.observe(view.dom);
   if (scroller) watch.observe(scroller);
 
@@ -268,11 +290,11 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     // 対して重く見える。測るのは 900 ブロックでも 0.4ms で、待つ理由が無い。
     now: paint,
     // 位置が変わるだけの合図（スクロール・折り返し・焦点）はまとめる。
-    draw: again,
+    draw: moved,
     stop: () => {
-      view.dom.removeEventListener("focus", again);
-      view.dom.removeEventListener("blur", again);
-      view.dom.removeEventListener("scroll", again, true);
+      view.dom.removeEventListener("focus", moved);
+      view.dom.removeEventListener("blur", moved);
+      view.dom.removeEventListener("scroll", moved, true);
       document.removeEventListener("selectionchange", again);
       watch.disconnect();
       cancelAnimationFrame(frame);
