@@ -55,7 +55,7 @@ export function Sidebar() {
               className="w-full rounded-md border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
             />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
+          <div className="mg-scroll-inset min-h-0 flex-1 overflow-y-auto px-1 pb-4">
             <FileTree />
           </div>
         </div>

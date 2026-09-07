@@ -3342,6 +3342,15 @@ svg[id^="mmd-"] foreignObject p {
   width: 10px;
   height: 10px;
 }
+/* 重ね表示のスクロールバーの場所を空ける。
+   macOS の既定は幅を取らない重ね表示で、`scrollbar-gutter: stable` でも場所は
+   空かない（system WKWebView で実測。中身の幅は枠の幅と同じままだった）。
+   地色や枠を持つ子が端まで伸びる枠では、つまみが中身の上に乗って読みにくい。
+   バーのぶんだけ内側を空け、つまみを中身の外へ出す。 */
+.mg-scroll-inset {
+  padding-right: 10px;
+}
+
 /* つまみは外側の端に寄せる。左右に同じだけ隙間を空けると溝の真ん中に浮いて
    見え、どの枠のバーなのか読み取りにくい。隙間は本文の側だけに空ける。 */
 *::-webkit-scrollbar-thumb {

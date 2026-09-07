@@ -97,7 +97,7 @@ export function CommandPalette() {
             className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
           />
         </div>
-        <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
+        <div ref={listRef} className="mg-scroll-inset max-h-[50vh] overflow-y-auto py-1">
           {results.map((r, i) => (
             <button
               key={r.node.path}

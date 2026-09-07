@@ -362,7 +362,7 @@ export function SearchPanel() {
           </button>
         </div>
       </div>
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div ref={listRef} className="mg-scroll-inset min-h-0 flex-1 overflow-y-auto py-1">
         {view === "tree"
           ? tree.map((n) => renderNode(n, 0))
           : shown.map((fh, fi) => (
