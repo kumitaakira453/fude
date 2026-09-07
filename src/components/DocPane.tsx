@@ -1347,12 +1347,20 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           />
         )}
 
-        {!editing && path && (
+        {/* ファイル内検索。読むときと編集面で同じものを使う。探す先だけが
+            違う（編集面は ProseMirror が持つ DOM を走査し、印はその外側の
+            入れ物へ重ねる）。 */}
+        {path && (
           <DocSearchOverlay
-            content={content}
+            content={writing ? editContent : content}
+            into={writing ? pm?.host : content}
             isActive={isActive}
             path={path}
-            docKey={path + (raw?.length ?? 0)}
+            docKey={
+              writing
+                ? `${path}:edit:${draft.length}`
+                : `${path}:${raw?.length ?? 0}`
+            }
           />
         )}
       </div>

@@ -7,7 +7,7 @@ import {
   highlightAtom,
   searchActiveHitAtom,
 } from "../state/atoms";
-import { clipRects, scrollBoxOf } from "../lib/domText";
+import { clipRects, scrollBoxOf, SYNTHETIC } from "../lib/domText";
 import { buildMatcher, stepHit, type HitStep } from "../lib/search";
 import { Icon } from "./Icon";
 
@@ -29,11 +29,20 @@ const RESCAN_WAIT = 150;
 // ヒット総数・次/前移動・アクティブ強調を提供する。
 export function DocSearchOverlay({
   content,
+  into,
   isActive,
   path,
   docKey,
 }: {
+  // 探す先。この中の文字ノードを走査する。
   content: HTMLElement | null;
+  // 印を重ねる先と、矩形を測る基準。渡さなければ content と同じ。
+  //
+  // 編集面では別にする必要がある。本文の DOM は ProseMirror が持っていて、
+  // その中に React の要素を入れると本文の書き換えと見なされて消される
+  // （registerMirror が属性の mutation に節点の範囲を返す）。外側の
+  // 入れ物へ重ねる。
+  into?: HTMLElement | null;
   isActive: boolean;
   path?: string;
   docKey?: string;
@@ -54,10 +63,12 @@ export function DocSearchOverlay({
 
   // 見つけた範囲を測って矩形にする。探し直しは伴わないので、枠の中を
   // スクロールしただけのときはこちらだけを呼ぶ。
+  const layerAt = into ?? content;
+
   const measure = useCallback(
     (ranges: Range[]) => {
-      if (!content) return;
-      const base = content.getBoundingClientRect();
+      if (!content || !layerAt) return;
+      const base = layerAt.getBoundingClientRect();
       // ピル感を出すため各矩形を少しだけ外側に広げる
       const PX = 3;
       const PY = 2;
@@ -87,7 +98,7 @@ export function DocSearchOverlay({
         }),
       );
     },
-    [content],
+    [content, layerAt],
   );
 
   const compute = useCallback(() => {
@@ -112,11 +123,10 @@ export function DocSearchOverlay({
     const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
     let node: Node | null;
     while ((node = walker.nextNode())) {
-      const pe = node.parentElement as HTMLElement | null;
-      // 編集中の textarea 等は対象外
-      if (pe?.closest?.(".mg-cell-editor")) continue;
-      // Mermaid など SVG 内のテキストは対象外（図の再描画で矩形が不安定になる）
-      if (pe?.closest?.("svg")) continue;
+      // 画面には出るがソースには無い文字は対象外。アイコンは合字なので、
+      // 除かないと "drag" で drag_indicator が当たる。図（svg）は再描画で
+      // 矩形が不安定になるのでこれにも入っている。
+      if (node.parentElement?.closest(SYNTHETIC)) continue;
       const text = node.nodeValue ?? "";
       re.lastIndex = 0;
       let m: RegExpExecArray | null;
@@ -286,7 +296,7 @@ export function DocSearchOverlay({
 
   const total = matches.length;
   const layer =
-    content &&
+    layerAt &&
     createPortal(
       <div className="mg-hl-layer" aria-hidden>
         {matches.map((m, i) =>
@@ -304,7 +314,7 @@ export function DocSearchOverlay({
           )),
         )}
       </div>,
-      content,
+      layerAt,
     );
 
   return (

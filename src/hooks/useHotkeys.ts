@@ -4,9 +4,18 @@ import { closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
 import { reviewScreenAtom } from "../state/review";
 
-// 入力欄以外で選択中のテキストを検索語プリフィル用に取得する
+// 入力欄以外で選択中のテキストを検索語プリフィル用に取得する。
+//
+// 本文の編集面（contentEditable）は入力欄として扱わない。読むときは選んだ
+// 文字がそのまま検索語になるのに、編集面では拾えないのは食い違う。
 function selectionText(): string {
-  if (inEditable(document.activeElement)) return "";
+  const at = document.activeElement as HTMLElement | null;
+  const typing =
+    !!at &&
+    (at.tagName === "INPUT" ||
+      at.tagName === "TEXTAREA" ||
+      !!at.closest?.(".cm-editor, .mg-block-cm, .mg-cm"));
+  if (typing) return "";
   const s = window.getSelection?.()?.toString().trim() ?? "";
   return s.length > 0 && s.length <= 200 ? s : "";
 }

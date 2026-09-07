@@ -5,7 +5,10 @@
 // 正規化された文字列が返り、ソースと突き合わせられなくなる。
 
 // 画面には出るがソースには無い合成テキスト。辿るときに除く。
-const SYNTHETIC = [
+//
+// ファイル内検索も同じものを除く（アイコンは合字なので、"drag" で
+// drag_indicator が当たってしまう）。
+export const SYNTHETIC = [
   ".material-symbols-rounded", // アイコンは合字なので文字として現れる
   ".mg-codeblock > div:first-child", // コードブロックの言語ラベルとコピーボタン
   ".mg-callout-k", // Note / Tip などの種別ラベル
@@ -14,6 +17,8 @@ const SYNTHETIC = [
   ".cm-editor", // その場編集で開いている生ソース
   ".katex", // 数式は別の字形に置き換わる
   "svg", // Mermaid の図
+  ".mg-code-head", // 編集面のコードの塊の言語の札と操作
+  ".mg-lang-menu", // 言語を選ぶ小窓
 ].join(",");
 
 export interface BlockText {
