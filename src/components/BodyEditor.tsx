@@ -19,7 +19,6 @@ import {
   closeEmoji,
   emojiKey,
   emojiSpanAt,
-  hasEmoji,
   swapEmoji,
   takeEmoji,
 } from "../lib/md/emoji";
@@ -29,7 +28,9 @@ import { domSpan, type Span } from "../lib/md/domSpan";
 import { seenAt } from "../lib/md/seenAt";
 import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
+import { linkSpanAt, relink } from "../lib/md/marks";
 import { AskBox } from "./AskBox";
+import { LinkCard } from "./LinkCard";
 import { EmojiBoard } from "./EmojiBoard";
 import { EditorGutter } from "./EditorGutter";
 import { MermaidModal } from "./MermaidModal";
@@ -533,6 +534,28 @@ export function BodyEditor({
     null,
   );
 
+  // 指しているリンク。行き先を見せる札と、打ち直しの入口を出す。
+  const [onLink, setOnLink] = useState<{
+    span: { from: number; to: number };
+    href: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  // リンクの行き先を聞いているところ。
+  const [askLink, setAskLink] = useState<{
+    span: { from: number; to: number };
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  // 札を消すのは少し待つ。リンクから札へ手を運ぶ間に消えると触れない。
+  const away = useRef(0);
+  const holdCard = () => window.clearTimeout(away.current);
+  const dropCard = () => {
+    window.clearTimeout(away.current);
+    away.current = window.setTimeout(() => setOnLink(null), 220);
+  };
+
   // 打ち直している式。位置はプラグインが持っているので、ここは出す場所と
   // いま見せている中身だけを控える。
   const [math, setMath] = useState<{
@@ -764,19 +787,42 @@ export function BodyEditor({
       // 見るのは 1 フレームに 1 回。
       let onEmoji = false;
       let looking = 0;
+      // 指しているリンク。同じものを指している間は出し直さない。
+      let shownLink = "";
       const hover = (event: MouseEvent) => {
         if (looking) return;
         looking = requestAnimationFrame(() => {
           looking = 0;
-          const el = event.target;
-          const near = el instanceof Element && hasEmoji(el.textContent ?? "");
-          const on = near && !!emojiSpanAt(view, event.clientX, event.clientY);
-          if (on === onEmoji) return;
-          onEmoji = on;
-          view.dom.classList.toggle("mg-over-emoji", on);
+          const el = event.target instanceof Element ? event.target : null;
+          // 指している 1 文字を見る。指している要素の字で先にふるうことは
+          // できない（本文の上に重ねた層が相手になることがあり、その字は
+          // 本文ではない）。位置を聞くのは実測 0〜1ms なので、フレームごとに
+          // 1 回で足りる。
+          const on = !!emojiSpanAt(view, event.clientX, event.clientY);
+          if (on !== onEmoji) {
+            onEmoji = on;
+            view.dom.classList.toggle("mg-over-emoji", on);
+          }
+
+          // リンクの札。要素から辿るだけなので、位置を測る必要は無い。
+          const a = el?.closest("a");
+          const box = a?.getBoundingClientRect();
+          const at = a ? view.posAtDOM(a, 0) : -1;
+          const span = at >= 0 ? linkSpanAt(view.state, at + 1) : null;
+          const key = span && box ? `${span.from},${span.to}` : "";
+          if (key === shownLink) return;
+          shownLink = key;
+          holdCard();
+          if (!span || !box) {
+            dropCard();
+            return;
+          }
+          setOnLink({ span, href: span.href, x: box.left, y: box.bottom + 8 });
         });
       };
       view.dom.addEventListener("mousemove", hover);
+      const leave = () => dropCard();
+      view.dom.addEventListener("mouseleave", leave);
 
       // 絵文字の盤を出す / 消す。打鍵のたびに React を描き直さないよう、
       // 変わったときだけ控えを差し替える。
@@ -1074,7 +1120,9 @@ export function BodyEditor({
         if (flushRef) flushRef.current = null;
         if (adoptRef) adoptRef.current = null;
         cancelAnimationFrame(looking);
+        window.clearTimeout(away.current);
         view.dom.removeEventListener("mousemove", hover);
+        view.dom.removeEventListener("mouseleave", leave);
         paint.stop();
         setBuilt(null);
         onBuilt?.(null);
@@ -1112,6 +1160,46 @@ export function BodyEditor({
             setPicking(null);
           }}
           onClose={() => setPicking(null)}
+        />
+      )}
+
+      {/* 指しているリンクの札。行き先を見せ、打ち直しの入口を出す。 */}
+      {built && onLink && !askLink && (
+        <LinkCard
+          href={onLink.href}
+          at={{ left: onLink.x, top: onLink.y }}
+          onEnter={holdCard}
+          onLeave={dropCard}
+          onEdit={() => {
+            setAskLink({
+              span: onLink.span,
+              text: onLink.href,
+              x: onLink.x,
+              y: onLink.y,
+            });
+            setOnLink(null);
+          }}
+        />
+      )}
+
+      {/* リンクの行き先を聞く小窓。相手は選んだ範囲ではなくそのリンク。 */}
+      {built && askLink && (
+        <AskBox
+          hint="https://…"
+          label="リンクの行き先"
+          text={askLink.text}
+          at={{ left: askLink.x, top: askLink.y }}
+          onText={(text) => setAskLink({ ...askLink, text })}
+          onDone={() => {
+            relink(askLink.span, askLink.text.trim())(
+              built.view.state,
+              built.view.dispatch,
+              built.view,
+            );
+            setAskLink(null);
+            built.view.focus();
+          }}
+          onClose={() => setAskLink(null)}
         />
       )}
 

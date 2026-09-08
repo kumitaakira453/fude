@@ -2792,6 +2792,58 @@ svg[id^="mmd-"] foreignObject p {
 .mg-sel-bar button.is-on .mg-sel-name {
   color: inherit;
 }
+/* リンクを指したときに出す札。行き先を見せ、写しと打ち直しの入口を置く。 */
+.mg-link-card {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  max-width: 32rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--mg-border);
+  border-radius: 999px;
+  background: var(--mg-panel);
+  box-shadow:
+    0 12px 28px -14px rgba(0, 0, 0, 0.4),
+    0 2px 6px -4px rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+}
+.mg-link-globe {
+  color: var(--mg-muted);
+}
+/* 行き先。長いものは省いて 1 行に保つ。 */
+.mg-link-href {
+  overflow: hidden;
+  max-width: 22rem;
+  color: var(--mg-fg-dim);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-link-href:hover {
+  color: var(--mg-accent);
+}
+.mg-link-card button {
+  display: flex;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  color: var(--mg-fg-dim);
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.mg-link-card button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-accent);
+}
+.mg-link-edit {
+  font-weight: 500;
+}
+
 /* 一言だけ聞く小窓。リンクの行き先と式の中身に使う。帯の左下へ置く。
    帯の中の段にはしない（帯の高さと幅が段の数で動くうえ、親の transform や
    overflow で切り抜かれて「押しても何も出ない」ように見える）。 */
@@ -2843,22 +2895,23 @@ svg[id^="mmd-"] foreignObject p {
 .mg-ask:has(> textarea) {
   align-items: flex-start;
 }
-/* 決めるボタン。帯のアイコンと同じ当たりにする。 */
+/* 決めるボタン。押す先だと分かるように主色で塗る。 */
 .mg-ask button {
   display: flex;
   width: 1.75rem;
   height: 1.75rem;
+  flex: none;
   align-items: center;
   justify-content: center;
   border-radius: 0.5rem;
-  color: var(--mg-fg-dim);
+  background: var(--mg-accent);
+  color: var(--mg-bg);
   transition:
     background 0.12s,
     color 0.12s;
 }
 .mg-ask button:hover {
-  background: var(--mg-hover);
-  color: var(--mg-accent);
+  background: color-mix(in srgb, var(--mg-accent) 82%, var(--mg-fg));
 }
 
 /* 操作が付いた知らせだけ押せるようにする。素の知らせは押す対象を持たない。 */

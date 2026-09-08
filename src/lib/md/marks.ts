@@ -97,6 +97,36 @@ export function linkAt(state: EditorState): string | null {
   return href;
 }
 
+// その位置にあるリンクの範囲と行き先。無ければ null。
+//
+// 押した / 指した先から辿るのに使う（帯は選んだ範囲を相手にするが、こちらは
+// リンクそのものを相手にする）。
+export function linkSpanAt(
+  state: EditorState,
+  pos: number,
+): { from: number; to: number; href: string } | null {
+  if (pos < 0 || pos > state.doc.content.size) return null;
+  const type = schema.marks.link;
+  const run = markRun(state.doc.resolve(pos), type);
+  if (!run) return null;
+  const mark = type.isInSet(state.doc.nodeAt(run.from)?.marks ?? []);
+  return mark ? { ...run, href: (mark.attrs.href as string) ?? "" } : null;
+}
+
+// その範囲のリンクを張り替える。行き先が空ならリンクを外す。
+export function relink(span: { from: number; to: number }, href: string): Command {
+  return (state, dispatch) => {
+    if (span.to <= span.from) return false;
+    if (dispatch) {
+      const type = schema.marks.link;
+      const tr = state.tr.removeMark(span.from, span.to, type);
+      if (href) tr.addMark(span.from, span.to, type.create({ href, title: null }));
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
 // リンクを張り直す。範囲が空なら何もしない（張る先の文字が無い）。
 export function setLink(href: string): Command {
   return (state, dispatch) => {

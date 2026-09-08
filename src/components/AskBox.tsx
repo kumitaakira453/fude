@@ -119,7 +119,7 @@ export function AskBox({
           onMouseDown={(e) => e.preventDefault()}
           onClick={onDone}
         >
-          <Icon name="keyboard_return" size={16} />
+          <Icon name="arrow_upward" size={16} />
         </button>
       </Tooltip>
     </div>,

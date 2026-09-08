@@ -81,9 +81,6 @@ const graphemes =
     ? new Intl.Segmenter("ja", { granularity: "grapheme" })
     : null;
 
-// 字の並びに絵文字が混じっているか。押した先を細かく調べる前のふるい。
-export const hasEmoji = (text: string): boolean => PICTO.test(text);
-
 // 押したところにある絵文字の範囲。無ければ null。
 export function emojiSpanAt(
   view: EditorView,

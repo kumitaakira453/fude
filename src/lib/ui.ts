@@ -388,7 +388,7 @@ export type { SplitNode };
 // 押下でそれらを畳む側は、ここを見て自分の中を除ける。1 つでも漏らすと、
 // 押した番に相手が消えて「押しても何も起きない」「押した瞬間に閉じる」に
 // なるので、並びは 1 か所に置く。
-const FLOATING = ".mg-sel-menu, .mg-block-menu, .mg-ask";
+const FLOATING = ".mg-sel-menu, .mg-block-menu, .mg-ask, .mg-link-card";
 
 export const inFloating = (target: EventTarget | null): boolean =>
   !!(target as Element | null)?.closest?.(FLOATING);
