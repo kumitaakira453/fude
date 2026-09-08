@@ -10,6 +10,7 @@ import {
 import katex from "katex";
 import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
+import { openMath } from "./math";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import { schema, summaryOf, withSummary } from "./schema";
 
@@ -492,10 +493,11 @@ class ImageView implements NodeView {
 class MathView implements NodeView {
   dom: HTMLElement;
 
-  constructor(node: PmNode) {
+  constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
     this.dom = document.createElement("span");
     this.dom.className = "mg-math";
     this.dom.contentEditable = "false";
+    editMath(this.dom, view, getPos);
     this.fill(node);
   }
 
@@ -515,6 +517,62 @@ class MathView implements NodeView {
     if (node.type !== schema.nodes.inlineMath) return false;
     this.fill(node);
     return true;
+  }
+
+  // 押下は自分で受ける。ProseMirror に渡すと節点の選択になり、入力欄を出す
+  // 前にカーソルの置き直しが走る。
+  stopEvent(event: Event) {
+    return event.type === "mousedown" || event.type === "click";
+  }
+}
+
+// 押したら中身を打ち直す。
+//
+// 出すのは click。押し下げで出すと、入力欄が付ける「外を押したら閉じる」が
+// まだ配り終えていないその押下を受け取って、出した端から閉じてしまう。
+function editMath(
+  dom: HTMLElement,
+  view: EditorView,
+  getPos: () => number | undefined,
+): void {
+  dom.addEventListener("mousedown", (event) => event.preventDefault());
+  dom.addEventListener("click", () => {
+    const at = getPos();
+    if (at !== undefined) openMath(view, at);
+  });
+}
+
+// 独立した数式。読むときと同じ KaTeX で組む。
+class MathBlockView implements NodeView {
+  dom: HTMLElement;
+
+  constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
+    this.dom = document.createElement("div");
+    this.dom.className = "mg-math-block";
+    this.dom.contentEditable = "false";
+    editMath(this.dom, view, getPos);
+    this.fill(node);
+  }
+
+  private fill(node: PmNode) {
+    const tex = node.attrs.tex as string;
+    this.dom.setAttribute("data-tex", tex);
+    this.dom.classList.toggle("is-empty", tex.trim() === "");
+    if (tex.trim() === "") {
+      this.dom.textContent = "TeX 式を追加する";
+      return;
+    }
+    katex.render(tex, this.dom, { throwOnError: false, displayMode: true });
+  }
+
+  update(node: PmNode) {
+    if (node.type !== schema.nodes.mathBlock) return false;
+    this.fill(node);
+    return true;
+  }
+
+  stopEvent(event: Event) {
+    return event.type === "mousedown" || event.type === "click";
   }
 }
 
@@ -721,7 +779,10 @@ export function nodeViews(deps: EditorDeps) {
     listItem: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new ListItemView(node, view, getPos),
     image: (node: PmNode) => new ImageView(node, deps),
-    inlineMath: (node: PmNode) => new MathView(node),
+    inlineMath: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
+      new MathView(node, view, getPos),
+    mathBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
+      new MathBlockView(node, view, getPos),
   };
 }
 

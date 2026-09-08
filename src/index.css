@@ -2809,9 +2809,9 @@ svg[id^="mmd-"] foreignObject p {
     0 12px 28px -14px rgba(0, 0, 0, 0.4),
     0 2px 6px -4px rgba(0, 0, 0, 0.22);
 }
-.mg-ask > input {
+.mg-ask > input,
+.mg-ask > textarea {
   width: 17rem;
-  height: 1.75rem;
   padding: 0 0.5rem;
   border: 1px solid var(--mg-border);
   border-radius: 0.5rem;
@@ -2820,11 +2820,28 @@ svg[id^="mmd-"] foreignObject p {
   font-size: 12px;
   outline: none;
 }
-.mg-ask > input:focus {
+.mg-ask > input {
+  height: 1.75rem;
+}
+/* 独立した数式は改行を含む。記号を数えるので等幅で出す。 */
+.mg-ask > textarea {
+  width: 24rem;
+  padding: 0.35rem 0.5rem;
+  font-family: var(--mg-font-mono);
+  line-height: 1.6;
+  resize: none;
+}
+.mg-ask > input:focus,
+.mg-ask > textarea:focus {
   border-color: var(--mg-accent);
 }
-.mg-ask > input::placeholder {
+.mg-ask > input::placeholder,
+.mg-ask > textarea::placeholder {
   color: var(--mg-muted);
+}
+/* 複数行のときは、決めるボタンを欄の上端へ寄せる。 */
+.mg-ask:has(> textarea) {
+  align-items: flex-start;
 }
 /* 決めるボタン。帯のアイコンと同じ当たりにする。 */
 .mg-ask button {
@@ -3925,6 +3942,24 @@ body.mg-carrying {
 .mg-pm .mg-math.is-empty {
   color: var(--mg-muted);
   border-bottom: 1px dashed var(--mg-border);
+}
+/* 独立した数式。組むのは読むときと同じ KaTeX なので、ここで足すのは選べる塊と
+   しての触りやすさだけ。 */
+.mg-pm .mg-math-block {
+  margin: 1.1rem 0;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.mg-pm .mg-math-block:hover {
+  background: var(--mg-hover);
+}
+/* 中身がまだ空のうちは、押して書き始められることを字で出す。 */
+.mg-pm .mg-math-block.is-empty {
+  border: 1px dashed var(--mg-border);
+  padding: 0.6rem 0.75rem;
+  color: var(--mg-muted);
+  font-size: 0.9em;
 }
 .mg-pm .mg-details-head {
   font-weight: 600;

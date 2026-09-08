@@ -3,8 +3,8 @@ import { CALLOUT_RE } from "../callout";
 
 // 全文編集の編集モデル。Markdown の実データが要求する形だけを持つ。
 //
-// ノードの顔ぶれは monorepo-docs の 1072 ファイルを数えて決めた。数式と脚注は
-// 実質使われていないので入れず、未知のものは原文のまま温存する（rawBlock /
+// ノードの顔ぶれは monorepo-docs の 1072 ファイルを数えて決めた。脚注は実質
+// 使われていないので入れず、未知のものは原文のまま温存する（rawBlock /
 // rawInline）。失うより、触れないほうがいい。
 //
 // トップレベルのブロックは id を持つ。読み込み時に振り、保存時に「読み込んだ
@@ -252,6 +252,30 @@ export const schema = new Schema({
             summaryOf(node.attrs.head),
           ],
           ["div", { class: "mg-details-body" }, 0],
+        ] as DOMOutputSpec,
+    },
+
+    // 独立した数式（$$…$$）。読むときは KaTeX で組まれるので、編集面でも
+    // 同じに見せる（NodeView が描く）。tex は中身、raw は原文の書き方
+    // （打ち直したら null にする）。
+    mathBlock: {
+      group: "block",
+      atom: true,
+      attrs: { ...id, tex: { default: "" }, raw: { default: null as string | null } },
+      parseDOM: [
+        {
+          tag: "div.mg-math-block",
+          getAttrs: (dom: HTMLElement) => ({
+            tex: dom.getAttribute("data-tex") ?? "",
+            raw: null,
+          }),
+        },
+      ],
+      toDOM: (node) =>
+        [
+          "div",
+          { class: "mg-math-block", "data-tex": node.attrs.tex },
+          node.attrs.tex as string,
         ] as DOMOutputSpec,
     },
 

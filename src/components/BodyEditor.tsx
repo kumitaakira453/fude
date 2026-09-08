@@ -10,16 +10,19 @@ import { useEffect, useRef, useState } from "react";
 import { throttled } from "../lib/later";
 import { calloutIcoAt, setCalloutIcon } from "../lib/md/calloutIcon";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
+import { schema } from "../lib/md/schema";
 import { parseAway } from "../lib/md/parseAway";
 import { GROW } from "../lib/md/grow";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
 import { closeEmoji, emojiKey, takeEmoji } from "../lib/md/emoji";
+import { applyMath, closeMath, mathKey } from "../lib/md/math";
 import { editorPlugins } from "../lib/md/plugins";
 import { domSpan, type Span } from "../lib/md/domSpan";
 import { seenAt } from "../lib/md/seenAt";
 import { selectionRects, type Rect } from "../lib/md/selectionRects";
 import { toMarkdown } from "../lib/md/toMarkdown";
+import { AskBox } from "./AskBox";
 import { EmojiBoard } from "./EmojiBoard";
 import { EditorGutter } from "./EditorGutter";
 import { MermaidModal } from "./MermaidModal";
@@ -519,6 +522,16 @@ export function BodyEditor({
     null,
   );
 
+  // 打ち直している式。位置はプラグインが持っているので、ここは出す場所と
+  // いま見せている中身だけを控える。
+  const [math, setMath] = useState<{
+    pos: number;
+    tex: string;
+    lines: boolean;
+    x: number;
+    y: number;
+  } | null>(null);
+
   // ":" と /emoji から出す盤。位置と絞り込みはプラグインが持っているので、
   // ここは出す場所だけを控える。
   const [emoji, setEmoji] = useState<{
@@ -703,6 +716,7 @@ export function BodyEditor({
           if (tr.docChanged) fillRest();
           paint.now();
           showEmoji(view);
+          showMath(view);
         },
       });
       const paint = painter(view, at, scroller);
@@ -734,6 +748,33 @@ export function BodyEditor({
           query: now.query,
           active: now.active,
           bare: now.bare,
+        });
+      };
+
+      // 式の入力欄を出す / 消す。位置と対象はプラグインが持つ。
+      let editing = -1;
+      const showMath = (v: EditorView) => {
+        const at = mathKey.getState(v.state) ?? -1;
+        if (at === editing) return;
+        editing = at;
+        const node = at < 0 ? null : v.state.doc.nodeAt(at);
+        if (!node) {
+          setMath(null);
+          return;
+        }
+        let spot: { left: number; bottom: number };
+        try {
+          spot = v.coordsAtPos(at);
+        } catch {
+          setMath(null);
+          return;
+        }
+        setMath({
+          pos: at,
+          tex: node.attrs.tex as string,
+          lines: node.type === schema.nodes.mathBlock,
+          x: spot.left,
+          y: spot.bottom + 8,
         });
       };
 
@@ -1012,6 +1053,28 @@ export function BodyEditor({
             setPicking(null);
           }}
           onClose={() => setPicking(null)}
+        />
+      )}
+
+      {/* 式の中身を聞く小窓。位置と対象はプラグインが持つ。 */}
+      {built && math && (
+        <AskBox
+          hint="E = mc^2"
+          label={math.lines ? "式（TeX）" : "行内の式（TeX）"}
+          text={math.tex}
+          lines={math.lines}
+          at={{ left: math.x, top: math.y }}
+          onText={(tex) => setMath({ ...math, tex })}
+          onDone={() => {
+            applyMath(built.view, math.pos, math.tex);
+            built.view.focus();
+          }}
+          onClose={() => {
+            // 中身が空のまま閉じたら節点ごと消す（中身の無い式を残さない）。
+            applyMath(built.view, math.pos, math.tex);
+            closeMath(built.view);
+            built.view.focus();
+          }}
         />
       )}
 

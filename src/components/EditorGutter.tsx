@@ -560,7 +560,23 @@ export function EditorGutter({
     };
   };
 
-  const after = (tr: ReturnType<typeof blockActTr>) => {
+  // 足した行・列を見えるところまで寄せる。寄せ幅は最小限にする（表の頭へ
+  // 巻き戻さない）。
+  const reveal = (part: { pos: number; kind: TablePart; at: number }) => {
+    const dom = view.nodeDOM(part.pos);
+    const table = dom instanceof HTMLElement ? dom.querySelector("table") : null;
+    const rows = [...(table?.querySelectorAll(":scope > tbody > tr") ?? [])];
+    const row = part.kind === "row" ? rows[Math.min(part.at, rows.length - 1)] : rows[0];
+    const cells = [...(row?.children ?? [])];
+    const cell =
+      part.kind === "row" ? cells[0] : cells[Math.min(part.at, cells.length - 1)];
+    cell?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
+
+  const after = (
+    tr: ReturnType<typeof blockActTr>,
+    grew: { pos: number; kind: TablePart; at: number } | null = null,
+  ) => {
     const hold = holdView();
     if (tr) view.dispatch(tr);
     view.focus();
@@ -569,6 +585,7 @@ export function EditorGutter({
     // 見せようとする動きは配り終えた後に来ることがあるので、そこでも戻す。
     requestAnimationFrame(() => {
       hold();
+      if (grew) reveal(grew);
       againRef.current?.();
     });
   };
@@ -576,8 +593,14 @@ export function EditorGutter({
   const runBlock = (index: number, act: BlockAct) =>
     after(blockActTr(view.state, index, act));
 
-  const runTable = (kind: TablePart, pos: number, at: number, act: TableAct) =>
-    after(tableActTr(view.state, pos, kind, at, act));
+  // 行・列を足したときは、足したものが見えるところまで寄せる。端に足すと
+  // 画面の外に入るので、そのままでは何が起きたのか分からない。
+  // 消したときは寄せない（見ていた場所を動かさない）。
+  const runTable = (kind: TablePart, pos: number, at: number, act: TableAct) => {
+    const grows = act === "insertBefore" || act === "insertAfter" || act === "duplicate";
+    const to = act === "insertBefore" ? at : at + 1;
+    after(tableActTr(view.state, pos, kind, at, act), grows ? { pos, kind, at: to } : null);
+  };
 
   const runItem = (pos: number, act: ItemAct) => after(itemActTr(view.state, pos, act));
 

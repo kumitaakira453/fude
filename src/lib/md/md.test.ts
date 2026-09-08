@@ -20,6 +20,27 @@ const editFirst = (src: string, text: string) => {
   return toMarkdown(schema.nodes.doc.create(null, children), loaded);
 };
 
+describe("数式", () => {
+  it("打ち直すと $$ で囲み直す", () => {
+    const loaded = fromMarkdown("$$\na^2\n$$\n");
+    const was = loaded.doc.child(0);
+    expect(was.type.name).toBe("mathBlock");
+    const next = loaded.doc.copy(
+      Fragment.fromArray([was.type.create({ ...was.attrs, tex: "b^2", raw: null })]),
+    );
+    expect(toMarkdown(next, loaded)).toBe("$$\nb^2\n$$\n");
+  });
+
+  it("中身が空になったら書き出さない", () => {
+    const loaded = fromMarkdown("$$\na^2\n$$\n");
+    const was = loaded.doc.child(0);
+    const next = loaded.doc.copy(
+      Fragment.fromArray([was.type.create({ ...was.attrs, tex: "", raw: null })]),
+    );
+    expect(toMarkdown(next, loaded)).toBe("\n");
+  });
+});
+
 describe("無編集なら原文がそのまま返る", () => {
   const cases: [string, string][] = [
     ["段落と見出し", "# 見出し\n\n本文です。\n"],
@@ -43,6 +64,8 @@ describe("無編集なら原文がそのまま返る", () => {
     ],
     ["語中の下線", "`content_scripts` と auto_creation.py の話\n"],
     ["行内 HTML", "これは <u> **下線** </u> です\n"],
+    ["行内の数式", "文中の $a^2 + b^2$ と続く\n"],
+    ["独立した数式", "$$\n\\int_0^1 x\\,dx\n$$\n"],
   ];
   for (const [name, src] of cases) {
     it(name, () => expect(round(src)).toBe(src));

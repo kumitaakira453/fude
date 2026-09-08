@@ -219,6 +219,9 @@ function toMdast(node: PmNode): RootContent {
     case "thematicBreak":
       return verbatim(node.attrs.marker || "---");
 
+    case "mathBlock":
+      return verbatim(mathText(node, "$$"));
+
     case "callout": {
       const attrs = [
         node.attrs.icon ? `icon="${node.attrs.icon}"` : "",
@@ -239,6 +242,18 @@ function toMdast(node: PmNode): RootContent {
     default:
       return verbatim(node.attrs.value ?? "");
   }
+}
+
+// 数式の書き戻し。触っていなければ原文の書き方のまま、打ち直したら囲み直す。
+//
+// 中身が空のものは書き出さない。打ち始める前の器なので、囲みの記号だけが
+// 残ると原文が壊れる（`$$` が閉じない数式になる）。
+function mathText(node: PmNode, fence: string): string {
+  const raw = node.attrs.raw as string | null;
+  if (raw !== null) return raw;
+  const tex = (node.attrs.tex as string).trim();
+  if (!tex) return "";
+  return fence === "$" ? `$${tex}$` : `$$\n${tex}\n$$`;
 }
 
 const childBlocks = (node: PmNode): (BlockContent | DefinitionContent)[] =>
@@ -352,8 +367,7 @@ function leaf(node: PmNode): PhrasingContent {
     case "rawInline":
       return { type: "html", value: node.attrs.value };
     case "inlineMath":
-      // 触っていなければ原文の書き方のまま。打ち直したら $…$ で出す。
-      return { type: "html", value: node.attrs.raw ?? `$${node.attrs.tex}$` };
+      return { type: "html", value: mathText(node, "$") };
     default:
       return { type: "text", value: node.text ?? "" };
   }

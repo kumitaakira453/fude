@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { fromMarkdown, type Loaded } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
 import { DETAILS_HEAD, summaryOf, withSummary } from "./schema";
+import { mathKey } from "./math";
 import { SLASH_ITEMS, slashItems, slashKey } from "./slash";
 import { toMarkdown } from "./toMarkdown";
 
@@ -290,9 +291,15 @@ const CASES: { id: string; query: string; want: string }[] = [
   { id: "rule", query: "hr", want: "あ\n\n---\n\nい\n" },
 ];
 
+// 式は決めた後の続きが入力欄の側なので、本文へ打ち込む形の CASES では
+// 追えない。下の「式」で別に見る。
+const IN_BOX = new Set(["math", "mathBlock"]);
+
 describe("決めた構造にする", () => {
   it("候補はすべて試している", () => {
-    expect(CASES.map((c) => c.id)).toEqual(SLASH_ITEMS.map((item) => item.id));
+    expect(CASES.map((c) => c.id)).toEqual(
+      SLASH_ITEMS.filter((item) => !IN_BOX.has(item.id)).map((item) => item.id),
+    );
   });
 
   for (const { id, query, want } of CASES) {
@@ -408,6 +415,31 @@ describe("絵文字", () => {
 
 // 選んだ文字から出す帯も同じ一覧を使う。範囲を選んだまま押されるので、
 // 「カーソルだけ」を要求すると押しても何も起きない。
+describe("式", () => {
+  it("/math では行内と塊の 2 つが並ぶ", () => {
+    expect(slashItems("math").map((one) => one.id)).toEqual(["math", "mathBlock"]);
+    expect(slashItems("式").map((one) => one.id)).toEqual(["math", "mathBlock"]);
+  });
+
+  it("インライン式は空の式を置き、そのまま中身を聞く", () => {
+    const view = slash("inlinemath");
+    expect(press(view, "Enter")).toBe(true);
+    const at = mathKey.getState(view.state);
+    expect(at).not.toBeNull();
+    expect(view.state.doc.nodeAt(at!)?.type.name).toBe("inlineMath");
+    // 中身が空のうちは書き出さない（囲みの記号だけが残ると原文が壊れる）。
+    expect(source()).toBe("あ\n\n");
+  });
+
+  it("式ブロックは書きかけの無い塊を置き換える", () => {
+    const view = slash("mathblock");
+    expect(press(view, "Enter")).toBe(true);
+    const at = mathKey.getState(view.state);
+    expect(at).not.toBeNull();
+    expect(view.state.doc.nodeAt(at!)?.type.name).toBe("mathBlock");
+  });
+});
+
 describe("範囲を選んだままの変換", () => {
   const pick = (view: EditorView, from: number, to: number) => {
     view.dispatch(
@@ -462,6 +494,6 @@ describe("範囲を選んだままの変換", () => {
 
   it("入れるだけの項目には印が付いている（変換の一覧に出さない）", () => {
     const inserts = SLASH_ITEMS.filter((one) => one.inserts).map((one) => one.id);
-    expect(inserts).toEqual(["emoji", "table", "rule"]);
+    expect(inserts).toEqual(["emoji", "table", "math", "mathBlock", "rule"]);
   });
 });

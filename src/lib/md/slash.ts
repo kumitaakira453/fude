@@ -18,6 +18,7 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { icon } from "./nodeViews";
 import { openEmojiBoard } from "./emoji";
+import { openMath } from "./math";
 import { DETAILS_HEAD, schema } from "./schema";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
@@ -150,6 +151,38 @@ const insertTable: Command = (state, dispatch) => {
   return true;
 };
 
+// 行内の式。カーソルのところへ空の式を置き、そのまま中身を聞く。
+const insertInlineMath: Command = (state, dispatch, view) => {
+  const type = schema.nodes.inlineMath;
+  if (!state.selection.$from.parent.isTextblock) return false;
+  if (dispatch) {
+    const at = state.selection.from;
+    // 装飾は継がせない。式を太字にしても組み方は変わらないのに、原文には
+    // 記号が残る。
+    dispatch(state.tr.replaceSelectionWith(type.create({ tex: "", raw: null }), false));
+    if (view) openMath(view, at);
+  }
+  return true;
+};
+
+// 独立した式。書きかけの字が無ければその塊を置き換え、あれば後ろに足す。
+const insertMathBlock: Command = (state, dispatch, view) => {
+  const { $from } = state.selection;
+  const type = schema.nodes.mathBlock;
+  if (!$from.parent.isTextblock || !fits($from, type)) return false;
+  if (dispatch) {
+    const node = type.create({ tex: "", raw: null });
+    const empty = $from.parent.content.size === 0;
+    const at = empty ? $from.before() : $from.after();
+    const tr = empty
+      ? state.tr.replaceRangeWith(at, $from.after(), node)
+      : state.tr.insert(at, node);
+    dispatch(tr.scrollIntoView());
+    if (view) openMath(view, at);
+  }
+  return true;
+};
+
 // 線は手前に差し込む。いまの塊はそのまま残るので、続けて書ける。
 const insertRule: Command = (state, dispatch) => {
   const { $from } = state.selection;
@@ -260,6 +293,24 @@ export const SLASH_ITEMS: SlashItem[] = [
     aliases: ["table", "teburu", "表", "グリッド"],
     inserts: true,
     run: insertTable,
+  },
+  {
+    id: "math",
+    label: "インライン式",
+    icon: "superscript",
+    hint: "$",
+    aliases: ["math", "tex", "katex", "equation", "inlinemath", "式", "数式"],
+    inserts: true,
+    run: insertInlineMath,
+  },
+  {
+    id: "mathBlock",
+    label: "式ブロック",
+    icon: "functions",
+    hint: "$$",
+    aliases: ["math", "tex", "katex", "equation", "mathblock", "式", "数式", "式ブロック"],
+    inserts: true,
+    run: insertMathBlock,
   },
   {
     id: "rule",

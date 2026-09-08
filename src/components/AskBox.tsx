@@ -14,6 +14,7 @@ export function AskBox({
   label,
   text,
   at,
+  lines,
   onText,
   onDone,
   onClose,
@@ -23,50 +24,82 @@ export function AskBox({
   // 何を聞いているか。読み上げと試験の手掛かり。
   label: string;
   text: string;
-  // 出す場所。帯の左下。ビューポート座標。
+  // 出す場所。左上。ビューポート座標。
   at: { left: number; top: number };
+  // 複数行で聞く（独立した式は改行を含む）。Enter は改行になり、決めるのは
+  // ⌘Enter と決めるボタン。
+  lines?: boolean;
   onText: (next: string) => void;
   onDone: () => void;
   onClose: () => void;
 }) {
-  const field = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
   useEffect(() => {
     field.current?.select();
   }, []);
 
   useEffect(() => {
-    // 外を押したら閉じる。押し下げでは畳まない（押した番に消えると、
-    // 決めるボタンの click がどこにも届かない）。
+    // 外を押したら閉じる。押し下げでは畳まない（押した番に消えると、決める
+    // ボタンの click がどこにも届かない）。
+    //
+    // 出した押下の続き（離す番）は数えない。メニューから選んで出したときは、
+    // その click の mouseup がまだ配られていないので、受け取ると出した端から
+    // 閉じてしまう。
+    let live = false;
+    const soon = window.setTimeout(() => {
+      live = true;
+    });
     const onUp = (e: MouseEvent) => {
+      if (!live) return;
       if ((e.target as Element | null)?.closest?.(".mg-ask")) return;
       onClose();
     };
     window.addEventListener("mouseup", onUp);
-    return () => window.removeEventListener("mouseup", onUp);
+    return () => {
+      window.clearTimeout(soon);
+      window.removeEventListener("mouseup", onUp);
+    };
   }, [onClose]);
+
+  const keys = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Enter") return;
+    // 複数行のときの改行は本文。決めるのは ⌘Enter。
+    if (lines && !(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    onDone();
+  };
 
   return createPortal(
     <div className="mg-ask" style={{ left: at.left, top: at.top }}>
-      <input
-        ref={field}
-        value={text}
-        placeholder={hint}
-        aria-label={label}
-        spellCheck={false}
-        onChange={(e) => onText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.stopPropagation();
-            onClose();
-            return;
-          }
-          if (e.key !== "Enter") return;
-          e.preventDefault();
-          onDone();
-        }}
-      />
-      <Tooltip label="決める" keys="⏎" side="bottom" align="end" tone="dark">
+      {lines ? (
+        <textarea
+          ref={field as React.RefObject<HTMLTextAreaElement>}
+          value={text}
+          placeholder={hint}
+          aria-label={label}
+          spellCheck={false}
+          rows={Math.min(8, Math.max(2, text.split("\n").length))}
+          onChange={(e) => onText(e.target.value)}
+          onKeyDown={keys}
+        />
+      ) : (
+        <input
+          ref={field as React.RefObject<HTMLInputElement>}
+          value={text}
+          placeholder={hint}
+          aria-label={label}
+          spellCheck={false}
+          onChange={(e) => onText(e.target.value)}
+          onKeyDown={keys}
+        />
+      )}
+      <Tooltip label="決める" keys={lines ? "⌘⏎" : "⏎"} side="bottom" align="end" tone="dark">
         <button
           type="button"
           aria-label="決める"

@@ -374,6 +374,17 @@ function blockOf(
       };
     }
 
+    case "math":
+      // 中身と、原文の書き方の両方を持つ。打ち直さないかぎり原文で戻す。
+      return {
+        node: schema.nodes.mathBlock.create({
+          ...attrs,
+          tex: node.value,
+          raw: slice(node, source),
+        }),
+        span: span(start, end),
+      };
+
     case "thematicBreak":
       return {
         node: schema.nodes.thematicBreak.create({ ...attrs, marker: slice(node, source).trim() }),
