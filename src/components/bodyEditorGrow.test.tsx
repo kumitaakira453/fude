@@ -82,20 +82,22 @@ async function grow(at: HTMLElement): Promise<void> {
 }
 
 describe("編集面を段階的に組む", () => {
-  const editor = (
-    props: Partial<React.ComponentProps<typeof BodyEditor>> = {},
-  ) =>
-    mount(
-      <BodyEditor
-        body={body}
-        prefix=""
-        dark={false}
-        className="mg-prose prose"
-        onChange={() => {}}
-        onSave={() => {}}
-        {...props}
-      />,
-    );
+  const made = (props: Partial<React.ComponentProps<typeof BodyEditor>> = {}) => (
+    <BodyEditor
+      body={body}
+      prefix=""
+      dark={false}
+      className="mg-prose prose"
+      onChange={() => {}}
+      onSave={() => {}}
+      {...props}
+    />
+  );
+  const editor = (props: Partial<React.ComponentProps<typeof BodyEditor>> = {}) =>
+    mount(made(props));
+  const again = (props: Partial<React.ComponentProps<typeof BodyEditor>> = {}) => {
+    act(() => root!.render(made(props)));
+  };
 
   it("最初は先頭だけ入れ、後から全部に育つ", async () => {
     const at = editor();
@@ -130,6 +132,19 @@ describe("編集面を段階的に組む", () => {
     expect(at.querySelector(".mg-pm")?.getAttribute("contenteditable")).toBe(
       "true",
     );
+  });
+
+  // 書体は設定で後から変わる。組み立て直しは本文の大きさに比例して高いので、
+  // 作り直さずに効かせる。
+  it("書体を変えると、組み直さずにその場で効く", () => {
+    const at = editor({ body: "みじかい本文\n", fontFamily: "'A', serif" });
+    const pm = () => at.querySelector<HTMLElement>(".mg-pm")!;
+    const was = pm();
+    expect(was.style.fontFamily).toContain("A");
+    again({ body: "みじかい本文\n", fontFamily: "'B', serif" });
+    expect(pm().style.fontFamily).toContain("B");
+    // 同じ要素のまま（作り直していない）。
+    expect(pm()).toBe(was);
   });
 
   it("小さい本文は一度で組み上がり、はじめから編集できる", () => {

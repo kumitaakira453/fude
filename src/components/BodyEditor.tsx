@@ -549,6 +549,14 @@ export function BodyEditor({
   deps.current.resolveAsset = resolveAsset;
   deps.current.peekAsset = peekAsset;
 
+  // 書体は設定で後から変わる。組み立て直しは本文の大きさに比例して高いので、
+  // 編集面の要素へ直に書く（EditorView の attributes は組み立てた時点で
+  // 固まるため、渡し直すには作り直しになる）。
+  useEffect(() => {
+    if (!built || built.view.isDestroyed) return;
+    built.view.dom.style.fontFamily = fontFamily ?? "";
+  }, [built, fontFamily]);
+
   // テーマの明暗が変わったら、開いている図を描き直す。図は明暗の 2 通りしか無い。
   useEffect(() => {
     if (deps.current.dark === dark) return;
@@ -654,10 +662,7 @@ export function BodyEditor({
       const view = new EditorView(at, {
         state,
         nodeViews: nodeViews(deps.current),
-        attributes: {
-          class: `mg-pm ${className ?? ""}`.trim(),
-          ...(fontFamily ? { style: `font-family: ${fontFamily}` } : {}),
-        },
+        attributes: { class: `mg-pm ${className ?? ""}`.trim() },
         handleDOMEvents: {
           // 押した拍子に書いていた場所を見失わないようにする。
           mousedown(_here, event) {
