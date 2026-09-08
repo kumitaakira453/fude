@@ -313,11 +313,15 @@ function cellsBox(view: EditorView, host: HTMLElement) {
     });
     if (right <= left || bottom <= top) return null;
     // 横に溢れる表は枠の中でスクロールする。見えている範囲で切る。
-    const wrap = view.dom.querySelector(".mg-table-wrap");
+    //
+    // 入れ物は選んでいる升目から辿る。本文の最初の表を当てにすると、2 つ目
+    // 以降の表では切り抜きが効かず、スクロールで隠れている側にも枠が出る。
+    const cell = view.nodeDOM(selection.$anchorCell.pos);
     const base = host.getBoundingClientRect();
-    const clip = wrap?.contains(view.nodeDOM(selection.$anchorCell.pos) as Node)
-      ? wrap.getBoundingClientRect()
-      : null;
+    const clip =
+      cell instanceof Element
+        ? (cell.closest(".mg-table-wrap")?.getBoundingClientRect() ?? null)
+        : null;
     if (clip) {
       left = Math.max(left, clip.left);
       right = Math.min(right, clip.right);
