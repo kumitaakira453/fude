@@ -385,7 +385,16 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     window.addEventListener("mousemove", onMove, true);
     window.addEventListener("mouseup", onUp, true);
   };
-  view.dom.addEventListener("mousedown", onDown);
+  // 引き始めを拾うのは**スクロールする要素**。本文そのものに付けると、
+  // 本文の外の余白から引き始めたときに速い経路へ入れない（実測で窓幅 1100 の
+  // とき本文は 170〜930px、左右 170px ずつが余白で、ペインの横幅の 31%）。
+  // そこから引くと selectionchange 経由の遅い経路に落ちて、帯が手に付いて
+  // こない。
+  //
+  // 広く拾っても振る舞いは変わらない。編集面の中の選択でなければ domSpan が
+  // null を返し、そのままモデル経由に落ちる。
+  const catcher = scroller ?? view.dom;
+  catcher.addEventListener("mousedown", onDown);
   view.dom.addEventListener("focus", moved);
   view.dom.addEventListener("blur", moved);
   // コードの塊のように中で横スクロールするものがある。scroll は上がって
@@ -409,7 +418,7 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     draw: moved,
     stop: () => {
       onUp();
-      view.dom.removeEventListener("mousedown", onDown);
+      catcher.removeEventListener("mousedown", onDown);
       view.dom.removeEventListener("focus", moved);
       view.dom.removeEventListener("blur", moved);
       view.dom.removeEventListener("scroll", moved, true);
