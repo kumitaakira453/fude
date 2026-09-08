@@ -19,10 +19,11 @@ import {
   closeEmoji,
   emojiKey,
   emojiSpanAt,
+  hasEmoji,
   swapEmoji,
   takeEmoji,
 } from "../lib/md/emoji";
-import { applyMath, closeMath, mathKey } from "../lib/md/math";
+import { applyMath, closeMath, liveMath, mathKey } from "../lib/md/math";
 import { editorPlugins } from "../lib/md/plugins";
 import { domSpan, type Span } from "../lib/md/domSpan";
 import { seenAt } from "../lib/md/seenAt";
@@ -756,6 +757,27 @@ export function BodyEditor({
       });
       const paint = painter(view, at, scroller);
 
+      // 絵文字の上では手の形にする。押して選び直せることを見せる。
+      //
+      // 走査はしない。まず指している要素の字に絵文字が無ければそこで終わり
+      // （正規表現 1 回）。あるときだけ位置を出して、その 1 文字を確かめる。
+      // 見るのは 1 フレームに 1 回。
+      let onEmoji = false;
+      let looking = 0;
+      const hover = (event: MouseEvent) => {
+        if (looking) return;
+        looking = requestAnimationFrame(() => {
+          looking = 0;
+          const el = event.target;
+          const near = el instanceof Element && hasEmoji(el.textContent ?? "");
+          const on = near && !!emojiSpanAt(view, event.clientX, event.clientY);
+          if (on === onEmoji) return;
+          onEmoji = on;
+          view.dom.classList.toggle("mg-over-emoji", on);
+        });
+      };
+      view.dom.addEventListener("mousemove", hover);
+
       // 絵文字の盤を出す / 消す。打鍵のたびに React を描き直さないよう、
       // 変わったときだけ控えを差し替える。
       let shown = "";
@@ -1051,6 +1073,8 @@ export function BodyEditor({
         send.flush();
         if (flushRef) flushRef.current = null;
         if (adoptRef) adoptRef.current = null;
+        cancelAnimationFrame(looking);
+        view.dom.removeEventListener("mousemove", hover);
         paint.stop();
         setBuilt(null);
         onBuilt?.(null);
@@ -1099,7 +1123,12 @@ export function BodyEditor({
           text={math.tex}
           lines={math.lines}
           at={{ left: math.x, top: math.y }}
-          onText={(tex) => setMath({ ...math, tex })}
+          onText={(tex) => {
+            setMath({ ...math, tex });
+            // 打っているそばから組み直す。決めるまで見た目が変わらないと、
+            // 記号が合っているかを確かめられない。
+            liveMath(built.view, math.pos, tex);
+          }}
           onDone={() => {
             applyMath(built.view, math.pos, math.tex);
             built.view.focus();

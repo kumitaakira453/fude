@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { inFloating } from "../lib/ui";
 import { Icon } from "./Icon";
 import { Tooltip } from "./Tooltip";
 
@@ -40,17 +41,25 @@ export function AskBox({
   }, []);
 
   useEffect(() => {
-    // 外を押したら閉じる。
+    // 外を押したら閉じる。数えるのは「外で押し始めて、外で離した」ときだけ。
     //
-    // 数えるのは「外で押し始めて、外で離した」ときだけ。離す番だけを見ると、
-    // この小窓を出した押下の続き（帯のボタンを離す番）を受け取ってしまい、
-    // 押している間しか出ていないように見える。押し下げだけを見ると、決める
-    // ボタンの click が届く前に消える。
-    const inside = (target: EventTarget | null) =>
-      !!(target as Element | null)?.closest?.(".mg-ask");
+    // 落とし穴が 2 つある。
+    //
+    // 1. 離す番だけを見ると、この小窓を出した押下の続き（帯のボタンを離す番）を
+    //    外と数えてしまい、押している間しか出ていないように見える
+    // 2. 押し下げは要素から window まで上がるので、小窓を出したその押下も、
+    //    登録した直後のここへ届く。それを起点に数えると 1 と同じことが起きる
+    //
+    // なので、押し下げは次の番から数える。帯（.mg-sel-menu）は外と見ない
+    // （出した押下を離す先はそこなので、取り違えると必ず閉じる）。
+    const inside = inFloating;
+    let counts = false;
+    const soon = window.setTimeout(() => {
+      counts = true;
+    });
     let armed = false;
     const onDown = (e: MouseEvent) => {
-      armed = !inside(e.target);
+      if (counts) armed = !inside(e.target);
     };
     const onUp = (e: MouseEvent) => {
       const out = armed && !inside(e.target);
@@ -60,6 +69,7 @@ export function AskBox({
     window.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     return () => {
+      window.clearTimeout(soon);
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
     };

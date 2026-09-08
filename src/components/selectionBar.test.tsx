@@ -201,23 +201,33 @@ describe("リンク", () => {
     expect(field()).toBeNull();
   });
 
-  // 出した押下の続き（離す番）で閉じてはいけない。押している間しか出ない
-  // ように見える。
+  // 出した押下で閉じてはいけない。押している間しか出ていないように見える。
+  //
+  // 押し下げは要素から window まで上がるので、欄を出したその押下も、付いた
+  // 直後の聞き手へ届くことがある。届く / 届かないは React が効果を流す番に
+  // よるので、両方を配って確かめる。
   it("押して離しただけでは閉じない", () => {
     bar("ここを見る\n", 0, 2);
     const el = button("リンク");
     pressDown(el);
     expect(field()).not.toBeNull();
     act(() => {
+      el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    });
+    act(() => {
       el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));
     });
     expect(field()).not.toBeNull();
   });
 
-  it("外で押して離したら閉じる", () => {
+  it("外で押して離したら閉じる", async () => {
     bar("ここを見る\n", 0, 2);
     pressDown(button("リンク"));
     expect(field()).not.toBeNull();
+    // 出した押下と見分けるため、数え始めるのは次の番から。
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, 0));
+    });
     act(() => {
       document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
       document.body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));

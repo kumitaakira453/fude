@@ -21,7 +21,7 @@ import {
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { DARK_THEME_IDS } from "../lib/themes";
-import { closePane, inEditable } from "../lib/ui";
+import { closePane, inEditable, inFloating } from "../lib/ui";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
   activePath,
@@ -821,12 +821,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 出すのは離したとき。引いている間に出すと、そのままドラッグの行き先を
     // 奪って選択が飛ぶ。打ち始めたら消す。
     const onUp = () => read();
-    // 自分が出した帯やメニューを押したときは畳まない。畳むと押した番に帯ごと
-    // 消えて、リンクの入力欄も開けない。
+    // 自分が出した帯・メニュー・入力欄を押したときは畳まない。畳むと押した番に
+    // 帯ごと消えて、そこから出しているものも一緒に消える（リンクや式の入力欄が
+    // 押した瞬間に閉じるのはこれ）。
     const onDown = (e: MouseEvent) => {
-      if (e.target instanceof Element && e.target.closest(".mg-sel-menu, .mg-block-menu")) {
-        return;
-      }
+      if (inFloating(e.target)) return;
       setEditSel(null);
     };
     const onKey = (e: KeyboardEvent) => {

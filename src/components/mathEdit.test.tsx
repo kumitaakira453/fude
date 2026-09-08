@@ -88,12 +88,18 @@ const nativeValue = (el: HTMLElement) =>
     "value",
   )!.set!;
 
-function fill(text: string, opts: { meta?: boolean } = {}) {
+// 打ち込みだけ（決めない）。
+function type(text: string) {
   const el = field()!;
   act(() => {
     nativeValue(el).call(el, text);
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+function fill(text: string, opts: { meta?: boolean } = {}) {
+  const el = field()!;
+  type(text);
   act(() => {
     el.dispatchEvent(
       new KeyboardEvent("keydown", {
@@ -134,6 +140,16 @@ describe("組んだ数式を押して打ち直す", () => {
     fill("a\nb", { meta: true });
     expect(box()).toBeNull();
     expect(saved()).toContain("$$\na\nb\n$$");
+  });
+
+  it("打っているそばから組み直す", () => {
+    const at = editor();
+    const block = () => at.querySelector<HTMLElement>(".mg-math-block")!;
+    press(block());
+    // 決める前でも、打った分が節点へ入って組み直される。
+    type("x + 1");
+    expect(block().getAttribute("data-tex")).toBe("x + 1");
+    expect(box()).not.toBeNull();
   });
 
   it("中身を空にして決めると、式ごと消える", () => {

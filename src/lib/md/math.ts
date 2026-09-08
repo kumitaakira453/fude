@@ -22,6 +22,16 @@ export function closeMath(view: EditorView): void {
   view.dispatch(view.state.tr.setMeta(mathKey, null));
 }
 
+// 打っている途中の中身をそのまま当てる。組み直した式がその場で見える。
+//
+// 空のときは消さない。打ち直しの途中で対象が消えると、入力欄もその場で
+// 閉じてしまう（消すのは決めたときだけ）。
+export function liveMath(view: EditorView, pos: number, tex: string): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (!isMath(node) || !node || node.attrs.tex === tex) return;
+  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { tex, raw: null }));
+}
+
 // 打ち直した中身を当てる。空なら節点ごと消す（中身の無い式を残さない）。
 export function applyMath(view: EditorView, pos: number, tex: string): void {
   const node = view.state.doc.nodeAt(pos);

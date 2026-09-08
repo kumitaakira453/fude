@@ -64,6 +64,7 @@ describe("引いている印", () => {
     ["ブロックのつまみ", "mg-block-layer"],
     ["指摘の層", "mg-review-layer"],
     ["絞り込みの層", "mg-hl-layer"],
+    ["聞く小窓", "mg-ask"],
   ];
   for (const [name, className] of spared) {
     it(`${name}を押したら付かない`, () => {

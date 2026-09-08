@@ -3943,6 +3943,11 @@ body.mg-carrying {
   color: var(--mg-muted);
   border-bottom: 1px dashed var(--mg-border);
 }
+/* 絵文字の上では手の形にする。押すと盤が出て選び直せることを見せる。
+   印は指しているあいだだけ編集面に付く（BodyEditor が付け外しする）。 */
+.mg-pm.mg-over-emoji {
+  cursor: pointer;
+}
 /* 独立した数式。組むのは読むときと同じ KaTeX なので、ここで足すのは選べる塊と
    しての触りやすさだけ。 */
 .mg-pm .mg-math-block {

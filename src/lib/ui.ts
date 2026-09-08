@@ -382,6 +382,17 @@ export function reviveLayout(
 
 export type { SplitNode };
 
+// 本文の上に重ねて出しているもの（選択の帯・つまみのメニュー・行き先や式を
+// 聞く小窓）。
+//
+// 押下でそれらを畳む側は、ここを見て自分の中を除ける。1 つでも漏らすと、
+// 押した番に相手が消えて「押しても何も起きない」「押した瞬間に閉じる」に
+// なるので、並びは 1 か所に置く。
+const FLOATING = ".mg-sel-menu, .mg-block-menu, .mg-ask";
+
+export const inFloating = (target: EventTarget | null): boolean =>
+  !!(target as Element | null)?.closest?.(FLOATING);
+
 // フォーカスが編集可能な要素（入力欄・CodeMirror 等）にあるか。
 // 本文向けのキー操作を、入力中に横取りさせないための判定。
 export function inEditable(target: EventTarget | null): boolean {

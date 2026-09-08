@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { inFloating } from "../lib/ui";
 
 // 選択を引いているあいだ、body に印を付ける。本文に重ねたもの（指摘のカード・
 // ブロックのつまみ・選択メニュー）を触れない板にするために使う。
@@ -13,9 +14,8 @@ export function useDragging() {
       // メニューでは続く mouseup と click が届かない（押しても何も起きない）。
       const el = e.target as Element | null;
       if (
-        el?.closest?.(
-          ".mg-block-layer, .mg-review-layer, .mg-hl-layer, .mg-sel-menu, .mg-block-menu",
-        )
+        inFloating(e.target) ||
+        el?.closest?.(".mg-block-layer, .mg-review-layer, .mg-hl-layer")
       ) {
         return;
       }
