@@ -12,12 +12,14 @@ export interface MenuItem {
   label: string;
   keys?: string;
   danger?: boolean;
+  // いまそれである項目。選ぶ側のメニューで、どれが今かを示す。
+  on?: boolean;
   run: () => void;
 }
 
 // 押した場所。画面の端では内側へ寄せる。
 const ROW = 32;
-const WIDTH = 190;
+const WIDTH = 216;
 
 export function BlockMenu({
   x,
@@ -57,7 +59,7 @@ export function BlockMenu({
         top: Math.min(y, window.innerHeight - items.length * ROW - 20),
       }}
       onClick={(e) => e.stopPropagation()}
-      className="mg-block-menu fixed z-50 w-[11.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
+      className="mg-block-menu fixed z-50 w-[13.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
     >
       {items.map((it) => (
         <button
@@ -67,17 +69,20 @@ export function BlockMenu({
             it.run();
             onClose();
           }}
-          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
+          className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
             it.danger ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
           }`}
         >
           <Icon
             name={it.icon}
             size={16}
-            className={it.danger ? "" : "text-[var(--mg-muted)]"}
+            className={`shrink-0 ${it.danger ? "" : "text-[var(--mg-muted)]"}`}
           />
-          {it.label}
-          {it.keys && <span className="mg-menu-keys">{it.keys}</span>}
+          <span className="min-w-0 flex-1 truncate">{it.label}</span>
+          {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}
+          {it.on && (
+            <Icon name="check" size={15} className="shrink-0 text-[var(--mg-accent)]" />
+          )}
         </button>
       ))}
     </div>,

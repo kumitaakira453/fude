@@ -2719,22 +2719,54 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-border);
 }
 /* 選んだ文字への操作の帯。項目が多いので段に分けて積む。上段はブロックそのもの
-   への操作、下段は選んだ文字への操作。 */
+   への操作、下段は選んだ文字への操作、聞くことがあればその下の段。
+
+   縁までボタンを敷かず、外側に余白を回して押せる面を切り離す。段の間に線は
+   引かない（組の切れ目は段の中の仕切りが示す）。 */
 .mg-sel-bar {
   flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 0.75rem;
+  box-shadow:
+    0 12px 28px -14px rgba(0, 0, 0, 0.4),
+    0 2px 6px -4px rgba(0, 0, 0, 0.22);
+  /* ツールチップは帯の外へ出る。切り抜きは外す（縁に余白があるので要らない）。 */
+  overflow: visible;
 }
 .mg-sel-row {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 2px;
 }
-.mg-sel-row + .mg-sel-row {
-  border-top: 1px solid var(--mg-border);
-}
-/* アイコンだけのボタンは正方に寄せ、名前を出すボタン（ブロックの種別・
-   コメント）だけ横に伸ばす。 */
+/* アイコンだけのボタンは正方に、名前を出すボタン（ブロックの種別・コメント）は
+   横に伸ばす。高さは揃える。字より少し淡く置き、触ったところだけ前へ出す。 */
 .mg-sel-bar button {
-  padding: 0.3rem 0.45rem;
+  justify-content: center;
+  gap: 0.3rem;
+  /* 幅は決め打ちにする。字形ごとに送り幅が違うので、内容に任せると
+     アイコンの間隔がばらつく。 */
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  color: var(--mg-fg-dim);
+}
+.mg-sel-bar button.mg-sel-wide {
+  width: auto;
+  padding: 0 0.45rem;
+}
+.mg-sel-name {
   color: var(--mg-fg);
+  font-size: 12px;
+  line-height: 1;
+}
+.mg-sel-bar button:hover .mg-sel-name {
+  color: inherit;
+}
+/* 仕切りは段の高さいっぱいには引かない。上下を空けて、組の切れ目だけを示す。 */
+.mg-sel-bar .mg-sel-menu-sep {
+  height: 1rem;
+  margin: 0 0.3rem;
 }
 /* いま付いている装飾は押し込んで見せる。押すと外れることが分かるように、
    地色ではなくアクセントで示す。 */
@@ -2742,17 +2774,30 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
-/* リンクの行き先を聞く入力。帯の最後の段に出す。 */
-.mg-sel-link {
-  padding: 0.3rem 0.5rem;
+.mg-sel-bar button.is-on .mg-sel-name {
+  color: inherit;
 }
-.mg-sel-link > input {
-  width: 18rem;
-  background: transparent;
+/* 行き先や式を聞く段。欄に見えないと「押しても何も出ない」と読まれるので、
+   枠と地色を持たせる。幅は上の段に合わせ、帯の横幅を動かさない。 */
+.mg-sel-ask {
+  gap: 0.25rem;
+}
+.mg-sel-ask > input {
+  flex: 1;
+  min-width: 0;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  background: var(--mg-bg);
   color: var(--mg-fg);
+  font-size: 12px;
   outline: none;
 }
-.mg-sel-link > input::placeholder {
+.mg-sel-ask > input:focus {
+  border-color: var(--mg-accent);
+}
+.mg-sel-ask > input::placeholder {
   color: var(--mg-muted);
 }
 

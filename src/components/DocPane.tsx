@@ -1419,6 +1419,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           <SelectionBar
             view={pm.view}
             at={editSel.rect}
+            span={{ from: editSel.from, to: editSel.to }}
             linkNonce={linkNonce}
             onComment={commentOnSpan}
           />
