@@ -107,8 +107,9 @@ export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
 // エディトリアル組版（ベータ）: 構造を読み取って組版を強化する描画モード
 export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
 
-// ファイルを開いたら、読むのではなく編集から始めるか。書くのが主な使い方の人向け。
-export const startEditingAtom = atomWithStorage<boolean>("mdglow:startedit", false);
+// リアルタイム編集（ベータ）: どのファイルも、組版されたまま直接書ける編集面で
+// 開く。切っていれば読む画面だけになり、直すのは本文のダブルクリックから。
+export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 // 図のソース欄の幅。図の記述は 1 行が長くなりやすいので掴んで広げられる。
 // 0 は「まだ動かしていない」で、窓の広さから決める。
 export const mermaidPaneAtom = atomWithStorage<number>("mdglow:mmdpane", 0);

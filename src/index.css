@@ -4085,11 +4085,6 @@ body.mg-carrying {
 .mg-pm ul:has(> li.task-list-item) {
   padding-left: 0.5rem;
 }
-/* 編集中の帯。読むときと見分けが付くよう、アクセントを薄く敷いて縁を締める。 */
-.mg-pane-head.is-editing {
-  background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-panel));
-  border-bottom-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
-}
 /* 表のセルを選んでいる状態。塗らずに、選んだ範囲を丸ごと囲んで示す
    （囲みは編集面が重ねる .mg-cells。塗りと囲みを両方出すと二重に見える）。 */
 .mg-cells {

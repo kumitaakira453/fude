@@ -8,8 +8,8 @@ import { THEMES } from "../lib/themes";
 import {
   editorialAtom,
   fontAtom,
+  liveEditAtom,
   readingWidthAtom,
-  startEditingAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
   themeAtom,
@@ -44,7 +44,7 @@ export function Settings() {
   const [fontValue, setFontValue] = useAtom(fontAtom);
   const [widthValue, setWidthValue] = useAtom(readingWidthAtom);
   const [editorialValue, setEditorialValue] = useAtom(editorialAtom);
-  const [startValue, setStartValue] = useAtom(startEditingAtom);
+  const [liveValue, setLiveValue] = useAtom(liveEditAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -53,7 +53,7 @@ export function Settings() {
     editorialValue,
     setEditorialValue,
   );
-  const [start, setStart] = useOptimisticSetting(startValue, setStartValue);
+  const [live, setLive] = useOptimisticSetting(liveValue, setLiveValue);
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
@@ -203,6 +203,33 @@ export function Settings() {
                   <h3>表示</h3>
                   <button
                     type="button"
+                    onClick={() => setLive(!live)}
+                    className="mg-set-row"
+                  >
+                    <Icon
+                      name="edit_note"
+                      size={18}
+                      fill={live}
+                      className={
+                        live ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                      }
+                    />
+                    <span className="mg-set-row-main">
+                      <span className="mg-set-row-name">
+                        リアルタイム編集機能
+                        <span className="mg-set-beta">Beta</span>
+                      </span>
+                      <span className="mg-set-note">
+                        組版されたまま直接書ける編集面でファイルを開く。切ると読む画面になり、直すのは本文のダブルクリックから
+                      </span>
+                    </span>
+                    <span className={`mg-switch${live ? " is-on" : ""}`}>
+                      <i />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setEditorial(!editorial)}
                     className="mg-set-row"
                   >
@@ -218,41 +245,14 @@ export function Settings() {
                     />
                     <span className="mg-set-row-main">
                       <span className="mg-set-row-name">
-                        紙面のような余白
+                        メイクアップ版
                         <span className="mg-set-beta">Beta</span>
                       </span>
                       <span className="mg-set-note">
-                        字間・行間・見出しの間を、本のように広めに取る
+                        字間・行間から見出し・箇条書き・引用の組み方まで作り込んで描く
                       </span>
                     </span>
                     <span className={`mg-switch${editorial ? " is-on" : ""}`}>
-                      <i />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setStart(!start)}
-                    className="mg-set-row"
-                  >
-                    <Icon
-                      name="edit_note"
-                      size={18}
-                      fill={start}
-                      className={
-                        start ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
-                      }
-                    />
-                    <span className="mg-set-row-main">
-                      <span className="mg-set-row-name">
-                        開いたら編集から始める
-                        <span className="mg-set-beta">Beta</span>
-                      </span>
-                      <span className="mg-set-note">
-                        ファイルを開いた時点で全文編集にする（⌘E で読む側へ戻る）
-                      </span>
-                    </span>
-                    <span className={`mg-switch${start ? " is-on" : ""}`}>
                       <i />
                     </span>
                   </button>

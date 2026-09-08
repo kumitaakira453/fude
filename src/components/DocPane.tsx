@@ -29,9 +29,9 @@ import {
   contentCacheAtom,
   editorialAtom,
   fontAtom,
+  liveEditAtom,
   paletteOpenAtom,
   readingWidthAtom,
-  startEditingAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
   themeAtom,
@@ -86,10 +86,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
   const editorial = useAtomValue(editorialAtom);
-  const startEditing = useAtomValue(startEditingAtom);
+  const live = useAtomValue(liveEditAtom);
   // 設定の切り替えでファイル切替の手順を走らせないよう、控えから読む。
-  const startRef = useRef(startEditing);
-  startRef.current = startEditing;
+  const liveRef = useRef(live);
+  liveRef.current = live;
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
   const tocOpen = useAtomValue(tocOpenAtom);
@@ -124,9 +124,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 控えはコンポーネントの外（lib/viewpoint）に置く。レビュー画面は本文の木を
   // 丸ごと差し替えるので、ここに持つと戻ってきた時点で消えていて先頭に戻る。
   const [editing, setEditing] = useState(false);
-  // 読む / 書くの切り替えは本文を丸ごと組み直すので、その間は画面が止まる。
-  // 先に印を出しておく。
-  const [switching, setSwitching] = useState(false);
   // 新しいファイルを編集面で開く途中。組むのに時間がかかる（大きい本文で
   // 300ms 台）ので、先に読み込みの印を描いてから組む。ツリーで選んだ瞬間に
   // 選択と画面が切り替わって見えるようにするため、ここを同じ一枚でやらない。
@@ -236,15 +233,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [write],
   );
 
-  const enterEdit = () => {
-    // 今見ている場所を控えて、そこから編集を始められるようにする。
-    const seen = viewAt();
-    rememberViewpoint(viewKey(pane.id, path), seen.at, seen.into);
-    setDraft(raw ?? "");
-    base.current = raw ?? "";
-    marked.current = false;
-    setEditing(true);
-  };
   // ⌘S。自動保存があるので押す必要は無いが、待たずに書ける。
   const save = () => flushRef.current?.();
   const exitEdit = () => {
@@ -254,22 +242,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     setStartAt(restoreIndex() ?? 0);
     setEditing(false);
   };
-  const toggleEdit = () => {
-    if (switching) return;
-    // 書きかけの指摘は持ち越さない。対象の指し方が画面ごとに違う。
-    reviewRef.current?.close();
-    setEditSel(null);
-    setSwitching(true);
-    // 印を描いた後の一枚で切り替える。同じ一枚でやると印が出ないまま止まる。
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => (editing ? exitEdit() : enterEdit()));
-    });
-  };
-  // キー操作から呼ぶための控え。listener の依存に本文の要素（後から入る）を
-  // 載せないと、それが無い時点の関数を掴んだままになり、見ていた場所を
-  // 取れずに先頭から開いてしまう。
-  const toggleRef = useRef(toggleEdit);
-  toggleRef.current = toggleEdit;
 
   // 外で書き換わったものを編集面へ取り込む。
   //
@@ -293,7 +265,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // ファイル切替。書きかけは編集面の後片付けが流すので、ここでは何も書かない
   // （切り替える前の path 向けの onChange が呼ばれる）。
   //
-  // 「開いたら編集から始める」のときは**編集モードを降りない**。
+  // リアルタイム編集が入っているときは**編集モードを降りない**。
   // React は子（編集面）の効果を親より先に走らせるので、ここで一度降りると
   // その前に新しいファイルの編集面が組まれてしまい、それを捨ててもう一度
   // 組むことになる。2000 ブロックで実測すると 1 回の押下で
@@ -304,9 +276,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 本文は控えから読む。raw を依存に入れると、自分の保存が返ってきた
     // だけでもここが走り、書きかけを取り込みの手順より先に踏んでしまう。
     const text = rawRef.current;
-    if (startRef.current && text !== undefined) {
+    if (liveRef.current && text !== undefined) {
       // そのまま編集面で開く。組むのは 1 度だけになる。
-      began.current = path;
+      handed.current = path;
       setDraft(text);
       base.current = text;
       setOpening(false);
@@ -314,27 +286,39 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       return;
     }
     setEditing(false);
-    // 編集から始める設定でまだ読めていないときは、読み込みの印を出しておく。
-    // 読めた時点で下の手順が編集面へ移す。
-    setOpening(startRef.current);
+    // リアルタイム編集が入っていてまだ読めていないときは、読み込みの印を
+    // 出しておく。読めた時点で下の手順が編集面へ移す。
+    setOpening(liveRef.current);
   }, [path]);
 
-  // 「開いたら編集から始める」。本文が読めた時点で切り替える。同じファイルで
-  // 一度だけ効かせるので、⌘E で読む側へ戻ったあと勝手に書く側へは戻らない。
-  const began = useRef<string | null>(null);
+  // 読む / 書くは設定だけで決まる。本文が読めた時点で編集面へ移し、設定を
+  // 切ったらその場で読む画面へ降りる。
+  //
+  // 渡し終えた path を控える。組むのは 2 フレーム後なので、そのあいだに
+  // ここがもう一度走ると（本文が届いた、印が下りた）同じファイルを二重に組む。
+  const handed = useRef<string | null>(null);
   useEffect(() => {
-    if (!startEditing || !path || !loaded) return;
-    if (began.current === path) {
-      // 既に始めたファイル。印が残っていたら下ろす（読み込みの印のまま
+    if (!live) {
+      handed.current = null;
+      if (editing) {
+        // 書きかけの指摘は持ち越さない。対象の指し方が画面ごとに違う。
+        reviewRef.current?.close();
+        setEditSel(null);
+        exitEdit();
+      }
+      return;
+    }
+    if (!path || !loaded) return;
+    if (handed.current === path) {
+      // 既に渡したファイル。印が残っていたら下ろす（読み込みの印のまま
       // 止まらないように）。
       if (opening) setOpening(false);
       return;
     }
-    began.current = path;
+    handed.current = path;
     setDraft(raw ?? "");
     base.current = raw ?? "";
     marked.current = false;
-    setSwitching(true);
     // 印を描いた後の一枚で組む。同じ一枚でやると印が出ないまま止まる。
     const want = path;
     requestAnimationFrame(() =>
@@ -345,7 +329,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         setEditing(true);
       }),
     );
-  }, [startEditing, path, loaded, raw, opening]);
+    // exitEdit は描画ごとに作り直される（見ていた場所を今の本文から出す）。
+    // 依存に入れると、設定が入っているあいだも毎回走る。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, editing, path, loaded, raw, opening]);
 
   // ドキュメント全体の Undo/Redo（アクティブペインのみ、CM 編集中は CM に任せる）
   useEffect(() => {
@@ -379,22 +366,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isActive, path, undoFile, redoFile, store]);
-
-  // ⌘E で編集/プレビュー切替（アクティブペインのみ）。
-  // 本文を選んでいるときは「選んだところを編集する」に譲る。同じキーで
-  // 両方が走ると、その場編集と全文編集が同時に開く。
-  useEffect(() => {
-    if (!isActive) return;
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
-        if (reviewRef.current?.selection) return;
-        e.preventDefault();
-        toggleRef.current();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isActive]);
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
@@ -714,14 +685,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (!settling || !pm || pm.view.isDestroyed) return;
     if (pm.view.hasFocus()) pm.view.dom.blur();
   }, [settling, pm]);
-  // 印を下ろすのは、行き先が触れる状態になったとき。
-  //
-  // 編集面は組み上がりでは足りない（この後に見ていた場所への合わせ込みが
-  // 走る）。骨組みを外す合図（pm）と同じものを見て、2 つの印が食い違わない
-  // ようにする。読むときは本文の入れ物が出たとき。
-  useEffect(() => {
-    if (editing ? pm : content) setSwitching(false);
-  }, [editing, pm, content]);
 
   // 当て直した回数。印を測り直させる合図（当て直しでは DOM が動かないので、
   // AnchorOverlay の observer には何も届かない）。
@@ -1101,15 +1064,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       }`}
     >
       {/* ヘッダー */}
-      {/* 編集中は帯にアクセントを敷く。読むときと同じ見た目だと、どちらに
-          いるのか分からない。 */}
-      <header
-        className={`mg-pane-head flex items-center gap-2 border-b px-4 py-2 backdrop-blur ${
-          editing
-            ? "is-editing"
-            : "border-[var(--mg-border)] bg-[var(--mg-panel)]/80"
-        }`}
-      >
+      <header className="mg-pane-head flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           <Breadcrumbs path={shownPath} paneId={pane.id} />
         </div>
@@ -1138,27 +1093,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             }`}
           />
         </Tooltip>
-        {shownPath && (
-          <button
-            onClick={toggleEdit}
-            disabled={switching}
-            title={editing ? "プレビュー (⌘E)" : "全文編集 (⌘E) ／ 本文はダブルクリックでその場編集"}
-            className={`grid h-6 w-6 place-items-center rounded transition hover:bg-[var(--mg-hover)] ${
-              editing
-                ? "text-[var(--mg-accent)]"
-                : "text-[var(--mg-muted)] hover:text-[var(--mg-fg)]"
-            }`}
-          >
-            <Icon
-              name={
-                switching ? "progress_activity" : editing ? "visibility" : "edit"
-              }
-              size={15}
-              fill={editing && !switching}
-              className={switching ? "mg-spin" : undefined}
-            />
-          </button>
-        )}
         {isSplit && (
           <button
             onClick={doClosePane}
