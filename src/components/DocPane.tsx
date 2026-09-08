@@ -152,7 +152,40 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [editScroller, setEditScroller] = useState<HTMLElement | null>(null);
 
   const isActive = activeId === pane.id;
-  const path = activePath(pane);
+  // 押した瞬間の値と、本文を組むための値を分ける。
+  //
+  // 本文の入れ替え（前の本文の片付けと新しい本文の組み立て）は 900 ブロックで
+  // 実測 105〜144ms、2000 ブロックで 196〜215ms かかる。これを選択の塗りと同じ
+  // 一枚に入れると、React は組み終わるまでコミットせず、ブラウザはコミットまで
+  // 塗れない。状態が同期で変わっていても画面が追いつかないのはこれ。
+  //
+  // 遅らせた値で本文を組めば、押した一枚は「前の本文のまま + 骨組みを重ねる」
+  // だけで済む。入れ替えは塗った後の一枚へ移る。
+  //
+  // 進めるのは requestAnimationFrame の二段。useDeferredValue では分かれない
+  // （React の scheduler は塗りを待たず、同じフレームのうちに遅らせた側の描画へ
+  // 入る。実測でも本文の大きさに比例したまま最大 224ms だった）。一段目はその
+  // フレームの塗りより前に走るので、二段目まで待って初めて塗った後になる。
+  const shownPath = activePath(pane);
+  const [path, setPath] = useState(shownPath);
+  // 押した先へ本文がまだ追いついていない。骨組みを重ねる合図。
+  const settling = shownPath !== path;
+  useEffect(() => {
+    if (!settling) return;
+    const go = () => setPath(shownPath);
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(go);
+    });
+    // 窓が隠れているとフレームは来ない。骨組みのまま取り残されないよう、
+    // 時間でも進める（先に来たほうで切り替わる）。
+    const late = window.setTimeout(go, 100);
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+      window.clearTimeout(late);
+    };
+  }, [settling, shownPath]);
   const raw = path ? cache.get(path) : undefined;
 
   // 本文が読めていないあいだは骨組みを出す。
@@ -862,10 +895,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     write(path, newFm + body);
   };
 
-  // path はあるが未読込なら読み込む
+  // path はあるが未読込なら読み込む。
+  // 読み始めは押した瞬間の値で動かす。遅らせた値で待つと、読み取りの開始が
+  // 一枚ぶん後ろへずれる。
   useEffect(() => {
-    if (path && !cache.has(path)) void reloadFile(path);
-  }, [path, cache, reloadFile]);
+    if (shownPath && !cache.has(shownPath)) void reloadFile(shownPath);
+  }, [shownPath, cache, reloadFile]);
 
   // いま画面の上端にあるブロックと、そのブロックへ入り込んでいる画素。
   // 長い表の途中を見ていたときに、表の先頭へ戻ってしまわないようにする。
@@ -1026,7 +1061,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         }`}
       >
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
-          <Breadcrumbs path={path} paneId={pane.id} />
+          <Breadcrumbs path={shownPath} paneId={pane.id} />
         </div>
         {saving > 0 && (
           <span title="保存中" className="shrink-0 text-[var(--mg-muted)]">
@@ -1053,7 +1088,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             }`}
           />
         </Tooltip>
-        {path && (
+        {shownPath && (
           <button
             onClick={toggleEdit}
             disabled={switching}
@@ -1141,73 +1176,82 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             />
           </div>
         ) : (
-          <div
-            ref={setScroller}
-            className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
-          >
-            {path && (!loaded || opening) ? (
-              // 読めていないあいだは骨組み。押した手応えを先に返すため、
-              // 待たずに出す。
-              <div className="px-10 py-8 sm:px-16">
+          // 骨組みは本文と入れ替えず、上に重ねる。
+          //
+          // 入れ替えると、押した一枚で前の本文の片付けが走る。重ねるなら
+          // 押した一枚で増えるのは骨組みの 1 枚だけで、本文の入れ替えは
+          // 遅らせた値の一枚（塗った後）へ移る。
+          //
+          // 重ねる先はスクロールする要素の外側。中に置くと、前の本文を下まで
+          // 送っていたときに骨組みがスクロール範囲の上端へ行って見えない。
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            <div
+              ref={setScroller}
+              className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+            >
+              {path ? (
+                <div className="px-10 py-8 sm:px-16">
+                  <article
+                    ref={setContent}
+                    style={{ fontFamily: fontStack(font) }}
+                    className={`mg-prose prose ${
+                      editorial ? "mg-editorial" : ""
+                    } ${WIDTH_CLASS[width]} mx-auto`}
+                  >
+                    {data &&
+                      (editingFm ? (
+                        <BlockSourceEditor
+                          src={fmPrefix}
+                          clickX={editingFm.x}
+                          clickY={editingFm.y}
+                          onCommit={(s) => {
+                            setEditingFm(null);
+                            saveFm(s);
+                          }}
+                          onCancel={() => setEditingFm(null)}
+                        />
+                      ) : (
+                        <div
+                          className="mg-block"
+                          onDoubleClick={(e) =>
+                            setEditingFm({ x: e.clientX, y: e.clientY })
+                          }
+                        >
+                          <Frontmatter data={data} />
+                        </div>
+                      ))}
+                    <markdownContext.Provider value={ctx}>
+                      {/* 選択メニューやつまみから、そのブロックだけを生ソース編集 */}
+                      {/* key でファイルごとに貼り替え、漸進描画を先頭からやり直す */}
+                      <EditableBody
+                        key={path}
+                        body={body}
+                        editorial={editorial}
+                        onSaveBody={saveBody}
+                        editRequest={editRequest}
+                        deleteRequest={deleteRequest}
+                        onDeleted={undoDelete}
+                        startIndex={startAt}
+                        content={content}
+                        scroller={scroller}
+                        contentKey={path}
+                        onComment={commentOnBlock}
+                        onCommentItem={commentOnItem}
+                        onCommentCell={commentOnCellAt}
+                      />
+                    </markdownContext.Provider>
+                  </article>
+                </div>
+              ) : (
+                <EmptyPane />
+              )}
+            </div>
+            {shownPath && (settling || !loaded || opening) && (
+              <div className="absolute inset-0 z-10 overflow-hidden bg-[var(--mg-bg)] px-10 py-8 sm:px-16">
                 <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                   <LoadingBody />
                 </div>
               </div>
-            ) : path ? (
-              <div className="px-10 py-8 sm:px-16">
-                <article
-                  ref={setContent}
-                  style={{ fontFamily: fontStack(font) }}
-                  className={`mg-prose prose ${
-                    editorial ? "mg-editorial" : ""
-                  } ${WIDTH_CLASS[width]} mx-auto`}
-                >
-                  {data &&
-                    (editingFm ? (
-                      <BlockSourceEditor
-                        src={fmPrefix}
-                        clickX={editingFm.x}
-                        clickY={editingFm.y}
-                        onCommit={(s) => {
-                          setEditingFm(null);
-                          saveFm(s);
-                        }}
-                        onCancel={() => setEditingFm(null)}
-                      />
-                    ) : (
-                      <div
-                        className="mg-block"
-                        onDoubleClick={(e) =>
-                          setEditingFm({ x: e.clientX, y: e.clientY })
-                        }
-                      >
-                        <Frontmatter data={data} />
-                      </div>
-                    ))}
-                  <markdownContext.Provider value={ctx}>
-                    {/* 選択メニューやつまみから、そのブロックだけを生ソース編集 */}
-                    {/* key でファイルごとに貼り替え、漸進描画を先頭からやり直す */}
-                    <EditableBody
-                      key={path}
-                      body={body}
-                      editorial={editorial}
-                      onSaveBody={saveBody}
-                      editRequest={editRequest}
-                      deleteRequest={deleteRequest}
-                      onDeleted={undoDelete}
-                      startIndex={startAt}
-                      content={content}
-                      scroller={scroller}
-                      contentKey={path}
-                      onComment={commentOnBlock}
-                      onCommentItem={commentOnItem}
-                      onCommentCell={commentOnCellAt}
-                    />
-                  </markdownContext.Provider>
-                </article>
-              </div>
-            ) : (
-              <EmptyPane />
             )}
           </div>
         )}
