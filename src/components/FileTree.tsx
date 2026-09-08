@@ -100,6 +100,20 @@ function NameInput({
   );
 }
 
+// 押した行を、その場で塗る。
+//
+// 押下 → store 更新 → React が描き直す、の順だと、同じ一枚に載っている
+// 右ペインの仕事（大きいファイルでは秒の単位）が終わるまで塗られない。
+// 見た目は data-on ひとつと CSS で決まっているので、React を待たずに
+// 属性だけ先に書き換える。React は後から同じ値に落ち着くだけ。
+function markOn(path: string): void {
+  for (const el of document.querySelectorAll("[data-path][data-on]")) {
+    if (el.getAttribute("data-path") !== path) el.removeAttribute("data-on");
+  }
+  document.querySelector(`[data-path="${CSS.escape(path)}"]`)
+    ?.setAttribute("data-on", "");
+}
+
 // 行は memo で包む。選択が変わったときに描き直すのは、真偽が変わった 2 行だけ。
 //
 // ctx は親で useMemo して同じものを渡す。毎回作り直すと memo が素通りになる。
@@ -259,9 +273,15 @@ const TreeItem = memo(function TreeItem({
       onDragEnd={(e) => {
         if (droppedOutside(e)) ctx.openInNewWindow(node.path, dropPoint(e));
       }}
-      onClick={(e) =>
-        e.metaKey ? ctx.openInNewWindow(node.path) : ctx.openFile(node.path)
-      }
+      onClick={(e) => {
+        if (e.metaKey) {
+          // 別のウィンドウで開く経路。この木が出しているファイルは変わらない。
+          ctx.openInNewWindow(node.path);
+          return;
+        }
+        markOn(node.path);
+        ctx.openFile(node.path);
+      }}
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
       // 出しているファイルかどうかは data-on ひとつで渡し、色は CSS が出す
