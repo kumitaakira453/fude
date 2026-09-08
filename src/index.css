@@ -2736,10 +2736,6 @@ svg[id^="mmd-"] foreignObject p {
   /* ツールチップは帯の外へ出る。切り抜きは外す（縁に余白があるので要らない）。 */
   overflow: visible;
 }
-/* 行き先や式を聞いている間だけ広げる。URL は狭い欄では読めない。 */
-.mg-sel-bar.is-asking {
-  min-width: 17rem;
-}
 .mg-sel-row {
   position: relative;
   display: flex;
@@ -2749,7 +2745,7 @@ svg[id^="mmd-"] foreignObject p {
 }
 /* アイコンの段は端まで割り振る。左に寄せると右だけ余って、帯が左右で
    非対称に見える。 */
-.mg-sel-row:not(.mg-sel-ask) {
+.mg-sel-row {
   justify-content: space-between;
 }
 /* ツールチップは段の外へ出す。
@@ -2800,15 +2796,25 @@ svg[id^="mmd-"] foreignObject p {
 .mg-sel-bar button.is-on .mg-sel-name {
   color: inherit;
 }
-/* 行き先や式を聞く段。欄に見えないと「押しても何も出ない」と読まれるので、
-   枠と地色を持たせる。 */
-.mg-sel-ask {
+/* 一言だけ聞く小窓。リンクの行き先と式の中身に使う。帯の左下へ置く。
+   帯の中の段にはしない（帯の高さと幅が段の数で動くうえ、親の transform や
+   overflow で切り抜かれて「押しても何も出ない」ように見える）。 */
+.mg-ask {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
   gap: 0.25rem;
-  margin-top: 2px;
+  padding: 5px;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.75rem;
+  background: var(--mg-panel);
+  box-shadow:
+    0 12px 28px -14px rgba(0, 0, 0, 0.4),
+    0 2px 6px -4px rgba(0, 0, 0, 0.22);
 }
-.mg-sel-ask > input {
-  flex: 1;
-  min-width: 0;
+.mg-ask > input {
+  width: 17rem;
   height: 1.75rem;
   padding: 0 0.5rem;
   border: 1px solid var(--mg-border);
@@ -2818,11 +2824,28 @@ svg[id^="mmd-"] foreignObject p {
   font-size: 12px;
   outline: none;
 }
-.mg-sel-ask > input:focus {
+.mg-ask > input:focus {
   border-color: var(--mg-accent);
 }
-.mg-sel-ask > input::placeholder {
+.mg-ask > input::placeholder {
   color: var(--mg-muted);
+}
+/* 決めるボタン。帯のアイコンと同じ当たりにする。 */
+.mg-ask button {
+  display: flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: var(--mg-fg-dim);
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.mg-ask button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-accent);
 }
 
 /* 操作が付いた知らせだけ押せるようにする。素の知らせは押す対象を持たない。 */

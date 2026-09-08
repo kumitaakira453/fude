@@ -1,3 +1,4 @@
+import { TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,7 +15,9 @@ import {
   itemSpotAt,
   type ItemAct,
 } from "../lib/md/itemActs";
+import { blockKindOf } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
+import { SLASH_ITEMS } from "../lib/md/slash";
 import { liftedKey, type LiftedSpans } from "../lib/md/lifted";
 import {
   pickedPart,
@@ -535,11 +538,39 @@ export function EditorGutter({
     };
   }, [view, host, scroller]);
 
+  // 操作しても、見ていた場所は動かさない。
+  //
+  // 表は節点ごと差し替えるので、中の横スクロールは DOM が作り直されて 0 へ
+  // 戻る（列を足すと左端まで巻き戻るのがこれ）。カーソルの置き場所も端の升目に
+  // なることがあり、焦点を戻した番に WebKit がそこを見せようとして縦にも飛ぶ
+  // （行を足す・一番下の行や一番右の列を消すと表の頭まで戻るのがこれ）。
+  // どちらも操作の副作用で、見ていた場所を変える理由が無い。
+  //
+  // 表の入れ物は差し替わるので、要素ではなく並び順で覚えて戻す。
+  const holdView = (): (() => void) => {
+    const wraps = () => [...view.dom.querySelectorAll<HTMLElement>(".mg-table-wrap")];
+    const top = scroller?.scrollTop ?? null;
+    const lefts = wraps().map((el) => el.scrollLeft);
+    return () => {
+      if (scroller && top !== null) scroller.scrollTop = top;
+      wraps().forEach((el, i) => {
+        const left = lefts[i];
+        if (left !== undefined) el.scrollLeft = left;
+      });
+    };
+  };
+
   const after = (tr: ReturnType<typeof blockActTr>) => {
+    const hold = holdView();
     if (tr) view.dispatch(tr);
     view.focus();
+    hold();
     // 本文の形が変わったので置き場所を測り直す。組版が終わった次の一枚で測る。
-    requestAnimationFrame(() => againRef.current?.());
+    // 見せようとする動きは配り終えた後に来ることがあるので、そこでも戻す。
+    requestAnimationFrame(() => {
+      hold();
+      againRef.current?.();
+    });
   };
 
   const runBlock = (index: number, act: BlockAct) =>
@@ -640,7 +671,25 @@ export function EditorGutter({
   const partItems = (kind: TablePart, where: Spot, at: number): MenuItem[] => {
     const act = (a: TableAct) => () => runTable(kind, where.pos, at, a);
     const row = kind === "row";
+    // 行への指摘は、その行の升目をまとめた範囲を相手にする。列は原文の上で
+    // 続きになっていないので（升目が行ごとに離れる）、列の名前＝見出しの升目を
+    // 相手にする。中身の無いところは範囲を持てないので、表の塊を相手にする。
+    const cells = tableSpans(view.state.doc, where.pos, kind, at);
+    const cover = cells.length
+      ? { from: cells[0][0] + 1, to: (row ? cells[cells.length - 1][1] : cells[0][1]) - 1 }
+      : null;
+    const comment: MenuItem[] = onComment
+      ? [
+          {
+            icon: "chat_bubble",
+            label: "コメント",
+            run: () =>
+              onComment(where.pos, cover && cover.to > cover.from ? cover : undefined),
+          },
+        ]
+      : [];
     return [
+      ...comment,
       {
         icon: row ? "arrow_upward" : "arrow_back",
         label: row ? "上に挿入" : "左に挿入",
@@ -680,11 +729,49 @@ export function EditorGutter({
         : [];
     return [
       ...comment,
+      typeMenu(at.pos),
       { icon: "arrow_upward", label: "上に挿入", run: run("insertBefore") },
       { icon: "arrow_downward", label: "下に挿入", run: run("insertAfter") },
       { icon: "content_copy", label: "複製", run: run("duplicate") },
       { icon: "delete", label: "削除", run: run("delete"), danger: true },
     ];
+  };
+
+  // ブロックの種別を変える一覧。相手はつまみを出しているブロックなので、
+  // 先にそこへカーソルを移してから変換の手を走らせる。
+  //
+  // 置けない種別は押せないようにする（表のセルの中では見出しにも箇条書きにも
+  // できない）。効くかどうかは手そのものに聞く（dispatch を渡さずに呼ぶと、
+  // 効くかだけを返す）。
+  const typeItems = (pos: number): MenuItem[] => {
+    const doc = view.state.doc;
+    const aim = view.state.tr.setSelection(
+      TextSelection.near(doc.resolve(Math.min(pos + 1, doc.content.size))),
+    );
+    const probe = view.state.apply(aim);
+    const now = blockKindOf(probe)?.id;
+    return SLASH_ITEMS.filter((one) => !one.inserts).map((one) => ({
+      icon: one.icon,
+      label: one.label,
+      keys: one.hint || undefined,
+      on: one.id === now,
+      disabled: !one.run(probe, undefined),
+      run: () => {
+        view.dispatch(aim);
+        one.run(view.state, view.dispatch, view);
+        view.focus();
+      },
+    }));
+  };
+
+  const typeMenu = (pos: number): MenuItem => {
+    const types = typeItems(pos);
+    return {
+      icon: "sync_alt",
+      label: "ブロックタイプの変換",
+      items: types,
+      disabled: types.every((one) => one.disabled),
+    };
   };
 
   // ブロックのメニュー。読むとき側にある「編集する」は入れない
@@ -702,6 +789,7 @@ export function EditorGutter({
       : [];
     return [
       ...comment,
+      typeMenu(where.pos),
       { icon: "vertical_align_top", label: "上に挿入", run: act("insertBefore") },
       { icon: "vertical_align_bottom", label: "下に挿入", run: act("insertAfter") },
       { icon: "content_copy", label: "複製", run: act("duplicate") },

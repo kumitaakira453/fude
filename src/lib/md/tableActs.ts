@@ -228,7 +228,9 @@ function colAct(shape: Shape, at: number, act: TableAct): Shape | null {
       if (width <= 1) return null;
       for (const cells of rows) cells.splice(at, 1);
       styleDelete(style, at);
-      shape.at = { row: 0, col: Math.min(at, width - 2) };
+      // 見出しではなく本体の 1 行目へ置く（見出しは列の名前なので、消した
+      // 直後に打ち始める場所ではない）。
+      shape.at = { row: Math.min(1, rows.length - 1), col: Math.min(at, width - 2) };
       return shape;
   }
 }

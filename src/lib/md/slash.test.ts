@@ -436,6 +436,30 @@ describe("範囲を選んだままの変換", () => {
     expect(source()).toBe("引用の中\n");
   });
 
+  // つまみのメニューは、この「効くかどうか」を押せる / 押せないに写している。
+  it("表のセルの中では、どの変換も効かない", () => {
+    const view = editor("| あ | い |\n| --- | --- |\n| 1 | 2 |\n");
+    // 先頭のセルの中へカーソルを置く。
+    let at = -1;
+    view.state.doc.descendants((node, pos) => {
+      if (at < 0 && node.type.name === "tableCell") at = pos + 1;
+      return at < 0;
+    });
+    pick(view, at, at);
+    const kinds = SLASH_ITEMS.filter((one) => !one.inserts);
+    const works = kinds.filter((one) => one.run(view.state, undefined)).map((one) => one.id);
+    expect(works).toEqual([]);
+  });
+
+  it("素の段落では、テキスト以外のどの変換も効く", () => {
+    const view = editor("ここを変える\n");
+    pick(view, 3, 5);
+    const kinds = SLASH_ITEMS.filter((one) => !one.inserts);
+    const dead = kinds.filter((one) => !one.run(view.state, undefined)).map((one) => one.id);
+    // もともと素の段落なので「テキスト」だけが効かない。
+    expect(dead).toEqual(["text"]);
+  });
+
   it("入れるだけの項目には印が付いている（変換の一覧に出さない）", () => {
     const inserts = SLASH_ITEMS.filter((one) => one.inserts).map((one) => one.id);
     expect(inserts).toEqual(["emoji", "table", "rule"]);

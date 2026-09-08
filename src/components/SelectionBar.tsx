@@ -15,6 +15,7 @@ import {
 } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
+import { AskBox } from "./AskBox";
 import { BlockMenu, MENU_WIDTH, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 import { Tooltip } from "./Tooltip";
@@ -55,10 +56,11 @@ const MORE: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   { mark: schema.marks.code, icon: "code", label: "行内コード", keys: "⌘⇧C" },
 ];
 
-// 聞くもの。行き先（リンク）か、式の中身（TeX）。
+// 聞くもの。行き先（リンク）か、式の中身（TeX）。出す場所は開いたときに測る。
 interface Asking {
   kind: "link" | "math";
   text: string;
+  at: { left: number; top: number };
 }
 
 const ASK: Record<Asking["kind"], { hint: string; label: string }> = {
@@ -85,8 +87,15 @@ export function SelectionBar({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [asking, setAsking] = useState<Asking | null>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const askRef = useRef<HTMLInputElement>(null);
   const seen = useRef(linkNonce);
+
+  // 聞く小窓を出す場所。帯の左下に置く。
+  const under = (): { left: number; top: number } => {
+    const from = panel.current?.getBoundingClientRect();
+    return from
+      ? { left: from.left, top: from.bottom + 8 }
+      : { left: box.left, top: box.bottom + 8 };
+  };
 
   // 出す場所は、選んでいるところが変わるまで動かさない。
   //
@@ -122,12 +131,11 @@ export function SelectionBar({
   useEffect(() => {
     if (linkNonce === seen.current) return;
     seen.current = linkNonce;
-    setAsking({ kind: "link", text: linkAt(view.state) ?? "" });
+    setAsking({ kind: "link", text: linkAt(view.state) ?? "", at: under() });
+    // under は描き終わった帯を測るだけなので、ここに入れると出す場所が
+    // 毎回の描き直しで動く。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkNonce, view]);
-
-  useEffect(() => {
-    if (asking) askRef.current?.select();
-  }, [asking]);
 
   const kind = blockKindOf(view.state);
   // 表のセルの中では種別を出さない。セルは行内しか持てないので、見出しにも
@@ -193,9 +201,9 @@ export function SelectionBar({
       <div
         ref={panel}
         style={{ top: box.bottom + 8, left: box.left }}
-        className={`mg-sel-menu mg-sel-bar${asking ? " is-asking" : ""}`}
+        className="mg-sel-menu mg-sel-bar"
       >
-        {!asking && !cell && (
+        {!cell && (
           <Tooltip label="ブロックの種別を変える" side="top" tone="dark">
             <button
               type="button"
@@ -226,130 +234,101 @@ export function SelectionBar({
           </Tooltip>
         )}
 
-        {!asking && (
-          <div className="mg-sel-row">
-            {MARKS.map(toggle)}
-            <Tooltip label="書式をクリア" side="right" tone="dark">
-              <button
-                type="button"
-                aria-label="書式をクリア"
-                onMouseDown={run((v) => clearMarks(v.state, v.dispatch, v))}
-              >
-                <Icon name="format_clear" size={16} />
-              </button>
-            </Tooltip>
-          </div>
-        )}
-
-        {!asking && (
-          <div className="mg-sel-row">
-            <Tooltip
-              label={href === null ? "リンクにする" : "リンクを外す"}
-              keys={href === null ? "⌘K" : undefined}
-              side="right"
-              tone="dark"
+        <div className="mg-sel-row">
+          {MARKS.map(toggle)}
+          <Tooltip label="書式をクリア" side="right" tone="dark">
+            <button
+              type="button"
+              aria-label="書式をクリア"
+              onMouseDown={run((v) => clearMarks(v.state, v.dispatch, v))}
             >
-              <button
-                type="button"
-                aria-label="リンク"
-                className={href === null ? undefined : "is-on"}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  if (href !== null) {
-                    clearLink(view.state, view.dispatch, view);
-                    view.focus();
-                    bump();
-                    return;
-                  }
-                  setAsking({ kind: "link", text: "" });
-                }}
-              >
-                <Icon name="link" size={16} />
-              </button>
-            </Tooltip>
-            {MORE.map(toggle)}
-            <Tooltip
-              label={tex === null ? "式にする" : "式を打ち直す"}
-              side="right"
-              tone="dark"
-            >
-              <button
-                type="button"
-                aria-label="式"
-                className={tex === null ? undefined : "is-on"}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  // 式の上を選んでいれば打ち直し、そうでなければ選んだ文字を
-                  // そのまま中身にする。
-                  setAsking({
-                    kind: "math",
-                    text: tex ?? view.state.doc.textBetween(span.from, span.to),
-                  });
-                }}
-              >
-                <Icon name="functions" size={16} />
-              </button>
-            </Tooltip>
-          </div>
-        )}
+              <Icon name="format_clear" size={16} />
+            </button>
+          </Tooltip>
+        </div>
 
-        {!asking && (
+        <div className="mg-sel-row">
           <Tooltip
-            label="選んだところにコメントを付ける"
-            side="bottom"
+            label={href === null ? "リンクにする" : "リンクを外す"}
+            keys={href === null ? "⌘K" : undefined}
+            side="right"
             tone="dark"
           >
             <button
               type="button"
-              aria-label="コメント"
-              className="mg-sel-line"
-              onMouseDown={run(() => onComment(), { keep: false })}
-            >
-              <Icon name="add_comment" size={16} />
-              <span className="mg-sel-name">コメント</span>
-            </button>
-          </Tooltip>
-        )}
-
-        {asking && (
-          // 聞いている間は他の段を出さない。帯の幅は欄に合わせて広がるので、
-          // 並べたままだとアイコンの段が余白だらけになる。別の箱にはしない
-          // （帯の高さの分だけ位置をずらす必要があり、段数を変えるたびに狂う）。
-          <div className="mg-sel-row mg-sel-ask">
-            <input
-              ref={askRef}
-              value={asking.text}
-              placeholder={ASK[asking.kind].hint}
-              aria-label={ASK[asking.kind].label}
-              spellCheck={false}
-              onChange={(e) => setAsking({ ...asking, text: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.stopPropagation();
-                  setAsking(null);
+              aria-label="リンク"
+              className={href === null ? undefined : "is-on"}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (href !== null) {
+                  clearLink(view.state, view.dispatch, view);
                   view.focus();
+                  bump();
                   return;
                 }
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                settle(asking);
+                setAsking({ kind: "link", text: "", at: under() });
               }}
-            />
-            <Tooltip label="決める" keys="⏎" side="right" tone="dark">
-              <button
-                type="button"
-                aria-label="決める"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  settle(asking);
-                }}
-              >
-                <Icon name="keyboard_return" size={16} />
-              </button>
-            </Tooltip>
-          </div>
-        )}
+            >
+              <Icon name="link" size={16} />
+            </button>
+          </Tooltip>
+          {MORE.map(toggle)}
+          <Tooltip
+            label={tex === null ? "式にする" : "式を打ち直す"}
+            side="right"
+            tone="dark"
+          >
+            <button
+              type="button"
+              aria-label="式"
+              className={tex === null ? undefined : "is-on"}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                // 式の上を選んでいれば打ち直し、そうでなければ選んだ文字を
+                // そのまま中身にする。
+                setAsking({
+                  kind: "math",
+                  text: tex ?? view.state.doc.textBetween(span.from, span.to),
+                  at: under(),
+                });
+              }}
+            >
+              <Icon name="functions" size={16} />
+            </button>
+          </Tooltip>
+        </div>
+
+        <Tooltip
+          label="選んだところにコメントを付ける"
+          side="bottom"
+          tone="dark"
+        >
+          <button
+            type="button"
+            aria-label="コメント"
+            className="mg-sel-line"
+            onMouseDown={run(() => onComment(), { keep: false })}
+          >
+            <Icon name="add_comment" size={16} />
+            <span className="mg-sel-name">コメント</span>
+          </button>
+        </Tooltip>
       </div>
+
+      {asking && (
+        <AskBox
+          hint={ASK[asking.kind].hint}
+          label={ASK[asking.kind].label}
+          text={asking.text}
+          at={asking.at}
+          onText={(text) => setAsking({ ...asking, text })}
+          onDone={() => settle(asking)}
+          onClose={() => {
+            setAsking(null);
+            view.focus();
+          }}
+        />
+      )}
 
       {menu && (
         <BlockMenu

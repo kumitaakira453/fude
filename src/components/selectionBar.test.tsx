@@ -112,7 +112,7 @@ function pressClick(el: HTMLElement) {
 }
 
 const menu = () => document.querySelector(".mg-block-menu");
-const field = () => document.querySelector<HTMLInputElement>(".mg-sel-ask > input");
+const field = () => document.querySelector<HTMLInputElement>(".mg-ask > input");
 
 // React は value の書き込みを自分で見張っているので、素の代入では onChange が
 // 走らない。本来の setter を呼んでから input を配る。
