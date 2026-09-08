@@ -677,7 +677,26 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   );
 
   // 組み立てた編集面。指摘の印は本文の DOM ではなく編集モデルから位置を出す。
-  const [pm, setPm] = useState<Editing | null>(null);
+  // 組み上がった編集面。**どのファイルのぶんか**を一緒に持つ。
+  //
+  // 編集面だけを控えると、ファイルを切り替えた後も新しいものが組み上がって
+  // onBuilt が来るまで**前のファイルの編集面を指したまま**になる。そのあいだ
+  // 骨組みの合図（!pm）が偽になるので、いちばん重い組み立ての最中に骨組みが
+  // 消えて「読み込んでいる」ことが分からなくなっていた（実測で 900 ブロック
+  // なら 432ms、2000 ブロックなら 951ms のあいだ）。捨てた編集面へ
+  // transaction を流して落ちる元でもあった。
+  const [built, setBuilt] = useState<{ path: string; view: Editing } | null>(
+    null,
+  );
+  const pm = built && built.path === path ? built.view : null;
+
+  // 骨組みで隠しているあいだは編集面へ打鍵を通さない。
+  // 押した先へ入れ替わるまでは前のファイルの編集面が生きたままなので、
+  // 隠れているところへ打つと前のファイルへ字が入る。
+  useEffect(() => {
+    if (!settling || !pm || pm.view.isDestroyed) return;
+    if (pm.view.hasFocus()) pm.view.dom.blur();
+  }, [settling, pm]);
   // 印を下ろすのは、行き先が触れる状態になったとき。
   //
   // 編集面は組み上がりでは足りない（この後に見ていた場所への合わせ込みが
@@ -1148,8 +1167,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 編集面を組むのは React の効果の中で、それが走るのは骨組みを
                 外した一枚を描いた後。被せないと、その間（大きいファイルでは
                 140ms）は空の紙が「書ける状態」に見えて、打った字がどこにも
-                入らない。編集面が出来たかどうかは onBuilt で分かる。 */}
-            {!pm && (
+                入らない。編集面が出来たかどうかは onBuilt で分かる。
+
+                settling も見る。押した瞬間の pm は**前のファイルの**編集面
+                なので `!pm` は偽になり、それだけだと押しても骨組みが出ない
+                （読むとき側は settling を見ているので出る）。編集モードの
+                解除は遅らせた path に紐づくので、2 フレーム後まで前の
+                ファイルが出たままになっていた。 */}
+            {(!pm || settling) && (
               <div className="absolute inset-0 z-10 bg-[var(--mg-bg)] px-10 py-8 sm:px-16">
                 <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                   <LoadingBody />
@@ -1165,7 +1190,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 rememberViewpoint(viewKey(pane.id, path), at, into);
               }}
               onDom={setEditContent}
-              onBuilt={setPm}
+              onBuilt={(view) => setBuilt(view ? { path, view } : null)}
               onComment={commentOnNode}
               onChange={(next) => {
                 setDraft(next);
