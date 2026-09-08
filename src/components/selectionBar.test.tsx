@@ -172,6 +172,24 @@ describe("ブロックの種別", () => {
   });
 });
 
+describe("並べ方", () => {
+  const labels = (row: Element) =>
+    [...row.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
+
+  it("種別とコメントは段を丸ごと使い、装飾は 4 つずつ 2 段", () => {
+    bar("ここを変える\n", 2, 4);
+    const rows = [...document.querySelectorAll(".mg-sel-row")];
+    expect(rows.map(labels)).toEqual([
+      ["太字", "斜体", "下線", "書式をクリア"],
+      ["リンク", "取り消し線", "行内コード", "式"],
+    ]);
+    // 段の中ではなく、帯の直下に置く。
+    for (const one of ["ブロックの種別", "コメント"]) {
+      expect(button(one).closest(".mg-sel-row")).toBeNull();
+    }
+  });
+});
+
 describe("リンク", () => {
   it("押すと行き先を聞く欄が出て、Enter で張る", () => {
     bar("ここを見る\n", 0, 2);

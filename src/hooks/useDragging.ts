@@ -8,10 +8,15 @@ export function useDragging() {
   useEffect(() => {
     const mark = (e: MouseEvent) => {
       if (e.button !== 0) return;
-      // 重ねたもの（つまみ・印・カード）を掴んだときは抑えない。抑えると
-      // 押した瞬間に触れない板になり、つまみ自身のドラッグが始まらない。
+      // 重ねたもの（つまみ・印・カード・選択メニュー）を掴んだときは抑えない。
+      // 抑えると押した瞬間に触れない板になり、つまみ自身のドラッグが始まらず、
+      // メニューでは続く mouseup と click が届かない（押しても何も起きない）。
       const el = e.target as Element | null;
-      if (el?.closest?.(".mg-block-layer, .mg-review-layer, .mg-hl-layer")) {
+      if (
+        el?.closest?.(
+          ".mg-block-layer, .mg-review-layer, .mg-hl-layer, .mg-sel-menu, .mg-block-menu",
+        )
+      ) {
         return;
       }
       document.body.classList.add("mg-dragging");

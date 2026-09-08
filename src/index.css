@@ -2718,15 +2718,17 @@ svg[id^="mmd-"] foreignObject p {
   width: 1px;
   background: var(--mg-border);
 }
-/* 選んだ文字への操作の帯。項目が多いので段に分けて積む。上段はブロックそのもの
-   への操作、下段は選んだ文字への操作、聞くことがあればその下の段。
+/* 選んだ文字への操作の帯。縦に積む。
+   種別とコメントはそれぞれ 1 段を丸ごと使い、装飾は 4 つずつ 2 段に割る。
+   横に長いと本文を覆う幅が広く、押す先も探しにくい。
 
    縁までボタンを敷かず、外側に余白を回して押せる面を切り離す。段の間に線は
-   引かない（組の切れ目は段の中の仕切りが示す）。 */
+   引かない。 */
 .mg-sel-bar {
   flex-direction: column;
-  gap: 2px;
-  padding: 5px;
+  gap: 3px;
+  min-width: 9.5rem;
+  padding: 6px;
   border-radius: 0.75rem;
   box-shadow:
     0 12px 28px -14px rgba(0, 0, 0, 0.4),
@@ -2734,39 +2736,60 @@ svg[id^="mmd-"] foreignObject p {
   /* ツールチップは帯の外へ出る。切り抜きは外す（縁に余白があるので要らない）。 */
   overflow: visible;
 }
+/* 行き先や式を聞いている間だけ広げる。URL は狭い欄では読めない。 */
+.mg-sel-bar.is-asking {
+  min-width: 17rem;
+}
 .mg-sel-row {
+  position: relative;
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 2px;
 }
-/* アイコンだけのボタンは正方に、名前を出すボタン（ブロックの種別・コメント）は
-   横に伸ばす。高さは揃える。字より少し淡く置き、触ったところだけ前へ出す。 */
+/* アイコンの段は端まで割り振る。左に寄せると右だけ余って、帯が左右で
+   非対称に見える。 */
+.mg-sel-row:not(.mg-sel-ask) {
+  justify-content: space-between;
+}
+/* ツールチップは段の外へ出す。
+   包みを位置の基準にしないことで、段の中のボタンは段の右へ、段を丸ごと使う
+   ボタン（種別・コメント）は帯の上下へ出る。基準を包みに置くと、隣のボタンの
+   上に出て字が読めない。 */
+.mg-sel-bar .group\/tt {
+  position: static;
+}
+/* アイコンだけのボタンは正方に。幅は決め打ちにする（字形ごとに送り幅が違うので、
+   内容に任せると間隔がばらつく）。 */
 .mg-sel-bar button {
   justify-content: center;
   gap: 0.3rem;
-  /* 幅は決め打ちにする。字形ごとに送り幅が違うので、内容に任せると
-     アイコンの間隔がばらつく。 */
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 0.5rem;
   color: var(--mg-fg-dim);
 }
-.mg-sel-bar button.mg-sel-wide {
-  width: auto;
-  padding: 0 0.45rem;
+/* 段を丸ごと使うボタン（種別・コメント）。名前は左、しるしは右端。 */
+.mg-sel-bar .group\/tt:has(> .mg-sel-line) {
+  display: block;
+}
+.mg-sel-bar button.mg-sel-line {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 0.4rem;
 }
 .mg-sel-name {
   color: var(--mg-fg);
   font-size: 12px;
   line-height: 1;
 }
-.mg-sel-bar button:hover .mg-sel-name {
-  color: inherit;
+.mg-sel-more {
+  margin-left: auto;
+  color: var(--mg-muted);
 }
-/* 仕切りは段の高さいっぱいには引かない。上下を空けて、組の切れ目だけを示す。 */
-.mg-sel-bar .mg-sel-menu-sep {
-  height: 1rem;
-  margin: 0 0.3rem;
+.mg-sel-bar button:hover .mg-sel-name,
+.mg-sel-bar button:hover .mg-sel-more {
+  color: inherit;
 }
 /* いま付いている装飾は押し込んで見せる。押すと外れることが分かるように、
    地色ではなくアクセントで示す。 */
@@ -2778,9 +2801,10 @@ svg[id^="mmd-"] foreignObject p {
   color: inherit;
 }
 /* 行き先や式を聞く段。欄に見えないと「押しても何も出ない」と読まれるので、
-   枠と地色を持たせる。幅は上の段に合わせ、帯の横幅を動かさない。 */
+   枠と地色を持たせる。 */
 .mg-sel-ask {
   gap: 0.25rem;
+  margin-top: 2px;
 }
 .mg-sel-ask > input {
   flex: 1;

@@ -19,7 +19,8 @@ export interface MenuItem {
 
 // 押した場所。画面の端では内側へ寄せる。
 const ROW = 32;
-const WIDTH = 216;
+// 呼び出し側が「帯の右に入るか」を測るのに使う。
+export const MENU_WIDTH = 216;
 
 export function BlockMenu({
   x,
@@ -55,7 +56,7 @@ export function BlockMenu({
     <div
       ref={box}
       style={{
-        left: Math.min(x, window.innerWidth - WIDTH),
+        left: Math.min(x, window.innerWidth - MENU_WIDTH),
         top: Math.min(y, window.innerHeight - items.length * ROW - 20),
       }}
       onClick={(e) => e.stopPropagation()}

@@ -15,7 +15,7 @@ import {
 } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
-import { BlockMenu, type MenuItem } from "./BlockMenu";
+import { BlockMenu, MENU_WIDTH, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 import { Tooltip } from "./Tooltip";
 
@@ -30,10 +30,10 @@ import { Tooltip } from "./Tooltip";
 // mousedown で処理し、preventDefault で選択の解除も止める（読むとき側の
 // 小メニューと同じ理由）。
 //
-// 段に分けて積む。上段はブロックそのものへの操作、下段は選んだ文字への操作、
-// 行き先や式を聞く入力はさらにその下の段。
+// 並べ方は縦積み。種別とコメントはそれぞれ 1 段を丸ごと使い、装飾は 4 つずつ
+// 2 段に割る。横に長いと本文を覆う幅が広く、押す先も探しにくい。
 
-// 下段の前半。書式クリアまでがひと組。
+// 装飾の段。4 つずつで割る。
 const MARKS: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   { mark: schema.marks.strong, icon: "format_bold", label: "太字", keys: "⌘B" },
   { mark: schema.marks.em, icon: "format_italic", label: "斜体", keys: "⌘I" },
@@ -45,7 +45,6 @@ const MARKS: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   },
 ];
 
-// 下段の後半。リンクと式は入力を伴うので、ここには並べない。
 const MORE: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   {
     mark: schema.marks.strike,
@@ -84,8 +83,8 @@ export function SelectionBar({
   onComment: () => void;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const panel = useRef<HTMLDivElement>(null);
   const [asking, setAsking] = useState<Asking | null>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const askRef = useRef<HTMLInputElement>(null);
   const seen = useRef(linkNonce);
 
@@ -107,16 +106,18 @@ export function SelectionBar({
   const [seq, setSeq] = useState(0);
   const bump = () => setSeq((n) => n + 1);
 
-  const run = (
-    apply: (v: EditorView) => void,
-    opts: { keep?: boolean } = { keep: true },
-  ) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    apply(view);
-    // 続けて別の装飾を付けられるように焦点と選択は戻す。
-    if (opts.keep !== false) view.focus();
-    bump();
-  };
+  const run =
+    (
+      apply: (v: EditorView) => void,
+      opts: { keep?: boolean } = { keep: true },
+    ) =>
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      apply(view);
+      // 続けて別の装飾を付けられるように焦点と選択は戻す。
+      if (opts.keep !== false) view.focus();
+      bump();
+    };
 
   useEffect(() => {
     if (linkNonce === seen.current) return;
@@ -136,21 +137,34 @@ export function SelectionBar({
   const tex = mathAt(view.state);
   void seq;
 
-  const items: MenuItem[] = SLASH_ITEMS.filter((item) => !item.inserts).map((item) => ({
-    icon: item.icon,
-    label: item.label,
-    keys: item.hint || undefined,
-    on: item.id === kind?.id,
-    run: () => {
-      item.run(view.state, view.dispatch, view);
-      view.focus();
-      setMenu(null);
-      bump();
-    },
-  }));
+  const items: MenuItem[] = SLASH_ITEMS.filter((item) => !item.inserts).map(
+    (item) => ({
+      icon: item.icon,
+      label: item.label,
+      keys: item.hint || undefined,
+      on: item.id === kind?.id,
+      run: () => {
+        item.run(view.state, view.dispatch, view);
+        view.focus();
+        setMenu(null);
+        bump();
+      },
+    }),
+  );
 
-  const toggle = (one: { mark: MarkType; icon: string; label: string; keys: string }) => (
-    <Tooltip key={one.label} label={one.label} keys={one.keys} tone="dark">
+  const toggle = (one: {
+    mark: MarkType;
+    icon: string;
+    label: string;
+    keys: string;
+  }) => (
+    <Tooltip
+      key={one.label}
+      label={one.label}
+      keys={one.keys}
+      side="right"
+      tone="dark"
+    >
       <button
         type="button"
         aria-label={one.label}
@@ -179,107 +193,128 @@ export function SelectionBar({
       <div
         ref={panel}
         style={{ top: box.bottom + 8, left: box.left }}
-        className="mg-sel-menu mg-sel-bar"
+        className={`mg-sel-menu mg-sel-bar${asking ? " is-asking" : ""}`}
       >
-        <div className="mg-sel-row">
-          {!cell && (
-            <>
-              <Tooltip label="ブロックの種別を変える" tone="dark">
-                <button
-                  type="button"
-                  aria-label="ブロックの種別"
-                  className="mg-sel-wide"
-                  // 出すのは click。mousedown で出すと、メニューが付ける
-                  // 「外を押したら閉じる」（mousedown を見ている）が、まだ
-                  // 配り終えていないその押下を受け取って端から閉じてしまう。
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={(e) => {
-                    // 出す先は帯の下。ボタンの下だと帯そのものに重なる。
-                    const from = e.currentTarget.getBoundingClientRect();
-                    const under = panel.current?.getBoundingClientRect().bottom ?? from.bottom;
-                    setMenu({ x: from.left, y: under + 6 });
-                  }}
-                >
-                  <Icon name={kind?.icon ?? "text_fields"} size={16} />
-                  <span className="mg-sel-name">{kind?.label ?? "テキスト"}</span>
-                  <Icon name="expand_more" size={14} />
-                </button>
-              </Tooltip>
-              <span className="mg-sel-menu-sep" />
-            </>
-          )}
-          <Tooltip label="選んだところにコメントを付ける" tone="dark">
+        {!asking && !cell && (
+          <Tooltip label="ブロックの種別を変える" side="top" tone="dark">
+            <button
+              type="button"
+              aria-label="ブロックの種別"
+              className="mg-sel-line"
+              // 出すのは click。mousedown で出すと、メニューが付ける
+              // 「外を押したら閉じる」（mousedown を見ている）が、まだ
+              // 配り終えていないその押下を受け取って端から閉じてしまう。
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                // 出す先は帯の横。上下だと帯そのものか本文に重なる。
+                const from = panel.current?.getBoundingClientRect();
+                if (!from) return;
+                const right = from.right + 6;
+                setMenu({
+                  x:
+                    right + MENU_WIDTH <= window.innerWidth
+                      ? right
+                      : from.left - 6 - MENU_WIDTH,
+                  y: from.top,
+                });
+              }}
+            >
+              <Icon name={kind?.icon ?? "text_fields"} size={16} />
+              <span className="mg-sel-name">{kind?.label ?? "テキスト"}</span>
+              <Icon name="chevron_right" size={16} className="mg-sel-more" />
+            </button>
+          </Tooltip>
+        )}
+
+        {!asking && (
+          <div className="mg-sel-row">
+            {MARKS.map(toggle)}
+            <Tooltip label="書式をクリア" side="right" tone="dark">
+              <button
+                type="button"
+                aria-label="書式をクリア"
+                onMouseDown={run((v) => clearMarks(v.state, v.dispatch, v))}
+              >
+                <Icon name="format_clear" size={16} />
+              </button>
+            </Tooltip>
+          </div>
+        )}
+
+        {!asking && (
+          <div className="mg-sel-row">
+            <Tooltip
+              label={href === null ? "リンクにする" : "リンクを外す"}
+              keys={href === null ? "⌘K" : undefined}
+              side="right"
+              tone="dark"
+            >
+              <button
+                type="button"
+                aria-label="リンク"
+                className={href === null ? undefined : "is-on"}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  if (href !== null) {
+                    clearLink(view.state, view.dispatch, view);
+                    view.focus();
+                    bump();
+                    return;
+                  }
+                  setAsking({ kind: "link", text: "" });
+                }}
+              >
+                <Icon name="link" size={16} />
+              </button>
+            </Tooltip>
+            {MORE.map(toggle)}
+            <Tooltip
+              label={tex === null ? "式にする" : "式を打ち直す"}
+              side="right"
+              tone="dark"
+            >
+              <button
+                type="button"
+                aria-label="式"
+                className={tex === null ? undefined : "is-on"}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  // 式の上を選んでいれば打ち直し、そうでなければ選んだ文字を
+                  // そのまま中身にする。
+                  setAsking({
+                    kind: "math",
+                    text: tex ?? view.state.doc.textBetween(span.from, span.to),
+                  });
+                }}
+              >
+                <Icon name="functions" size={16} />
+              </button>
+            </Tooltip>
+          </div>
+        )}
+
+        {!asking && (
+          <Tooltip
+            label="選んだところにコメントを付ける"
+            side="bottom"
+            tone="dark"
+          >
             <button
               type="button"
               aria-label="コメント"
-              className="mg-sel-wide"
+              className="mg-sel-line"
               onMouseDown={run(() => onComment(), { keep: false })}
             >
               <Icon name="add_comment" size={16} />
               <span className="mg-sel-name">コメント</span>
             </button>
           </Tooltip>
-        </div>
-
-        <div className="mg-sel-row">
-          {MARKS.map(toggle)}
-          <Tooltip label="書式をクリア" tone="dark">
-            <button
-              type="button"
-              aria-label="書式をクリア"
-              onMouseDown={run((v) => clearMarks(v.state, v.dispatch, v))}
-            >
-              <Icon name="format_clear" size={16} />
-            </button>
-          </Tooltip>
-          <span className="mg-sel-menu-sep" />
-          <Tooltip
-            label={href === null ? "リンクにする" : "リンクを外す"}
-            keys={href === null ? "⌘K" : undefined}
-            tone="dark"
-          >
-            <button
-              type="button"
-              aria-label="リンク"
-              className={href === null ? undefined : "is-on"}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                if (href !== null) {
-                  clearLink(view.state, view.dispatch, view);
-                  view.focus();
-                  bump();
-                  return;
-                }
-                setAsking({ kind: "link", text: "" });
-              }}
-            >
-              <Icon name="link" size={16} />
-            </button>
-          </Tooltip>
-          {MORE.map(toggle)}
-          <Tooltip label={tex === null ? "式にする" : "式を打ち直す"} tone="dark">
-            <button
-              type="button"
-              aria-label="式"
-              className={tex === null ? undefined : "is-on"}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                // 式の上を選んでいれば打ち直し、そうでなければ選んだ文字を
-                // そのまま中身にする。
-                setAsking({
-                  kind: "math",
-                  text: tex ?? view.state.doc.textBetween(span.from, span.to),
-                });
-              }}
-            >
-              <Icon name="functions" size={16} />
-            </button>
-          </Tooltip>
-        </div>
+        )}
 
         {asking && (
-          // 帯の中に段として足す。別の箱にすると帯の高さの分だけ位置を
-          // ずらす必要があり、段数を変えるたびに狂う。
+          // 聞いている間は他の段を出さない。帯の幅は欄に合わせて広がるので、
+          // 並べたままだとアイコンの段が余白だらけになる。別の箱にはしない
+          // （帯の高さの分だけ位置をずらす必要があり、段数を変えるたびに狂う）。
           <div className="mg-sel-row mg-sel-ask">
             <input
               ref={askRef}
@@ -300,7 +335,7 @@ export function SelectionBar({
                 settle(asking);
               }}
             />
-            <Tooltip label="決める" keys="⏎" align="end" tone="dark">
+            <Tooltip label="決める" keys="⏎" side="right" tone="dark">
               <button
                 type="button"
                 aria-label="決める"
@@ -317,7 +352,12 @@ export function SelectionBar({
       </div>
 
       {menu && (
-        <BlockMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />
+        <BlockMenu
+          x={menu.x}
+          y={menu.y}
+          items={items}
+          onClose={() => setMenu(null)}
+        />
       )}
     </>
   );

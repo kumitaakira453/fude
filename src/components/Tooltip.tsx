@@ -16,16 +16,22 @@ export function Tooltip({
   // 打鍵。あれば説明の後ろに淡く添える。
   keys?: string;
   children: ReactNode;
-  side?: "bottom" | "top";
+  side?: "bottom" | "top" | "right";
   align?: "center" | "start" | "end";
   tone?: "panel" | "dark";
 }) {
+  // 横に出すときは align を使わない（縦に積んだ帯の中では、段を覆わないよう
+  // 帯の外へ出すのが要点）。
   const pos =
-    align === "end"
-      ? "right-0"
-      : align === "start"
-        ? "left-0"
-        : "left-1/2 -translate-x-1/2";
+    side === "right"
+      ? "left-full top-1/2 ml-2 -translate-y-1/2"
+      : `${
+          align === "end"
+            ? "right-0"
+            : align === "start"
+              ? "left-0"
+              : "left-1/2 -translate-x-1/2"
+        } ${side === "bottom" ? "top-full mt-2" : "bottom-full mb-2"}`;
   const skin =
     tone === "dark"
       ? "border-transparent bg-[var(--mg-fg)] text-[var(--mg-bg)] shadow-lg"
@@ -35,9 +41,7 @@ export function Tooltip({
       {children}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute z-50 w-max max-w-[240px] whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] leading-snug opacity-0 transition-opacity delay-150 duration-150 group-hover/tt:opacity-100 ${skin} ${pos} ${
-          side === "bottom" ? "top-full mt-2" : "bottom-full mb-2"
-        }`}
+        className={`pointer-events-none absolute z-50 w-max max-w-[240px] whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] leading-snug opacity-0 transition-opacity delay-150 duration-150 group-hover/tt:opacity-100 ${skin} ${pos}`}
       >
         {label}
         {keys && <span className="ml-1.5 opacity-55">{keys}</span>}
