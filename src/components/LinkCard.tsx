@@ -12,16 +12,11 @@ export function LinkCard({
   href,
   at,
   onEdit,
-  onEnter,
-  onLeave,
 }: {
   href: string;
   // 出す場所。リンクの左下。ビューポート座標。
   at: { left: number; top: number };
   onEdit: () => void;
-  // 札へ手を運ぶ間に消えないよう、出している側へ知らせる。
-  onEnter: () => void;
-  onLeave: () => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -36,12 +31,7 @@ export function LinkCard({
   };
 
   return createPortal(
-    <div
-      className="mg-link-card"
-      style={{ left: at.left, top: at.top }}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-    >
+    <div className="mg-link-card" style={{ left: at.left, top: at.top }}>
       <Icon name="language" size={15} className="mg-link-globe" />
       <a className="mg-link-href" href={href} target="_blank" rel="noreferrer">
         {href}

@@ -1715,10 +1715,14 @@ body.mg-dragging .mg-sel-menu {
   box-shadow: inset 0 0 0 1px var(--mg-border);
   cursor: pointer;
 }
-.mg-grip-add:hover {
+/* 手が乗っているとき。出た瞬間から押せる見た目にするため、印は出す側が
+   付ける（手の下に現れた要素の :hover は、その場では効かないことがある）。 */
+.mg-grip-add:hover,
+.mg-grip-add.is-on {
   background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
   box-shadow: inset 0 0 0 1px
     color-mix(in srgb, var(--mg-accent) 45%, transparent);
+  color: var(--mg-accent);
 }
 /* メニューの対象。どこを指しているかを薄く塗って示す。 */
 .mg-target {

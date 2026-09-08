@@ -535,12 +535,18 @@ export function BodyEditor({
   );
 
   // 指しているリンク。行き先を見せる札と、打ち直しの入口を出す。
+  //
+  // 出す / 消すは手の位置で決める。入った・出たの通知で決めると、札は本文の
+  // 外（body）に置いてあるぶん順番が絡み、手を運んだ途端に消える。
   const [onLink, setOnLink] = useState<{
     span: { from: number; to: number };
     href: string;
+    // リンクそのものの矩形。ここと札の上に手があるあいだは出したままにする。
+    link: { left: number; right: number; top: number; bottom: number };
     x: number;
     y: number;
   } | null>(null);
+  const shownLink = useRef("");
   // リンクの行き先を聞いているところ。
   const [askLink, setAskLink] = useState<{
     span: { from: number; to: number };
@@ -548,13 +554,39 @@ export function BodyEditor({
     x: number;
     y: number;
   } | null>(null);
-  // 札を消すのは少し待つ。リンクから札へ手を運ぶ間に消えると触れない。
-  const away = useRef(0);
-  const holdCard = () => window.clearTimeout(away.current);
-  const dropCard = () => {
-    window.clearTimeout(away.current);
-    away.current = window.setTimeout(() => setOnLink(null), 220);
-  };
+  // 札を消すのは、リンクからも札からも手が離れたとき。
+  useEffect(() => {
+    if (!onLink) return;
+    const slack = 8;
+    const over = (
+      box: { left: number; right: number; top: number; bottom: number } | undefined,
+      x: number,
+      y: number,
+    ) =>
+      !!box &&
+      x >= box.left - slack &&
+      x <= box.right + slack &&
+      y >= box.top - slack &&
+      y <= box.bottom + slack;
+    let frame = 0;
+    const onMove = (e: MouseEvent) => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const card = document.querySelector(".mg-link-card")?.getBoundingClientRect();
+        if (over(onLink.link, e.clientX, e.clientY) || over(card, e.clientX, e.clientY)) {
+          return;
+        }
+        shownLink.current = "";
+        setOnLink(null);
+      });
+    };
+    document.addEventListener("mousemove", onMove);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("mousemove", onMove);
+    };
+  }, [onLink]);
 
   // 打ち直している式。位置はプラグインが持っているので、ここは出す場所と
   // いま見せている中身だけを控える。
@@ -787,8 +819,6 @@ export function BodyEditor({
       // 見るのは 1 フレームに 1 回。
       let onEmoji = false;
       let looking = 0;
-      // 指しているリンク。同じものを指している間は出し直さない。
-      let shownLink = "";
       const hover = (event: MouseEvent) => {
         if (looking) return;
         looking = requestAnimationFrame(() => {
@@ -804,25 +834,30 @@ export function BodyEditor({
             view.dom.classList.toggle("mg-over-emoji", on);
           }
 
-          // リンクの札。要素から辿るだけなので、位置を測る必要は無い。
+          // リンクの札。出すだけで、消すのは手の位置を見ている側に任せる。
           const a = el?.closest("a");
           const box = a?.getBoundingClientRect();
           const at = a ? view.posAtDOM(a, 0) : -1;
           const span = at >= 0 ? linkSpanAt(view.state, at + 1) : null;
           const key = span && box ? `${span.from},${span.to}` : "";
-          if (key === shownLink) return;
-          shownLink = key;
-          holdCard();
-          if (!span || !box) {
-            dropCard();
-            return;
-          }
-          setOnLink({ span, href: span.href, x: box.left, y: box.bottom + 8 });
+          if (key === shownLink.current) return;
+          shownLink.current = key;
+          if (!span || !box) return;
+          setOnLink({
+            span,
+            href: span.href,
+            link: {
+              left: box.left,
+              right: box.right,
+              top: box.top,
+              bottom: box.bottom,
+            },
+            x: box.left,
+            y: box.bottom + 4,
+          });
         });
       };
       view.dom.addEventListener("mousemove", hover);
-      const leave = () => dropCard();
-      view.dom.addEventListener("mouseleave", leave);
 
       // 絵文字の盤を出す / 消す。打鍵のたびに React を描き直さないよう、
       // 変わったときだけ控えを差し替える。
@@ -1120,9 +1155,7 @@ export function BodyEditor({
         if (flushRef) flushRef.current = null;
         if (adoptRef) adoptRef.current = null;
         cancelAnimationFrame(looking);
-        window.clearTimeout(away.current);
         view.dom.removeEventListener("mousemove", hover);
-        view.dom.removeEventListener("mouseleave", leave);
         paint.stop();
         setBuilt(null);
         onBuilt?.(null);
@@ -1168,8 +1201,6 @@ export function BodyEditor({
         <LinkCard
           href={onLink.href}
           at={{ left: onLink.x, top: onLink.y }}
-          onEnter={holdCard}
-          onLeave={dropCard}
           onEdit={() => {
             setAskLink({
               span: onLink.span,

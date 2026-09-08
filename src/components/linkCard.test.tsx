@@ -74,6 +74,16 @@ async function point(el: Element) {
   });
 }
 
+// 手を動かす。消すかどうかは位置で決まるので、座標だけ配る。
+async function moveMouse(x: number, y: number) {
+  await act(async () => {
+    document.dispatchEvent(
+      new MouseEvent("mousemove", { bubbles: true, clientX: x, clientY: y }),
+    );
+    await new Promise((done) => requestAnimationFrame(() => done(null)));
+  });
+}
+
 function press(el: Element) {
   act(() => {
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
@@ -141,15 +151,22 @@ describe("リンクの札", () => {
     expect(saved()).toBe("ここに 埋め込みリンク があります。\n");
   });
 
-  it("リンクの外を指すと消える", async () => {
+  // 出し消しは手の位置で決める。入った・出たの通知に任せると、札は本文の外に
+  // 置いてあるぶん順番が絡んで、手を運んだ途端に消える。
+  it("札の上に手があるあいだは消えない", async () => {
     const at = editor();
     await point(at.querySelector("a")!);
     expect(card()).not.toBeNull();
-    await point(at.querySelector("p")!);
-    // 手を運ぶ間に消えないよう少し待つ作りなので、その分待つ。
-    await act(async () => {
-      await new Promise((done) => setTimeout(done, 300));
-    });
+    // 札の上（jsdom では矩形が 0 なので原点）。
+    await moveMouse(0, 0);
+    expect(card()).not.toBeNull();
+  });
+
+  it("リンクからも札からも離れると消える", async () => {
+    const at = editor();
+    await point(at.querySelector("a")!);
+    expect(card()).not.toBeNull();
+    await moveMouse(900, 700);
     expect(card()).toBeNull();
   });
 });

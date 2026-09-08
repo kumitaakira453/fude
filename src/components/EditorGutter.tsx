@@ -104,6 +104,10 @@ interface Spot {
   table: {
     rows: number;
     cols: number;
+    // 「足す」ボタンの上に手があるか。出た瞬間から押せる見た目にするために、
+    // :hover に任せず自分で決める（手の下に現れた要素の hover は、その場では
+    // 効かないことがある）。
+    onAdd: "row" | "col" | null;
     below: number;
     nearRow: boolean;
     nearCol: boolean;
@@ -197,6 +201,54 @@ function blockAtY(view: EditorView, y: number): Hit | null {
   return { el, index: at, pos };
 }
 
+// 「足す」ボタンの帯に手が入っているか。ボタンの置き場所と同じ式で見る。
+function onAddBand(
+  geo: NonNullable<ReturnType<typeof tableGeometry>>,
+  below: number,
+  x: number,
+  y: number,
+): "row" | "col" | null {
+  const slack = 2;
+  const t = geo.table;
+  const rowTop = addBelow(geo.bottom, below, ADD_GAP);
+  if (
+    y >= rowTop - slack &&
+    y <= rowTop + ADD + slack &&
+    x >= t.left - slack &&
+    x <= t.left + t.width + slack
+  ) {
+    return "row";
+  }
+  const colLeft = t.left + t.width + ADD_GAP;
+  if (
+    geo.atRight &&
+    x >= colLeft - slack &&
+    x <= colLeft + ADD + slack &&
+    y >= t.top - slack &&
+    y <= t.top + t.height + slack
+  ) {
+    return "col";
+  }
+  return null;
+}
+
+// 直前のブロックが表で、その「足す」帯に手が入っているならそれを返す。
+//
+// 行を足すボタンは表の下の縁の外に置くので、そこへ手を伸ばしている間は表の
+// 上に居ない。ブロックの間の余白は近い方が選ばれるため、そのままでは次の
+// ブロックが相手になって、ボタンが出る前に消える。
+function tableBand(view: EditorView, hit: Hit, y: number): Hit | null {
+  const before = hit.index - 1;
+  if (before < 0 || view.state.doc.child(before).type !== schema.nodes.table) return null;
+  const el = view.dom.children[before];
+  if (!(el instanceof HTMLElement)) return null;
+  const box = el.getBoundingClientRect();
+  if (y < box.bottom || y > box.bottom + ADD_GAP + ADD) return null;
+  let pos = 0;
+  for (let i = 0; i < before; i++) pos += view.state.doc.child(i).nodeSize;
+  return { el, index: before, pos };
+}
+
 // その li に対応する編集モデルの位置。項目そのものと、親のリストと並び。
 function itemPosOf(
   view: EditorView,
@@ -287,11 +339,12 @@ export function EditorGutter({
       // つまみの上に来ても保つ。消えると押せない。
       if (keep && target && layer.current?.contains(target)) return;
 
-      const hit = blockAtY(view, y);
-      if (!hit) {
+      const found = blockAtY(view, y);
+      if (!found) {
         show(null);
         return;
       }
+      const hit = tableBand(view, found, y) ?? found;
       const base = host.getBoundingClientRect();
       const box = hit.el.getBoundingClientRect();
       const room = scroller
@@ -351,6 +404,7 @@ export function EditorGutter({
           ? {
               rows: node.childCount,
               cols: node.child(0)?.childCount ?? 0,
+              onAdd: onAddBand(geo, below, x - base.left, y - base.top),
               below,
               // 縁に寄ったらつまみに育てる。寄っていないあいだは棒だけ。
               nearRow: nearEdge(x, base.left + geo.table.left),
@@ -957,7 +1011,9 @@ export function EditorGutter({
                 <button
                   type="button"
                   title="列を追加"
-                  className="mg-grip mg-grip-bar mg-grip-add"
+                  className={`mg-grip mg-grip-bar mg-grip-add${
+                    spot.table.onAdd === "col" ? " is-on" : ""
+                  }`}
                   style={{
                     top: geo.table.top,
                     left: geo.table.left + geo.table.width + ADD_GAP,
@@ -974,7 +1030,9 @@ export function EditorGutter({
               <button
                 type="button"
                 title="行を追加"
-                className="mg-grip mg-grip-bar mg-grip-add"
+                className={`mg-grip mg-grip-bar mg-grip-add${
+                  spot.table.onAdd === "row" ? " is-on" : ""
+                }`}
                 style={{
                   top: addBelow(geo.bottom, spot.table.below, ADD_GAP),
                   left: geo.table.left,
