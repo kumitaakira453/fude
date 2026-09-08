@@ -1,4 +1,5 @@
 import { EditorState, NodeSelection, TextSelection } from "prosemirror-state";
+import { Fragment, type Node as PmNode } from "prosemirror-model";
 import { CellSelection } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 // ProseMirror が要る土台の指定。改行の前後に挟む見えない img を本文の img 指定から
@@ -9,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { throttled } from "../lib/later";
 import { calloutIcoAt, setCalloutIcon } from "../lib/md/calloutIcon";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
+import { GROW } from "../lib/md/grow";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
 import { closeEmoji, emojiKey, takeEmoji } from "../lib/md/emoji";
@@ -538,11 +540,58 @@ export function BodyEditor({
     const want = Math.max(0, (viewpoint?.at ?? 0) - prefix.length);
     const target = want > 0 ? (blocks.find((b) => b.end > want) ?? null) : null;
 
+    // 編集面は段階的に組む。
+    //
+    // 費用の本体は組み立てではなく**焦点を当てること**で、長い
+    // contenteditable では WebKit 側の仕事が本文の大きさに比例する
+    // （2000 ブロックで実測 375ms。preventScroll でも変わらない）。
+    // 先頭の数十ブロックだけで作って**小さいうちに焦点を当て**、残りを
+    // 後から足せば、そこが数 ms で済む。
+    //
+    // 合わせ先（見ていた場所）は最初の分に含める。含めないと、そこへ届く
+    // まで画面が先頭に留まる。
+    const whole = loaded.doc;
+    const total = whole.childCount;
+    // 合わせ先を含む子の番号。target.pos は全文での位置だが、先頭からの子は
+    // 途中の doc でも同じ位置に並ぶので、その子まで入れておけば resolve できる。
+    let upto = 0;
+    if (target) {
+      let scan = 0;
+      for (let i = 0; i < total; i++) {
+        if (scan >= target.pos) break;
+        scan += whole.child(i).nodeSize;
+        upto = i + 1;
+      }
+    }
+    // 最初に入れる子の数。画面に出る分 + 余白。
+    const FIRST = 40;
+    let grown = Math.min(total, Math.max(FIRST, upto + FIRST));
+    // 育ち中は書き出さない・打たせない。途中の doc を直列化すると
+    // ファイルが切り詰められる。
+    // 育てる方式は末尾へ足すたびに ProseMirror が doc を突き合わせるので、
+    // 1 回が本文の大きさに比例する（全体では二乗）。小さいうちは焦点を
+    // 小さい doc で当てられる分が大きく勝つが、大きい本文では負ける。
+    // 境目は実測で決める。
+    // 実測で決めた境目。900 ブロックでは最長の塊が 419ms → 199ms、塞がる合計も
+    // 743ms → 370ms に下がる。2000 ブロックでは足す回数が増えて合計が伸び、
+    // 育ち切るまでに数秒かかるので、そこは今までどおり一度で組む。
+    const GROW_MAX = 1200;
+    let growing = grown < total && total <= GROW_MAX;
+    if (!growing) grown = total;
+    const head = (n: number): PmNode => {
+      const kids: PmNode[] = [];
+      for (let i = 0; i < n; i++) kids.push(whole.child(i));
+      return whole.type.create(whole.attrs, Fragment.fromArray(kids));
+    };
+    const first = growing ? head(grown) : whole;
+
     const state = EditorState.create({
-      doc: loaded.doc,
+      doc: first,
       // 焦点を当てると選んでいるところへ画面が動く。合わせたい位置を先に選んでおく。
       selection: target
-        ? TextSelection.near(loaded.doc.resolve(target.pos + 1))
+        ? TextSelection.near(
+            first.resolve(Math.min(target.pos + 1, first.content.size)),
+          )
         : undefined,
       plugins: editorPlugins({ onSave: () => saved.current() }),
     });
@@ -586,6 +635,12 @@ export function BodyEditor({
         view.updateState(next);
         // 打鍵の経路に置くのはここまで。組み直しは手を止めてから。
         if (tr.docChanged) send();
+        // 育てる分では描き直さない。末尾へ足すだけでカーソルも選択も動かない。
+        // ここは本文の大きさに比例するので、足すたびに走ると育つのが遅くなる。
+        if (tr.getMeta(GROW)) return;
+        // 人が打ったなら、残りを一気に入れて普通の状態へ戻す。育ち中は
+        // 書き出しを止めているので、そのままでは打ったものが保存されない。
+        if (tr.docChanged) fillRest();
         paint.now();
         showEmoji(view);
       },
@@ -624,7 +679,13 @@ export function BodyEditor({
 
     // 組み直して親へ渡す。ここだけが重いので、打鍵の経路から外してある。
     const send = throttled(
-      () => changed.current(prefix + toMarkdown(view.state.doc, loaded)),
+      () => {
+        // 育ち切るまでは書き出さない。toMarkdown は doc 全体を直列化するので、
+        // 途中の doc を渡すとファイルが切り詰められる。ここ 1 か所で止めれば
+        // 打鍵・⌘S・窓を離れたとき・後片付けの全部が塞がる。
+        if (growing) return;
+        changed.current(prefix + toMarkdown(view.state.doc, loaded));
+      },
       WAIT,
       CAP,
     );
@@ -636,7 +697,13 @@ export function BodyEditor({
     // カーソルの描画まで全部作り直しになる。差し替えを 1 つの transaction で
     // 流せば、ProseMirror が古い doc と差分を取って変わったところの DOM だけ
     // 触る。スクロール位置も自然に保たれる。
+    // 育ち中に来た外の変更。育ち切ってから当て直す。
+    let waiting: string | null = null;
     const adopt = (text: string) => {
+      if (growing) {
+        waiting = text;
+        return;
+      }
       // 変わったところだけ読み直せるならそれで済ませる。大きいファイルでは
       // 全体の読み直しが 350ms 掛かる（929 ブロックで実測）。
       const spot = reload(loaded, text);
@@ -678,7 +745,86 @@ export function BodyEditor({
     // 走り、実測で 800ms ほど本文が流れ続ける（900 ブロックで組み上がり
     // 351ms → 落ち着き 1444ms）。そこで骨組みを外すと、字は出ていて焦点も
     // あるのに本文が動いていく状態になる。**落ち着いてから知らせる。**
-    const ready = () => onBuilt?.({ view, host: at, loaded: () => loaded });
+    // 触れる状態になったと親へ知らせるのは、「育ち切った」かつ
+    // 「合わせ込みが落ち着いた」の両方が揃ってから。
+    let aligned = false;
+    let told = false;
+    const tell = () => {
+      if (growing || !aligned || told) return;
+      told = true;
+      onBuilt?.({ view, host: at, loaded: () => loaded });
+    };
+    const ready = () => {
+      aligned = true;
+      tell();
+    };
+
+    // 残りの子を少しずつ足す。
+    //
+    // 1 回に足す数は測って寄せる。ブロックの種類で 1 つの重さが変わるので、
+    // 個数で決め打ちすると 1 フレームに収まらない。
+    const GROW_MS = 8;
+    let batch = 24;
+    let rafGrow = 0;
+    // 残りをまとめて入れる。打鍵が来たときに使う。
+    const fillRest = () => {
+      if (!growing) return;
+      cancelAnimationFrame(rafGrow);
+      rafGrow = 0;
+      const rest: PmNode[] = [];
+      for (let i = grown; i < total; i++) rest.push(whole.child(i));
+      grown = total;
+      growing = false;
+      if (rest.length > 0) {
+        // 打鍵の処理の中からは流せないので、ひと呼吸おいて入れる。
+        queueMicrotask(() => {
+          if (view.isDestroyed) return;
+          view.dispatch(
+            view.state.tr
+              .insert(view.state.doc.content.size, Fragment.fromArray(rest))
+              .setMeta("addToHistory", false)
+              .setMeta(GROW, true),
+          );
+          tell();
+        });
+        return;
+      }
+      tell();
+    };
+    const grow = () => {
+      rafGrow = 0;
+      const take = Math.min(batch, total - grown);
+      const kids: PmNode[] = [];
+      for (let i = 0; i < take; i++) kids.push(whole.child(grown + i));
+      grown += take;
+      const t0 = performance.now();
+      view.dispatch(
+        view.state.tr
+          .insert(view.state.doc.content.size, Fragment.fromArray(kids))
+          // 育てる分は ⌘Z に積まない。打ったものではない。
+          .setMeta("addToHistory", false)
+          // 末尾へ足すだけ、と受け取る側へ伝える。既にある位置は動かないので、
+          // 位置の写し直しや描き直しを省ける（そこが本文の大きさに比例する）。
+          .setMeta(GROW, true),
+      );
+      const took = Math.max(0.5, performance.now() - t0);
+      // 次の量は「1 フレームに収まるはず」の数へ寄せる。振れないよう、
+      // 前の量から離れすぎないところで止める。
+      const want = (take * GROW_MS) / took;
+      batch = Math.max(8, Math.min(400, Math.round((batch + want) / 2)));
+      if (grown < total) {
+        rafGrow = requestAnimationFrame(grow);
+        return;
+      }
+      growing = false;
+      if (waiting !== null) {
+        const text = waiting;
+        waiting = null;
+        adopt(text);
+      }
+      tell();
+    };
+    if (growing) rafGrow = requestAnimationFrame(grow);
 
     // 開いた位置へ合わせる。字体や画像で高さが決まるまで数フレームかかる。
     // 動かなくなったら打ち切る（回数で決め打ちすると、落ち着いた後も待つ）。
@@ -759,6 +905,7 @@ export function BodyEditor({
 
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(rafGrow);
       cancelAnimationFrame(tick);
       scroller?.removeEventListener("scroll", onScroll);
       window.removeEventListener("blur", onLeave);
