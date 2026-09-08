@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
+import { mathKey } from "../lib/md/math";
 import { editorPlugins } from "../lib/md/plugins";
 import { toMarkdown } from "../lib/md/toMarkdown";
 import { SelectionBar } from "./SelectionBar";
@@ -243,21 +244,32 @@ describe("リンク", () => {
   });
 });
 
+// 式は聞かずにその場で作り、あとは節点の打ち直しに任せる（打つそばから
+// 組み直すのは節点の側が持っている）。入力欄は編集面が出すので、ここには
+// 出ない。
 describe("式", () => {
-  it("押すと選んだ文字が入った欄が出て、Enter で式になる", () => {
-    bar("計算は E = mc^2 です\n", 4, 12);
+  it("押すと選んだ文字がその場で式になる", () => {
+    const view = bar("計算は E = mc^2 です\n", 4, 12);
     pressDown(button("式"));
-    expect(field()?.value).toBe("E = mc^2");
-    fill("E = mc^2");
     expect(source()).toBe("計算は $E = mc^2$ です\n");
+    expect(field()).toBeNull();
+    // 打ち直しの相手として掴んでいる。
+    expect(mathKey.getState(view.state)).toBe(5);
   });
 
-  it("式を選んで押すと打ち直しになる", () => {
-    bar("文中の $a^2$ と\n", 4, 5);
+  it("式を選んで押すと、そのまま打ち直しの相手になる", () => {
+    const view = bar("文中の $a^2$ と\n", 4, 5);
     pressDown(button("式"));
-    expect(field()?.value).toBe("a^2");
-    fill("b^2");
-    expect(source()).toBe("文中の $b^2$ と\n");
+    // 原文はそのまま（作り直さない）。
+    expect(source()).toBe("文中の $a^2$ と\n");
+    expect(mathKey.getState(view.state)).toBe(5);
+  });
+
+  it("何も選んでいないところでは作らない", () => {
+    const view = bar("ここだけ\n", 2, 2);
+    pressDown(button("式"));
+    expect(source()).toBe("ここだけ\n");
+    expect(mathKey.getState(view.state)).toBeNull();
   });
 });
 

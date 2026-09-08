@@ -13,6 +13,7 @@ import {
   setMath,
   toggleInline,
 } from "../lib/md/marks";
+import { openMath } from "../lib/md/math";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
 import { AskBox } from "./AskBox";
@@ -56,17 +57,13 @@ const MORE: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   { mark: schema.marks.code, icon: "code", label: "行内コード", keys: "⌘⇧C" },
 ];
 
-// 聞くもの。行き先（リンク）か、式の中身（TeX）。出す場所は開いたときに測る。
+// 聞くもの（いまはリンクの行き先だけ）。出す場所は開いたときに測る。
+//
+// 式は聞かずにその場で作る。打つそばから組み直すのは節点の側が持っている。
 interface Asking {
-  kind: "link" | "math";
   text: string;
   at: { left: number; top: number };
 }
-
-const ASK: Record<Asking["kind"], { hint: string; label: string }> = {
-  link: { hint: "https://…", label: "リンクの行き先" },
-  math: { hint: "E = mc^2", label: "式（TeX）" },
-};
 
 export function SelectionBar({
   view,
@@ -131,7 +128,7 @@ export function SelectionBar({
   useEffect(() => {
     if (linkNonce === seen.current) return;
     seen.current = linkNonce;
-    setAsking({ kind: "link", text: linkAt(view.state) ?? "", at: under() });
+    setAsking({ text: linkAt(view.state) ?? "", at: under() });
     // under は描き終わった帯を測るだけなので、ここに入れると出す場所が
     // 毎回の描き直しで動く。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,14 +181,11 @@ export function SelectionBar({
     </Tooltip>
   );
 
-  // 聞いたものを当てる。空なら何もせず閉じる。
+  // 聞いた行き先を当てる。空なら何もせず閉じる。
   const settle = (asked: Asking) => {
     const text = asked.text.trim();
     setAsking(null);
-    if (text) {
-      const apply = asked.kind === "link" ? setLink(text) : setMath(text);
-      apply(view.state, view.dispatch, view);
-    }
+    if (text) setLink(text)(view.state, view.dispatch, view);
     view.focus();
     bump();
   };
@@ -266,7 +260,7 @@ export function SelectionBar({
                   bump();
                   return;
                 }
-                setAsking({ kind: "link", text: "", at: under() });
+                setAsking({ text: "", at: under() });
               }}
             >
               <Icon name="link" size={16} />
@@ -284,13 +278,13 @@ export function SelectionBar({
               className={tex === null ? undefined : "is-on"}
               onMouseDown={(e) => {
                 e.preventDefault();
-                // 式の上を選んでいれば打ち直し、そうでなければ選んだ文字を
-                // そのまま中身にする。
-                setAsking({
-                  kind: "math",
-                  text: tex ?? view.state.doc.textBetween(span.from, span.to),
-                  at: under(),
-                });
+                // その場で式にして、あとは節点の打ち直しに任せる。打つそばから
+                // 組み直すのは節点の側が持っているので、入口を分けない。
+                const body = view.state.doc.textBetween(span.from, span.to);
+                if (tex === null && !body.trim()) return;
+                if (tex === null) setMath(body)(view.state, view.dispatch, view);
+                openMath(view, span.from);
+                bump();
               }}
             >
               <Icon name="functions" size={16} />
@@ -317,8 +311,8 @@ export function SelectionBar({
 
       {asking && (
         <AskBox
-          hint={ASK[asking.kind].hint}
-          label={ASK[asking.kind].label}
+          hint="https://…"
+          label="リンクの行き先"
           text={asking.text}
           at={asking.at}
           onText={(text) => setAsking({ ...asking, text })}
