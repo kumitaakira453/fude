@@ -3890,13 +3890,14 @@ body.mg-carrying {
 }
 /* 自分で描くカーソル。標準のカーソルは行の高さで描かれ、書体と行間の
    組み合わせで字より大きくなる。高さを決める指定は CSS に無い。
-   標準は消し、字の箱に合わせた棒を重ねる。 */
-.mg-caret-on .mg-pm {
-  caret-color: transparent;
-}
-/* 棒を出せないとき（測れない場所）だけ標準が出る。そのときも色は揃える。 */
+   標準は消し、字の箱に合わせた棒を重ねる。
+
+   消す指定は常に効かせる。caret-color は継ぐ指定なので、出し入れのたびに
+   本文まるごとのスタイル再計算が走り、2000 ブロックでは 62〜127ms かかる。
+   棒を出せないとき（測れない場所）だけ、描く側が要素へ直に色を書いて
+   標準を出す（BodyEditor の caretBar）。 */
 .mg-pm {
-  caret-color: var(--mg-accent);
+  caret-color: transparent;
 }
 .mg-caret {
   position: absolute;

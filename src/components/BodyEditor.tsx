@@ -95,6 +95,11 @@ export interface Editing {
 // 変換中も自分で描く。ただし変換中は編集モデルがまだ更新されていないので、
 // 位置は DOM 側の選択から測る（IME のカーソルはそこに出ている）。測れなければ
 // 標準へ戻す。
+
+// 棒をどこに置くか。"native" は棒が要るのに測れないので標準のカーソルへ
+// 戻す合図、null は棒が要らない（範囲を選んでいる・焦点が無い）。
+type Spot = { left: number; top: number; height: number } | "native" | null;
+
 function caretBar(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
   bar.className = "mg-caret is-idle";
@@ -104,17 +109,27 @@ function caretBar(view: EditorView, host: HTMLElement) {
   // 直前に描いた場所。同じなら書き直さない。style を書くだけでレイアウトが
   // 無効になるので、動いていないときに書くのは丸損。
   let was = "";
-  // 棒を出しているか。入れ物のクラスは子孫セレクタで効いているので、
-  // 付け外しのたびに編集面の配下まるごとのスタイル再計算が走る。範囲を
-  // 選んでいる間は選択の変化が連続で来るため、変わったときだけ触る。
+  // 棒を出しているか。
   let shown = false;
+  // 標準のカーソルへ戻しているか。
+  //
+  // 戻す指定（caret-color）は継ぐ指定なので、書き換えると本文まるごとの
+  // スタイル再計算が走る。2000 ブロックで実測 62〜127ms、300 ブロックで
+  // 8〜15ms と本文の大きさに比例する。常時は CSS 側の「透明」に任せ、ここは
+  // 戻すときだけ触る（測れない場所は稀）。
+  let native = false;
+
+  const standard = (on: boolean) => {
+    if (native === on) return;
+    native = on;
+    view.dom.style.caretColor = on ? "var(--mg-accent)" : "";
+  };
 
   const hide = () => {
     if (!shown) return;
     shown = false;
     was = "";
     bar.style.display = "none";
-    host.classList.remove("mg-caret-on");
   };
 
   // 変換中の位置。DOM 側の選択はそのまま IME のカーソルを指している。
@@ -129,7 +144,7 @@ function caretBar(view: EditorView, host: HTMLElement) {
     return { left: rect.left, top: rect.top, bottom: rect.bottom };
   };
 
-  const measure = (): { left: number; top: number; height: number } | null => {
+  const measure = (): Spot => {
     const { selection } = view.state;
     if (!selection.empty || !view.hasFocus()) return null;
     // 隠れているところ（図だけを出している塊の中など）は測れない。
@@ -139,7 +154,7 @@ function caretBar(view: EditorView, host: HTMLElement) {
     } catch {
       at = null;
     }
-    if (!at) return null;
+    if (!at) return "native";
     const box = host.getBoundingClientRect();
     return {
       left: at.left - box.left,
@@ -148,11 +163,14 @@ function caretBar(view: EditorView, host: HTMLElement) {
     };
   };
 
-  const apply = (at: { left: number; top: number; height: number } | null) => {
-    if (!at) {
+  const apply = (spot: Spot) => {
+    if (spot === null || spot === "native") {
       hide();
+      standard(spot === "native");
       return;
     }
+    standard(false);
+    const at = spot;
     const now = `${at.left},${at.top},${at.height}`;
     if (now === was && shown) return;
     was = now;
@@ -163,7 +181,6 @@ function caretBar(view: EditorView, host: HTMLElement) {
     if (!shown) {
       shown = true;
       bar.style.display = "block";
-      host.classList.add("mg-caret-on");
     }
     // 打っている間は点滅を止める。動くたびに頭から数え直す。
     // クラスを掛け直して offsetWidth を読む形にすると、そこで毎回
