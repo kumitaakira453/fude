@@ -7,6 +7,7 @@ import {
   type NodeView,
   type ViewMutationRecord,
 } from "prosemirror-view";
+import katex from "katex";
 import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
 import { MERMAID, PLAIN, languages } from "./highlight";
@@ -484,6 +485,39 @@ class ImageView implements NodeView {
   }
 }
 
+// 行内の数式。読むときと同じ KaTeX で組む。
+//
+// 素の $…$ を字のまま出すと、何が式なのか読めず、記号を数えて直すことになる。
+// 中身の打ち直しは帯の入力欄でやるので、ここは描くだけ。
+class MathView implements NodeView {
+  dom: HTMLElement;
+
+  constructor(node: PmNode) {
+    this.dom = document.createElement("span");
+    this.dom.className = "mg-math";
+    this.dom.contentEditable = "false";
+    this.fill(node);
+  }
+
+  private fill(node: PmNode) {
+    const tex = node.attrs.tex as string;
+    this.dom.setAttribute("data-tex", tex);
+    this.dom.classList.toggle("is-empty", tex.trim() === "");
+    if (tex.trim() === "") {
+      this.dom.textContent = "式";
+      return;
+    }
+    // 組めない式は記号をそのまま出す（書いている途中は必ず通る）。
+    katex.render(tex, this.dom, { throwOnError: false, displayMode: false });
+  }
+
+  update(node: PmNode) {
+    if (node.type !== schema.nodes.inlineMath) return false;
+    this.fill(node);
+    return true;
+  }
+}
+
 // 箇条書きの項目。checked が付いているものだけ、読むときと同じチェックを出す。
 //
 // チェックは編集の対象ではないので、中身とは別の入れ物に分ける。印の無い項目は
@@ -687,6 +721,7 @@ export function nodeViews(deps: EditorDeps) {
     listItem: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new ListItemView(node, view, getPos),
     image: (node: PmNode) => new ImageView(node, deps),
+    inlineMath: (node: PmNode) => new MathView(node),
   };
 }
 

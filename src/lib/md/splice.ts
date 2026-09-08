@@ -193,7 +193,16 @@ const sameMarks = (a: PmNode, b: PmNode): boolean =>
 
 // 見た目を覚えているだけの attrs は比べない。編集で桁幅や記号が変わっても
 // 文書の意味は変わらないため。
-const STYLE = new Set(["id", "widths", "delim", "marker", "tight", "fenced", "fence"]);
+const STYLE = new Set([
+  "id",
+  "widths",
+  "delim",
+  "marker",
+  "tight",
+  "fenced",
+  "fence",
+  "raw",
+]);
 
 const bare = (attrs: Record<string, unknown>): string =>
   JSON.stringify(Object.fromEntries(Object.entries(attrs).filter(([k]) => !STYLE.has(k))));

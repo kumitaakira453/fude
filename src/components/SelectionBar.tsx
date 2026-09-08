@@ -8,7 +8,9 @@ import {
   inCell,
   linkAt,
   markedWith,
+  mathAt,
   setLink,
+  setMath,
   toggleInline,
 } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
@@ -27,10 +29,10 @@ import { Icon } from "./Icon";
 // mousedown で処理し、preventDefault で選択の解除も止める（読むとき側の
 // 小メニューと同じ理由）。
 //
-// 項目が多いので 2 段に積む。上段はブロックそのものへの操作、下段は選んだ
-// 文字への操作。
+// 項目が多いので段に分けて積む。上段はブロックそのものへの操作、下段は選んだ
+// 文字への操作、行き先や式を聞く入力はさらにその下の段。
 
-// 上段の左端に出す種別と、下段の装飾。
+// 下段の前半。書式クリアまでがひと組。
 const MARKS: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   { mark: schema.marks.strong, icon: "format_bold", label: "太字", keys: "⌘B" },
   { mark: schema.marks.em, icon: "format_italic", label: "斜体", keys: "⌘I" },
@@ -42,6 +44,7 @@ const MARKS: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   },
 ];
 
+// 下段の後半。リンクと式は入力を伴うので、ここには並べない。
 const MORE: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   {
     mark: schema.marks.strike,
@@ -51,6 +54,17 @@ const MORE: { mark: MarkType; icon: string; label: string; keys: string }[] = [
   },
   { mark: schema.marks.code, icon: "code", label: "行内コード", keys: "⌘⇧C" },
 ];
+
+// 聞くもの。行き先（リンク）か、式の中身（TeX）。
+interface Asking {
+  kind: "link" | "math";
+  text: string;
+}
+
+const HINT: Record<Asking["kind"], string> = {
+  link: "https://…",
+  math: "E = mc^2",
+};
 
 export function SelectionBar({
   view,
@@ -66,8 +80,8 @@ export function SelectionBar({
   onComment: () => void;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [link, setLinking] = useState<string | null>(null);
-  const linkRef = useRef<HTMLInputElement>(null);
+  const [asking, setAsking] = useState<Asking | null>(null);
+  const askRef = useRef<HTMLInputElement>(null);
   const seen = useRef(linkNonce);
 
   // 押した分をその場で見た目へ返す。編集モデルの選択は transaction のたびに
@@ -89,12 +103,12 @@ export function SelectionBar({
   useEffect(() => {
     if (linkNonce === seen.current) return;
     seen.current = linkNonce;
-    setLinking(linkAt(view.state) ?? "");
+    setAsking({ kind: "link", text: linkAt(view.state) ?? "" });
   }, [linkNonce, view]);
 
   useEffect(() => {
-    if (link !== null) linkRef.current?.focus();
-  }, [link]);
+    if (asking) askRef.current?.focus();
+  }, [asking]);
 
   const kind = blockKindOf(view.state);
   // 表のセルの中では種別を出さない。セルは行内しか持てないので、見出しにも
@@ -126,6 +140,18 @@ export function SelectionBar({
       <Icon name={one.icon} size={15} />
     </button>
   );
+
+  // 聞いたものを当てる。空なら何もせず閉じる。
+  const settle = (asked: Asking) => {
+    const text = asked.text.trim();
+    setAsking(null);
+    if (text) {
+      const apply = asked.kind === "link" ? setLink(text) : setMath(text);
+      apply(view.state, view.dispatch, view);
+    }
+    view.focus();
+    bump();
+  };
 
   return (
     <>
@@ -180,38 +206,51 @@ export function SelectionBar({
                 bump();
                 return;
               }
-              setLinking("");
+              setAsking({ kind: "link", text: "" });
             }}
           >
             <Icon name="link" size={15} />
           </button>
           {MORE.map(toggle)}
+          <button
+            type="button"
+            title="式に変換"
+            className={mathAt(view.state) === null ? undefined : "is-on"}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const { from, to } = view.state.selection;
+              // 式の上を選んでいれば打ち直し、そうでなければ選んだ文字を
+              // そのまま中身にする。
+              setAsking({
+                kind: "math",
+                text: mathAt(view.state) ?? view.state.doc.textBetween(from, to),
+              });
+            }}
+          >
+            <Icon name="functions" size={15} />
+          </button>
         </div>
 
-        {link !== null && (
-          // 行き先を聞く。帯の中に段として足し、Enter で張る。別の箱にすると
-          // 帯の高さの分だけ位置をずらす必要があり、段数を変えるたびに狂う。
+        {asking && (
+          // 帯の中に段として足す。別の箱にすると帯の高さの分だけ位置を
+          // ずらす必要があり、段数を変えるたびに狂う。
           <div className="mg-sel-row mg-sel-link">
             <input
-              ref={linkRef}
-              value={link}
-              placeholder="https://…"
+              ref={askRef}
+              value={asking.text}
+              placeholder={HINT[asking.kind]}
               spellCheck={false}
-              onChange={(e) => setLinking(e.target.value)}
+              onChange={(e) => setAsking({ ...asking, text: e.target.value })}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   e.stopPropagation();
-                  setLinking(null);
+                  setAsking(null);
                   view.focus();
                   return;
                 }
                 if (e.key !== "Enter") return;
                 e.preventDefault();
-                const url = link.trim();
-                setLinking(null);
-                if (url) setLink(url)(view.state, view.dispatch, view);
-                view.focus();
-                bump();
+                settle(asking);
               }}
             />
           </div>

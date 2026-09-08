@@ -291,6 +291,31 @@ export const schema = new Schema({
         ] as DOMOutputSpec,
     },
 
+    // 行内の数式（$…$）。読むときは KaTeX で組まれるので、編集面でも同じに
+    // 見せる（NodeView が描く）。tex は中身、raw は原文の書き方（$$…$$ で
+    // 書かれていたものを $…$ に直さないため。打ち直したら null にする）。
+    inlineMath: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { tex: { default: "" }, raw: { default: null as string | null } },
+      parseDOM: [
+        {
+          tag: "span.mg-math",
+          getAttrs: (dom: HTMLElement) => ({
+            tex: dom.getAttribute("data-tex") ?? "",
+            raw: null,
+          }),
+        },
+      ],
+      toDOM: (node) =>
+        [
+          "span",
+          { class: "mg-math", "data-tex": node.attrs.tex },
+          node.attrs.tex as string,
+        ] as DOMOutputSpec,
+    },
+
     hardBreak: {
       group: "inline",
       inline: true,

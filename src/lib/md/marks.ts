@@ -151,6 +151,35 @@ export const clearMarks: Command = (state, dispatch) => {
   return true;
 };
 
+// 選んだところが式ひとつなら、その中身。無ければ null。
+//
+// 式の上を選んで押し直したときに、打ち直しとして開けるようにする。
+export function mathAt(state: EditorState): string | null {
+  const { from, to } = state.selection;
+  const node = state.doc.nodeAt(from);
+  if (!node || node.type !== schema.nodes.inlineMath) return null;
+  return from + node.nodeSize === to ? (node.attrs.tex as string) : null;
+}
+
+// 選んだところを式にする。中身が空なら何もしない。
+export function setMath(tex: string): Command {
+  return (state, dispatch) => {
+    const { empty } = state.selection;
+    if (empty || !tex.trim()) return false;
+    if (dispatch) {
+      // 装飾は継がせない。式を太字にしても組み方は変わらないのに、原文には
+      // 記号が残る。
+      dispatch(
+        state.tr.replaceSelectionWith(
+          schema.nodes.inlineMath.create({ tex, raw: null }),
+          false,
+        ),
+      );
+    }
+    return true;
+  };
+}
+
 // 表のセルの中か。セルは行内しか持てないので、ブロックの種別を変える入口は
 // ここでは出さない。
 export function inCell(state: EditorState): boolean {

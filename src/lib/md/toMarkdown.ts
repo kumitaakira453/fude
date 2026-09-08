@@ -351,6 +351,9 @@ function leaf(node: PmNode): PhrasingContent {
       return { type: "break" };
     case "rawInline":
       return { type: "html", value: node.attrs.value };
+    case "inlineMath":
+      // 触っていなければ原文の書き方のまま。打ち直したら $…$ で出す。
+      return { type: "html", value: node.attrs.raw ?? `$${node.attrs.tex}$` };
     default:
       return { type: "text", value: node.text ?? "" };
   }

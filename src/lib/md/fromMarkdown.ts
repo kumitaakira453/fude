@@ -494,6 +494,15 @@ function inlineOf(nodes: PhrasingContent[], source: string, base: number): Inlin
       case "break":
         add(schema.nodes.hardBreak.create());
         return;
+      case "inlineMath":
+        // 中身と、原文の書き方の両方を持つ。打ち直さないかぎり原文で戻す。
+        add(
+          schema.nodes.inlineMath.create({
+            tex: node.value,
+            raw: source.slice(start - base, end - base),
+          }),
+        );
+        return;
       default:
         add(schema.nodes.rawInline.create({ value: slice(node, source) }));
     }

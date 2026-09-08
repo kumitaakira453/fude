@@ -3828,6 +3828,16 @@ body.mg-carrying {
   color: var(--mg-muted);
   white-space: pre-wrap;
 }
+/* 行内の数式。組むのは読むときと同じ KaTeX なので、ここで足すのは選べる塊と
+   しての触りやすさだけ。 */
+.mg-pm .mg-math {
+  padding: 0 0.1em;
+}
+/* 中身がまだ空のうちは組むものが無い。押せる的として字を出す。 */
+.mg-pm .mg-math.is-empty {
+  color: var(--mg-muted);
+  border-bottom: 1px dashed var(--mg-border);
+}
 .mg-pm .mg-details-head {
   font-weight: 600;
 }

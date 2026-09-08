@@ -8,7 +8,9 @@ import {
   inCell,
   linkAt,
   markedWith,
+  mathAt,
   setLink,
+  setMath,
   toggleInline,
 } from "./marks";
 import { editorPlugins } from "./plugins";
@@ -178,6 +180,43 @@ describe("clearMarks", () => {
   it("何も付いていなければ動かない", () => {
     const { state } = opened("素の段落\n");
     expect(clearMarks(select(state, 0, 0, 4), undefined)).toBe(false);
+  });
+});
+
+describe("式", () => {
+  it("選んだ文字を式にする", () => {
+    const { loaded, state } = opened("計算は E = mc^2 です\n");
+    const picked = select(state, 0, 4, 12);
+    const on = run(picked, setMath("E = mc^2"));
+    expect(toMarkdown(on.doc, loaded)).toBe("計算は $E = mc^2$ です\n");
+    // 読み直しても式のまま。
+    const back = fromMarkdown(toMarkdown(on.doc, loaded));
+    expect(back.doc.child(0).child(1).type.name).toBe("inlineMath");
+  });
+
+  it("選んでいなければ何もしない", () => {
+    const { state } = opened("素の段落\n");
+    expect(setMath("a^2")(state, undefined)).toBe(false);
+  });
+
+  it("原文の $$…$$ は書き方のまま戻る", () => {
+    const { loaded, state } = opened("文中の $$a^2$$ と\n");
+    expect(state.doc.child(0).child(1).type.name).toBe("inlineMath");
+    expect(toMarkdown(state.doc, loaded)).toBe("文中の $$a^2$$ と\n");
+  });
+
+  it("式ひとつを選ぶと中身が返り、打ち直すと $…$ で出る", () => {
+    const { loaded, state } = opened("文中の $$a^2$$ と\n");
+    const picked = select(state, 0, 4, 5);
+    expect(mathAt(picked)).toBe("a^2");
+    const next = run(picked, setMath("b^2"));
+    expect(toMarkdown(next.doc, loaded)).toBe("文中の $b^2$ と\n");
+  });
+
+  it("式でないところを選んでも中身は返らない", () => {
+    const { state } = opened("文中の $$a^2$$ と\n");
+    expect(mathAt(select(state, 0, 0, 3))).toBe(null);
+    expect(mathAt(select(state, 0, 3, 6))).toBe(null);
   });
 });
 
