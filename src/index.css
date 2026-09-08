@@ -2895,9 +2895,10 @@ svg[id^="mmd-"] foreignObject p {
 .mg-ask > textarea::placeholder {
   color: var(--mg-muted);
 }
-/* 複数行のときは、決めるボタンを欄の上端へ寄せる。 */
+/* 複数行のときは、決めるボタンを欄の下の端へ寄せる。打ち終わりの隣に置く
+   （上端に置くと、背の高い欄の横で行き場のない位置に浮いて見える）。 */
 .mg-ask:has(> textarea) {
-  align-items: flex-start;
+  align-items: flex-end;
 }
 /* 決めるボタン。押す先だと分かるように主色で塗る。 */
 .mg-ask button {
