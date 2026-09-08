@@ -9,6 +9,7 @@ import {
 } from "../blockDiff";
 import type { ReviewThread } from "../review";
 import type { Loaded } from "./fromMarkdown";
+import { schema } from "./schema";
 import { toMarkdownParts, type Part } from "./toMarkdown";
 
 // 指摘の居場所を、編集面の節点へ当てる。
@@ -137,6 +138,15 @@ export interface Target {
   source: string;
 }
 
+// 中身を持たない行内を字として読むときの代わり。
+//
+// 数式は原文の書き方（$…$）で読む。何も返さないと、式を含む範囲を引用したときに
+// 引用文から式が抜け落ちる（居場所の突き合わせも原文と食い違う）。
+const leafText = (node: PmNode): string =>
+  node.type === schema.nodes.inlineMath
+    ? ((node.attrs.raw as string | null) ?? `$${node.attrs.tex as string}$`)
+    : "";
+
 // 選んだ範囲を対象にする。範囲がブロックをまたぐときは、始まったブロックの
 // 終わりまでに丸める（読むとき側の readSelection と同じ扱い）。
 export function targetOfSpan(
@@ -158,8 +168,8 @@ export function targetOfSpan(
   return {
     ...built,
     spot: { from, to: end },
-    text: doc.textBetween(from, end, "", ""),
-    offset: doc.textBetween(pos + 1, from, "", "").length,
+    text: doc.textBetween(from, end, "", leafText),
+    offset: doc.textBetween(pos + 1, from, "", leafText).length,
   };
 }
 

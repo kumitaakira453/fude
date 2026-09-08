@@ -218,6 +218,19 @@ describe("targetOfSpan / targetOfBlock", () => {
     expect(target?.source).toBe(SRC);
   });
 
+  // 式は中身を持たない行内なので、そのままでは引用文から抜け落ちる。
+  it("式を含む範囲は、原文の書き方のまま引用に入る", () => {
+    const { loaded, state } = opened("計算は $E = mc^2$ です。\n");
+    // 段落は 計算は(3) + 空白 + 式(1) + 空白 + です。(3)。
+    expect(targetOfSpan(state.doc, loaded, "", 1, 10)?.text).toBe(
+      "計算は $E = mc^2$ です。",
+    );
+    // ブロックの中での位置も同じ数え方で出す。
+    const later = targetOfSpan(state.doc, loaded, "", 7, 10);
+    expect(later?.text).toBe("です。");
+    expect(later?.offset).toBe("計算は $E = mc^2$ ".length);
+  });
+
   it("フロントマターは版の前に付け直す", () => {
     const { loaded, state } = opened(SRC);
     const at = posOf(state.doc, 3);
