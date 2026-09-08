@@ -1,6 +1,7 @@
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { COLS, emojiReady, rememberEmoji, searchEmoji } from "../emoji";
+import { schema } from "./schema";
 
 // 本文で `:` を打ったら絵文字の盤を出す。
 //
@@ -66,6 +67,73 @@ export function takeEmoji(view: EditorView, char: string): void {
   tr.insertText(char);
   view.dispatch(tr.setMeta(emojiKey, { type: "close" } satisfies Meta));
   rememberEmoji(char);
+  if (!view.hasFocus()) view.focus();
+}
+
+// 本文の絵文字を押したところで選び直す。
+//
+// 走査はしない。押した 1 点から本文の位置を出し、その字の連なり 1 つだけを
+// 見るので、本文が大きくなっても費用は変わらない。
+const PICTO = /\p{Extended_Pictographic}/u;
+
+const graphemes =
+  typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter("ja", { granularity: "grapheme" })
+    : null;
+
+// 押したところにある絵文字の範囲。無ければ null。
+export function emojiSpanAt(
+  view: EditorView,
+  x: number,
+  y: number,
+): { from: number; to: number } | null {
+  // 位置を DOM に聞く。測れない場所（隠れているところ）では投げる。
+  try {
+    const hit = view.posAtCoords({ left: x, top: y });
+    return hit ? emojiSpanAtPos(view.state, hit.pos) : null;
+  } catch {
+    return null;
+  }
+}
+
+// 本文のその位置にある絵文字の範囲。位置を出すところ（当たり判定）と分けて
+// あるのは、当たり判定を持たない試験からも同じ判断を確かめられるようにするため。
+export function emojiSpanAtPos(
+  state: EditorState,
+  pos: number,
+): { from: number; to: number } | null {
+  if (!graphemes || pos < 0 || pos > state.doc.content.size) return null;
+  const $at = state.doc.resolve(pos);
+  const parent = $at.parent;
+  if (!parent.isTextblock) return null;
+  // 中身を持たない行内（画像・生 HTML・数式）は 1 文字に置き換えて数える。
+  // こうすると文字の並びと本文の位置の数え方が揃う。
+  const text = parent.textBetween(0, parent.content.size, undefined, "\u0000");
+  const parts = graphemes.segment(text);
+  // 押した点は字の境目に落ちる。字の左半分を押すとその字、右半分を押すと
+  // 次の字の頭になるので、絵文字でなければ手前も見る。
+  const pick = (index: number) => {
+    const one = index < 0 ? undefined : parts.containing(index);
+    return one && PICTO.test(one.segment) ? one : null;
+  };
+  const one = pick($at.parentOffset) ?? pick($at.parentOffset - 1);
+  if (!one) return null;
+  const start = $at.start() + one.index;
+  return { from: start, to: start + one.segment.length };
+}
+
+// 選び直した絵文字を当てる。空なら消す。装飾はそのまま残す。
+export function swapEmoji(
+  view: EditorView,
+  span: { from: number; to: number },
+  char: string,
+): void {
+  const marks = view.state.doc.resolve(span.from).marks();
+  const tr = view.state.tr;
+  if (char) tr.replaceWith(span.from, span.to, schema.text(char, marks));
+  else tr.delete(span.from, span.to);
+  view.dispatch(tr);
+  if (char) rememberEmoji(char);
   if (!view.hasFocus()) view.focus();
 }
 

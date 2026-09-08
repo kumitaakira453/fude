@@ -3,7 +3,14 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { loadEmoji } from "../emoji";
-import { closeEmoji, emojiKey, openEmojiBoard, takeEmoji } from "./emoji";
+import {
+  closeEmoji,
+  emojiKey,
+  emojiSpanAtPos,
+  openEmojiBoard,
+  swapEmoji,
+  takeEmoji,
+} from "./emoji";
 import { fromMarkdown, type Loaded } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
@@ -179,6 +186,65 @@ describe("決める", () => {
     press(view, "Enter");
     // 打った文字はそのまま。決め打ちで何かを入れたりしない。
     expect(view.state.doc.textContent).toContain(":zzqq");
+  });
+});
+
+// 本文の絵文字を押して選び直す。囲みのアイコンと同じ盤を出す。
+//
+// 当たり判定は jsdom に無いので、位置から判断する部分を直に見る。
+describe("本文の絵文字", () => {
+  const spanIn = (body: string, offset: number) => {
+    const view = editor(body);
+    return emojiSpanAtPos(view.state, 1 + offset);
+  };
+
+  it("字の左半分でも右半分でも同じ範囲を返す", () => {
+    // 「あ🍣い」の 🍣 は 2 文字ぶん（サロゲートペア）。
+    expect(spanIn("あ🍣い\n", 1)).toEqual({ from: 2, to: 4 });
+    expect(spanIn("あ🍣い\n", 3)).toEqual({ from: 2, to: 4 });
+  });
+
+  it("連なった絵文字はまとめて 1 つと見る", () => {
+    // 家族（ZWJ でつないだもの）と、肌の色を足したもの。
+    const family = "👨‍👩‍👧";
+    const one = spanIn(`${family}のあと\n`, 0);
+    expect(one).toEqual({ from: 1, to: 1 + family.length });
+    const hand = "👍🏽";
+    expect(spanIn(`${hand}のあと\n`, 0)).toEqual({ from: 1, to: 1 + hand.length });
+  });
+
+  it("絵文字でないところでは返さない", () => {
+    expect(spanIn("ふつうの字\n", 2)).toBeNull();
+    expect(spanIn("abc\n", 1)).toBeNull();
+  });
+
+  it("画像や式が同じ段落にあっても位置がずれない", () => {
+    // 画像は中身を持たない行内。文字の並びと本文の位置の数え方を揃える。
+    const body = "![](a.png)と🍣\n";
+    const view = editor(body);
+    // 段落は 画像(1) + 「と」(1) + 🍣(2)。
+    expect(emojiSpanAtPos(view.state, 1 + 2)).toEqual({ from: 3, to: 5 });
+  });
+
+  it("選び直すと、その 1 文字だけが差し替わる", () => {
+    const view = editor("あ🍣い\n");
+    const span = emojiSpanAtPos(view.state, 2)!;
+    swapEmoji(view, span, "🍺");
+    expect(toMarkdown(view.state.doc, open!.loaded)).toBe("あ🍺い\n");
+  });
+
+  it("空を渡すと消える", () => {
+    const view = editor("あ🍣い\n");
+    const span = emojiSpanAtPos(view.state, 2)!;
+    swapEmoji(view, span, "");
+    expect(toMarkdown(view.state.doc, open!.loaded)).toBe("あい\n");
+  });
+
+  it("装飾は残る", () => {
+    const view = editor("**ふとい🍣**\n");
+    const span = emojiSpanAtPos(view.state, 5)!;
+    swapEmoji(view, span, "🍺");
+    expect(toMarkdown(view.state.doc, open!.loaded)).toBe("**ふとい🍺**\n");
   });
 });
 

@@ -40,24 +40,27 @@ export function AskBox({
   }, []);
 
   useEffect(() => {
-    // 外を押したら閉じる。押し下げでは畳まない（押した番に消えると、決める
-    // ボタンの click がどこにも届かない）。
+    // 外を押したら閉じる。
     //
-    // 出した押下の続き（離す番）は数えない。メニューから選んで出したときは、
-    // その click の mouseup がまだ配られていないので、受け取ると出した端から
-    // 閉じてしまう。
-    let live = false;
-    const soon = window.setTimeout(() => {
-      live = true;
-    });
-    const onUp = (e: MouseEvent) => {
-      if (!live) return;
-      if ((e.target as Element | null)?.closest?.(".mg-ask")) return;
-      onClose();
+    // 数えるのは「外で押し始めて、外で離した」ときだけ。離す番だけを見ると、
+    // この小窓を出した押下の続き（帯のボタンを離す番）を受け取ってしまい、
+    // 押している間しか出ていないように見える。押し下げだけを見ると、決める
+    // ボタンの click が届く前に消える。
+    const inside = (target: EventTarget | null) =>
+      !!(target as Element | null)?.closest?.(".mg-ask");
+    let armed = false;
+    const onDown = (e: MouseEvent) => {
+      armed = !inside(e.target);
     };
+    const onUp = (e: MouseEvent) => {
+      const out = armed && !inside(e.target);
+      armed = false;
+      if (out) onClose();
+    };
+    window.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     return () => {
-      window.clearTimeout(soon);
+      window.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
     };
   }, [onClose]);

@@ -15,7 +15,13 @@ import { parseAway } from "../lib/md/parseAway";
 import { GROW } from "../lib/md/grow";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
-import { closeEmoji, emojiKey, takeEmoji } from "../lib/md/emoji";
+import {
+  closeEmoji,
+  emojiKey,
+  emojiSpanAt,
+  swapEmoji,
+  takeEmoji,
+} from "../lib/md/emoji";
 import { applyMath, closeMath, mathKey } from "../lib/md/math";
 import { editorPlugins } from "../lib/md/plugins";
 import { domSpan, type Span } from "../lib/md/domSpan";
@@ -691,14 +697,39 @@ export function BodyEditor({
           click(here, event) {
             const ico = icoOf(event);
             const hit = ico && calloutIcoAt(here, event.target);
-            if (!ico || !hit) return false;
+            if (ico && hit) {
+              event.preventDefault();
+              const box = ico.getBoundingClientRect();
+              setPicking((was) => ({
+                seq: (was?.seq ?? 0) + 1,
+                x: box.left,
+                y: box.bottom + 6,
+                apply: (value) => setCalloutIcon(here, hit.pos, value),
+              }));
+              return true;
+            }
+            // 本文の絵文字も押したら選び直せる。囲みのアイコンと同じ盤を出す。
+            //
+            // 範囲を選んだ流れ（引いて離した）と、修飾キーを押しながらの
+            // 押下では出さない。
+            const bare =
+              !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+            const sel = here.dom.ownerDocument.getSelection();
+            if (!bare || (sel && !sel.isCollapsed)) return false;
+            const span = emojiSpanAt(here, event.clientX, event.clientY);
+            if (!span) return false;
             event.preventDefault();
-            const box = ico.getBoundingClientRect();
+            let box: { left: number; bottom: number };
+            try {
+              box = here.coordsAtPos(span.from);
+            } catch {
+              return false;
+            }
             setPicking((was) => ({
               seq: (was?.seq ?? 0) + 1,
               x: box.left,
               y: box.bottom + 6,
-              apply: (value) => setCalloutIcon(here, hit.pos, value),
+              apply: (value) => swapEmoji(here, span, value),
             }));
             return true;
           },

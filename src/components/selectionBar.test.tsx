@@ -201,6 +201,30 @@ describe("リンク", () => {
     expect(field()).toBeNull();
   });
 
+  // 出した押下の続き（離す番）で閉じてはいけない。押している間しか出ない
+  // ように見える。
+  it("押して離しただけでは閉じない", () => {
+    bar("ここを見る\n", 0, 2);
+    const el = button("リンク");
+    pressDown(el);
+    expect(field()).not.toBeNull();
+    act(() => {
+      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));
+    });
+    expect(field()).not.toBeNull();
+  });
+
+  it("外で押して離したら閉じる", () => {
+    bar("ここを見る\n", 0, 2);
+    pressDown(button("リンク"));
+    expect(field()).not.toBeNull();
+    act(() => {
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      document.body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));
+    });
+    expect(field()).toBeNull();
+  });
+
   it("既にリンクなら押すと外れ、欄は出さない", () => {
     bar("[ここ](https://example.com)を見る\n", 0, 2);
     pressDown(button("リンク"));
