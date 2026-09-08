@@ -1,5 +1,6 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
 import {
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -166,13 +167,20 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // （React の scheduler は塗りを待たず、同じフレームのうちに遅らせた側の描画へ
   // 入る。実測でも本文の大きさに比例したまま最大 224ms だった）。一段目はその
   // フレームの塗りより前に走るので、二段目まで待って初めて塗った後になる。
+  //
+  // 組み立ては startTransition の中で始める。そのままだと割り込めない同期の
+  // 描画になり、900 ブロックなら 100ms 以上のあいだ本流が塞がって、その間に
+  // 別のファイルを押しても何も起きない。transition なら合間にブラウザへ譲り、
+  // 押下が来たらその場で割り込んで、進めていた分は捨てて押した先で組み直す。
+  // path は途中のファイルを飛ばして最後に押したものへ進むので、path を見ている
+  // 効果（編集モードの解除・見ていた場所の復帰・印の当て直し）も走らない。
   const shownPath = activePath(pane);
   const [path, setPath] = useState(shownPath);
   // 押した先へ本文がまだ追いついていない。骨組みを重ねる合図。
   const settling = shownPath !== path;
   useEffect(() => {
     if (!settling) return;
-    const go = () => setPath(shownPath);
+    const go = () => startTransition(() => setPath(shownPath));
     let second = 0;
     const first = requestAnimationFrame(() => {
       second = requestAnimationFrame(go);
