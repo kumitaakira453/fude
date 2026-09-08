@@ -1,4 +1,4 @@
-import { chainCommands, setBlockType } from "prosemirror-commands";
+import { chainCommands, lift, setBlockType, wrapIn } from "prosemirror-commands";
 import {
   Fragment,
   type Attrs,
@@ -41,17 +41,24 @@ export interface SlashItem {
   hint: string;
   // 表示名では当たらない呼び方。すべて小文字で持つ。
   aliases: string[];
+  // いまの塊を変えるのではなく、新しく置くもの。選んだ文字から出す変換の
+  // 一覧には出さない。
+  inserts?: boolean;
   run: Command;
 }
 
 const listItem = schema.nodes.listItem;
 
-// いまの塊を素の段落に戻す。箇条書きの中なら項目ごと外へ出す。
+// いまの塊を素の段落に戻す。箇条書きの中なら項目ごと外へ出し、引用や囲みの
+// 中なら 1 段外へ出す。
 // もともと素の段落なら何もしない（目印を落として無用な組み直しを招かない）。
-const toText = chainCommands(liftListItem(listItem), (state, dispatch, view) =>
-  state.selection.$from.parent.type === schema.nodes.paragraph
-    ? false
-    : setBlockType(schema.nodes.paragraph)(state, dispatch, view),
+const toText = chainCommands(
+  liftListItem(listItem),
+  (state, dispatch, view) =>
+    state.selection.$from.parent.type === schema.nodes.paragraph
+      ? false
+      : setBlockType(schema.nodes.paragraph)(state, dispatch, view),
+  lift,
 );
 
 const toBullet = wrapInList(schema.nodes.bulletList, { marker: "-", tight: true });
@@ -78,17 +85,23 @@ const fits = ($from: ResolvedPos, type: NodeType): boolean =>
   $from.node(-1).canReplaceWith($from.index(-1), $from.indexAfter(-1), type);
 
 // いまの塊を、新しい囲みの中身にする。書きかけの文字はそのまま引き継ぐ。
+//
+// 選んでいる範囲があっても効く。選んだ文字から出す帯からも呼ぶので、
+// 「カーソルだけ」を要求すると押しても何も起きない。
 function toWrapper(type: NodeType, attrs: Attrs): Command {
   return (state, dispatch) => {
-    const { $from, empty } = state.selection;
-    if (!empty || !$from.parent.isTextblock || !fits($from, type)) return false;
+    const { $from, $to, from, to } = state.selection;
+    if (!$from.sameParent($to) || !$from.parent.isTextblock || !fits($from, type)) {
+      return false;
+    }
     if (dispatch) {
       const inner = schema.nodes.paragraph.create(null, $from.parent.content);
       const at = $from.before();
       const tr = state.tr.replaceRangeWith(at, $from.after(), type.create(attrs, inner));
-      // 中身の先頭から書き始められるようにする。
+      // 選んでいたところはそのまま選んだままにする。囲みが 1 段深くなるので、
+      // 位置は 1 つずれる。
       dispatch(
-        tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1)).scrollIntoView(),
+        tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1)).scrollIntoView(),
       );
     }
     return true;
@@ -203,6 +216,22 @@ export const SLASH_ITEMS: SlashItem[] = [
     run: toWrapper(schema.nodes.details, { head: DETAILS_HEAD }),
   },
   {
+    id: "quote",
+    label: "引用",
+    icon: "format_quote",
+    hint: "> ",
+    aliases: ["quote", "blockquote", "inyo", ">"],
+    run: wrapIn(schema.nodes.blockquote),
+  },
+  {
+    id: "code",
+    label: "コード",
+    icon: "code_blocks",
+    hint: "```",
+    aliases: ["code", "codeblock", "pre", "kodo", "```"],
+    run: setBlockType(schema.nodes.codeBlock),
+  },
+  {
     id: "callout",
     label: "コールアウト",
     icon: "lightbulb",
@@ -216,6 +245,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     icon: "mood",
     hint: ":",
     aliases: ["emoji", "emo", "icon", "絵文字", "顔"],
+    inserts: true,
     run: (_state, _dispatch, view) => {
       if (!view) return false;
       openEmojiBoard(view);
@@ -228,6 +258,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     icon: "table",
     hint: "",
     aliases: ["table", "teburu", "表", "グリッド"],
+    inserts: true,
     run: insertTable,
   },
   {
@@ -236,6 +267,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     icon: "horizontal_rule",
     hint: "---",
     aliases: ["hr", "divider", "rule", "line", "kugiri", "---"],
+    inserts: true,
     run: insertRule,
   },
 ];

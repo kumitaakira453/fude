@@ -277,6 +277,8 @@ const CASES: { id: string; query: string; want: string }[] = [
     query: "toggle",
     want: "あ\n\n<details>\n<summary>トグル</summary>\n\nい\n\n</details>\n",
   },
+  { id: "quote", query: "quote", want: "あ\n\n> い\n" },
+  { id: "code", query: "codeblock", want: "あ\n\n```\nい\n```\n" },
   { id: "callout", query: "callout", want: 'あ\n\n<callout icon="💡">\nい\n</callout>\n' },
   // 絵文字は構造を作らない。盤を出すだけなので、本文は打った分だけになる。
   { id: "emoji", query: "emoji", want: "あ\n\nい\n" },
@@ -401,5 +403,41 @@ describe("絵文字", () => {
   it("一覧に出て、別名でも当たる", () => {
     expect(slashItems("emoji").map((i) => i.id)).toContain("emoji");
     expect(slashItems("絵文字")[0]?.id).toBe("emoji");
+  });
+});
+
+// 選んだ文字から出す帯も同じ一覧を使う。範囲を選んだまま押されるので、
+// 「カーソルだけ」を要求すると押しても何も起きない。
+describe("範囲を選んだままの変換", () => {
+  const pick = (view: EditorView, from: number, to: number) => {
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)),
+    );
+  };
+  const item = (id: string) => SLASH_ITEMS.find((one) => one.id === id)!;
+  const kinds = ["h2", "bullet", "ordered", "todo", "quote", "code", "callout", "toggle"];
+
+  for (const id of kinds) {
+    it(`${id} に変えられ、選んだところは選んだまま`, () => {
+      const view = editor("ここを変える\n");
+      pick(view, 3, 5);
+      expect(item(id).run(view.state, view.dispatch, view)).toBe(true);
+      const { from, to } = view.state.selection;
+      expect(view.state.doc.textBetween(from, to)).toBe("を変");
+      expect(view.state.doc.textContent).toBe("ここを変える");
+    });
+  }
+
+  it("テキストへ戻すと引用から出る", () => {
+    const view = editor("> 引用の中\n");
+    pick(view, 3, 5);
+    expect(item("text").run(view.state, view.dispatch, view)).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe("paragraph");
+    expect(source()).toBe("引用の中\n");
+  });
+
+  it("入れるだけの項目には印が付いている（変換の一覧に出さない）", () => {
+    const inserts = SLASH_ITEMS.filter((one) => one.inserts).map((one) => one.id);
+    expect(inserts).toEqual(["emoji", "table", "rule"]);
   });
 });

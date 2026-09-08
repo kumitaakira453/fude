@@ -2,6 +2,7 @@ import type { Mark, Node as PmNode } from "prosemirror-model";
 import type {
   BlockContent,
   DefinitionContent,
+  Parent,
   PhrasingContent,
   RootContent,
   Table,
@@ -22,9 +23,32 @@ import { plainEdit, sameShape, spliceNode } from "./splice";
 // 表は remark の流儀で組み直すと桁揃えが全部動くので、原文の桁幅を覚えておいて
 // そこへ詰め直す。編集したセルの列だけが広がり、他の列は動かない。
 
+// 下線。Markdown に記号が無いので、実データと同じ生の <u> で書き出す。
+// mdast に無い節点を足すので、remark の作法どおり型も足しておく。
+interface Underline extends Parent {
+  type: "mgUnderline";
+  children: PhrasingContent[];
+}
+
+declare module "mdast" {
+  interface PhrasingContentMap {
+    mgUnderline: Underline;
+  }
+  interface RootContentMap {
+    mgUnderline: Underline;
+  }
+}
+
 // 実データの書き方に寄せた設定。箇条書きは "-"、強調は "**"、水平線は "---"。
 const OPTIONS: Options = {
   extensions: [gfmToMarkdown({ tablePipeAlign: false })],
+  handlers: {
+    mgUnderline: (node, _parent, state, info) => {
+      if (node.type !== "mgUnderline") return "";
+      // 前後にタグの山かっこが立つので、逃がしの判断もそれで見させる。
+      return `<u>${state.containerPhrasing(node, { ...info, before: ">", after: "<" })}</u>`;
+    },
+  },
   bullet: "-",
   bulletOther: "*",
   emphasis: "*",
@@ -312,6 +336,8 @@ function wrap(mark: Mark, items: Item[], depth: number): PhrasingContent {
       return { type: "emphasis", children };
     case "strike":
       return { type: "delete", children };
+    case "underline":
+      return { type: "mgUnderline", children };
     default:
       return { type: "link", url: mark.attrs.href, title: mark.attrs.title, children };
   }

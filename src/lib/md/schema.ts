@@ -357,6 +357,13 @@ export const schema = new Schema({
       toDOM: () => ["del", 0] as DOMOutputSpec,
     },
 
+    // Markdown に下線の記号は無く、実データは生の <u> で書かれている
+    // （1072 ファイルに 160 か所）。印として持ち、書き戻すときも同じ形で出す。
+    underline: {
+      parseDOM: [{ tag: "u" }],
+      toDOM: () => ["u", 0] as DOMOutputSpec,
+    },
+
     // 囲みの直後で打った字は中に入れない。記号を画面に出さないので、入ると
     // 囲みから出る手立てが無くなる（閉じの ` を消せない）。伸ばしたいときは、
     // 消した字を打ち直すか、範囲を選んで付け直す。
@@ -370,11 +377,13 @@ export const schema = new Schema({
 
 export type MdSchema = typeof schema;
 
-// 行内の装飾の入れ子の順序。外側から link → strong → em → strike → code。
+// 行内の装飾の入れ子の順序。外側から link → underline → strong → em →
+// strike → code。
 //
 // Markdown の記号は必ず入れ子になるので、装飾の重なりはこの順序でしか書けない。
 // 原文へ戻すときの入れ子と、打った字が継ぐ装飾の判断で同じ並びを使う。
-const INLINE_NEST = ["link", "strong", "em", "strike", "code"];
+// 下線が強調より外なのは実データの書き方に合わせたため（`<u>**字**</u>`）。
+const INLINE_NEST = ["link", "underline", "strong", "em", "strike", "code"];
 
 // 外側から数えた深さ。並びに無い装飾は、いちばん外側として扱う。
 export const nestOf = (name: string): number => INLINE_NEST.indexOf(name);

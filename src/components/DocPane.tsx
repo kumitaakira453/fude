@@ -821,7 +821,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 出すのは離したとき。引いている間に出すと、そのままドラッグの行き先を
     // 奪って選択が飛ぶ。打ち始めたら消す。
     const onUp = () => read();
-    const onDown = () => setEditSel(null);
+    // 自分が出した帯やメニューを押したときは畳まない。畳むと押した番に帯ごと
+    // 消えて、リンクの入力欄も開けない。
+    const onDown = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest(".mg-sel-menu, .mg-block-menu")) {
+        return;
+      }
+      setEditSel(null);
+    };
     const onKey = (e: KeyboardEvent) => {
       // 選択を伸ばす操作と、ショートカット（装飾の付け外しなど）では消さない。
       // 消すのは字が入るとき（対象がずれる）。

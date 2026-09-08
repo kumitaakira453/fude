@@ -57,7 +57,7 @@ export function BlockMenu({
         top: Math.min(y, window.innerHeight - items.length * ROW - 20),
       }}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 w-[11.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
+      className="mg-block-menu fixed z-50 w-[11.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
     >
       {items.map((it) => (
         <button

@@ -2701,7 +2701,7 @@ svg[id^="mmd-"] foreignObject p {
   font-size: 12px;
   font-weight: 500;
 }
-.mg-sel-menu > button {
+.mg-sel-menu button {
   display: flex;
   gap: 0.3rem;
   align-items: center;
@@ -2710,7 +2710,7 @@ svg[id^="mmd-"] foreignObject p {
     background 0.12s,
     color 0.12s;
 }
-.mg-sel-menu > button:hover {
+.mg-sel-menu button:hover {
   background: var(--mg-hover);
   color: var(--mg-accent);
 }
@@ -2718,19 +2718,31 @@ svg[id^="mmd-"] foreignObject p {
   width: 1px;
   background: var(--mg-border);
 }
-/* 選んだ文字への操作の帯。アイコンだけのボタンは正方に寄せ、名前を出す
-   ボタン（ブロックの種別・指摘する）だけ横に伸ばす。 */
-.mg-sel-bar > button {
+/* 選んだ文字への操作の帯。項目が多いので段に分けて積む。上段はブロックそのもの
+   への操作、下段は選んだ文字への操作。 */
+.mg-sel-bar {
+  flex-direction: column;
+}
+.mg-sel-row {
+  display: flex;
+  align-items: stretch;
+}
+.mg-sel-row + .mg-sel-row {
+  border-top: 1px solid var(--mg-border);
+}
+/* アイコンだけのボタンは正方に寄せ、名前を出すボタン（ブロックの種別・
+   コメント）だけ横に伸ばす。 */
+.mg-sel-bar button {
   padding: 0.3rem 0.45rem;
   color: var(--mg-fg);
 }
 /* いま付いている装飾は押し込んで見せる。押すと外れることが分かるように、
    地色ではなくアクセントで示す。 */
-.mg-sel-bar > button.is-on {
+.mg-sel-bar button.is-on {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
-/* リンクの行き先を聞く入力。帯の下に続けて出す。 */
+/* リンクの行き先を聞く入力。帯の最後の段に出す。 */
 .mg-sel-link {
   padding: 0.3rem 0.5rem;
 }

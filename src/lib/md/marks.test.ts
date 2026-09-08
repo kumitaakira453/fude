@@ -4,6 +4,8 @@ import { fromMarkdown } from "./fromMarkdown";
 import {
   blockKindOf,
   clearLink,
+  clearMarks,
+  inCell,
   linkAt,
   markedWith,
   setLink,
@@ -126,6 +128,71 @@ describe("リンク", () => {
   });
 });
 
+describe("下線", () => {
+  it("選んだところに付け、生の <u> で書き出す", () => {
+    const { loaded, state } = opened("ここを引く\n");
+    const picked = select(state, 0, 0, 2);
+    const on = run(picked, toggleInline(schema.marks.underline));
+    expect(toMarkdown(on.doc, loaded)).toBe("<u>ここ</u>を引く\n");
+  });
+
+  it("原文の <u> は印として読み、押すと外れる", () => {
+    const { loaded, state } = opened("<u>ここ</u>を引く\n");
+    expect(markedWith(select(state, 0, 0, 2), schema.marks.underline)).toBe(true);
+    const off = run(select(state, 0, 0, 2), toggleInline(schema.marks.underline));
+    expect(toMarkdown(off.doc, loaded)).toBe("ここを引く\n");
+  });
+
+  it("強調と重なっても原文の書き方（下線が外）で戻る", () => {
+    const { loaded, state } = opened("<u>**ふとい**</u>\n");
+    const picked = select(state, 0, 0, 3);
+    expect(markedWith(picked, schema.marks.underline)).toBe(true);
+    expect(markedWith(picked, schema.marks.strong)).toBe(true);
+    // 触っていないので原文がそのまま返る。
+    expect(toMarkdown(state.doc, loaded)).toBe("<u>**ふとい**</u>\n");
+    const off = run(picked, toggleInline(schema.marks.strong));
+    expect(toMarkdown(off.doc, loaded)).toBe("<u>ふとい</u>\n");
+  });
+
+  it("装飾の無い字が続く対は畳まない（原文との対応が崩れるため）", () => {
+    const { loaded, state } = opened("<u>あ</u><u>い</u>\n");
+    expect(markedWith(select(state, 0, 0, 1), schema.marks.underline)).toBe(false);
+    expect(toMarkdown(state.doc, loaded)).toBe("<u>あ</u><u>い</u>\n");
+  });
+});
+
+describe("clearMarks", () => {
+  it("選んだところの装飾を全部落とす", () => {
+    const { loaded, state } = opened("**ふとい**と*ななめ*と`コード`\n");
+    const all = select(state, 0, 0, 11);
+    const bare = run(all, clearMarks);
+    expect(toMarkdown(bare.doc, loaded)).toBe("ふといとななめとコード\n");
+  });
+
+  it("リンクも下線も落とす", () => {
+    const { loaded, state } = opened("[題](https://example.com)と<u>下線</u>\n");
+    const bare = run(select(state, 0, 0, 4), clearMarks);
+    expect(toMarkdown(bare.doc, loaded)).toBe("題と下線\n");
+  });
+
+  it("何も付いていなければ動かない", () => {
+    const { state } = opened("素の段落\n");
+    expect(clearMarks(select(state, 0, 0, 4), undefined)).toBe(false);
+  });
+});
+
+describe("inCell", () => {
+  it("表のセルの中だけ真", () => {
+    const table = opened("| a  | b  |\n| -- | -- |\n| 1  | 2  |\n");
+    const at = table.state.apply(
+      table.state.tr.setSelection(TextSelection.near(table.state.doc.resolve(1))),
+    );
+    expect(inCell(at)).toBe(true);
+    const plain = opened("段落。\n");
+    expect(inCell(plain.state)).toBe(false);
+  });
+});
+
 describe("blockKindOf", () => {
   const kinds: [string, string][] = [
     ["段落。\n", "text"],
@@ -135,6 +202,8 @@ describe("blockKindOf", () => {
     ["1. ひとつ\n", "ordered"],
     ["- [ ] やること\n", "todo"],
     ["| a  | b  |\n| -- | -- |\n| 1  | 2  |\n", "table"],
+    ["> 引用。\n", "quote"],
+    ["```ts\nconst a = 1;\n```\n", "code"],
   ];
   for (const [body, id] of kinds) {
     it(`${JSON.stringify(body)} は ${id}`, () => {

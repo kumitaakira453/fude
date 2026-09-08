@@ -4,8 +4,8 @@ import type { Command, EditorState } from "prosemirror-state";
 import { schema } from "./schema";
 import { SLASH_ITEMS, type SlashItem } from "./slash";
 
-// 装飾（太字・斜体・打ち消し・行内コード・リンク）の付け外しと、いま何が
-// 付いているかの問い合わせ。
+// 装飾（太字・斜体・下線・打ち消し・行内コード・リンク）の付け外しと、
+// いま何が付いているかの問い合わせ。
 //
 // 打鍵（keymap）と、選んだときに出す帯の両方から呼ぶ。どちらから触っても
 // 同じ振る舞いになるように 1 か所に置く。
@@ -128,6 +128,39 @@ export const clearLink: Command = (state, dispatch) => {
   return true;
 };
 
+// 選んだところの装飾を全部落とす。
+//
+// 何がどう重なっているかを見ずに素へ戻せる道。1 つずつ外すと、囲みと強調が
+// 重なったところで押す順序によって残りが変わる。
+const ALL_MARKS = Object.values(schema.marks);
+
+export const clearMarks: Command = (state, dispatch) => {
+  const { from, to, empty } = state.selection;
+  if (empty) {
+    // カーソルだけのときは、これから打つ字が継ぐ装飾を落とす。
+    if (!(state.storedMarks ?? state.selection.$from.marks()).length) return false;
+    if (dispatch) dispatch(state.tr.setStoredMarks([]));
+    return true;
+  }
+  if (!ALL_MARKS.some((type) => state.doc.rangeHasMark(from, to, type))) return false;
+  if (dispatch) {
+    const tr = state.tr;
+    for (const type of ALL_MARKS) tr.removeMark(from, to, type);
+    dispatch(tr);
+  }
+  return true;
+};
+
+// 表のセルの中か。セルは行内しか持てないので、ブロックの種別を変える入口は
+// ここでは出さない。
+export function inCell(state: EditorState): boolean {
+  const $at = state.selection.$from;
+  for (let depth = $at.depth; depth > 0; depth--) {
+    if ($at.node(depth).type === schema.nodes.tableCell) return true;
+  }
+  return false;
+}
+
 // いまカーソルが居るブロックの種別。帯に名前を出すのに使う。
 //
 // 見分けるのは節点の型と印だけ。スラッシュコマンドと同じ一覧から引くので、
@@ -151,6 +184,10 @@ function kindOf(
       return `h${node.attrs.level}`;
     case n.table:
       return "table";
+    case n.blockquote:
+      return "quote";
+    case n.codeBlock:
+      return "code";
     case n.callout:
       return "callout";
     case n.details:

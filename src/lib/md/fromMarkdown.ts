@@ -1,4 +1,4 @@
-import type { Mark, Node as PmNode } from "prosemirror-model";
+import { Fragment, type Mark, type Node as PmNode } from "prosemirror-model";
 import type { Root, RootContent, PhrasingContent } from "mdast";
 import remarkCjkFriendly from "remark-cjk-friendly";
 import remarkGfm from "remark-gfm";
@@ -394,6 +394,51 @@ interface Inline {
   spans: Span[];
 }
 
+// ---- 下線 ----
+
+const isTag = (node: PmNode, tag: string): boolean =>
+  node.type === schema.nodes.rawInline && node.attrs.value === tag;
+
+// 釣り合う </u> の位置。無ければ -1。入れ子は数えない（実データに無い）。
+function closeU(nodes: PmNode[], from: number): number {
+  for (let i = from + 1; i < nodes.length; i++) {
+    if (isTag(nodes[i], "<u>")) return -1;
+    if (isTag(nodes[i], "</u>")) return i;
+  }
+  return -1;
+}
+
+// <u>…</u> を下線の印へ畳む。
+//
+// Markdown に下線の記号は無いので、実データは生の <u> で書かれている。素の
+// まま持つと編集面にタグの字がそのまま出て、押しても外せない。
+//
+// 畳んだ結果、同じ印の字が隣り合うと ProseMirror が 1 つの字へ束ねる
+// （`<u>あ</u><u>い</u>` のように装飾の無い字が続くとき）。数が合わないと
+// 原文の範囲との対応が崩れて保存が壊れるので、そのときは畳まずに戻す。
+function foldUnderline(inline: Inline): Inline {
+  if (!inline.nodes.some((node) => isTag(node, "<u>"))) return inline;
+  const mark = schema.marks.underline.create();
+  const out: Inline = { nodes: [], spans: [] };
+
+  for (let i = 0; i < inline.nodes.length; i++) {
+    const close = isTag(inline.nodes[i], "<u>") ? closeU(inline.nodes, i) : -1;
+    // 中身の無い対（`<u></u>`）は畳むと字ごと消えるので、原文のまま持つ。
+    if (close < 0 || close === i + 1) {
+      out.nodes.push(inline.nodes[i]);
+      out.spans.push(inline.spans[i]);
+      continue;
+    }
+    for (let j = i + 1; j < close; j++) {
+      out.nodes.push(inline.nodes[j].mark(mark.addToSet(inline.nodes[j].marks)));
+      out.spans.push(inline.spans[j]);
+    }
+    i = close;
+  }
+
+  return Fragment.fromArray(out.nodes).childCount === out.nodes.length ? out : inline;
+}
+
 function inlineOf(nodes: PhrasingContent[], source: string, base: number): Inline {
   const out: Inline = { nodes: [], spans: [] };
   const push = (node: PhrasingContent, marks: readonly Mark[]) => {
@@ -454,5 +499,5 @@ function inlineOf(nodes: PhrasingContent[], source: string, base: number): Inlin
     }
   };
   nodes.forEach((node) => push(node, []));
-  return out;
+  return foldUnderline(out);
 }

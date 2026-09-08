@@ -17,7 +17,7 @@ import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
 import { anchors } from "./anchors";
 import { emojiMenu } from "./emoji";
-import { toggleInline } from "./marks";
+import { inCell, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { insideBlock } from "./nodeViews";
 import { nestOf, schema } from "./schema";
@@ -61,15 +61,8 @@ export const fenceOnEnter: Command = (state, dispatch) => {
 
 // 行の中の改行。表のセルでは <br> を置く（GFM の表は行を分けられない）。
 export const lineBreak: Command = (state, dispatch) => {
-  const { $from } = state.selection;
-  const inCell = (() => {
-    for (let d = $from.depth; d > 0; d--) {
-      if ($from.node(d).type === schema.nodes.tableCell) return true;
-    }
-    return false;
-  })();
   if (dispatch) {
-    const node = inCell
+    const node = inCell(state)
       ? schema.nodes.rawInline.create({ value: "<br>" })
       : schema.nodes.hardBreak.create();
     dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
@@ -403,6 +396,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       // 行内の装飾。付けるだけでなく外せるようにする。
       "Mod-b": toggleInline(schema.marks.strong),
       "Mod-i": toggleInline(schema.marks.em),
+      "Mod-u": toggleInline(schema.marks.underline),
       "Shift-Mod-x": toggleInline(schema.marks.strike),
       "Shift-Mod-c": toggleInline(schema.marks.code),
       "Shift-Enter": lineBreak,
