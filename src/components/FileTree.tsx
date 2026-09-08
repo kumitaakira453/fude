@@ -264,10 +264,16 @@ const TreeItem = memo(function TreeItem({
       }
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
-      className={`group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] transition ${
+      // 選択されている側には遷移を掛けない。
+      //
+      // 遷移が掛かるのは背景と文字色だけで、アイコンの塗り
+      // （font-variation-settings の FILL 軸）・左端の棒・件数の札は掛からない。
+      // 共通側に transition を置くと、押した瞬間にアイコンだけ切り替わって
+      // 背景が 150ms かけて追いつく。選択が外れる側とホバーには残す。
+      className={`group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] ${
         active
           ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
-          : "text-[var(--mg-fg-dim)] hover:bg-[var(--mg-hover)]"
+          : "text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)]"
       }`}
     >
       {active && (

@@ -118,10 +118,13 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                   if (opened) closeTabAt(store, pane.id, path, { remember: false });
                 });
               }}
-              className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] transition ${
+              // 選ばれている側には遷移を掛けない。上端のアクセントの線は
+              // 要素の出現で即座に出るので、背景が遅れて追いつくと足並みが
+              // 揃わない（ファイルツリーの行と同じ）。
+              className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] ${
                 selected
                   ? "bg-[var(--mg-bg)] text-[var(--mg-fg)]"
-                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)]"
+                  : "text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)]"
               }`}
             >
               {selected && isActive && (
