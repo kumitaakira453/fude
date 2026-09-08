@@ -290,15 +290,32 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   }, [editing, raw, draft]);
 
 
-  // ファイル切替で編集モード解除。書きかけは編集面の後片付けが流すので、
-  // ここでは何も書かない（切り替える前の path 向けの onChange が呼ばれる）。
+  // ファイル切替。書きかけは編集面の後片付けが流すので、ここでは何も書かない
+  // （切り替える前の path 向けの onChange が呼ばれる）。
+  //
+  // 「開いたら編集から始める」のときは**編集モードを降りない**。
+  // React は子（編集面）の効果を親より先に走らせるので、ここで一度降りると
+  // その前に新しいファイルの編集面が組まれてしまい、それを捨ててもう一度
+  // 組むことになる。2000 ブロックで実測すると 1 回の押下で
+  // fromMarkdown 130ms → 組み立て 28ms → 焦点 375ms が**2 度**走っていた。
   useEffect(() => {
     marked.current = false;
-    setEditing(false);
     setEditingFm(null);
-    // 編集から始める設定なら、この後すぐ編集面を組む。前のファイルの中身を
-    // 残さず読み込みの印に切り替えておく（設定の切り替えでここを走らせない
-    // ように、設定は控えから読む）。
+    // 本文は控えから読む。raw を依存に入れると、自分の保存が返ってきた
+    // だけでもここが走り、書きかけを取り込みの手順より先に踏んでしまう。
+    const text = rawRef.current;
+    if (startRef.current && text !== undefined) {
+      // そのまま編集面で開く。組むのは 1 度だけになる。
+      began.current = path;
+      setDraft(text);
+      base.current = text;
+      setOpening(false);
+      setEditing(true);
+      return;
+    }
+    setEditing(false);
+    // 編集から始める設定でまだ読めていないときは、読み込みの印を出しておく。
+    // 読めた時点で下の手順が編集面へ移す。
     setOpening(startRef.current);
   }, [path]);
 
