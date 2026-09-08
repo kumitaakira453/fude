@@ -140,6 +140,21 @@ const splitItem: Command = (state, dispatch, view) => {
   )(state, dispatch, view);
 };
 
+// 項目の先頭で Backspace。飾りを外して 1 段浅くする。いちばん外なら
+// 箇条書きを抜けて段落に戻る。
+//
+// 素の joinBackward は手前の項目へ中身を継ぎ足すので、消したいのが点や番号
+// だけのときに前の行と文がつながってしまう。
+export const unlistBack: Command = (state, dispatch, view) => {
+  const { empty, $from } = state.selection;
+  if (!empty || $from.parentOffset !== 0) return false;
+  if ($from.depth < 2 || $from.node(-1).type !== schema.nodes.listItem) return false;
+  // 項目の最初のブロックにいるときだけ。2 つ目以降の段落は、同じ項目の中で
+  // 手前の段落へ継ぐのが正しい。
+  if ($from.index(-1) !== 0) return false;
+  return liftListItem(schema.nodes.listItem)(state, dispatch, view);
+};
+
 // 組版された姿から、書いたときの記号へ戻す。
 //
 // 記号を画面に出さない代わりに、記号そのものへ戻る道が要る。打った直後なら
@@ -380,8 +395,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     keymap({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
-      // 装飾の末尾で消したときは、打ち直しが同じ装飾へ入るようにする。
-      Backspace: chainCommands(undoRule(kept), toSourceBack, eraseInMark),
+      // 項目の先頭では飾りを外し、装飾の末尾で消したときは打ち直しが同じ
+      // 装飾へ入るようにする。
+      Backspace: chainCommands(undoRule(kept), toSourceBack, unlistBack, eraseInMark),
       Delete: toSourceForward,
       "Mod-s": () => {
         onSave();
