@@ -143,6 +143,16 @@ describe("リンクの札", () => {
     );
   });
 
+  it("打ち直しているあいだ、そのリンクに印が付く", async () => {
+    const at = editor();
+    await point(at.querySelector("a")!);
+    expect(at.querySelector(".mg-editing")).toBeNull();
+    press(button("編集"));
+    expect(at.querySelector(".mg-editing")?.textContent).toBe("埋め込みリンク");
+    fill("https://demia.co.jp/news");
+    expect(at.querySelector(".mg-editing")).toBeNull();
+  });
+
   it("行き先を空にするとリンクが外れる", async () => {
     const at = editor();
     await point(at.querySelector("a")!);

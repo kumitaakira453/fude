@@ -142,6 +142,16 @@ describe("組んだ数式を押して打ち直す", () => {
     expect(saved()).toContain("$$\na\nb\n$$");
   });
 
+  it("打ち直しているあいだ、その式に印が付く", () => {
+    const at = editor();
+    const block = () => at.querySelector<HTMLElement>(".mg-math-block")!;
+    expect(block().classList.contains("mg-editing")).toBe(false);
+    press(block());
+    expect(block().classList.contains("mg-editing")).toBe(true);
+    fill("x", { meta: true });
+    expect(at.querySelector(".mg-editing")).toBeNull();
+  });
+
   it("打っているそばから組み直す", () => {
     const at = editor();
     const block = () => at.querySelector<HTMLElement>(".mg-math-block")!;

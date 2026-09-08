@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { inFloating } from "../lib/ui";
-import { Icon } from "./Icon";
-import { Tooltip } from "./Tooltip";
 
 // 一言だけ聞く小窓。リンクの行き先と、式の中身（TeX）に使う。
 //
@@ -112,16 +110,15 @@ export function AskBox({
           onKeyDown={keys}
         />
       )}
-      <Tooltip label="決める" keys={lines ? "⌘⏎" : "⏎"} side="bottom" align="end" tone="dark">
-        <button
-          type="button"
-          aria-label="決める"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onDone}
-        >
-          <Icon name="arrow_upward" size={16} />
-        </button>
-      </Tooltip>
+      <button
+        type="button"
+        aria-label="確定"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onDone}
+      >
+        確定
+        <span className="mg-ask-keys">{lines ? "⌘⏎" : "⏎"}</span>
+      </button>
     </div>,
     document.body,
   );

@@ -2796,6 +2796,13 @@ svg[id^="mmd-"] foreignObject p {
 .mg-sel-bar button.is-on .mg-sel-name {
   color: inherit;
 }
+/* 打ち直しているところ。本文の外の小窓で打つので、どこを直しているのかを
+   本文の側でも示す。 */
+.mg-pm .mg-editing {
+  border-radius: 3px;
+  background: var(--mg-accent-soft);
+}
+
 /* リンクを指したときに出す札。行き先を見せ、写しと打ち直しの入口を置く。 */
 .mg-link-card {
   position: fixed;
@@ -2900,20 +2907,26 @@ svg[id^="mmd-"] foreignObject p {
 .mg-ask:has(> textarea) {
   align-items: flex-end;
 }
-/* 決めるボタン。押す先だと分かるように主色で塗る。 */
+/* 確定ボタン。押す先だと分かるように主色で塗り、何が起きるかは字で出す
+   （矢印だけでは伝わらない）。 */
 .mg-ask button {
   display: flex;
-  width: 1.75rem;
   height: 1.75rem;
   flex: none;
   align-items: center;
-  justify-content: center;
+  gap: 0.3rem;
+  padding: 0 0.5rem;
   border-radius: 0.5rem;
   background: var(--mg-accent);
   color: var(--mg-bg);
+  font-size: 12px;
+  font-weight: 500;
   transition:
     background 0.12s,
     color 0.12s;
+}
+.mg-ask-keys {
+  opacity: 0.7;
 }
 .mg-ask button:hover {
   background: color-mix(in srgb, var(--mg-accent) 82%, var(--mg-fg));

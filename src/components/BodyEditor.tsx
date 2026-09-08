@@ -22,6 +22,7 @@ import {
   swapEmoji,
   takeEmoji,
 } from "../lib/md/emoji";
+import { markEditing } from "../lib/md/editing";
 import { applyMath, closeMath, liveMath, mathKey } from "../lib/md/math";
 import { editorPlugins } from "../lib/md/plugins";
 import { domSpan, type Span } from "../lib/md/domSpan";
@@ -900,17 +901,25 @@ export function BodyEditor({
           setMath(null);
           return;
         }
+        const lines = node.type === schema.nodes.mathBlock;
+        // 独立した式は塊の下へ出す。位置から出すと塊の頭を指すので、そのままでは
+        // 式そのものを覆う。行内の式は字の下でよい。
+        const dom = lines ? v.nodeDOM(at) : null;
         let spot: { left: number; bottom: number };
-        try {
-          spot = v.coordsAtPos(at);
-        } catch {
-          setMath(null);
-          return;
+        if (dom instanceof HTMLElement) {
+          spot = dom.getBoundingClientRect();
+        } else {
+          try {
+            spot = v.coordsAtPos(at);
+          } catch {
+            setMath(null);
+            return;
+          }
         }
         setMath({
           pos: at,
           tex: node.attrs.tex as string,
-          lines: node.type === schema.nodes.mathBlock,
+          lines,
           x: spot.left,
           y: spot.bottom + 8,
         });
@@ -1208,6 +1217,8 @@ export function BodyEditor({
               x: onLink.x,
               y: onLink.y,
             });
+            // 打ち直しているあいだ、本文の側でもそのリンクに印を付ける。
+            markEditing(built.view, onLink.span);
             setOnLink(null);
           }}
         />
@@ -1227,10 +1238,14 @@ export function BodyEditor({
               built.view.dispatch,
               built.view,
             );
+            markEditing(built.view, null);
             setAskLink(null);
             built.view.focus();
           }}
-          onClose={() => setAskLink(null)}
+          onClose={() => {
+            markEditing(built.view, null);
+            setAskLink(null);
+          }}
         />
       )}
 

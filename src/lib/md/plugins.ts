@@ -17,6 +17,7 @@ import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
 import { anchors } from "./anchors";
 import { emojiMenu } from "./emoji";
+import { editingMark } from "./editing";
 import { mathEditing } from "./math";
 import { inCell, toggleInline } from "./marks";
 import { lifted } from "./lifted";
@@ -375,6 +376,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     // ":" から絵文字を選ぶ。同じく矢印と Enter を先に取る。
     emojiMenu,
     mathEditing,
+    editingMark,
     keymap({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。

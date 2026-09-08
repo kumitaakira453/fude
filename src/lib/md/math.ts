@@ -1,6 +1,7 @@
 import type { Node as PmNode } from "prosemirror-model";
 import { Plugin, PluginKey } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { editingKey } from "./editing";
 import { schema } from "./schema";
 
 // いま打ち直している式。
@@ -14,12 +15,19 @@ export const isMath = (node: PmNode | null | undefined): boolean =>
   node?.type === schema.nodes.inlineMath || node?.type === schema.nodes.mathBlock;
 
 export function openMath(view: EditorView, pos: number): void {
-  view.dispatch(view.state.tr.setMeta(mathKey, pos));
+  const node = view.state.doc.nodeAt(pos);
+  if (!isMath(node) || !node) return;
+  // 打ち直しているあいだ、本文の側でもその式に印を付ける。
+  view.dispatch(
+    view.state.tr
+      .setMeta(mathKey, pos)
+      .setMeta(editingKey, { from: pos, to: pos + node.nodeSize }),
+  );
 }
 
 export function closeMath(view: EditorView): void {
   if (mathKey.getState(view.state) === null) return;
-  view.dispatch(view.state.tr.setMeta(mathKey, null));
+  view.dispatch(view.state.tr.setMeta(mathKey, null).setMeta(editingKey, null));
 }
 
 // 打っている途中の中身をそのまま当てる。組み直した式がその場で見える。
@@ -39,7 +47,7 @@ export function applyMath(view: EditorView, pos: number, tex: string): void {
   const tr = view.state.tr;
   if (tex.trim() === "") tr.delete(pos, pos + node.nodeSize);
   else tr.setNodeMarkup(pos, undefined, { tex, raw: null });
-  view.dispatch(tr.setMeta(mathKey, null));
+  view.dispatch(tr.setMeta(mathKey, null).setMeta(editingKey, null));
 }
 
 export const mathEditing = new Plugin<number | null>({
