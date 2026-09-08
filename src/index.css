@@ -759,6 +759,41 @@ button.mg-task-check:hover {
    ============================================================ */
 /* 本文サイズは通常描画と同じに保つ（editorial で拡大しない） */
 
+/* ファイルの行。見た目は data-on ひとつから出す。
+   背景・文字色・アイコンを別々の class 文字列で切り替えると、遷移の掛かるもの
+   （background / color）と掛からないもの（アイコンの塗りは
+   font-variation-settings、左端の棒は要素の有無）が混ざり、押した瞬間に
+   一部だけ変わる。**遷移は書かない**：選択は付くときも外れるときも即座で、
+   でないと移る途中に 2 行とも塗られて見える。 */
+.mg-tree-row {
+  color: var(--mg-fg-dim);
+}
+.mg-tree-row .mg-tree-ico {
+  color: var(--mg-muted);
+}
+.mg-tree-row:hover {
+  background: var(--mg-hover);
+}
+/* 選ばれている行。:hover と強さが同じなので、後に置いて勝たせる。 */
+.mg-tree-row[data-on] {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-tree-row[data-on] .mg-tree-ico {
+  color: var(--mg-accent);
+}
+/* 左端の棒 */
+.mg-tree-rail {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 1rem;
+  width: 2px;
+  transform: translateY(-50%);
+  border-radius: 9999px;
+  background: var(--mg-accent);
+}
+
 /* パンくずから「ツリーで表示」した行の一時ハイライト */
 .mg-tree-reveal {
   animation: mgTreeReveal 1.4s ease;

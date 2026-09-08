@@ -165,7 +165,7 @@ const TreeItem = memo(function TreeItem({
             }}
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
-            className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none transition ${
+            className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none ${
               isDropTarget
                 ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]"
                 : "hover:bg-[var(--mg-hover)]"
@@ -264,32 +264,16 @@ const TreeItem = memo(function TreeItem({
       }
       onContextMenu={(e) => ctx.onContext(e, node)}
       style={{ paddingLeft: `${basePad}px` }}
-      // 選択されている側には遷移を掛けない。
-      //
-      // 遷移が掛かるのは背景と文字色だけで、アイコンの塗り
-      // （font-variation-settings の FILL 軸）・左端の棒・件数の札は掛からない。
-      // 共通側に transition を置くと、押した瞬間にアイコンだけ切り替わって
-      // 背景が 150ms かけて追いつく。選択が外れる側とホバーには残す。
-      className={`group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] ${
-        active
-          ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
-          : "text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)]"
-      }`}
+      // 出しているファイルかどうかは data-on ひとつで渡し、色は CSS が出す
+      // （index.css の .mg-tree-row）。背景・文字色・アイコンをそれぞれの
+      // class 文字列で切り替えると、遷移の掛かるものと掛からないものが混ざり、
+      // 押した瞬間に一部だけ変わる。
+      data-on={active || undefined}
+      className="mg-tree-row group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px]"
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--mg-accent)]" />
-      )}
+      {active && <span className="mg-tree-rail" />}
       <span className="w-[18px] shrink-0" />
-      <Icon
-        name="markdown"
-        size={16}
-        fill={active}
-        className={
-          active
-            ? "shrink-0 text-[var(--mg-accent)]"
-            : "shrink-0 text-[var(--mg-muted)]"
-        }
-      />
+      <Icon name="markdown" size={16} fill={active} className="mg-tree-ico shrink-0" />
       <span className="truncate">{displayName(node.name)}</span>
       {reviewCount > 0 && (
         <span
