@@ -2797,9 +2797,10 @@ svg[id^="mmd-"] foreignObject p {
   color: inherit;
 }
 /* 打ち直しているところ。本文の外の小窓で打つので、どこを直しているのかを
-   本文の側でも示す。 */
+   本文の側でも示す。
+   角は丸めない。装飾をまたぐ範囲は装飾の切れ目ごとに別の箱として描かれるので、
+   丸めると 1 つの範囲が札の連なりに見える。 */
 .mg-pm .mg-editing {
-  border-radius: 3px;
   background: var(--mg-accent-soft);
 }
 

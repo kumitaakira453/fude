@@ -724,7 +724,12 @@ export function EditorGutter({
   //
   // 印は装飾で渡す。クラスを DOM へ直に足すと、ProseMirror が属性の変化を
   // 本文の書き換えと見て節点を描き直し、消えてしまう。
+  //
+  // 片付けた編集面へは流さない。この部品が消える番に運びの後片付け
+  // （stopRef → onCancel → unlift）が走るが、編集面を持っているのは親なので、
+  // そのときには既に片付いている。
   const mark = (spans: LiftedSpans) => {
+    if (view.isDestroyed) return;
     view.dispatch(
       view.state.tr.setMeta(liftedKey, spans).setMeta("addToHistory", false),
     );

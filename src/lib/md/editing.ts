@@ -2,6 +2,7 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import type { Node as PmNode } from "prosemirror-model";
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 import type { Span } from "./domSpan";
+import { schema } from "./schema";
 
 // いま打ち直しているところに印を付ける。
 //
@@ -22,7 +23,30 @@ export function markEditing(view: EditorView, span: Span | null): void {
 
 const same = (a: Span, b: Span) => a.from === b.from && a.to === b.to;
 
-function build(doc: PmNode, span: Span): DecorationSet {
+// 行内コードは途中で切らず、札ごと覆う。
+//
+// 行内の印は装飾の切れ目ごとに別の箱として描かれる。行内コードは自分の地と
+// 余白を持つので、その途中で切ると札の半分だけ色が変わり、1 つの札が 2 つに
+// 割れて見える。
+function snap(doc: PmNode, span: Span): Span {
+  const $from = doc.resolve(span.from);
+  if (!$from.parent.inlineContent || doc.resolve(span.to).parent !== $from.parent) {
+    return span;
+  }
+  const start = $from.start();
+  let { from, to } = span;
+  $from.parent.forEach((child, offset) => {
+    if (!schema.marks.code.isInSet(child.marks)) return;
+    const a = start + offset;
+    const b = a + child.nodeSize;
+    if (a < from && from < b) from = a;
+    if (a < to && to < b) to = b;
+  });
+  return { from, to };
+}
+
+function build(doc: PmNode, asked: Span): DecorationSet {
+  const span = snap(doc, asked);
   const node = doc.nodeAt(span.from);
   // 式のように中身を持たない塊は、節点そのものに印を付ける（行内の印は
   // 中身の字に付くので、字を持たないものには乗らない）。字そのものは節点の
