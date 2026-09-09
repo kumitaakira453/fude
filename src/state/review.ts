@@ -27,6 +27,11 @@ export const openCountsAtom = atom((get) => {
 export const reviewScreenAtom = atom(false);
 export const reviewThreadAtom = atom<string | null>(null);
 
+// 版の履歴画面。開くファイル（フォルダからの相対パス。本文キャッシュと同じ鍵）
+// を入れると開く。レビュー画面と同じく本文に重ねずに別画面で出す。差分を
+// 並べて見せるので、読む画面の幅では足りない。
+export const versionScreenAtom = atom<string | null>(null);
+
 // 未解決の総数。ツールバーの入口に出す。
 //
 // 台帳はマシンに 1 つで、他のフォルダの指摘も入っている。入口の数はいま開いて

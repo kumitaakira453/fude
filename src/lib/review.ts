@@ -114,6 +114,45 @@ export async function readVersion(id: string): Promise<string | null> {
   return text;
 }
 
+// 人が明示的に打つ版。画面に出ている本文をそのまま渡す（ディスクの内容ではなく
+// これを渡すので、版と画面に出ていたものが食い違わない）。
+export interface Checkpointed {
+  id: string;
+  // 同じ内容の版が既にあったときは false。押しても履歴が増えないことを言う。
+  created: boolean;
+}
+
+export async function createCheckpoint(
+  file: string, // 絶対パス
+  text: string,
+  label: string | null,
+): Promise<Checkpointed | null> {
+  return call(
+    () => invoke<Checkpointed>("review_checkpoint", { file, text, label }),
+    "版を保存できませんでした",
+  );
+}
+
+export interface Restored {
+  // 書き戻した本文。
+  text: string;
+  // 復元の直前の本文の版。ここへ復元し直せば取り消せる。
+  backup: string;
+}
+
+// 過去の版でファイルを置き換える。expect は画面が基準にしている本文で、
+// ディスクがそれと違えば Rust 側が何もせずにエラーを返す。
+export async function restoreVersion(
+  file: string,
+  version: string,
+  expect: string,
+): Promise<Restored | null> {
+  return call(
+    () => invoke<Restored>("review_restore", { file, version, expect }),
+    "復元できませんでした",
+  );
+}
+
 // 解決結果を台帳に控える。CLI は Markdown を解析しないため、GUI が対応付けた
 // 結果をここに置いて読ませる。headQuote は解決時点の「現在のブロック本文」で、
 // CLI はそれが今のファイルに含まれるかでキャッシュの新しさを自分で判定できる。

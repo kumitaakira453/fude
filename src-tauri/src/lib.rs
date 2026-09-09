@@ -68,6 +68,35 @@ async fn review_version_text(id: String) -> Result<String, String> {
         .map_err(|e| format!("版の読み込みに失敗しました: {e}"))?
 }
 
+// 人が明示的に版を打つ。画面に出ている本文をそのまま渡す。
+#[tauri::command]
+async fn review_checkpoint(
+    file: String,
+    text: String,
+    label: Option<String>,
+) -> Result<review::Checkpointed, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        review::checkpoint(&PathBuf::from(file), &text, label)
+    })
+    .await
+    .map_err(|e| format!("版の保存に失敗しました: {e}"))?
+}
+
+// 過去の版でファイルを置き換える。expect は画面が基準にしている本文で、
+// ディスクがそれと違えば外部で書き換わっているので何もせずに知らせる。
+#[tauri::command]
+async fn review_restore(
+    file: String,
+    version: String,
+    expect: String,
+) -> Result<review::Restored, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        review::restore(&PathBuf::from(file), &version, &expect)
+    })
+    .await
+    .map_err(|e| format!("復元に失敗しました: {e}"))?
+}
+
 // GUI が求めた対応付けの結果を控える。CLI はこれを読んで「現在の本文」を出す。
 #[tauri::command]
 async fn review_set_resolved(
@@ -261,6 +290,8 @@ pub fn run() {
             review_store_path,
             review_create_thread,
             review_version_text,
+            review_checkpoint,
+            review_restore,
             review_set_resolved,
             review_reply,
             review_resolve,

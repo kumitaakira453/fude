@@ -430,6 +430,20 @@ mod tests {
     }
 
     #[test]
+    fn origin_names_are_fixed() {
+        // 綴りは台帳のファイルとフロントエンドの型に出る。変えると過去の
+        // 台帳が読めなくなる。
+        for (origin, json) in [
+            (Origin::Comment, "\"comment\""),
+            (Origin::Commit, "\"commit\""),
+            (Origin::Checkpoint, "\"checkpoint\""),
+        ] {
+            assert_eq!(serde_json::to_string(&origin).unwrap(), json);
+            assert_eq!(serde_json::from_str::<Origin>(json).unwrap(), origin);
+        }
+    }
+
+    #[test]
     fn new_id_is_eight_hex_digits() {
         let id = new_id();
         assert_eq!(id.len(), 8);

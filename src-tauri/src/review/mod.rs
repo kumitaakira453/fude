@@ -274,6 +274,27 @@ pub fn set_resolved(thread_id: &str, state: &str, head_quote: &str) -> Result<()
 
 // ---- 更新 ----
 
+// 人が明示的に打った版の結果。
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Checkpointed {
+    pub id: String,
+    // 同じ内容の版が既にあったときは false。押しても履歴が増えないことを
+    // 画面の側で言えるようにする。
+    pub created: bool,
+}
+
+// 復元の直前の本文に付ける名前。ここへ戻せば復元を取り消せる。
+pub const BACKUP_LABEL: &str = "復元前";
+
+// 復元の結果。
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Restored {
+    // 書き戻した本文。
+    pub text: String,
+    // 復元の直前の本文の版。ここへ復元し直せば取り消せる。
+    pub backup: String,
+}
+
 pub struct NewThread {
     pub file: PathBuf,
     pub quote: String,
@@ -457,6 +478,74 @@ pub fn commit(file: &Path, message: &str) -> Result<String, String> {
     Ok(id)
 }
 
+// 人が明示的に版を打つ。画面に出ている本文をそのまま版にする。
+//
+// ディスクは読まない。指摘を付けるときと同じ扱いにすることで、ディスクの内容と
+// ずれていても、版と画面に出ていたものが食い違わない。
+pub fn checkpoint(
+    file: &Path,
+    text: &str,
+    label: Option<String>,
+) -> Result<Checkpointed, String> {
+    let key = normalize(file)?;
+    let id = snapshot::put(text)?;
+    let now = store::now_millis();
+    store::update(|ledger: &mut Ledger| {
+        let known = ledger.versions.iter().any(|v| v.id == id && v.file == key);
+        record_version(ledger, &key, &id, Origin::Checkpoint, label.clone(), now);
+        Ok(Checkpointed {
+            id: id.clone(),
+            created: !known,
+        })
+    })
+}
+
+// 過去の版でファイルを置き換える。
+//
+// expect は画面が基準にしている本文。ディスクがそれと違えば外部で書き換わって
+// いるので、何もせずに知らせる。復元前の本文は先に版として残すので、書き込みが
+// 転んでも今の本文は失われない。
+pub fn restore(file: &Path, version: &str, expect: &str) -> Result<Restored, String> {
+    let key = normalize(file)?;
+    let disk = fs::read_to_string(&key).map_err(|e| format!("{key} を読めません: {e}"))?;
+    if disk != expect {
+        return Err(
+            "このファイルは fude の外で書き換わっています。読み直してからやり直してください。"
+                .to_string(),
+        );
+    }
+    // 戻す本文を先に取る。読めないなら、まだ何も書き換えていない。
+    let target = snapshot::get(version)?;
+    let backup = snapshot::put(&disk)?;
+    let now = store::now_millis();
+    store::update(|ledger: &mut Ledger| {
+        apply_restore(ledger, &key, &backup, version, now);
+        Ok(())
+    })?;
+    store::write_atomic(Path::new(&key), target.as_bytes())?;
+    Ok(Restored {
+        text: target,
+        backup,
+    })
+}
+
+// 復元を台帳に書く。復元前の本文と、戻した版の両方を残す。
+//
+// 復元そのものを新しい出来事として積むので、履歴は巻き戻さない。
+fn apply_restore(ledger: &mut Ledger, file: &str, backup: &str, target: &str, now: i64) {
+    let named = ledger.versions.iter().any(|v| v.id == backup && v.file == file);
+    // 既に版になっている本文の名前は書き換えない。人が付けた名前を復元の
+    // 都合で奪うことになる。
+    let label = if named {
+        None
+    } else {
+        Some(BACKUP_LABEL.to_string())
+    };
+    record_version(ledger, file, backup, Origin::Checkpoint, label, now);
+    // 戻した版は台帳にあるので畳まれる。名前は触らない。
+    record_version(ledger, file, target, Origin::Checkpoint, None, now);
+}
+
 // 同じ内容の版が既にあれば重ねて記録しない。ラベルは後から来た方を優先する。
 fn record_version(
     ledger: &mut Ledger,
@@ -633,6 +722,79 @@ mod tests {
 
         // 別ファイルの同一内容は別の版として持つ
         record_version(&mut ledger, "/b.md", "hash1", Origin::Comment, None, 40);
+        assert_eq!(ledger.versions.len(), 2);
+    }
+
+    #[test]
+    fn a_version_punched_by_hand_is_a_checkpoint() {
+        let mut ledger = Ledger::default();
+        record_version(
+            &mut ledger,
+            "/a.md",
+            "h1",
+            Origin::Checkpoint,
+            Some("初稿".into()),
+            10,
+        );
+        assert_eq!(ledger.versions.len(), 1);
+        assert_eq!(ledger.versions[0].origin, Origin::Checkpoint);
+        assert_eq!(ledger.versions[0].label.as_deref(), Some("初稿"));
+
+        // 同じ本文をもう一度打っても増えず、打った時刻も動かない
+        record_version(
+            &mut ledger,
+            "/a.md",
+            "h1",
+            Origin::Checkpoint,
+            Some("初稿".into()),
+            20,
+        );
+        assert_eq!(ledger.versions.len(), 1);
+        assert_eq!(ledger.versions[0].created_at, 10);
+    }
+
+    #[test]
+    fn restoring_leaves_the_text_it_replaced_as_a_version() {
+        let mut ledger = Ledger::default();
+        record_version(
+            &mut ledger,
+            "/a.md",
+            "old",
+            Origin::Checkpoint,
+            Some("初稿".into()),
+            10,
+        );
+        apply_restore(&mut ledger, "/a.md", "now", "old", 30);
+
+        // 復元の直前の本文が版として残る。ここへ戻せば復元を取り消せる
+        let backup = ledger.versions.iter().find(|v| v.id == "now").unwrap();
+        assert_eq!(backup.label.as_deref(), Some(BACKUP_LABEL));
+        assert_eq!(backup.origin, Origin::Checkpoint);
+        assert_eq!(backup.created_at, 30);
+
+        // 戻した版の名前と時刻はそのまま。履歴は巻き戻さない
+        let target = ledger.versions.iter().find(|v| v.id == "old").unwrap();
+        assert_eq!(target.label.as_deref(), Some("初稿"));
+        assert_eq!(target.created_at, 10);
+    }
+
+    #[test]
+    fn restoring_does_not_take_the_name_off_a_version_that_has_one() {
+        // 打った版のまま復元すると、復元の直前の本文には既に名前が付いている
+        let mut ledger = Ledger::default();
+        record_version(
+            &mut ledger,
+            "/a.md",
+            "now",
+            Origin::Checkpoint,
+            Some("下書き整理".into()),
+            10,
+        );
+        record_version(&mut ledger, "/a.md", "old", Origin::Comment, None, 5);
+        apply_restore(&mut ledger, "/a.md", "now", "old", 30);
+
+        let kept = ledger.versions.iter().find(|v| v.id == "now").unwrap();
+        assert_eq!(kept.label.as_deref(), Some("下書き整理"));
         assert_eq!(ledger.versions.len(), 2);
     }
     fn open_thread(id: &str) -> Thread {

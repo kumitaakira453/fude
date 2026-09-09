@@ -4474,3 +4474,282 @@ body.mg-carrying {
   outline: 2px solid var(--mg-accent);
   outline-offset: 1px;
 }
+
+/* ============================================================
+   版の履歴
+   左に版を新しい順に並べ、右に選んだものを出す。差分は「前」を弱く、
+   「後」をアクセントで示す。色は本文の読み心地を壊さない濃さに留める。
+   ============================================================ */
+
+/* 本文 / 差分、統合 / 分割の切り替え。並んだ選択肢は枠で囲って 1 つの
+   まとまりに見せる。 */
+.mg-ver-seg {
+  display: flex;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+}
+.mg-ver-seg > button {
+  padding: 0.25rem 0.6rem;
+  font-size: 12px;
+  color: var(--mg-fg-dim);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-ver-seg > button:hover {
+  background: var(--mg-hover);
+}
+.mg-ver-seg > button.is-on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+  font-weight: 600;
+}
+.mg-ver-seg > button + button {
+  border-left: 1px solid var(--mg-border);
+}
+
+/* 差分の相手を選ぶ口。 */
+.mg-ver-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 14rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  font-size: 12px;
+  color: var(--mg-fg-dim);
+  transition: background 0.12s ease;
+}
+.mg-ver-pick:hover {
+  background: var(--mg-hover);
+}
+.mg-ver-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--mg-fg-dim);
+}
+.mg-ver-opt:hover {
+  background: var(--mg-hover);
+}
+.mg-ver-opt.is-on {
+  color: var(--mg-accent);
+  font-weight: 600;
+}
+
+/* 一覧の 1 行。 */
+.mg-ver-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.mg-ver-row + .mg-ver-row {
+  border-top: 1px solid var(--mg-border);
+}
+.mg-ver-row:hover {
+  background: var(--mg-hover);
+}
+.mg-ver-row.is-active {
+  background: var(--mg-accent-soft);
+}
+/* 版を打った主体。人とエージェントで色を分ける。名前だけでは、自分で
+   打ったのかコメントやエージェントが残したのかが読めない。 */
+.mg-ver-face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
+  border-radius: 999px;
+  background: var(--mg-hover);
+  color: var(--mg-muted);
+}
+.mg-ver-face.is-ai {
+  background: color-mix(in srgb, var(--mg-accent2) 18%, transparent);
+  color: var(--mg-accent2);
+}
+.mg-ver-face.is-you {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-ver-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.mg-ver-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--mg-fg);
+  /* 名前は日時のこともあるので、2 行までで切る */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.mg-ver-note {
+  font-size: 10.5px;
+  color: var(--mg-muted);
+}
+.mg-ver-when {
+  flex: none;
+  margin-top: 0.15rem;
+  font-size: 10.5px;
+  color: var(--mg-muted);
+}
+
+/* 復元。1 つしかない操作なので、列を作らず本文の上に浮かせる。 */
+.mg-ver-act {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 20;
+  padding: 0.3rem;
+  border-radius: 0.6rem;
+  background: var(--mg-panel);
+  box-shadow:
+    0 0 0 1px var(--mg-border),
+    0 10px 28px -14px rgba(0, 0, 0, 0.5);
+}
+
+/* 読み込み中や「同じです」の一言。 */
+.mg-ver-note-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0;
+  font-size: 12px;
+  color: var(--mg-muted);
+}
+/* どちらの版からどちらへ、を差分の頭に置く。 */
+.mg-ver-facing {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--mg-border);
+  margin-bottom: 0.5rem;
+  font-size: 11.5px;
+  color: var(--mg-fg-dim);
+}
+
+/* 差分。変わっていないところは弱め、変わったところに札を出す。 */
+.mg-ver-kept {
+  opacity: 0.55;
+}
+/* 変わっていないブロックの連なり。押すと開く。 */
+.mg-ver-gap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.25rem;
+  border-radius: 0.4rem;
+  border: 1px dashed var(--mg-border);
+  font-size: 11px;
+  color: var(--mg-muted);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-ver-gap:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg-dim);
+}
+
+.mg-ver-pair {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 1.5rem 0 1rem;
+}
+.mg-ver-diff.is-split .mg-ver-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+}
+/* 何が起きたか（書き換え・追加・削除）。組の上端に出す。 */
+.mg-ver-pair::before {
+  content: attr(data-label);
+  position: absolute;
+  top: -0.7rem;
+  left: 0.6rem;
+  z-index: 1;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--mg-panel);
+  box-shadow: 0 0 0 1px var(--mg-border);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.25rem;
+  color: var(--mg-muted);
+  white-space: nowrap;
+}
+
+.mg-ver-cell {
+  position: relative;
+  min-width: 0;
+  /* 上は「前 / 後」の札の分を空ける。本文の上に重ねると 1 行目が読めない。 */
+  padding: 1.3rem 0.9rem 0.2rem;
+  border-radius: 0.6rem;
+}
+/* 前と後。読み手は左（統合では上）を古い側として読む。 */
+.mg-ver-cell.is-base {
+  background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-danger) 22%, transparent);
+}
+.mg-ver-cell.is-head {
+  background: var(--mg-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
+}
+/* 片側だけの組でも列が崩れないように置く空のセル。 */
+.mg-ver-cell.is-void {
+  border-radius: 0.6rem;
+  border: 1px dashed var(--mg-border);
+  opacity: 0.4;
+}
+.mg-ver-cell::after {
+  content: attr(data-side);
+  position: absolute;
+  top: 0.4rem;
+  left: 0.95rem;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.mg-ver-cell.is-base::after {
+  color: color-mix(in srgb, var(--mg-danger) 80%, var(--mg-muted));
+}
+.mg-ver-cell.is-head::after {
+  color: var(--mg-accent);
+}
+
+/* フロントマター。本文のブロックに割れないので、書いたままの形で出す。 */
+.mg-ver-meta {
+  overflow-x: auto;
+  font-family: var(--mg-font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--mg-fg-dim);
+  white-space: pre;
+}

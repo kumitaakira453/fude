@@ -7,6 +7,7 @@ import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
 import { ReviewScreen } from "./components/review/ReviewScreen";
+import { VersionScreen } from "./components/version/VersionScreen";
 import { Toolbar } from "./components/Toolbar";
 import { Toast } from "./components/Toast";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -27,7 +28,7 @@ import {
   sidebarOpenAtom,
   themeAtom,
 } from "./state/atoms";
-import { reviewScreenAtom } from "./state/review";
+import { reviewScreenAtom, versionScreenAtom } from "./state/review";
 
 export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
@@ -37,6 +38,7 @@ export default function App() {
   const layout = useAtomValue(layoutAtom);
   const activePaneId = useAtomValue(activePaneIdAtom);
   const reviewOpen = useAtomValue(reviewScreenAtom);
+  const versionFile = useAtomValue(versionScreenAtom);
   const store = useStore();
 
   useHotkeys();
@@ -112,6 +114,17 @@ export default function App() {
         <UpdateBanner />
         <Toast />
       </div>
+    );
+  }
+
+  // 版の履歴も専用画面。前と後を並べるので、読む画面の幅には収まらない。
+  if (versionFile !== null) {
+    return (
+      <>
+        <VersionScreen path={versionFile} />
+        <UpdateBanner />
+        <Toast />
+      </>
     );
   }
 

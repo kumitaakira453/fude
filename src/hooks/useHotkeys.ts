@@ -2,7 +2,7 @@ import { useStore } from "jotai";
 import { useEffect } from "react";
 import { closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
 import * as A from "../state/atoms";
-import { reviewScreenAtom } from "../state/review";
+import { reviewScreenAtom, versionScreenAtom } from "../state/review";
 
 // 入力欄以外で選択中のテキストを検索語プリフィル用に取得する。
 //
@@ -79,6 +79,9 @@ export function useHotkeys() {
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {
         e.preventDefault();
+        // 版の履歴を開いていたら閉じる。どちらも本文の代わりに出す画面なので、
+        // 重ねると片方が後ろで開いたままになる。
+        store.set(versionScreenAtom, null);
         store.set(reviewScreenAtom, true);
       } else if (mod && e.shiftKey && (e.key === "t" || e.key === "T")) {
         e.preventDefault();

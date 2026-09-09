@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue, useStore } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   startTransition,
   useCallback,
@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
+import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useReview } from "../hooks/useReview";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
@@ -20,8 +21,10 @@ import {
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
+import { createCheckpoint } from "../lib/review";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating } from "../lib/ui";
+import { syncLedger, versionScreenAtom } from "../state/review";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
   activePath,
@@ -235,6 +238,55 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // ⌘S。自動保存があるので押す必要は無いが、待たずに書ける。
   const save = () => flushRef.current?.();
+
+  // ---- 版 ----
+  const openVersions = useSetAtom(versionScreenAtom);
+  // 版の名前を打つ 1 行。押した直後に出し、Enter で確定する。
+  const [naming, setNaming] = useState(false);
+  const [versionName, setVersionName] = useState("");
+  const ime = useImeSafeEnter();
+  const stamping = useRef(false);
+
+  // 書きかけを先に流し、そのうえで今の本文を読む。
+  //
+  // 自動保存が届く前に押されると、打った直後の一手が入っていない本文を
+  // 版にしてしまう。flush は本文キャッシュを同期で書き換えるので、
+  // 呼んだ直後に読めば最新が取れる（描画を待つ cache は 1 手古い）。
+  const settled = useCallback((): string | null => {
+    if (!path) return null;
+    flushRef.current?.();
+    return store.get(contentCacheAtom).get(path) ?? null;
+  }, [path, store]);
+
+  // 版を打つ。名前は任意で、空なら日時で呼ばれる。
+  const stamp = useCallback(
+    async (name: string) => {
+      if (stamping.current || !path) return;
+      const text = settled();
+      const abs = absOf(path);
+      if (text === null || !abs) return;
+      stamping.current = true;
+      try {
+        const done = await createCheckpoint(abs, text, name.trim() || null);
+        if (!done) return;
+        await syncLedger(store);
+        notify(
+          store,
+          done.created ? "版を保存しました" : "同じ内容の版がすでにあります",
+        );
+      } finally {
+        stamping.current = false;
+      }
+    },
+    [absOf, path, settled, store],
+  );
+
+  // 履歴を開く。開く前に書きかけを流して、いまの本文を版と比べられるようにする。
+  const showVersions = useCallback(() => {
+    if (!path) return;
+    settled();
+    openVersions(path);
+  }, [openVersions, path, settled]);
   const exitEdit = () => {
     // 書きかけを先に流す。流れた分は自動保存が書く。
     flushRef.current?.();
@@ -1068,6 +1120,23 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           <Breadcrumbs path={shownPath} paneId={pane.id} />
         </div>
+        {path && (
+          <>
+            <button
+              onClick={() => {
+                setVersionName("");
+                setNaming(true);
+              }}
+              title="版を保存"
+              className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+            >
+              <Icon name="bookmark_add" size={16} />
+            </button>
+            <button onClick={showVersions} title="版の履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
+              <Icon name="history" size={16} />
+            </button>
+          </>
+        )}
         {saving > 0 && (
           <span title="保存中" className="shrink-0 text-[var(--mg-muted)]">
             <Icon name="progress_activity" size={13} className="mg-spin" />
@@ -1103,6 +1172,39 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           </button>
         )}
       </header>
+
+      {/* 版の名前。任意なので、空のまま確定すれば日時で呼ばれる。 */}
+      {naming && (
+        <div className="flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-1.5">
+          <Icon
+            name="bookmark_add"
+            size={15}
+            className="shrink-0 text-[var(--mg-accent)]"
+          />
+          <input
+            autoFocus
+            value={versionName}
+            placeholder="版の名前（空なら日時）"
+            onChange={(e) => setVersionName(e.target.value)}
+            onCompositionStart={ime.onCompositionStart}
+            onCompositionEnd={ime.onCompositionEnd}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setNaming(false);
+              } else if (e.key === "Enter" && !ime.isComposing(e)) {
+                e.preventDefault();
+                setNaming(false);
+                void stamp(versionName);
+              }
+            }}
+            className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--mg-fg)] outline-none placeholder:text-[var(--mg-muted)]"
+          />
+          <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
+            Enter で保存 / Esc で取消
+          </span>
+        </div>
+      )}
 
       {/* 読書プログレスバー */}
       <div className="h-0.5 w-full bg-transparent">
