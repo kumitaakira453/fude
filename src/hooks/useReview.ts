@@ -25,6 +25,7 @@ import { parseFrontmatter } from "../lib/frontmatter";
 import type { Target } from "../lib/md/reviewAnchors";
 import {
   createThread,
+  editComment,
   isOpen,
   removeThread,
   reopenThread,
@@ -250,6 +251,16 @@ export function useReview({
     [store],
   );
 
+  // 本文の上から自分の書き込みを直す。レビュー画面と同じ台帳の操作。
+  const rewrite = useCallback(
+    async (thread: string, comment: string, body: string) => {
+      if (!(await editComment(thread, comment, body))) return;
+      await syncLedger(store);
+      notify(store, "コメントを直しました", "right");
+    },
+    [store],
+  );
+
   // 直後の ⌘Z で戻す。戻すものが無ければ本文の undo に譲る。
   const undoRemove = useCallback((): boolean => runReviewUndo(), []);
 
@@ -421,6 +432,7 @@ export function useReview({
     clearSelection,
     remove,
     resolve,
+    rewrite,
     undoRemove,
   };
 }

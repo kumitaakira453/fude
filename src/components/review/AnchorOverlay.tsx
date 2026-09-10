@@ -9,8 +9,10 @@ import {
 import { createPortal } from "react-dom";
 import type { AnchorHit } from "../../lib/review";
 import type { Mark, Marked, Rect } from "../../lib/reviewMarks";
+import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
+import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
-import { CommentBody } from "./CommentMarkdown";
+import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
 
 // 指摘が付いている箇所に印を重ねる。DOM は書き換えず、矩形を絶対配置で
 // 載せるだけなので本文の組版に影響しない。
@@ -66,6 +68,7 @@ export function AnchorOverlay({
   contentKey,
   measure,
   onPick,
+  onEdit,
   onRemove,
   onResolve,
 }: {
@@ -76,6 +79,8 @@ export function AnchorOverlay({
   // 何をどこに出すか。重ねる先の矩形を渡すので、返す矩形はその左上を原点にする。
   measure: (base: DOMRect) => Marked;
   onPick: (hit: AnchorHit) => void;
+  // 自分の書き込みを、カードの上でそのまま書き直す。
+  onEdit: (thread: string, comment: string, body: string) => void;
   // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
   onRemove: (id: string) => void;
   // 解決にする。レビュー画面まで行かずに片付けられるようにする。
@@ -98,6 +103,8 @@ export function AnchorOverlay({
     who: string;
     at: number;
     answered: boolean;
+    comment: string;
+    mine: boolean;
     hit: AnchorHit;
   } | null>(null);
   // 印からカードへ指を移す間、少しだけ開いたままにする。印を離れた瞬間に
@@ -107,12 +114,28 @@ export function AnchorOverlay({
   // 当たり判定と開き直しの判断を、描画のたびに作り直さずに済ませる控え。
   const marksRef = useRef<Mark[]>([]);
   const peekRef = useRef<string | null>(null);
+  // カードの上で書き直している相手。書いている間はホバーで閉じない。
+  const [edit, setEdit] = useState<{ thread: string; comment: string } | null>(
+    null,
+  );
+  const [draft, setDraft] = useState("");
+  const [see, setSee] = useState(false);
+  // ホバーの見張りは張り替えずに済ませたいので、控えから読む。
+  const editRef = useRef(false);
+  editRef.current = edit !== null;
   const keep = useCallback(() => window.clearTimeout(hideTimer.current), []);
   const hideSoon = useCallback(() => {
+    if (editRef.current) return;
     window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => setPeek(null), HOVER_GRACE);
   }, []);
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
+
+  const stopEdit = useCallback(() => {
+    setEdit(null);
+    setSee(false);
+    setPeek(null);
+  }, []);
 
   // 印に何を出すか。矩形は位置を決めるためだけに受け取る。
   const showPeek = useCallback((mark: Mark, rc: Rect) => {
@@ -127,6 +150,8 @@ export function AnchorOverlay({
       who: mark.who,
       at: mark.at,
       answered: mark.answered,
+      comment: mark.comment,
+      mine: mark.mine,
       hit: mark.hit,
       state: mark.guess
         ? "元の箇所が見つかりません。近いブロックに出しています"
@@ -158,6 +183,12 @@ export function AnchorOverlay({
     if (!content) return;
     let raf = 0;
     const onMove = (e: MouseEvent) => {
+      // 書き直している間は動かさない。別の指摘へ移ると、書いていたものが
+      // 消えたように見える。
+      if (editRef.current) {
+        keep();
+        return;
+      }
       // 選択を引いているあいだは出さない。カードが下に出ると、ドラッグの
       // 行き先をそれが奪って選択が飛ぶ。
       if (e.buttons !== 0) {
@@ -193,6 +224,17 @@ export function AnchorOverlay({
       content.removeEventListener("mouseleave", onLeave);
     };
   }, [content, hitAt, keep, hideSoon, showPeek]);
+
+  // 外を押したら書き直しをやめる。カードは触っていないと閉じる作りなので、
+  // 書いている間の逃げ道をここで用意する。
+  useEffect(() => {
+    if (!edit) return;
+    const onDown = (e: MouseEvent) => {
+      if (!cardRef.current?.contains(e.target as Node)) stopEdit();
+    };
+    window.addEventListener("mousedown", onDown, true);
+    return () => window.removeEventListener("mousedown", onDown, true);
+  }, [edit, stopEdit]);
 
   const compute = useCallback(() => {
     if (!content) {
@@ -258,13 +300,50 @@ export function AnchorOverlay({
           : `${view.bottom - PEEK_EDGE - box.height - base}px`;
     };
     place();
+    // 書き直しの入力欄は打つほど伸びる。高さが変わったら置き直す。
+    const ro = new ResizeObserver(place);
+    ro.observe(card);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, { capture: true, passive: true });
     return () => {
+      ro.disconnect();
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, { capture: true });
     };
   }, [peek, content]);
+
+  const flip = useCallback(() => setSee((v) => !v), []);
+  const md = useMarkdownKeys(setDraft, flip);
+
+  const startEdit = () => {
+    if (!peek) return;
+    setEdit({ thread: peek.hit.id, comment: peek.comment });
+    setDraft(peek.note);
+    setSee(false);
+  };
+
+  const save = () => {
+    const body = draft.trim();
+    const target = edit;
+    const was = peek?.note ?? "";
+    stopEdit();
+    if (target && body && body !== was) onEdit(target.thread, target.comment, body);
+  };
+
+  const onEditKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      stopEdit();
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      save();
+      return;
+    }
+    md.onKeyDown(e);
+  };
 
   marksRef.current = marks;
   if (peekRef.current !== (peek?.id ?? null)) peekRef.current = peek?.id ?? null;
@@ -304,14 +383,20 @@ export function AnchorOverlay({
       {peek && (
         <div
           ref={cardRef}
-          className="mg-review-peek"
-          role="button"
-          tabIndex={0}
+          className={`mg-review-peek${edit ? " is-editing" : ""}`}
+          role={edit ? undefined : "button"}
+          tabIndex={edit ? -1 : 0}
           style={{ top: peek.top + PEEK_GAP, left: peek.left }}
           onMouseEnter={keep}
           onMouseLeave={hideSoon}
-          onClick={() => onPick(peek.hit)}
-          onKeyDown={(e) => e.key === "Enter" && onPick(peek.hit)}
+          // 押したら書き直しに入る。人の言葉は書き換えられないので、
+          // そちらは一覧で開く。
+          onClick={edit ? undefined : peek.mine ? startEdit : () => onPick(peek.hit)}
+          onKeyDown={(e) => {
+            if (edit || e.key !== "Enter") return;
+            if (peek.mine) startEdit();
+            else onPick(peek.hit);
+          }}
         >
           <div className="mg-peek-top">
             <span className="mg-peek-face">
@@ -319,12 +404,69 @@ export function AnchorOverlay({
             </span>
             <span className="mg-peek-who">{peek.who || "コメント"}</span>
             {peek.at > 0 && <span className="mg-peek-when">{ago(peek.at)}</span>}
+            {/* 一覧へ行く道は札にする。カードそのものは書き直しに使う。 */}
+            <button
+              type="button"
+              className="mg-peek-open"
+              title="コメントの一覧で開く"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPick(peek.hit);
+              }}
+            >
+              <Icon name="open_in_new" size={13} />
+            </button>
           </div>
-          {peek.note ? (
+          {edit ? (
+            see ? (
+              <CommentPreview body={draft} onKeyDown={onEditKey} />
+            ) : (
+              <AutoTextarea
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onCompositionStart={md.onCompositionStart}
+                onCompositionEnd={md.onCompositionEnd}
+                onKeyDown={onEditKey}
+                minRows={2}
+                maxRows={8}
+                className="mg-field"
+              />
+            )
+          ) : peek.note ? (
             <CommentBody body={peek.note} className="mg-review-peek-body" />
           ) : (
             <div className="mg-review-peek-body">（本文なし）</div>
           )}
+          {edit ? (
+            <div className="mg-peek-edit-foot">
+              <PreviewToggle on={see} onToggle={flip} />
+              <span className="mg-side-hint">⌘Enter で保存</span>
+              {/* 押した瞬間に確定する。click を待つと、入力欄から焦点が
+                  外れる拍子に押下がどこにも届かないことがある。 */}
+              <button
+                type="button"
+                className="mg-small"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  stopEdit();
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="mg-small is-go"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  save();
+                }}
+              >
+                保存
+              </button>
+            </div>
+          ) : (
           <div className="mg-peek-foot">
             {peek.answered && (
               <span className="mg-peek-chip is-answered">
@@ -344,9 +486,11 @@ export function AnchorOverlay({
                 {peek.state}
               </span>
             )}
-            <span className="mg-peek-go">クリックで開く</span>
-            {/* 解決と取り消しはカードの中から。カード自体は開く操作なので、
-                ここでは伝播を止める。 */}
+            <span className="mg-peek-go">
+              {peek.mine ? "クリックで書き直す" : "クリックで開く"}
+            </span>
+            {/* 解決と取り消しはカードの中から。カード自体を押すと書き直しに
+                入るので、ここでは伝播を止める。 */}
             <button
               type="button"
               className="mg-peek-done"
@@ -374,6 +518,7 @@ export function AnchorOverlay({
               <Icon name="delete" size={13} />
             </button>
           </div>
+          )}
         </div>
       )}
     </div>,

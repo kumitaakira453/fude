@@ -1378,6 +1378,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             contentKey={path + (raw?.length ?? 0)}
             measure={measureMarks}
             onPick={review.inspect}
+            onEdit={(t, c, b) => void review.rewrite(t, c, b)}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}
           />
@@ -1392,6 +1393,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             contentKey={path ?? ""}
             measure={measureEditMarks}
             onPick={review.inspect}
+            onEdit={(t, c, b) => void review.rewrite(t, c, b)}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}
           />

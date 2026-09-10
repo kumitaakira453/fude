@@ -7,7 +7,12 @@ import {
   scrollBoxOf,
 } from "./domText";
 import { findPlain } from "./projection";
-import { answeredByAgent, type AnchorHit, type ReviewThread } from "./review";
+import {
+  answeredByAgent,
+  REVIEW_AUTHOR,
+  type AnchorHit,
+  type ReviewThread,
+} from "./review";
 
 // 指摘の印を、本文の上に重ねる矩形として組む。
 //
@@ -39,6 +44,10 @@ export interface Mark {
   more: number;
   who: string;
   at: number;
+  // 1 件目の書き込み。カードからその場で書き直すのに使う。
+  comment: string;
+  // それを書いたのが自分か。人の言葉は書き換えられるようにしない。
+  mine: boolean;
   // 最後の書き込みがエージェント。返事が返ってきていることを示す。
   answered: boolean;
 }
@@ -203,7 +212,7 @@ export function unitOf(range: Range): Element | null {
 // 指摘の中身をカードに出すための取り出し。矩形の作り方が違っても同じ。
 export function noteOf(
   thread: ReviewThread,
-): Pick<Mark, "note" | "more" | "who" | "at" | "answered"> {
+): Pick<Mark, "note" | "more" | "who" | "at" | "answered" | "comment" | "mine"> {
   const first = thread.comments[0];
   return {
     note: first ? first.body : "",
@@ -211,6 +220,8 @@ export function noteOf(
     who: first ? first.author : "",
     at: first ? first.created_at : 0,
     answered: answeredByAgent(thread),
+    comment: first ? first.id : "",
+    mine: first ? first.author === REVIEW_AUTHOR : false,
   };
 }
 
