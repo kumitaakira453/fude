@@ -137,25 +137,50 @@ export function VersionScreen({ path }: { path: string }) {
         ? (list[0]?.id ?? null)
         : null
       : against;
+
   // 古いほうを変更前に置く。
-  const [oldId, newId] =
-    stampOf(picked) >= stampOf(other) ? [other, picked] : [picked, other];
+  const order = useCallback(
+    (a: Pick, b: Pick): [Pick, Pick] =>
+      stampOf(a) >= stampOf(b) ? [b, a] : [a, b],
+    [stampOf],
+  );
 
-  // 右ペインは画面を 1 枚描き切ってから組む。押した一枚で重い組み立てまで
-  // 走らせると、左ペインの選択やボタンの見た目もそれが終わるまで変わらない。
-  const wanted = `${mode}|${layout}|${picked ?? ""}|${other ?? ""}`;
-  const drawn = useAfterPaint(wanted);
-  const pending = drawn !== wanted;
+  // 押した瞬間の値と、中身を組むための値を分ける。
+  //
+  // 本文や差分の組み立ては重い。同じ一枚でやると、React は組み終わるまで
+  // コミットせず、ブラウザはコミットまで塗れない。左の一覧の選択も右上の
+  // 見出しも、それが終わるまで変わらない。
+  //
+  // 前の中身を消すのも同じくらい重い（数百のブロックの片付け）。だから
+  // 押した一枚では中身に触らず、上に覆いを重ねるだけにする。入れ替えは
+  // 塗った後の一枚へ移す。
+  const view = useMemo(
+    () => ({ mode, layout, picked, other }),
+    [mode, layout, picked, other],
+  );
+  const drawn = useAfterPaint(view);
+  const shown = drawn ?? view;
+  const pending = drawn !== view;
 
-  const oldText = useText(oldId, current);
-  const newText = useText(newId, current);
-  const pickedText = useText(picked, current);
+  const [oldId, newId] = order(picked, other);
+  const [drawnOld, drawnNew] = order(shown.picked, shown.other);
+
+  const oldText = useText(drawnOld, current);
+  const newText = useText(drawnNew, current);
+  const pickedText = useText(shown.picked, current);
   const newestText = useText(list[0]?.id ?? null, current);
+
+  // 覆いを外すのは、組む値が追いつき、その本文も読めてから。先に外すと
+  // 読み込みの一言が 1 枚だけ挟まって点滅する。
+  const loading =
+    shown.mode === "body"
+      ? pickedText === undefined
+      : oldText === undefined || newText === undefined;
 
   const atNewest =
     list.length > 0 && newestText != null && newestText === current;
 
-  const style = { fontFamily: fontStack(font) };
+  const style = useMemo(() => ({ fontFamily: fontStack(font) }), [font]);
   const ctx = useMemo(
     () => ({
       onNavigate: () => {},
@@ -271,7 +296,7 @@ export function VersionScreen({ path }: { path: string }) {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="mg-scroll-inset w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
+        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
           <button
             onClick={() => choose(null)}
             className={`mg-ver-row${picked === null ? " is-active" : ""}`}
@@ -312,54 +337,73 @@ export function VersionScreen({ path }: { path: string }) {
           })}
         </nav>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-5xl px-6 py-6">
-            {current === undefined ? (
-              <Waiting>本文を読み込んでいます…</Waiting>
-            ) : list.length === 0 ? (
-              <p className="mg-ver-note-line">
-                <Icon name="save_as" size={15} />
-                この文書にはまだバージョンがありません。本文の画面の「バージョンを保存」から打てます。
-              </p>
-            ) : pending ? (
-              <Waiting>読み込んでいます…</Waiting>
-            ) : mode === "body" ? (
-              pickedText === undefined ? (
-                <Waiting>読み込んでいます…</Waiting>
-              ) : pickedText === null ? (
-                <Lost>このバージョンの本文が見つかりません。</Lost>
-              ) : (
-                <markdownContext.Provider value={ctx}>
-                  <Body
-                    text={pickedText}
-                    editorial={editorial}
-                    style={style}
-                    width={width}
-                  />
-                </markdownContext.Provider>
-              )
-            ) : oldText === undefined || newText === undefined ? (
-              <Waiting>読み込んでいます…</Waiting>
-            ) : oldText === null || newText === null ? (
-              <Lost>比べるバージョンの本文が見つかりません。</Lost>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* いま何を見ているか。押した瞬間の値から出すので、中身が組み
+              終わるのを待たずに変わる。 */}
+          <div className="mg-ver-facing">
+            {mode === "body" ? (
+              <Facing id={picked} list={list} />
             ) : (
               <>
-                <p className="mg-ver-facing">
-                  <span>{nameOf(oldId)}</span>
-                  <Icon name="arrow_forward" size={14} />
-                  <span>{nameOf(newId)}</span>
-                </p>
-                <markdownContext.Provider value={ctx}>
-                  <VersionDiff
-                    key={`${oldId ?? "now"}:${newId ?? "now"}`}
-                    base={oldText}
-                    head={newText}
-                    layout={layout}
-                    editorial={editorial}
-                    style={style}
-                  />
-                </markdownContext.Provider>
+                <Facing id={oldId} list={list} />
+                <Icon name="arrow_forward" size={14} className="shrink-0" />
+                <Facing id={newId} list={list} />
               </>
+            )}
+          </div>
+
+          <div className="relative flex min-h-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-5xl px-6 py-6">
+                {current === undefined ? (
+                  <Waiting>本文を読み込んでいます…</Waiting>
+                ) : list.length === 0 ? (
+                  <p className="mg-ver-note-line">
+                    <Icon name="save_as" size={15} />
+                    この文書にはまだバージョンがありません。本文の画面の「バージョンを保存」から打てます。
+                  </p>
+                ) : shown.mode === "body" ? (
+                  pickedText === undefined ? (
+                    <Waiting>読み込んでいます…</Waiting>
+                  ) : pickedText === null ? (
+                    <Lost>このバージョンの本文が見つかりません。</Lost>
+                  ) : (
+                    <markdownContext.Provider value={ctx}>
+                      <Body
+                        text={pickedText}
+                        editorial={editorial}
+                        style={style}
+                        width={width}
+                      />
+                    </markdownContext.Provider>
+                  )
+                ) : oldText === undefined || newText === undefined ? (
+                  <Waiting>読み込んでいます…</Waiting>
+                ) : oldText === null || newText === null ? (
+                  <Lost>比べるバージョンの本文が見つかりません。</Lost>
+                ) : (
+                  <markdownContext.Provider value={ctx}>
+                    <VersionDiff
+                      key={`${drawnOld ?? "now"}:${drawnNew ?? "now"}`}
+                      base={oldText}
+                      head={newText}
+                      layout={shown.layout}
+                      editorial={editorial}
+                      style={style}
+                    />
+                  </markdownContext.Provider>
+                )}
+              </div>
+            </div>
+
+            {/* 組み替えのあいだ重ねる覆い。中身と入れ替えると、押した一枚で
+                前の中身の片付けまで走る。重ねる先はスクロールする要素の外側
+                （中に置くと、下まで送っていたときに覆いが上端へ行って
+                見えない）。 */}
+            {(pending || loading) && (
+              <div className="absolute inset-0 z-10 bg-[var(--mg-bg)] px-6 py-6">
+                <Waiting>読み込んでいます…</Waiting>
+              </div>
             )}
           </div>
         </div>
@@ -385,6 +429,20 @@ export function VersionScreen({ path }: { path: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+// 見出しに出すバージョンの呼び名。日時と、主体・名前を添える。
+function Facing({ id, list }: { id: Pick; list: ReviewVersion[] }) {
+  const version = id === null ? null : list.find((v) => v.id === id);
+  if (!version) {
+    return <span className="mg-ver-facing-name">{id === null ? "いま" : "失われたバージョン"}</span>;
+  }
+  return (
+    <span className="min-w-0 truncate">
+      <span className="mg-ver-facing-name">{whenOf(version)}</span>
+      <span className="mg-ver-facing-note">{noteOf(version)}</span>
+    </span>
   );
 }
 
@@ -477,13 +535,14 @@ function Against({
 // バージョンの本文を読む。「いま」は本文キャッシュから、それ以外は
 // スナップショットから。undefined は読み込み中、null は本文が見つからない。
 function useText(id: Pick, current: string | undefined): string | null | undefined {
-  const [text, setText] = useState<string | null | undefined>(undefined);
+  // どのバージョンの本文かを一緒に持つ。持たないと、選び替えた直後の一枚で
+  // 前のバージョンの本文をそのまま出してしまう。
+  const [got, setGot] = useState<{ id: string; text: string | null } | null>(null);
   useEffect(() => {
     if (id === null) return;
     let alive = true;
-    setText(undefined);
-    void readVersion(id).then((got) => {
-      if (alive) setText(got);
+    void readVersion(id).then((text) => {
+      if (alive) setGot({ id, text });
     });
     return () => {
       alive = false;
@@ -491,7 +550,8 @@ function useText(id: Pick, current: string | undefined): string | null | undefin
   }, [id]);
   // 「いま」は控えを持たず、そのつど本文キャッシュから読む。バージョンと違って
   // 書き換わるので、控えると監視の取り込みに追いつかない。
-  return id === null ? (current ?? null) : text;
+  if (id === null) return current ?? null;
+  return got?.id === id ? got.text : undefined;
 }
 
 // 最初の一塊。ここを大きくすると、押してから何かが出るまでの間が伸びる。

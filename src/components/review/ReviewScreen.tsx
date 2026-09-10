@@ -332,7 +332,7 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="mg-scroll-inset w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
+        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
           {groups.length === 0 && (
             <p className="px-3 py-4 text-[12px] text-[var(--mg-muted)]">
               {elsewhere > 0

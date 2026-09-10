@@ -3678,17 +3678,12 @@ svg[id^="mmd-"] foreignObject p {
   width: 10px;
   height: 10px;
 }
-/* 重ね表示のスクロールバーの場所を空ける。
-   macOS の既定は幅を取らない重ね表示で、`scrollbar-gutter: stable` でも場所は
-   空かない（system WKWebView で実測。中身の幅は枠の幅と同じままだった）。
-   地色や枠を持つ子が端まで伸びる枠では、つまみが中身の上に乗って読みにくい。
-   バーのぶんだけ内側を空け、つまみを中身の外へ出す。 */
-.mg-scroll-inset {
-  padding-right: 10px;
-}
-
-/* つまみは外側の端に寄せる。左右に同じだけ隙間を空けると溝の真ん中に浮いて
-   見え、どの枠のバーなのか読み取りにくい。隙間は本文の側だけに空ける。 */
+/* つまみは外側の端に寄せる。
+   このスクロールバーは場所を取らない重ね表示で、`overflow-y: scroll` でも
+   `scrollbar-gutter: stable` でも中身の幅は枠の幅と同じままになる
+   （system WKWebView で実測）。中身は端まで敷き詰めたまま、つまみだけが
+   縁に浮く。左右に同じだけ隙間を空けると溝の真ん中に浮いて見え、どの枠の
+   バーなのか読み取りにくいので、隙間は本文の側だけに空ける。 */
 *::-webkit-scrollbar-thumb {
   background: var(--mg-border);
   border-radius: 6px;
@@ -4546,56 +4541,62 @@ body.mg-carrying {
   font-weight: 600;
 }
 
-/* バージョンの名前を決める小窓。帯のボタンの真下に出す。
+/* バージョンの名前を決める小窓。画面の中央に出す。
    名前は任意なので、開いた時点で日時を入れておき、そのまま Enter でも
    打てるようにする。空欄と向き合わせない。 */
-.mg-ver-name-pop {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 40;
-  width: 17rem;
-  margin-top: 0.4rem;
-  padding: 0.55rem 0.6rem 0.4rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.7rem;
-  background: var(--mg-panel);
-  box-shadow: 0 14px 34px -16px rgba(0, 0, 0, 0.55);
+.mg-ver-save-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: color-mix(in srgb, var(--mg-bg) 55%, transparent);
+  backdrop-filter: blur(3px);
 }
-.mg-ver-name-head {
+.mg-ver-save {
+  width: min(24rem, 100%);
+  padding: 0.9rem 1rem 0.75rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.9rem;
+  background: var(--mg-panel);
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6);
+}
+.mg-ver-save-head {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  padding-bottom: 0.4rem;
-  font-size: 11px;
+  gap: 0.4rem;
+  padding-bottom: 0.6rem;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--mg-accent);
+  color: var(--mg-fg);
 }
-.mg-ver-name-input {
+.mg-ver-save-input {
   width: 100%;
-  padding: 0.35rem 0.5rem;
+  padding: 0.45rem 0.6rem;
   border: 1px solid var(--mg-border);
-  border-radius: 0.45rem;
+  border-radius: 0.5rem;
   background: var(--mg-input-bg);
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--mg-fg);
   outline: none;
 }
-.mg-ver-name-input:focus {
+.mg-ver-save-input:focus {
   border-color: color-mix(in srgb, var(--mg-accent) 60%, var(--mg-border));
 }
-.mg-ver-name-input::placeholder {
+.mg-ver-save-input::placeholder {
   color: var(--mg-muted);
 }
-.mg-ver-name-foot {
+.mg-ver-save-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  padding-top: 0.3rem;
-  font-size: 10.5px;
+  gap: 0.3rem;
+  padding-top: 0.5rem;
+  font-size: 11px;
   color: var(--mg-muted);
+}
+.mg-ver-save-foot > span {
+  flex: 1;
 }
 
 /* 一覧の 1 行。 */
@@ -4692,16 +4693,26 @@ body.mg-carrying {
   font-size: 12px;
   color: var(--mg-muted);
 }
-/* どちらの版からどちらへ、を差分の頭に置く。 */
+/* いま何を見ているか。右ペインの上端に置く。中身より先に描くので、
+   押した瞬間にここだけが変わる。 */
 .mg-ver-facing {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 0.4rem;
-  padding-bottom: 0.75rem;
+  gap: 0.45rem;
+  padding: 0.6rem 1.5rem;
   border-bottom: 1px solid var(--mg-border);
-  margin-bottom: 0.5rem;
   font-size: 11.5px;
   color: var(--mg-fg-dim);
+}
+.mg-ver-facing-name {
+  font-weight: 600;
+  color: var(--mg-fg);
+  font-variant-numeric: tabular-nums;
+}
+.mg-ver-facing-note {
+  margin-left: 0.45rem;
+  color: var(--mg-muted);
 }
 
 /* 差分。変わっていないところは弱め、変わったところは組ごとに枠で囲む。 */

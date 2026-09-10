@@ -9,7 +9,6 @@ import {
   useState,
 } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
-import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useReview } from "../hooks/useReview";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
@@ -51,6 +50,7 @@ import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
 import { BodyEditor, type Editing } from "./BodyEditor";
 import { SelectionBar } from "./SelectionBar";
+import { SaveVersion } from "./version/SaveVersion";
 import {
   recallViewpoint,
   rememberViewpoint,
@@ -236,12 +236,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // ---- バージョン ----
   const openVersions = useSetAtom(versionScreenAtom);
-  // バージョンの名前を決める小窓。名前は任意なので、空欄と向き合わせず
-  // 日時を入れた状態で開く。そのまま Enter でも打てる。
-  const [naming, setNaming] = useState(false);
-  const [versionName, setVersionName] = useState("");
-  const namingRef = useRef<HTMLDivElement>(null);
-  const ime = useImeSafeEnter();
+  // バージョンの名前を決める小窓。開くたびに日時を入れ直す。
+  const [naming, setNaming] = useState<string | null>(null);
   const stamping = useRef(false);
 
   // 書きかけを先に流し、そのうえで今の本文を読む。
@@ -282,9 +278,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // 名前を決める小窓を開く。既定の名前はそのときの日時。
   const startNaming = useCallback(() => {
-    if (!path) return;
-    setVersionName(defaultName());
-    setNaming(true);
+    if (path) setNaming(defaultName());
   }, [path]);
 
   // 履歴を開く。開く前に書きかけを流して、いまの本文をバージョンと
@@ -294,18 +288,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     settled();
     openVersions(path);
   }, [openVersions, path, settled]);
-
-  // 小窓の外を押したら閉じる。
-  useEffect(() => {
-    if (!naming) return;
-    const onDown = (e: MouseEvent) => {
-      if (namingRef.current && !namingRef.current.contains(e.target as Node)) {
-        setNaming(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [naming]);
 
   // ⌘⇧S でバージョンを打つ。押している側のペインが受け取る。
   useEffect(() => {
@@ -1147,74 +1129,24 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           : ""
       }`}
     >
-      {/* ヘッダー
-          backdrop-blur は重ね順の入れ物を作るので、帯から出す小窓（バージョンの
-          名前）は帯の中に閉じ込められる。帯自身を positioned にして、本文に
-          重ねた読み込みの覆い（z-10）より上へ出す。 */}
-      <header className="mg-pane-head relative z-30 flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
+      {/* ヘッダー */}
+      <header className="mg-pane-head flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           <Breadcrumbs path={shownPath} paneId={pane.id} />
         </div>
         {path && (
           <>
-            <div ref={namingRef} className="relative">
-              <button
-                onClick={() => (naming ? setNaming(false) : startNaming())}
-                title="バージョンを保存 (⌘⇧S)"
-                className={`grid h-6 w-6 place-items-center rounded transition ${
-                  naming
-                    ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
-                    : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-                }`}
-              >
-                <Icon name="save_as" size={16} />
-              </button>
-              {naming && (
-                <div className="mg-ver-name-pop">
-                  <div className="mg-ver-name-head">
-                    <Icon name="save_as" size={14} />
-                    バージョンを保存
-                  </div>
-                  <input
-                    autoFocus
-                    value={versionName}
-                    placeholder="名前なしで保存"
-                    onChange={(e) => setVersionName(e.target.value)}
-                    onFocus={(e) => e.currentTarget.select()}
-                    onCompositionStart={ime.onCompositionStart}
-                    onCompositionEnd={ime.onCompositionEnd}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        setNaming(false);
-                      } else if (e.key === "Enter" && !ime.isComposing(e)) {
-                        e.preventDefault();
-                        setNaming(false);
-                        void stamp(versionName);
-                      }
-                    }}
-                    className="mg-ver-name-input"
-                  />
-                  <div className="mg-ver-name-foot">
-                    <span>Enter で保存 / Esc で取消</span>
-                    {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
-                        入力欄から焦点が外れる拍子に押下がどこにも届かない
-                        ことがある。 */}
-                    <button
-                      type="button"
-                      className="mg-small is-go"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setNaming(false);
-                        void stamp(versionName);
-                      }}
-                    >
-                      保存
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              onClick={() => (naming === null ? startNaming() : setNaming(null))}
+              title="バージョンを保存 (⌘⇧S)"
+              className={`grid h-6 w-6 place-items-center rounded transition ${
+                naming !== null
+                  ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
+                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              }`}
+            >
+              <Icon name="save_as" size={16} />
+            </button>
             <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
               <Icon name="history" size={16} />
             </button>
@@ -1255,6 +1187,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           </button>
         )}
       </header>
+
+      {naming !== null && (
+        <SaveVersion
+          initial={naming}
+          onSave={(name) => void stamp(name)}
+          onClose={() => setNaming(null)}
+        />
+      )}
 
       {/* 読書プログレスバー */}
       <div className="h-0.5 w-full bg-transparent">
