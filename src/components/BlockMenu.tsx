@@ -12,7 +12,8 @@ export interface MenuItem {
   label: string;
   keys?: string;
   danger?: boolean;
-  // いまそれである項目。選ぶ側のメニューで、どれが今かを示す。
+  // いまそれである項目。選ぶ側のメニューで、どれが今かを地色で示す。
+  // 印を足すと、記号の欄が右端に寄る作りのせいでその行だけ桁がずれる。
   on?: boolean;
   // ここでは選べないもの。押せないようにして、なぜ無いのかを黙らせない
   // （表のセルの中では見出しにできない、など）。
@@ -99,7 +100,7 @@ export function BlockMenu({
                 it.run?.();
                 onClose();
               }}
-              className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
+              className={`mg-menu-row${it.on ? " is-on" : ""} flex w-full items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
                 it.disabled
                   ? "cursor-default opacity-40"
                   : "hover:bg-[var(--mg-hover)]"
@@ -112,9 +113,6 @@ export function BlockMenu({
               />
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
               {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}
-              {it.on && (
-                <Icon name="check" size={15} className="shrink-0 text-[var(--mg-accent)]" />
-              )}
               {it.items && (
                 <Icon
                   name="chevron_right"

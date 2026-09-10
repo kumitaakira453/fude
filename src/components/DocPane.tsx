@@ -1018,7 +1018,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const seen = viewAt();
-    rememberViewpoint(viewKey(pane.id, path), seen.at, seen.into);
+        rememberViewpoint(viewKey(pane.id, absPath), seen.at, seen.into);
       });
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
@@ -1026,7 +1026,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       cancelAnimationFrame(raf);
       scroller.removeEventListener("scroll", onScroll);
     };
-  }, [scroller, pane.id, path, viewAt]);
+  }, [scroller, pane.id, absPath, viewAt]);
 
   // 編集面でも読書プログレスを動かす。見ている場所の控えは編集面の側が持つので、
   // ここで見るのは帯だけ。
@@ -1051,13 +1051,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 控えの位置が本文の何番目のブロックか。復帰の合わせ先に使う。
   // memo にしない（控えは外に置いてあるので、描画のたびに見直さないと古い値を使う）。
   const restoreIndex = useCallback((): number | null => {
-    const saved = recallViewpoint(viewKey(pane.id, path)).at;
+    const saved = recallViewpoint(viewKey(pane.id, absPath)).at;
     if (saved <= 0) return null;
     const prefix = (rawRef.current ?? "").length - bodyRef.current.length;
     const at = saved - prefix;
     const hit = blocksOf(bodyRef.current).findIndex((b) => b.end > at);
     return hit < 0 ? null : hit;
-  }, [pane.id, path]);
+  }, [pane.id, absPath]);
 
   // 漸進描画をどこまで先に出すか。プレビューに戻る時点で決める（描画より前に
   // 決まっていないと、合わせ先のブロックがまだ無い）。
@@ -1083,7 +1083,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const el = content.querySelector<HTMLElement>(`[data-mg-block="${at}"]`);
       const box = el ? blockRect(el) : null;
       if (box) {
-        const into = recallViewpoint(viewKey(pane.id, path)).into;
+        const into = recallViewpoint(viewKey(pane.id, absPath)).into;
         const delta = box.top - scroller.getBoundingClientRect().top + into;
         if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
       }
@@ -1101,7 +1101,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       scroller.removeEventListener("wheel", stop);
       scroller.removeEventListener("touchstart", stop);
     };
-  }, [path, editing, scroller, content, restoreIndex, startAt]);
+  }, [path, absPath, editing, scroller, content, restoreIndex, startAt]);
 
 
   const ctx = useMemo(
@@ -1239,9 +1239,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               key={path}
               body={body}
               prefix={fmPrefix}
-              viewpoint={recallViewpoint(viewKey(pane.id, path))}
+              viewpoint={recallViewpoint(viewKey(pane.id, absPath))}
               onViewpoint={(at, into) => {
-                rememberViewpoint(viewKey(pane.id, path), at, into);
+                rememberViewpoint(viewKey(pane.id, absPath), at, into);
               }}
               onDom={setEditContent}
               onBuilt={(view) => setBuilt(view ? { path, view } : null)}

@@ -1651,6 +1651,20 @@ button.mg-task-check:hover {
   font-size: 11px;
   color: var(--mg-muted);
 }
+/* いまそれである項目。地色で示す。印を足すと、記号の欄が右端に寄る作りの
+   せいでその行だけ桁がずれる。触ったときは一段濃くして、ホバーと今の状態を
+   見分けられるようにする。 */
+.mg-menu-row.is-on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-menu-row.is-on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mg-accent) 22%, transparent);
+}
+.mg-menu-row.is-on > .material-symbols-rounded,
+.mg-menu-row.is-on .mg-menu-keys {
+  color: var(--mg-accent);
+}
 
 /* 選択を引いているあいだ、本文に重ねたものは触れない板にする。押せるものが
    途中で下に出ると、ドラッグの行き先をそれが奪い、選択が本文の端まで飛ぶ。 */
