@@ -7,8 +7,14 @@ import { continueList, linkAt, wrapWith, type Edit } from "../lib/mdInput";
 //
 // 値は呼ぶ側の状態なので、書き換えたあとキャレットは自分で戻す。React が
 // 値を描き直すまで位置は当てられないので、描画のあとに置く。
+//
+// 同じハンドラをプレビューの枠にも渡す。⌘⇧P で行き来できるようにするには、
+// 入力欄が外れている間もキーを受ける先が要る。
 
-export function useMarkdownKeys(onChange: (value: string) => void) {
+export function useMarkdownKeys(
+  onChange: (value: string) => void,
+  onPreview?: () => void,
+) {
   const ime = useImeSafeEnter();
   const back = useRef<{ el: HTMLTextAreaElement; edit: Edit } | null>(null);
 
@@ -24,11 +30,20 @@ export function useMarkdownKeys(onChange: (value: string) => void) {
     back.current = { el, edit };
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.shiftKey && e.key.toLowerCase() === "p") {
+      e.preventDefault();
+      onPreview?.();
+      return;
+    }
+
+    // ここから先は入力欄の中身を書き換える手当て。
     const el = e.currentTarget;
+    if (!(el instanceof HTMLTextAreaElement)) return;
     const { value, selectionStart: from, selectionEnd: to } = el;
 
-    if (e.key === "Enter" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+    if (e.key === "Enter" && !mod && !e.shiftKey) {
       // 変換の確定は改行ではない。選んでいる範囲があるときも素の改行に任せる。
       if (ime.isComposing(e) || from !== to) return;
       const next = continueList(value, from);
@@ -38,7 +53,7 @@ export function useMarkdownKeys(onChange: (value: string) => void) {
       return;
     }
 
-    if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+    if (!mod || e.shiftKey || e.altKey) return;
     const key = e.key.toLowerCase();
     if (key === "b") {
       e.preventDefault();

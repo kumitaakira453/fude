@@ -317,7 +317,7 @@ export const Markdown = memo(function Markdown({
       // @ts-expect-error 同上
       rehypePlugins={rehypePlugins}
       components={{
-        code({ className, children, ...props }) {
+        code({ node: _node, className, children, ...props }) {
           const match = /language-([\w-]+)/.exec(className || "");
           if (match?.[1] === "mermaid") {
             return (

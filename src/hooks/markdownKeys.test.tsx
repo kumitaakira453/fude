@@ -10,9 +10,11 @@ beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
+const flips: number[] = [];
+
 function Field({ start }: { start: string }) {
   const [value, setValue] = useState(start);
-  const md = useMarkdownKeys(setValue);
+  const md = useMarkdownKeys(setValue, () => flips.push(1));
   return (
     <textarea
       value={value}
@@ -89,6 +91,21 @@ describe("入力欄の手当て", () => {
     el.setSelectionRange(0, 4);
     press(el, "k", { metaKey: true });
     expect(show(el)).toBe("[fude]([url])");
+  });
+
+  it("⌘⇧P はプレビューの切り替えへ渡す", () => {
+    const el = field("あ|");
+    press(el, "P", { metaKey: true, shiftKey: true });
+    expect(flips).toHaveLength(1);
+    // 入力欄の中身は変えない
+    expect(show(el)).toBe("あ|");
+  });
+
+  it("修飾を伴う ⌘⇧B は囲まない", () => {
+    const el = field("あいう");
+    el.setSelectionRange(1, 2);
+    press(el, "b", { metaKey: true, shiftKey: true });
+    expect(el.value).toBe("あいう");
   });
 
   it("修飾のない字は素通しする", () => {

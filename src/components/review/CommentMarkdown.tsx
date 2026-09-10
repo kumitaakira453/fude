@@ -1,11 +1,11 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from "react";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
 // コメントを Markdown として読む・書くための部品。
 //
 // 本文は書いた記法のまま台帳に残り、出すときだけ組版する。書く側は素の記法を
-// 打つ入力欄のままで、書いたものの見た目は「見る」に切り替えて確かめる。
+// 打つ入力欄のままで、書いたものの見た目はプレビューに切り替えて確かめる。
 // 切り替えのボタンは呼ぶ側の足元に置く（並びが場所ごとに違う）。
 
 // 済んだコメントの本文。
@@ -31,16 +31,29 @@ export function CommentBody({
 }
 
 // 書いている途中のものを、出したときの姿で見せる。
+// 焦点を引き取って、⌘⇧P で入力欄へ戻れるようにする。
 export function CommentPreview({
   body,
   style,
+  onKeyDown,
 }: {
   body: string;
   style?: CSSProperties;
+  onKeyDown?: (e: KeyboardEvent<HTMLElement>) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
   const text = body.trim();
   return (
-    <div className="mg-md-preview mg-md mg-prose prose" style={style}>
+    <div
+      ref={ref}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="mg-md-preview mg-md mg-prose prose"
+      style={style}
+    >
       {text ? (
         <Markdown body={text} editorial={false} breaks />
       ) : (
@@ -61,11 +74,11 @@ export function PreviewToggle({
     <button
       type="button"
       onClick={onToggle}
-      title={on ? "記法を書く" : "書いたものを見る"}
+      title={on ? "書く（⌘⇧P）" : "プレビュー（⌘⇧P）"}
       className={`mg-md-toggle${on ? " is-on" : ""}`}
     >
-      <Icon name={on ? "edit" : "visibility"} size={13} />
-      {on ? "書く" : "見る"}
+      <Icon name={on ? "edit_note" : "preview"} size={14} />
+      {on ? "書く" : "プレビュー"}
     </button>
   );
 }

@@ -1014,7 +1014,7 @@ button.mg-task-check:hover {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 30%, transparent);
   font-family: inherit;
   font-size: 12.5px;
-  line-height: 1.6;
+  line-height: 1.4;
   color: var(--mg-fg);
   outline: none;
   resize: none;
@@ -3418,7 +3418,9 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-input-bg);
   font-family: inherit;
   font-size: 12.5px;
-  line-height: 1.65;
+  /* キャレットは行の高さで描かれる。字に対して行を空けすぎると、
+     細長い棒が字より目立つ。 */
+  line-height: 1.4;
   color: var(--mg-fg);
   outline: none;
   resize: none;
@@ -3644,7 +3646,11 @@ svg[id^="mmd-"] foreignObject p {
   margin: 0.35em 0;
 }
 .mg-md :is(ul, ol) {
-  padding-left: 1.25em;
+  padding-left: 1.6em;
+}
+/* 小さい字では既定の点が読み取れないので、記号だけ一段大きく組む。 */
+.mg-md ul > li::marker {
+  font-size: 1.25em;
 }
 .mg-md li {
   margin: 0.1em 0;
@@ -3673,6 +3679,11 @@ svg[id^="mmd-"] foreignObject p {
   border-radius: 0.6rem;
   background: var(--mg-input-bg);
   overflow: auto;
+}
+/* 焦点は ⌘⇧P を受けるために引き取るだけ。枠は入力欄と同じ合図にする。 */
+.mg-md-preview:focus {
+  outline: none;
+  border-color: var(--mg-accent);
 }
 .mg-md-blank {
   color: var(--mg-muted);

@@ -45,9 +45,15 @@ export function CommentComposer({
   const [body, setBody] = useState("");
   // 書いたものの姿を確かめている間。
   const [see, setSee] = useState(false);
-  const md = useMarkdownKeys(setBody);
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 書く側へ戻したら焦点も戻す。入力欄は出し直しになるので、描き直しのあとに当てる。
+  const flip = () =>
+    setSee((v) => {
+      if (v) requestAnimationFrame(() => inputRef.current?.focus());
+      return !v;
+    });
+  const md = useMarkdownKeys(setBody, flip);
   // 開いた時点からの対象のずれ。これを足して追いかける。
   const [shift, setShift] = useState({ x: 0, y: 0 });
   // 小窓の高さ。画面の端で止めるのに要る（入力欄が伸びると変わる）。
@@ -173,6 +179,16 @@ export function CommentComposer({
     onSubmit(text);
   };
 
+  // 送信の合図は入力欄でもプレビューでも同じに効かせる。
+  const onKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      submit();
+      return;
+    }
+    md.onKeyDown(e);
+  };
+
 
   return (
     <div
@@ -196,6 +212,7 @@ export function CommentComposer({
           <CommentPreview
             body={body}
             style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
+            onKeyDown={onKey}
           />
         ) : (
           <textarea
@@ -204,29 +221,14 @@ export function CommentComposer({
             onChange={(e) => setBody(e.target.value)}
             onCompositionStart={md.onCompositionStart}
             onCompositionEnd={md.onCompositionEnd}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                submit();
-                return;
-              }
-              md.onKeyDown(e);
-            }}
+            onKeyDown={onKey}
             style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
             placeholder="コメントを書く…（⌘Enter で送信）"
-            className="block w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] leading-relaxed outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
+            className="block w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] leading-[1.4] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
           />
         )}
         <div className="mt-1.5 flex items-center gap-1.5">
-          {/* 書く側へ戻したら焦点も戻す。入力欄は出し直しになるので、
-              描き直しのあとに当てる。 */}
-          <PreviewToggle
-            on={see}
-            onToggle={() => {
-              setSee((v) => !v);
-              if (see) requestAnimationFrame(() => inputRef.current?.focus());
-            }}
-          />
+          <PreviewToggle on={see} onToggle={flip} />
           <span className="flex-1" />
           <button
             onClick={onClose}

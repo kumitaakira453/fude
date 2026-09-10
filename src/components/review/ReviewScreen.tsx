@@ -598,7 +598,14 @@ function ThreadDetail({
   const [reply, setReply] = useState("");
   // 書いたものの姿を確かめている間。送ると書く側へ戻す。
   const [seeReply, setSeeReply] = useState(false);
-  const md = useMarkdownKeys(setReply);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
+  // 書く側へ戻したら焦点も戻す。入力欄は出し直しになるので、描き直しのあとに当てる。
+  const flipReply = () =>
+    setSeeReply((v) => {
+      if (v) requestAnimationFrame(() => replyRef.current?.focus());
+      return !v;
+    });
+  const md = useMarkdownKeys(setReply, flipReply);
   // 表示用。返信と解決は別の操作なので別に持つ。1 つにすると、返信しただけで
   // 解決のボタンまで処理中の見た目になる。
   const [sending, setSending] = useState(false);
@@ -675,6 +682,15 @@ function ThreadDetail({
       setSending(false);
     }
   }, [reply, thread.id, store]);
+
+  const onReplyKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      void send();
+      return;
+    }
+    md.onKeyDown(e);
+  };
 
   const finish = useCallback(async () => {
     if (resolvingRef.current) return;
@@ -872,21 +888,15 @@ function ThreadDetail({
 
         <div className="mg-side-compose">
           {seeReply ? (
-            <CommentPreview body={reply} />
+            <CommentPreview body={reply} onKeyDown={onReplyKey} />
           ) : (
             <AutoTextarea
+              ref={replyRef}
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               onCompositionStart={md.onCompositionStart}
               onCompositionEnd={md.onCompositionEnd}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  void send();
-                  return;
-                }
-                md.onKeyDown(e);
-              }}
+              onKeyDown={onReplyKey}
               minRows={2}
               maxRows={10}
               placeholder="返信を書く…（記法が使えます）"
@@ -896,7 +906,7 @@ function ThreadDetail({
           {/* 送り方の案内は入力欄の外に置く。プレースホルダに混ぜると、
               書き始めたとたんに読めなくなる。 */}
           <div className="mg-side-row">
-            <PreviewToggle on={seeReply} onToggle={() => setSeeReply((v) => !v)} />
+            <PreviewToggle on={seeReply} onToggle={flipReply} />
             <span className="mg-side-hint">⌘Enter で送信</span>
             <button
               onClick={() => void send()}
@@ -970,7 +980,9 @@ function Message({
   const [text, setText] = useState(comment.body);
   // 書き直しの途中で、書いたものの姿を確かめている間。
   const [see, setSee] = useState(false);
-  const md = useMarkdownKeys(setText);
+  // 入力欄は autoFocus で出し直すので、戻す先の世話は要らない。
+  const flip = () => setSee((v) => !v);
+  const md = useMarkdownKeys(setText, flip);
   // 吹き出しの幅。書き直しに入った瞬間に横幅が変わると、同じ発言が別の形に
   // 見えてしまうので、入る直前の幅をそのまま引き継ぐ。
   const [width, setWidth] = useState<number | undefined>(undefined);
@@ -979,6 +991,19 @@ function Message({
   const save = () => {
     setEditing(false);
     if (changed) onRewrite(text.trim());
+  };
+  const onKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setEditing(false);
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      save();
+      return;
+    }
+    md.onKeyDown(e);
   };
   const startEditing = () => {
     setWidth(bubbleRef.current?.getBoundingClientRect().width);
@@ -1004,7 +1029,7 @@ function Message({
         {editing ? (
           <div className="mg-bubble-edit" style={{ width }}>
             {see ? (
-              <CommentPreview body={text} />
+              <CommentPreview body={text} onKeyDown={onKey} />
             ) : (
               <AutoTextarea
                 autoFocus
@@ -1012,19 +1037,7 @@ function Message({
                 onChange={(e) => setText(e.target.value)}
                 onCompositionStart={md.onCompositionStart}
                 onCompositionEnd={md.onCompositionEnd}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    setEditing(false);
-                    return;
-                  }
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    save();
-                    return;
-                  }
-                  md.onKeyDown(e);
-                }}
+                onKeyDown={onKey}
                 minRows={2}
                 maxRows={12}
                 className="mg-bubble-input"
@@ -1035,7 +1048,7 @@ function Message({
                 書き換えていないときの保存は、何も書かずに閉じるだけにする。
                 押せないボタンにすると、反応しないのと区別が付かない。 */}
             <div className="mg-bubble-edit-foot">
-              <PreviewToggle on={see} onToggle={() => setSee((v) => !v)} />
+              <PreviewToggle on={see} onToggle={flip} />
               <span className="mg-side-hint">⌘Enter で保存</span>
               <button
                 type="button"
