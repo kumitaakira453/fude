@@ -2,6 +2,7 @@ import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
 import type { FolderEntry } from "../lib/idb";
+import { SIDEBAR_WIDTH } from "../lib/sidebar";
 import { windowScopedKey } from "../lib/windows";
 
 // ---- ワークスペース ----
@@ -118,6 +119,11 @@ export const mermaidPaneAtom = atomWithStorage<number>("mdglow:mmdpane", 0);
 export const sidebarOpenAtom = atomWithStorage<boolean>(
   windowScopedKey("mdglow:sidebar"),
   true,
+);
+// 左の欄の幅（画素）。掴んで変えた分を窓ごとに覚える。
+export const sidebarWidthAtom = atomWithStorage<number>(
+  windowScopedKey("mdglow:sidebarw"),
+  SIDEBAR_WIDTH,
 );
 export const tocOpenAtom = atomWithStorage<boolean>(
   windowScopedKey("mdglow:toc"),

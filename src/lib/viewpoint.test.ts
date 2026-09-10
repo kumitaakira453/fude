@@ -1,5 +1,5 @@
-// @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { useFakeStorage } from "../test/storage";
 
 // 控えはモジュールを読んだ時点で入るので、試験ごとに読み直す。
 async function fresh() {
@@ -9,8 +9,7 @@ async function fresh() {
 
 const STORE_KEY = "mdglow:seen";
 
-beforeEach(() => localStorage.clear());
-afterEach(() => localStorage.clear());
+useFakeStorage();
 
 describe("見ていた場所", () => {
   it("覚えて呼び戻せる", async () => {

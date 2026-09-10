@@ -11,7 +11,7 @@ export function Sidebar() {
   const loading = useAtomValue(loadingAtom);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
+    <aside className="flex h-full min-h-0 flex-col bg-[var(--mg-panel)]">
       <div className="border-b border-[var(--mg-border)] p-2">
         <FolderSwitcher />
       </div>

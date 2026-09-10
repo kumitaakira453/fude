@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   loadEmoji,
   rememberEmoji,
@@ -7,6 +7,7 @@ import {
   searchEmoji,
   type Emoji,
 } from "./emoji";
+import { useFakeStorage } from "../test/storage";
 
 // 絵文字の探し方。狙いが決まっている打ち方（英字の短名）を先に返す。
 
@@ -65,7 +66,7 @@ describe("searchEmoji", () => {
 });
 
 describe("最近使ったもの", () => {
-  beforeEach(() => localStorage.clear());
+  useFakeStorage();
 
   it("新しいものが先頭に来る", () => {
     rememberEmoji("💡");

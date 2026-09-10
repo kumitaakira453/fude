@@ -1,4 +1,4 @@
-import { useAtomValue, useStore } from "jotai";
+import { useAtom, useAtomValue, useStore } from "jotai";
 import { useEffect, useMemo } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Settings } from "./components/Settings";
@@ -6,6 +6,7 @@ import { Shortcuts } from "./components/Shortcuts";
 import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
+import { SidebarGrip } from "./components/SidebarGrip";
 import { ReviewScreen } from "./components/review/ReviewScreen";
 import { VersionScreen } from "./components/version/VersionScreen";
 import { Toolbar } from "./components/Toolbar";
@@ -19,6 +20,7 @@ import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
 import { useWatcher } from "./hooks/useWatcher";
 import { folderDisplayName } from "./lib/idb";
+import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
 import { setWindowTitle } from "./lib/windows";
 import {
   activeFolderIdAtom,
@@ -28,6 +30,7 @@ import {
   savedLayoutsAtom,
   sessionLayoutsAtom,
   sidebarOpenAtom,
+  sidebarWidthAtom,
   themeAtom,
 } from "./state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "./state/review";
@@ -36,6 +39,7 @@ export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const folders = useAtomValue(foldersAtom);
   const sidebarOpen = useAtomValue(sidebarOpenAtom);
+  const [sideWidth, setSideWidth] = useAtom(sidebarWidthAtom);
   const theme = useAtomValue(themeAtom);
   const layout = useAtomValue(layoutAtom);
   const activePaneId = useAtomValue(activePaneIdAtom);
@@ -147,9 +151,23 @@ export default function App() {
           <Toolbar />
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
-              <div className="w-72 shrink-0">
-                <Sidebar />
-              </div>
+              <>
+                {/* 幅は掴んで変えられる。窓を狭めたときに本文が 0 にならないよう、
+                    上限を入れ物への割合で置く（割合は flex の入れ物の内側幅に
+                    対して解ける）。min-width は max-width より優先されるので、
+                    極端に狭い窓でも字が読める幅は残る。 */}
+                <div
+                  style={{
+                    width: sideWidth,
+                    minWidth: SIDEBAR_MIN,
+                    maxWidth: `calc(100% - ${MIN_DOC}px)`,
+                  }}
+                  className="shrink-0"
+                >
+                  <Sidebar />
+                </div>
+                <SidebarGrip width={sideWidth} onWidth={setSideWidth} />
+              </>
             )}
             <PaneGroup />
           </div>
