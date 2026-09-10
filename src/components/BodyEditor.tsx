@@ -373,12 +373,6 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   // 範囲を引いている間か。引いている間だけ DOM 側の選択から測る。
   let drawing = false;
 
-  // 開いた直後はカーソルの棒を出さない。
-  //
-  // すぐ打てる状態にしておくために焦点は当てるが、棒まで出すと読み始めた目が
-  // 本文の頭へ引かれる。触るまでは出さない。
-  let quiet = true;
-
   const paint = () => {
     const live = drawing ? domSpan(view) : null;
     const { from, to, head } = view.state.selection;
@@ -389,7 +383,7 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     const rects = boxes.measure(live);
     const cellsAt = cells.measure();
     // 引いている間はカーソルの棒を出さない（範囲を選んでいるので要らない）。
-    const at = live || quiet ? null : bar.measure();
+    const at = live ? null : bar.measure();
     boxes.apply(rects);
     cells.apply(cellsAt);
     bar.apply(at);
@@ -407,13 +401,6 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   const moved = () => {
     gen++;
     again();
-  };
-  // 本文に触った合図。ここでカーソルの棒を出し始める。押した先と打鍵の
-  // どちらでも起こす（打てるのに棒が出ないのは、それ自体が分からない）。
-  const wake = () => {
-    if (!quiet) return;
-    quiet = false;
-    moved();
   };
   // 引いている間は mousemove で描く。編集モデルの更新（selectionchange 経由）を
   // 待つと 1 番遅れる。
@@ -441,8 +428,6 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   // null を返し、そのままモデル経由に落ちる。
   const catcher = scroller ?? view.dom;
   catcher.addEventListener("mousedown", onDown);
-  view.dom.addEventListener("pointerdown", wake);
-  view.dom.addEventListener("keydown", wake);
   view.dom.addEventListener("focus", moved);
   view.dom.addEventListener("blur", moved);
   // コードの塊のように中で横スクロールするものがある。scroll は上がって
@@ -467,8 +452,6 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     stop: () => {
       onUp();
       catcher.removeEventListener("mousedown", onDown);
-      view.dom.removeEventListener("pointerdown", wake);
-      view.dom.removeEventListener("keydown", wake);
       view.dom.removeEventListener("focus", moved);
       view.dom.removeEventListener("blur", moved);
       view.dom.removeEventListener("scroll", moved, true);
@@ -1001,7 +984,9 @@ export function BodyEditor({
 
       onDom?.(view.dom);
       setBuilt({ view, host: at, scroller });
-      view.focus();
+      // 焦点は当てない。当てると、読んでいる間も OS が入力モードの印を出す
+      // （カーソルの位置に「あ」などが浮き、画面の外へ送ると端に居座る）。
+      // 触ったときに渡す（本文を押す、または字を打ち始める）。
       paint.draw();
 
       // 触れる状態になったと親へ知らせる。

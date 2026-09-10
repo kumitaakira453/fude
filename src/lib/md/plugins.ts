@@ -124,7 +124,7 @@ function undoRule(kept: Plugin<Undone | null>): Command {
 
 // 項目を割るとき、いまの項目の性格（タスクかどうか）を次へ引き継ぐ。
 // 素の splitListItem は既定の attrs で作るので、タスクの続きが素の項目になる。
-const splitItem: Command = (state, dispatch, view) => {
+export const splitItem: Command = (state, dispatch, view) => {
   const { $from } = state.selection;
   let checked: boolean | null = null;
   for (let d = $from.depth; d > 0; d--) {

@@ -196,6 +196,21 @@ export function fromMarkdown(source: string): Loaded {
   return { doc, source, ranges, originals, spans };
 }
 
+// 項目に書かれているのが「[ ]」「[x]」だけかどうか。だけなら、それは
+// 中身の無いタスク項目のつもり（GFM では印として書けないので字で残る）。
+function loneBox(item: { checked?: boolean | null; children: unknown[] }):
+  | boolean
+  | null {
+  if (item.checked != null || item.children.length !== 1) return null;
+  const only = item.children[0] as { type?: string; children?: unknown[] };
+  if (only.type !== "paragraph" || only.children?.length !== 1) return null;
+  const text = only.children[0] as { type?: string; value?: string };
+  if (text.type !== "text") return null;
+  const mark = (text.value ?? "").trim();
+  if (mark === "[ ]") return false;
+  return mark === "[x]" || mark === "[X]" ? true : null;
+}
+
 const span = (start: number, end: number, children: Span[] = []): Span => ({
   start,
   end,
@@ -326,8 +341,21 @@ function blockOf(
       const items: PmNode[] = [];
       const itemSpans: Span[] = [];
       for (const item of node.children) {
-        const inner = blocksOf(item.children, source, base);
         const [s, e] = at(item, base);
+        // 中身の無いタスク項目は GFM の印では書けない（`- [ ]` は印ではなく
+        // 「[ ]」という字として読まれる）。書き出す側はその字で残すので、
+        // 読むときに空のタスク項目へ戻す。往復して同じものになる。
+        const lone = loneBox(item);
+        if (lone !== null) {
+          items.push(
+            schema.nodes.listItem.create({ checked: lone }, [
+              schema.nodes.paragraph.create(),
+            ]),
+          );
+          itemSpans.push(span(s, e, [span(s, e)]));
+          continue;
+        }
+        const inner = blocksOf(item.children, source, base);
         items.push(
           schema.nodes.listItem.create({ checked: item.checked ?? null }, inner.nodes),
         );

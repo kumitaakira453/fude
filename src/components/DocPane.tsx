@@ -749,6 +749,24 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   );
   const pm = built && built.path === path ? built.view : null;
 
+  // 字を打ち始めたら編集面へ焦点を渡す。
+  //
+  // 開いた時点では焦点を当てていない（当てると、読んでいる間も OS が入力
+  // モードの印を出す）。打鍵は編集面の外で起きているので既定では落ちる。
+  // 焦点を渡したうえで、その 1 字は自分で入れる。
+  useEffect(() => {
+    if (!isActive || overlayOpen || !pm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
+      if (inEditable(e.target) || pm.view.hasFocus()) return;
+      e.preventDefault();
+      pm.view.focus();
+      pm.view.dispatch(pm.view.state.tr.insertText(e.key));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, overlayOpen, pm]);
+
   // 骨組みで隠しているあいだは編集面へ打鍵を通さない。
   // 押した先へ入れ替わるまでは前のファイルの編集面が生きたままなので、
   // 隠れているところへ打つと前のファイルへ字が入る。

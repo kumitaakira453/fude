@@ -388,11 +388,15 @@ export function VersionScreen({ path }: { path: string }) {
 
           <div className="relative flex min-h-0 flex-1">
             <div ref={scroller} className="min-w-0 flex-1 overflow-y-auto">
-              {/* ソースは等幅を左右に並べるので、読み物の幅では収まらない。 */}
+              {/* 本文を出すときは読む画面と同じ余白にする（幅は Body が
+                  読む幅の設定に従う）。差分は前と後を並べるので広く使い、
+                  ソースは等幅を左右に並べるので読み物の幅では収まらない。 */}
               <div
-                className={`mx-auto px-6 py-6 ${
-                  shown.mode === "diff" && shown.source ? "max-w-none" : "max-w-5xl"
-                }`}
+                className={
+                  shown.mode === "body"
+                    ? "px-10 py-8 sm:px-16"
+                    : `mx-auto px-6 py-6 ${shown.source ? "max-w-none" : "max-w-5xl"}`
+                }
               >
                 {current === undefined ? (
                   <Waiting>本文を読み込んでいます…</Waiting>

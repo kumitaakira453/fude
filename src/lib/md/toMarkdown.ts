@@ -204,12 +204,33 @@ function toMdast(node: PmNode): RootContent {
         ordered,
         start: ordered ? node.attrs.start : null,
         spread: !node.attrs.tight,
-        children: mapChildren(node, (item) => ({
-          type: "listItem" as const,
-          checked: item.attrs.checked,
-          spread: false,
-          children: childBlocks(item),
-        })),
+        children: mapChildren(node, (item) => {
+          const box = item.attrs.checked as boolean | null;
+          // 中身の無いタスク項目は GFM の印では書けない（印だけを書くと
+          // 「[ ]」という字として読まれ、素の項目になって点が出る）。
+          // 印を字として残し、読む側で空のタスク項目へ戻す。
+          if (box !== null && hollow(item)) {
+            return {
+              type: "listItem" as const,
+              checked: null,
+              spread: false,
+              children: [
+                {
+                  type: "paragraph" as const,
+                  children: [
+                    { type: "text" as const, value: box ? "[x]" : "[ ]" },
+                  ],
+                },
+              ],
+            };
+          }
+          return {
+            type: "listItem" as const,
+            checked: box,
+            spread: false,
+            children: childBlocks(item),
+          };
+        }),
       };
     }
 
@@ -255,6 +276,12 @@ function mathText(node: PmNode, fence: string): string {
   if (!tex) return "";
   return fence === "$" ? `$${tex}$` : `$$\n${tex}\n$$`;
 }
+
+// 中身が空っぽの項目か。段落 1 つだけを持ち、その段落に何も無いもの。
+const hollow = (item: PmNode): boolean =>
+  item.childCount === 1 &&
+  item.firstChild?.type.name === "paragraph" &&
+  item.firstChild.content.size === 0;
 
 const childBlocks = (node: PmNode): (BlockContent | DefinitionContent)[] =>
   mapChildren(node, toMdast) as (BlockContent | DefinitionContent)[];
