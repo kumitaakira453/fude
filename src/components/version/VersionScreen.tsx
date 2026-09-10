@@ -7,6 +7,7 @@ import { splitBlocks } from "../../lib/blocks";
 import { fontStack } from "../../lib/fonts";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import { readVersion, restoreVersion, type ReviewVersion } from "../../lib/review";
+import { lineDiff } from "../../lib/lineDiff";
 import { WIDTH_CLASS } from "../../lib/ui";
 import {
   ACTOR_ICON,
@@ -28,6 +29,7 @@ import { notify } from "../../state/toast";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 import { markdownContext } from "../MarkdownContext";
+import { SourceDiff } from "./SourceDiff";
 import { VersionDiff, type Layout } from "./VersionDiff";
 
 // バージョンの履歴。左にバージョンを新しい順に並べ、右に選んだものを出す。
@@ -45,7 +47,7 @@ type Pick = string | null;
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "body", label: "本文" },
-  { id: "diff", label: "差分" },
+  { id: "diff", label: "比べる" },
 ];
 
 const LAYOUTS: { id: Layout; label: string }[] = [
@@ -73,6 +75,8 @@ export function VersionScreen({ path }: { path: string }) {
   // 求められたら出す。
   const [mode, setMode] = useState<Mode>("body");
   const [layout, setLayout] = useState<Layout>("unified");
+  // ソースのまま比べるか。組版を通した比較では記法の違いが読み取れない。
+  const [source, setSource] = useState(false);
   // 差分の比較対象。undefined は「まだ選んでいない」で、既定に従う。
   const [against, setAgainst] = useState<Pick | undefined>(undefined);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -152,8 +156,8 @@ export function VersionScreen({ path }: { path: string }) {
   // 押した一枚では中身に触らず、上に覆いを重ねるだけにする。入れ替えは
   // 塗った後の一枚へ移す。
   const view = useMemo(
-    () => ({ mode, layout, picked, other }),
-    [mode, layout, picked, other],
+    () => ({ mode, layout, source, picked, other }),
+    [mode, layout, source, picked, other],
   );
   const drawn = useAfterPaint(view);
   const shown = drawn ?? view;
@@ -172,6 +176,35 @@ export function VersionScreen({ path }: { path: string }) {
     shown.mode === "body"
       ? pickedText === undefined
       : oldText === undefined || newText === undefined;
+
+  // 変更の規模。ソースの行数で数えるので、組版で見ていても同じ数字が出る。
+  const stat = useMemo(
+    () => (oldText != null && newText != null ? lineDiff(oldText, newText) : null),
+    [oldText, newText],
+  );
+
+  // 変更箇所の送り。印を付けた要素をスクロールする入れ物から拾う。
+  const scroller = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState(-1);
+  const [spots, setSpots] = useState(0);
+  useEffect(() => {
+    const el = scroller.current;
+    setSpots(el ? el.querySelectorAll("[data-mg-change]").length : 0);
+    setAt(-1);
+  }, [pending, shown, oldText, newText]);
+
+  const jump = useCallback(
+    (dir: 1 | -1) => {
+      const el = scroller.current;
+      if (!el) return;
+      const found = el.querySelectorAll<HTMLElement>("[data-mg-change]");
+      if (found.length === 0) return;
+      const next = (at + dir + found.length) % found.length;
+      setAt(next);
+      found[next].scrollIntoView({ block: "center", behavior: "smooth" });
+    },
+    [at],
+  );
 
   const style = useMemo(() => ({ fontFamily: fontStack(font) }), [font]);
   const ctx = useMemo(
@@ -266,6 +299,14 @@ export function VersionScreen({ path }: { path: string }) {
               exclude={picked}
               onPick={setAgainst}
             />
+            <button
+              onClick={() => setSource((v) => !v)}
+              title="Markdown のまま比べる"
+              className={`mg-ver-flag${source ? " is-on" : ""}`}
+            >
+              <Icon name="code" size={15} />
+              ソース
+            </button>
             <div className="mg-ver-seg">
               {LAYOUTS.map((l) => (
                 <button
@@ -326,12 +367,33 @@ export function VersionScreen({ path }: { path: string }) {
                   <Facing id={newId} list={list} />
                 </>
               )}
+              {mode === "diff" && stat && (
+                <>
+                  <Stat added={stat.added} removed={stat.removed} />
+                  {spots > 0 && (
+                    <span className="mg-ver-hop">
+                      <button onClick={() => jump(-1)} title="前の変更へ">
+                        <Icon name="keyboard_arrow_up" size={16} />
+                      </button>
+                      <span>{at < 0 ? `${spots} 箇所` : `${at + 1} / ${spots}`}</span>
+                      <button onClick={() => jump(1)} title="次の変更へ">
+                        <Icon name="keyboard_arrow_down" size={16} />
+                      </button>
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           )}
 
           <div className="relative flex min-h-0 flex-1">
-            <div className="min-w-0 flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-5xl px-6 py-6">
+            <div ref={scroller} className="min-w-0 flex-1 overflow-y-auto">
+              {/* ソースは等幅を左右に並べるので、読み物の幅では収まらない。 */}
+              <div
+                className={`mx-auto px-6 py-6 ${
+                  shown.mode === "diff" && shown.source ? "max-w-none" : "max-w-5xl"
+                }`}
+              >
                 {current === undefined ? (
                   <Waiting>本文を読み込んでいます…</Waiting>
                 ) : list.length === 0 ? (
@@ -358,6 +420,8 @@ export function VersionScreen({ path }: { path: string }) {
                   <Waiting>読み込んでいます…</Waiting>
                 ) : oldText === null || newText === null ? (
                   <Lost>比べるバージョンの本文が見つかりません。</Lost>
+                ) : shown.source ? (
+                  stat && <SourceDiff diff={stat} layout={shown.layout} />
                 ) : (
                   <markdownContext.Provider value={ctx}>
                     <VersionDiff
@@ -406,6 +470,21 @@ export function VersionScreen({ path }: { path: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+// 変更の規模。数だけでは大きさが掴めないので、追加と削除の比率を細い帯で添える。
+function Stat({ added, removed }: { added: number; removed: number }) {
+  const total = added + removed;
+  if (total === 0) return null;
+  return (
+    <span className="mg-ver-stat">
+      <span className="is-add">＋{added}</span>
+      <span className="is-del">−{removed}</span>
+      <span className="mg-ver-bar">
+        <i style={{ width: `${(added / total) * 100}%` }} />
+      </span>
+    </span>
   );
 }
 

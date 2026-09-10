@@ -1,27 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../../lib/blocks";
+import { charDiff } from "../../lib/charDiff";
+import { rangeAt, readBlockText } from "../../lib/domText";
 import { compare, unchanged, type DiffRow } from "../../lib/versions";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
-// バージョンとバージョンの差分。閲覧専用。
+// バージョンとバージョンの差分を、組版を通した姿で比べる。閲覧専用。
 //
 // 行ではなくブロックで突き合わせる。散文は 1 段落がソースの 1 行なので、
 // 行差分では「段落全体が変わった」しか分からない。ブロックなら変更前と
 // 変更後をそれぞれ描いて並べられる。
 //
-// 変わっていないところは畳む。同じものが延々と続くと、どこが変わったのかを
-// 目で探すことになる。
+// 見立ては校正刷り。変更前は少し退けた濃さで置き、変更後を本文の濃さで読ませる。
+// 枠で囲まず、左の罫と行頭の記号だけで区切る。
 
 export type Layout = "unified" | "split";
 
-// 何が起きた組か。枠線の左上に出す。
-const TAG: Record<string, string> = {
-  changed: "書き換え",
-  added: "追加",
-  removed: "削除",
-  meta: "見出し情報",
-};
+// 印の名前。描画側は ::highlight() で拾う。
+const DEL = "mg-diff-del";
+const INS = "mg-diff-ins";
 
 export function VersionDiff({
   base,
@@ -37,6 +35,8 @@ export function VersionDiff({
   style: React.CSSProperties;
 }) {
   const rows = useMemo(() => compare(base, head), [base, head]);
+  const root = useRef<HTMLDivElement>(null);
+  useInnerMarks(root, rows, layout, editorial, style);
 
   if (unchanged(rows)) {
     return (
@@ -48,7 +48,7 @@ export function VersionDiff({
   }
 
   return (
-    <div className="mg-ver-diff">
+    <div ref={root} className="mg-ver-diff">
       {rows.map((row, i) => (
         <Row
           key={i}
@@ -60,6 +60,59 @@ export function VersionDiff({
       ))}
     </div>
   );
+}
+
+// 書き換わった組の中で、変わった字だけに印を付ける。
+//
+// 描画結果どうしを比べるので、見た目が変わらない記法の違いには印が付かない。
+// 組版を通した比較としてはそれが正しい（記法を見たいときはソースで比べる）。
+//
+// DOM は書き換えず、範囲だけを描画側へ渡す。属性やタグを足すと Markdown の
+// 木を組み直すことになり、大きな文書で目に見えて遅くなる。
+function useInnerMarks(
+  root: React.RefObject<HTMLDivElement | null>,
+  rows: DiffRow[],
+  layout: Layout,
+  editorial: boolean,
+  style: React.CSSProperties,
+) {
+  useEffect(() => {
+    const registry = "highlights" in CSS ? CSS.highlights : null;
+    if (!registry) return;
+    registry.delete(DEL);
+    registry.delete(INS);
+    const el = root.current;
+    if (!el) return;
+
+    const dels: Range[] = [];
+    const inss: Range[] = [];
+    for (const pair of el.querySelectorAll<HTMLElement>(".mg-ver-pair")) {
+      const a = pair.querySelector<HTMLElement>('[data-diff-side="base"]');
+      const b = pair.querySelector<HTMLElement>('[data-diff-side="head"]');
+      if (!a || !b) continue;
+      const left = readBlockText(a);
+      const right = readBlockText(b);
+      const diff = charDiff(left.plain, right.plain);
+      // 長すぎて突き合わせを諦めたときは、塊ごと変わったものとして扱う
+      // （全部を塗ると、変わっていない字まで立ってしまう）。
+      if (diff.gaveUp) continue;
+      for (const span of diff.del) {
+        const range = rangeAt(left, span.from, span.to);
+        if (range) dels.push(range);
+      }
+      for (const span of diff.ins) {
+        const range = rangeAt(right, span.from, span.to);
+        if (range) inss.push(range);
+      }
+    }
+    if (dels.length > 0) registry.set(DEL, new Highlight(...dels));
+    if (inss.length > 0) registry.set(INS, new Highlight(...inss));
+
+    return () => {
+      registry.delete(DEL);
+      registry.delete(INS);
+    };
+  }, [root, rows, layout, editorial, style]);
 }
 
 function Row({
@@ -116,18 +169,21 @@ function Row({
     ) : null;
 
   return (
-    <div className={`mg-ver-pair is-${layout}`}>
-      <span className="mg-ver-tag">{TAG[row.kind]}</span>
-      <Side kind="base" body={before} layout={layout} />
-      <Side kind="head" body={after} layout={layout} />
+    <div className={`mg-ver-pair is-${layout}`} data-mg-change="">
+      <Side kind="base" of={row.kind} body={before} layout={layout} />
+      <Side kind="head" of={row.kind} body={after} layout={layout} />
     </div>
   );
 }
 
-const SIDE = {
-  base: { icon: "remove", label: "変更前" },
-  head: { icon: "add", label: "変更後" },
-} as const;
+const MARK = { base: "remove", head: "add" } as const;
+
+// 何が起きたかは、片側だけの組では「追加」「削除」で言い切れる。
+function labelOf(kind: "base" | "head", of: DiffRow["kind"]): string {
+  if (of === "added") return "追加";
+  if (of === "removed") return "削除";
+  return kind === "base" ? "変更前" : "変更後";
+}
 
 // 変更前 / 変更後の片側。
 //
@@ -138,10 +194,12 @@ const SIDE = {
 // 無いので、言わなくても片側だけだと分かる。
 function Side({
   kind,
+  of,
   body,
   layout,
 }: {
   kind: "base" | "head";
+  of: DiffRow["kind"];
   body: React.ReactNode;
   layout: Layout;
 }) {
@@ -156,10 +214,10 @@ function Side({
   return (
     <div className={`mg-ver-side is-${kind}`}>
       <div className="mg-ver-side-head">
-        <Icon name={SIDE[kind].icon} size={13} />
-        {SIDE[kind].label}
+        <Icon name={MARK[kind]} size={13} />
+        {labelOf(kind, of)}
       </div>
-      {body}
+      <div data-diff-side={kind}>{body}</div>
     </div>
   );
 }

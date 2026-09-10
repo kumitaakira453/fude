@@ -18,7 +18,7 @@ export type BlockChange =
   | { kind: "removed"; base: Block };
 
 export function diffBlocks(base: Block[], head: Block[]): BlockChange[] {
-  const pairs = matchedPairs(
+  const pairs = lcsPairs(
     base.map((b) => b.src),
     head.map((b) => b.src),
   );
@@ -229,8 +229,9 @@ export function stripMarkup(src: string): string {
     .trim();
 }
 
-// 最長共通部分列をとり、一致したブロックの添字の組を返す。
-function matchedPairs(a: string[], b: string[]): [number, number][] {
+// 最長共通部分列をとり、一致した要素の添字の組を返す。
+// ブロックのほか、行と文字の突き合わせでも同じものを使う。
+export function lcsPairs(a: string[], b: string[]): [number, number][] {
   const n = a.length;
   const m = b.length;
   const dp: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));

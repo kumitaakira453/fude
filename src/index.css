@@ -16,6 +16,16 @@
      メニューの対象）はすべてこの 2 つから出す。 */
   --mg-box-out: -5px 0 0 -12px;
   --mg-box-in: 5px 12px;
+
+  /* 追加と削除の色。テーマの色ではなく差分の作法に倣う（緑が足された、
+     赤が消された）。どのテーマでも読めるよう、地の文の色を混ぜて明暗を
+     合わせる。地色は薄く敷くだけなので混ぜずに済む。 */
+  --mg-add-fg: color-mix(in srgb, #2ea043 76%, var(--mg-fg));
+  --mg-del-fg: color-mix(in srgb, #d1242f 76%, var(--mg-fg));
+  --mg-add: color-mix(in srgb, #2ea043 13%, transparent);
+  --mg-del: color-mix(in srgb, #d1242f 13%, transparent);
+  --mg-add-mark: color-mix(in srgb, #2ea043 30%, transparent);
+  --mg-del-mark: color-mix(in srgb, #d1242f 30%, transparent);
 }
 
 html,
@@ -4710,6 +4720,81 @@ body.mg-carrying {
   margin-left: 0.45rem;
   color: var(--mg-muted);
 }
+/* 変更の規模。数と、追加・削除の比率を示す帯。 */
+.mg-ver-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.mg-ver-stat .is-add {
+  color: var(--mg-add-fg);
+  font-weight: 600;
+}
+.mg-ver-stat .is-del {
+  color: var(--mg-del-fg);
+  font-weight: 600;
+}
+.mg-ver-bar {
+  display: block;
+  overflow: hidden;
+  width: 4.5rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--mg-del-fg);
+}
+.mg-ver-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--mg-add-fg);
+}
+/* 変更箇所への送り。 */
+.mg-ver-hop {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: 11px;
+  color: var(--mg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mg-ver-hop > button {
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 0.35rem;
+  color: var(--mg-fg-dim);
+  transition: background 0.12s ease;
+}
+.mg-ver-hop > button:hover {
+  background: var(--mg-hover);
+}
+/* ソースのまま比べるかの切り替え。 */
+.mg-ver-flag {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  font-size: 12px;
+  color: var(--mg-fg-dim);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-ver-flag:hover {
+  background: var(--mg-hover);
+}
+.mg-ver-flag.is-on {
+  background: var(--mg-accent-soft);
+  border-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
+  color: var(--mg-accent);
+  font-weight: 600;
+}
 
 /* 差分。変わっていないところは弱め、変わったところは組ごとに枠で囲む。 */
 .mg-ver-kept {
@@ -4737,60 +4822,41 @@ body.mg-carrying {
   color: var(--mg-fg-dim);
 }
 
-/* 変更前と変更後をまとめた 1 つの組。地色は敷かず枠で囲む。塗ると
-   本文の読み心地が変わり、テーマによっては前後が同系色で潰れる。 */
+/* 変更前と変更後の組。校正刷りに見立てる。
+   枠で囲まず、左の罫と行頭の記号だけで区切る。塗りつぶした箱を並べると
+   本文の読み心地が戻らないうえ、テーマによっては前後が同系色で潰れる。 */
 .mg-ver-pair {
-  position: relative;
-  margin: 1.75rem 0 1.25rem;
-  padding: 0.9rem 0.9rem 0.1rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.7rem;
+  margin: 1.5rem 0 1.25rem;
 }
 .mg-ver-pair.is-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.1rem;
-  align-items: stretch;
-}
-/* 何が起きた組か。枠線の上に載せて切り欠きにする。中身の上には重ねない
-   （組の中に「変更前 / 変更後」の見出しが入るので、浮かせると重なる）。 */
-.mg-ver-tag {
-  position: absolute;
-  top: -0.65rem;
-  left: 0.8rem;
-  padding: 0 0.45rem;
-  background: var(--mg-bg);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.3;
-  color: var(--mg-muted);
-  white-space: nowrap;
+  gap: 1.5rem;
+  align-items: start;
 }
 
-/* 片側。左にレールを引き、頭に記号と語を置く。 */
+/* 片側。 */
 .mg-ver-side {
   min-width: 0;
-  padding-left: 0.75rem;
+  padding-left: 0.85rem;
   border-left: 2px solid var(--mg-border);
 }
 .mg-ver-side.is-base {
-  border-left-color: color-mix(in srgb, var(--mg-danger) 70%, transparent);
+  border-left-color: color-mix(in srgb, var(--mg-danger) 60%, transparent);
+  /* 変更前は少し退けて置き、変更後を本文の濃さで読ませる。 */
+  opacity: 0.72;
 }
 .mg-ver-side.is-head {
   border-left-color: var(--mg-accent);
 }
-/* 統合では 2 つを縦に積む。切れ目に線を挟まないと、どこまでが変更前か
-   読み取れない。 */
+/* 統合では 2 つを縦に積む。 */
 .mg-ver-pair.is-unified > .mg-ver-side + .mg-ver-side {
-  margin-top: 0.9rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--mg-border);
+  margin-top: 1rem;
 }
 .mg-ver-side-head {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.15rem;
   margin-bottom: 0.1rem;
   font-size: 10.5px;
   font-weight: 700;
@@ -4807,10 +4873,20 @@ body.mg-carrying {
   display: grid;
   place-items: center;
   min-width: 0;
-  padding: 1rem 0.75rem;
+  padding: 1rem 0.85rem;
   border-left: none;
   font-size: 11.5px;
   color: var(--mg-muted);
+}
+
+/* 文中の変わったところ。組版を通した比較では、描画結果どうしを突き合わせて
+   変わった字だけを立てる。DOM は書き換えず範囲だけを渡すので、
+   Markdown の木は組み直されない。 */
+::highlight(mg-diff-del) {
+  background-color: color-mix(in srgb, var(--mg-danger) 26%, transparent);
+}
+::highlight(mg-diff-ins) {
+  background-color: color-mix(in srgb, var(--mg-accent) 32%, transparent);
 }
 
 /* フロントマター。本文のブロックに割れないので、書いたままの形で出す。 */
@@ -4822,4 +4898,106 @@ body.mg-carrying {
   line-height: 1.6;
   color: var(--mg-fg-dim);
   white-space: pre;
+}
+
+/* ============================================================
+   ソースで比べる
+   組版を通した比較では、記法の違い（見出しの階層・表の区切り・リンクの
+   書き方）が読み取れない。この面はそこを見るためにあるので、読み物として
+   組まず、行差分の作法にそのまま倣う。
+   ============================================================ */
+.mg-src {
+  font-family: var(--mg-font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.mg-src-hunk {
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  scroll-margin-top: 4.5rem;
+}
+.mg-src-hunk + .mg-src-hunk {
+  margin-top: 1.25rem;
+}
+/* 畳んだところの境目。どこからどこまでを出しているかを言う。 */
+.mg-src-at {
+  padding: 0.25rem 0.7rem;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-hover);
+  font-size: 10.5px;
+  color: var(--mg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mg-src-rows {
+  overflow-x: auto;
+}
+.mg-src-row {
+  display: flex;
+  align-items: baseline;
+  min-width: max-content;
+}
+.mg-src-row.is-add {
+  background: var(--mg-add);
+}
+.mg-src-row.is-del {
+  background: var(--mg-del);
+}
+/* 行番号。等幅の桁で揃え、本文と地を分ける。 */
+.mg-src-no {
+  flex: none;
+  width: 3rem;
+  padding: 0 0.5rem;
+  border-right: 1px solid var(--mg-border);
+  text-align: right;
+  font-size: 10.5px;
+  color: var(--mg-muted);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+/* 追加か削除かの印。色に頼らず記号で読めるようにする。 */
+.mg-src-sign {
+  flex: none;
+  width: 1.5rem;
+  text-align: center;
+  color: var(--mg-muted);
+  user-select: none;
+}
+.mg-src-row.is-add .mg-src-sign {
+  color: var(--mg-add-fg);
+}
+.mg-src-row.is-del .mg-src-sign {
+  color: var(--mg-del-fg);
+}
+.mg-src-text {
+  flex: 1;
+  padding-right: 0.7rem;
+  white-space: pre;
+  color: var(--mg-fg-dim);
+}
+/* 行の中で変わった語句。素の文字なので印はそのまま組める。 */
+.mg-src-mark {
+  border-radius: 0.15rem;
+  background: var(--mg-del-mark);
+  color: inherit;
+}
+.mg-src-row.is-add .mg-src-mark {
+  background: var(--mg-add-mark);
+}
+
+/* 分割。左右で行の高さを揃えるため、1 行を grid の 1 行にする。 */
+.mg-src-rows.is-split .mg-src-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: max-content;
+}
+.mg-src-rows.is-split .mg-src-row {
+  min-width: 0;
+}
+.mg-src-rows.is-split .mg-src-pair > .mg-src-row + .mg-src-row {
+  border-left: 1px solid var(--mg-border);
+}
+/* 相手のいない行。地色も記号も持たせない。 */
+.mg-src-row.is-void {
+  background: color-mix(in srgb, var(--mg-border) 25%, transparent);
 }
