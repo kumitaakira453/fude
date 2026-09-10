@@ -47,6 +47,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { Icon } from "./Icon";
+import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
 import { BodyEditor, type Editing } from "./BodyEditor";
 import { SelectionBar } from "./SelectionBar";
@@ -1530,21 +1531,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
 // 読込中のプレースホルダ。見出し＋段落の骨組みを並べ、本文が出たときに
 // 位置が大きく動かないようにする。
-function LoadingBody() {
-  const widths = ["45%", "100%", "92%", "78%", "100%", "88%", "60%"];
-  return (
-    <div className="mg-skeleton" aria-label="読み込み中" aria-busy>
-      {widths.map((w, i) => (
-        <div
-          key={i}
-          className={`mg-skeleton-bar${i === 0 ? " mg-skeleton-head" : ""}`}
-          style={{ width: w }}
-        />
-      ))}
-    </div>
-  );
-}
-
 function EmptyPane() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[var(--mg-muted)]">

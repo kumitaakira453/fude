@@ -27,6 +27,7 @@ import {
 import { ledgerAtom, syncLedger, versionScreenAtom } from "../../state/review";
 import { notify } from "../../state/toast";
 import { Icon } from "../Icon";
+import { LoadingBody } from "../LoadingBody";
 import { Markdown } from "../Markdown";
 import { markdownContext } from "../MarkdownContext";
 import { SourceDiff } from "./SourceDiff";
@@ -205,6 +206,15 @@ export function VersionScreen({ path }: { path: string }) {
     },
     [at],
   );
+
+  // 中身の余白。覆いの骨組みも同じ当て方にして、切り替わりで行がずれないように
+  // する。本文は読む画面と同じ余白（幅は Body が読む幅の設定に従う）。差分は
+  // 前と後を並べるので広く使い、ソースは等幅を左右に並べるので読み物の幅には
+  // 収まらない。
+  const pad =
+    shown.mode === "body"
+      ? "px-10 py-8 sm:px-16"
+      : `mx-auto px-6 py-6 ${shown.source ? "max-w-none" : "max-w-5xl"}`;
 
   const style = useMemo(() => ({ fontFamily: fontStack(font) }), [font]);
   const ctx = useMemo(
@@ -388,18 +398,9 @@ export function VersionScreen({ path }: { path: string }) {
 
           <div className="relative flex min-h-0 flex-1">
             <div ref={scroller} className="min-w-0 flex-1 overflow-y-auto">
-              {/* 本文を出すときは読む画面と同じ余白にする（幅は Body が
-                  読む幅の設定に従う）。差分は前と後を並べるので広く使い、
-                  ソースは等幅を左右に並べるので読み物の幅では収まらない。 */}
-              <div
-                className={
-                  shown.mode === "body"
-                    ? "px-10 py-8 sm:px-16"
-                    : `mx-auto px-6 py-6 ${shown.source ? "max-w-none" : "max-w-5xl"}`
-                }
-              >
+              <div className={pad}>
                 {current === undefined ? (
-                  <Waiting>本文を読み込んでいます…</Waiting>
+                  <LoadingBody />
                 ) : list.length === 0 ? (
                   <p className="mg-ver-note-line">
                     <Icon name="save_as" size={15} />
@@ -407,7 +408,7 @@ export function VersionScreen({ path }: { path: string }) {
                   </p>
                 ) : shown.mode === "body" ? (
                   pickedText === undefined ? (
-                    <Waiting>読み込んでいます…</Waiting>
+                    <LoadingBody />
                   ) : pickedText === null ? (
                     <Lost>このバージョンの本文が見つかりません。</Lost>
                   ) : (
@@ -421,7 +422,7 @@ export function VersionScreen({ path }: { path: string }) {
                     </markdownContext.Provider>
                   )
                 ) : oldText === undefined || newText === undefined ? (
-                  <Waiting>読み込んでいます…</Waiting>
+                  <LoadingBody />
                 ) : oldText === null || newText === null ? (
                   <Lost>比べるバージョンの本文が見つかりません。</Lost>
                 ) : shown.source ? (
@@ -446,8 +447,12 @@ export function VersionScreen({ path }: { path: string }) {
                 （中に置くと、下まで送っていたときに覆いが上端へ行って
                 見えない）。 */}
             {(pending || loading) && (
-              <div className="absolute inset-0 z-10 bg-[var(--mg-bg)] px-6 py-6">
-                <Waiting>読み込んでいます…</Waiting>
+              <div className={`absolute inset-0 z-10 bg-[var(--mg-bg)] ${pad}`}>
+                {/* 本文は読む幅の設定に従って中央に置くので、骨組みも同じ
+                    幅に収める（切り替わりで行の左右がずれない）。 */}
+                <div className={shown.mode === "body" ? `${WIDTH_CLASS[width]} mx-auto` : undefined}>
+                  <LoadingBody />
+                </div>
               </div>
             )}
           </div>
@@ -503,15 +508,6 @@ function Facing({ id, list }: { id: Pick; list: ReviewVersion[] }) {
       <span className="mg-ver-facing-name">{whenOf(version)}</span>
       <span className="mg-ver-facing-note">{noteOf(version)}</span>
     </span>
-  );
-}
-
-function Waiting({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mg-ver-note-line">
-      <Icon name="progress_activity" size={14} className="mg-spin" />
-      {children}
-    </p>
   );
 }
 
