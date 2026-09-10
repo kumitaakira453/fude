@@ -1,5 +1,5 @@
 import { useAtomValue, useStore } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Settings } from "./components/Settings";
 import { Shortcuts } from "./components/Shortcuts";
@@ -9,8 +9,10 @@ import { Sidebar } from "./components/Sidebar";
 import { ReviewScreen } from "./components/review/ReviewScreen";
 import { VersionScreen } from "./components/version/VersionScreen";
 import { Toolbar } from "./components/Toolbar";
+import { Icon } from "./components/Icon";
 import { Toast } from "./components/Toast";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { useAfterPaint } from "./hooks/useAfterPaint";
 import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
@@ -107,54 +109,63 @@ export default function App() {
     });
   }, [activeFolderId, folders]);
 
-  if (!activeFolderId) {
-    return (
-      <div className="h-screen w-screen bg-[var(--mg-bg)] text-[var(--mg-fg)]">
-        <Landing />
-        <UpdateBanner />
-        <Toast />
-      </div>
-    );
-  }
-
-  // 版の履歴も専用画面。前と後を並べるので、読む画面の幅には収まらない。
-  if (versionFile !== null) {
-    return (
-      <>
-        <VersionScreen path={versionFile} />
-        <UpdateBanner />
-        <Toast />
-      </>
-    );
-  }
-
-  // レビューは専用画面。読書ビューに重ねると差分を並べて見せられない。
-  if (reviewOpen) {
-    return (
-      <>
-        <ReviewScreen />
-        <UpdateBanner />
-        <Toast />
-      </>
-    );
-  }
+  // どの画面を出すか。押した瞬間の値と、実際に組む値を分ける。
+  const want = useMemo(
+    () => ({
+      landing: !activeFolderId,
+      version: versionFile,
+      review: reviewOpen,
+    }),
+    [activeFolderId, versionFile, reviewOpen],
+  );
+  const drawn = useAfterPaint(want);
+  const screen = drawn ?? want;
+  const switching = drawn !== want;
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
-      <Toolbar />
-      <div className="flex min-h-0 flex-1">
-        {sidebarOpen && (
-          <div className="w-72 shrink-0">
-            <Sidebar />
+    <>
+      {screen.landing ? (
+        <div className="h-screen w-screen bg-[var(--mg-bg)] text-[var(--mg-fg)]">
+          <Landing />
+        </div>
+      ) : screen.version !== null ? (
+        // バージョンの履歴は専用画面。前と後を並べるので、読む画面の幅には
+        // 収まらない。
+        <VersionScreen path={screen.version} />
+      ) : screen.review ? (
+        // レビューも専用画面。読書ビューに重ねると差分を並べて見せられない。
+        <ReviewScreen />
+      ) : (
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
+          <Toolbar />
+          <div className="flex min-h-0 flex-1">
+            {sidebarOpen && (
+              <div className="w-72 shrink-0">
+                <Sidebar />
+              </div>
+            )}
+            <PaneGroup />
           </div>
-        )}
-        <PaneGroup />
-      </div>
-      <CommandPalette />
-      <Shortcuts />
-      <Settings />
+          <CommandPalette />
+          <Shortcuts />
+          <Settings />
+        </div>
+      )}
+      {/* 画面を入れ替えているあいだの覆い。
+          入れ替えは重い（本文の組み立て、指摘の一覧の突き合わせ）。押した一枚で
+          やると、React は組み終わるまでコミットせず、ブラウザはコミットまで
+          塗れないので、押した手応えがまるで無い。覆いだけを先に重ねる。 */}
+      {switching && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-[var(--mg-bg)]">
+          <Icon
+            name="progress_activity"
+            size={22}
+            className="mg-spin text-[var(--mg-muted)]"
+          />
+        </div>
+      )}
       <UpdateBanner />
-        <Toast />
-    </div>
+      <Toast />
+    </>
   );
 }

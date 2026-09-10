@@ -231,8 +231,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [write],
   );
 
-  // ⌘S。自動保存があるので押す必要は無いが、待たずに書ける。
-  const save = () => flushRef.current?.();
 
   // ---- バージョン ----
   const openVersions = useSetAtom(versionScreenAtom);
@@ -289,12 +287,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     openVersions(path);
   }, [openVersions, path, settled]);
 
-  // ⌘⇧S でバージョンを打つ。押している側のペインが受け取る。
+  // ⌘S でバージョンを打つ。自動保存があるので、押して書き足すものは無い。
+  //
+  // 編集面の中では編集面の側の割り当てが受け取る（そちらは preventDefault まで
+  // する）。ここは読む画面と、入力欄の外にいるときのための受け口。
   useEffect(() => {
     if (!isActive || overlayOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey) return;
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
       if (e.key !== "s" && e.key !== "S") return;
+      if (inEditable(e.target)) return;
       e.preventDefault();
       startNaming();
     };
@@ -1138,7 +1140,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           <>
             <button
               onClick={() => (naming === null ? startNaming() : setNaming(null))}
-              title="バージョンを保存 (⌘⇧S)"
+              title="バージョンを保存 (⌘S)"
               className={`grid h-6 w-6 place-items-center rounded transition ${
                 naming !== null
                   ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
@@ -1245,7 +1247,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 setDraft(next);
                 if (path) autoSave(path, next);
               }}
-              onSave={save}
+              onSave={startNaming}
               flushRef={flushRef}
               adoptRef={adoptRef}
               fontFamily={fontStack(font)}

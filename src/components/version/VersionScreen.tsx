@@ -288,7 +288,7 @@ export function VersionScreen({ path }: { path: string }) {
 
         <button
           onClick={() => close(null)}
-          className="flex items-center gap-1 rounded-lg border border-[var(--mg-border)] px-2.5 py-1 text-[12px] text-[var(--mg-fg-dim)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+          className="flex items-center gap-1 rounded-lg border border-[var(--mg-border)] px-2.5 py-1 text-[12px] text-[var(--mg-fg-dim)] transition duration-100 active:scale-95 hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
         >
           <Icon name="close" size={15} />
           閉じる
