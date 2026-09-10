@@ -184,14 +184,27 @@ function locate(bt: BlockText, offset: number): { node: Text; offset: number } |
 // ブロックをまたぐ選択は、選択が始まったブロックの末尾までに丸める。
 // 要素の中の文字を丸ごと選ぶ。要素そのものを範囲にすると選択の起点が
 // 要素になり、文字位置へ変換できない（readSelection が読めない）。
-export function selectTextIn(el: Element): boolean {
+export function selectTextIn(
+  el: Element,
+  opts?: { own?: boolean },
+): boolean {
   // 画面に出るがソースには無い文字（チェックのアイコンなど）は選ばない。
   // そこから選び始めると、本文の文字として数えられず選択が読めなくなる。
+  //
+  // own を立てると、中の入れ子の一覧は拾わない。項目と入れ子の一覧は別の
+  // ものなので、親の項目を相手にするときは親の分だけを選ぶ。
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) =>
-      node.parentElement?.closest(SYNTHETIC)
-        ? NodeFilter.FILTER_REJECT
-        : NodeFilter.FILTER_ACCEPT,
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      if (parent?.closest(SYNTHETIC)) return NodeFilter.FILTER_REJECT;
+      if (opts?.own) {
+        const list = parent?.closest("ul, ol");
+        if (list && list !== el && el.contains(list)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
   });
   const first = walker.nextNode() as Text | null;
   if (!first) return false;

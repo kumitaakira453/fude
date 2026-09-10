@@ -256,6 +256,35 @@ describe("targetOfSpan / targetOfBlock", () => {
     expect(targetOfSpan(state.doc, loaded, "", marks[0], marks[0] + 2)?.pos).toBe(at);
   });
 
+  it("親の項目の範囲に、入れ子の子項目は入らない", () => {
+    // つまみのメニューが渡す範囲と同じ組み方（項目の中身の頭から、入れ子の
+    // 手前まで）で見る。
+    const nested = "- おや\n    - こ\n";
+    const { loaded, state } = opened(nested);
+    const at = posOf(state.doc, 0);
+    let item = -1;
+    state.doc.nodeAt(at)!.descendants((node, offset) => {
+      if (item < 0 && node.type.name === "listItem") item = at + 1 + offset;
+      return true;
+    });
+    const parent = state.doc.nodeAt(item)!;
+    // 親の子は「段落」と「入れ子の一覧」。段落の分だけを範囲にする。
+    const own = item + 1 + parent.child(0).nodeSize;
+    const target = targetOfSpan(state.doc, loaded, "", item + 1, own);
+    expect(target?.text).toBe("おや");
+    expect(target?.text).not.toContain("こ");
+    expect(target?.unit).toEqual({ kind: "item", index: 0 });
+    // 節点まるごとを渡すと子まで入る（直す前の範囲）。
+    const whole = targetOfSpan(
+      state.doc,
+      loaded,
+      "",
+      item + 1,
+      item + parent.nodeSize - 1,
+    );
+    expect(whole?.text).toContain("こ");
+  });
+
   it("項目の外の範囲は引き先を持たない", () => {
     const { loaded, state } = opened(SRC);
     const at = posOf(state.doc, 3);

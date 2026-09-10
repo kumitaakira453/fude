@@ -104,6 +104,21 @@ export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {
   return firstLine(li) ?? box;
 }
 
+// 項目そのものの箱。入れ子の一覧は別の項目なので含めない。含めると、親を
+// 選んだだけで子まで選んだように見え、コメントの相手も子ごとになる。
+export function itemOwnRect(li: HTMLElement): DOMRect {
+  const box = li.getBoundingClientRect();
+  const nested = [...li.children].find(
+    (el) => el.tagName === "UL" || el.tagName === "OL",
+  );
+  if (!nested) return box;
+  const under = nested.getBoundingClientRect();
+  const height = Math.max(0, under.top - box.top);
+  // 測れない（描画前など）ときは元の箱のまま。潰れた箱を返すより素直。
+  if (height === 0) return box;
+  return new DOMRect(box.left, box.top, box.width, height);
+}
+
 // ブロックの 1 行の高さ。見出しのように行が高いものでも文字の中心に並ぶよう、
 // 実際に組まれた行送りを読む。
 export function lineHeight(el: Element): number {

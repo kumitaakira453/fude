@@ -516,7 +516,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const el = content?.querySelector<HTMLElement>(
         `[data-mg-block="${index}"] li[data-mg-item="${anchor}"]`,
       );
-      if (!el || !selectTextIn(el)) return;
+      // 入れ子の一覧は別の項目。親の項目を相手にするときは親の分だけを選ぶ。
+      if (!el || !selectTextIn(el, { own: true })) return;
       reviewRef.current?.startDraft({ unit: true });
     },
     [content],

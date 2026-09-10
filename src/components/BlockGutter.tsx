@@ -12,6 +12,7 @@ import {
   itemAtY,
   itemEdge,
   itemLine,
+  itemOwnRect,
   lineHeight,
   ONLY,
   relative,
@@ -324,6 +325,8 @@ export function BlockGutter({
       const found =
         li && anchorAt !== null ? itemAt(hit.index, anchorAt) : null;
       const liBox = li ? li.getBoundingClientRect() : null;
+      // メニューの相手として塗るのは項目そのもの。入れ子の一覧は別の項目。
+      const liOwn = li ? itemOwnRect(li) : null;
       const next: View = {
         index: hit.index,
         atRight: true,
@@ -340,7 +343,7 @@ export function BlockGutter({
                 height: liBox.height,
                 mid: itemLine(li, liBox).top - base.top + itemLine(li, liBox).height / 2,
                 edge: itemEdge(li) - base.left,
-                box: relative(liBox, base),
+                box: relative(liOwn ?? liBox, base),
               }
             : null,
         // ブロックの上端から半行下げる。行箱を直に測ると、コールアウトのように
