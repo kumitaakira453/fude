@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Settings } from "./components/Settings";
 import { Shortcuts } from "./components/Shortcuts";
@@ -40,6 +40,8 @@ export default function App() {
   const folders = useAtomValue(foldersAtom);
   const sidebarOpen = useAtomValue(sidebarOpenAtom);
   const [sideWidth, setSideWidth] = useAtom(sidebarWidthAtom);
+  // 掴んでいるあいだは仕切りが幅を直に書く（状態を通すと木全体が描き直される）。
+  const sideRef = useRef<HTMLDivElement>(null);
   const theme = useAtomValue(themeAtom);
   const layout = useAtomValue(layoutAtom);
   const activePaneId = useAtomValue(activePaneIdAtom);
@@ -157,6 +159,7 @@ export default function App() {
                     対して解ける）。min-width は max-width より優先されるので、
                     極端に狭い窓でも字が読める幅は残る。 */}
                 <div
+                  ref={sideRef}
                   style={{
                     width: sideWidth,
                     minWidth: SIDEBAR_MIN,
@@ -166,7 +169,11 @@ export default function App() {
                 >
                   <Sidebar />
                 </div>
-                <SidebarGrip width={sideWidth} onWidth={setSideWidth} />
+                <SidebarGrip
+                  target={sideRef}
+                  width={sideWidth}
+                  onWidth={setSideWidth}
+                />
               </>
             )}
             <PaneGroup />
