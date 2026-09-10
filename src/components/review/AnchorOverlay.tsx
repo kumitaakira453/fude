@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import type { AnchorHit } from "../../lib/review";
 import type { Mark, Marked, Rect } from "../../lib/reviewMarks";
 import { Icon } from "../Icon";
+import { CommentBody } from "./CommentMarkdown";
 
 // 指摘が付いている箇所に印を重ねる。DOM は書き換えず、矩形を絶対配置で
 // 載せるだけなので本文の組版に影響しない。
@@ -319,9 +320,11 @@ export function AnchorOverlay({
             <span className="mg-peek-who">{peek.who || "コメント"}</span>
             {peek.at > 0 && <span className="mg-peek-when">{ago(peek.at)}</span>}
           </div>
-          <div className="mg-review-peek-body">
-            {peek.note || "（本文なし）"}
-          </div>
+          {peek.note ? (
+            <CommentBody body={peek.note} className="mg-review-peek-body" />
+          ) : (
+            <div className="mg-review-peek-body">（本文なし）</div>
+          )}
           <div className="mg-peek-foot">
             {peek.answered && (
               <span className="mg-peek-chip is-answered">

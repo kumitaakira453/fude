@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { isMermaidBlock } from "../../lib/blocks";
 import type { AnchorHit } from "../../lib/review";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
+import { CommentPreview, PreviewToggle } from "./CommentMarkdown";
 
 // 読書中に選択した箇所へ指摘を書く小窓。書くことだけを担い、
 // 付いている指摘を読む・返信する・解決するのはレビュー画面が受け持つ。
@@ -41,6 +43,9 @@ export function CommentComposer({
   onClose: () => void;
 }) {
   const [body, setBody] = useState("");
+  // 書いたものの姿を確かめている間。
+  const [see, setSee] = useState(false);
+  const md = useMarkdownKeys(setBody);
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 開いた時点からの対象のずれ。これを足して追いかける。
@@ -187,21 +192,41 @@ export function CommentComposer({
         )}
       </div>
       <div className="p-2">
-        <textarea
-          ref={inputRef}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
-          placeholder="コメントを書く…（⌘Enter で送信）"
-          className="block w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] leading-relaxed outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
-        />
+        {see ? (
+          <CommentPreview
+            body={body}
+            style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
+          />
+        ) : (
+          <textarea
+            ref={inputRef}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onCompositionStart={md.onCompositionStart}
+            onCompositionEnd={md.onCompositionEnd}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                submit();
+                return;
+              }
+              md.onKeyDown(e);
+            }}
+            style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
+            placeholder="コメントを書く…（⌘Enter で送信）"
+            className="block w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] leading-relaxed outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
+          />
+        )}
         <div className="mt-1.5 flex items-center gap-1.5">
+          {/* 書く側へ戻したら焦点も戻す。入力欄は出し直しになるので、
+              描き直しのあとに当てる。 */}
+          <PreviewToggle
+            on={see}
+            onToggle={() => {
+              setSee((v) => !v);
+              if (see) requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+          />
           <span className="flex-1" />
           <button
             onClick={onClose}

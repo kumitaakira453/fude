@@ -26,6 +26,7 @@ import { Icon } from "./Icon";
 import { markdownContext } from "./MarkdownContext";
 import { CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
+import { remarkSoftBreaks } from "../lib/md/softBreaks";
 import { MdImage } from "./MdImage";
 import { Mermaid } from "./Mermaid";
 
@@ -37,6 +38,10 @@ const remarkPlugins = [
   remarkMath,
   [remarkFrontmatter, ["yaml"]] as const,
 ];
+// 単独の改行を改行として描く構成。会話に近いもの（コメント）に使う。
+// 並びはモジュールで持つ。描画のたびに新しい配列を渡すと、react-markdown が
+// 同じ本文でも作り直す。
+const remarkPluginsWithBreaks = [...remarkPlugins, remarkSoftBreaks];
 const rehypePlugins = [
   rehypeRaw,
   rehypeSlug,
@@ -231,6 +236,7 @@ function itemAnchor(node: unknown): number | null {
 export const Markdown = memo(function Markdown({
   body,
   editorial,
+  breaks,
   onToggleTask,
   editCell,
   onCellCommit,
@@ -241,6 +247,9 @@ export const Markdown = memo(function Markdown({
 }: {
   body: string;
   editorial: boolean;
+  // 単独の改行を改行として描くか。文書では空白に潰すのが正しいが、
+  // コメントでは Enter は改行の意図で押される。
+  breaks?: boolean;
   // タスクチェックボックスのトグル用（ブロック内の何番目のタスクかと、
   // 押されたボタン）。渡されないときはチェックボックスを押せなくする。
   onToggleTask?: (ordinal: number, el: HTMLElement) => void;
@@ -304,7 +313,7 @@ export const Markdown = memo(function Markdown({
   return (
     <ReactMarkdown
       // @ts-expect-error remark/rehype プラグインのタプル型は緩めに扱う
-      remarkPlugins={remarkPlugins}
+      remarkPlugins={breaks ? remarkPluginsWithBreaks : remarkPlugins}
       // @ts-expect-error 同上
       rehypePlugins={rehypePlugins}
       components={{

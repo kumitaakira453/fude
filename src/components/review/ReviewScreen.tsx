@@ -2,6 +2,7 @@ import { confirm, message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAfterPaint } from "../../hooks/useAfterPaint";
+import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
@@ -50,6 +51,7 @@ import {
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
+import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
 import { DocumentView, type Anchor } from "./DocumentView";
 import { Quote } from "./Quote";
 
@@ -458,6 +460,19 @@ function DetailSkeleton() {
 // 画面に出るときの字へ均してから 1 行に詰める。
 const lineCache = new Map<string, string>();
 
+// 一覧に出す指摘の 1 行。ここは 2 行の枠なので組版はせず、記法だけを落として
+// 字の並びに均す（`**強調**` の記号が本文として読まれないようにする）。
+const bodyCache = new Map<string, string>();
+
+function bodyLine(body: string): string {
+  const hit = bodyCache.get(body);
+  if (hit !== undefined) return hit;
+  const plain = buildProjection(body).plain.replace(/\s+/g, " ").trim();
+  const line = plain || body.replace(/\s+/g, " ").trim();
+  bodyCache.set(body, line);
+  return line;
+}
+
 function targetLine(thread: ReviewThread): string {
   const raw = thread.selection.trim();
   if (raw) return raw.replace(/\s+/g, " ");
@@ -484,7 +499,7 @@ function ThreadCard({
     <button onClick={onPick} className={`mg-thread-card ${active ? "is-active" : ""}`}>
       {/* 読みたいのは指摘そのもの。対象はその下に、手がかりとして小さく添える。 */}
       <div className="mg-thread-body">
-        {thread.comments[0]?.body ?? "（本文なし）"}
+        {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
       </div>
       <div className="mg-thread-quote">
         <span>{targetLine(thread)}</span>
@@ -581,6 +596,9 @@ function ThreadDetail({
   const { openFile, resolveAsset, peekAsset } = useWorkspace();
   const [baseText, setBaseText] = useState<string | null>(null);
   const [reply, setReply] = useState("");
+  // 書いたものの姿を確かめている間。送ると書く側へ戻す。
+  const [seeReply, setSeeReply] = useState(false);
+  const md = useMarkdownKeys(setReply);
   // 表示用。返信と解決は別の操作なので別に持つ。1 つにすると、返信しただけで
   // 解決のボタンまで処理中の見た目になる。
   const [sending, setSending] = useState(false);
@@ -648,6 +666,7 @@ function ThreadDetail({
     try {
       if (await replyToThread(thread.id, REVIEW_AUTHOR, text)) {
         setReply("");
+        setSeeReply(false);
         await syncLedger(store);
         notify(store, "返信しました");
       }
@@ -852,23 +871,32 @@ function ThreadDetail({
         )}
 
         <div className="mg-side-compose">
-          <AutoTextarea
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                void send();
-              }
-            }}
-            minRows={2}
-            maxRows={10}
-            placeholder="返信を書く…"
-            className="mg-field"
-          />
+          {seeReply ? (
+            <CommentPreview body={reply} />
+          ) : (
+            <AutoTextarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onCompositionStart={md.onCompositionStart}
+              onCompositionEnd={md.onCompositionEnd}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void send();
+                  return;
+                }
+                md.onKeyDown(e);
+              }}
+              minRows={2}
+              maxRows={10}
+              placeholder="返信を書く…（記法が使えます）"
+              className="mg-field"
+            />
+          )}
           {/* 送り方の案内は入力欄の外に置く。プレースホルダに混ぜると、
               書き始めたとたんに読めなくなる。 */}
           <div className="mg-side-row">
+            <PreviewToggle on={seeReply} onToggle={() => setSeeReply((v) => !v)} />
             <span className="mg-side-hint">⌘Enter で送信</span>
             <button
               onClick={() => void send()}
@@ -940,6 +968,9 @@ function Message({
   // 書き直しは自分の書き込みだけ。相手の言葉を書き換えられるようにはしない。
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(comment.body);
+  // 書き直しの途中で、書いたものの姿を確かめている間。
+  const [see, setSee] = useState(false);
+  const md = useMarkdownKeys(setText);
   // 吹き出しの幅。書き直しに入った瞬間に横幅が変わると、同じ発言が別の形に
   // 見えてしまうので、入る直前の幅をそのまま引き継ぐ。
   const [width, setWidth] = useState<number | undefined>(undefined);
@@ -952,6 +983,7 @@ function Message({
   const startEditing = () => {
     setWidth(bubbleRef.current?.getBoundingClientRect().width);
     setText(comment.body);
+    setSee(false);
     setEditing(true);
   };
   return (
@@ -971,28 +1003,39 @@ function Message({
         )}
         {editing ? (
           <div className="mg-bubble-edit" style={{ width }}>
-            <AutoTextarea
-              autoFocus
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setEditing(false);
-                } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  save();
-                }
-              }}
-              minRows={2}
-              maxRows={12}
-              className="mg-bubble-input"
-            />
+            {see ? (
+              <CommentPreview body={text} />
+            ) : (
+              <AutoTextarea
+                autoFocus
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onCompositionStart={md.onCompositionStart}
+                onCompositionEnd={md.onCompositionEnd}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setEditing(false);
+                    return;
+                  }
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    save();
+                    return;
+                  }
+                  md.onKeyDown(e);
+                }}
+                minRows={2}
+                maxRows={12}
+                className="mg-bubble-input"
+              />
+            )}
             {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
                 入力欄から焦点が外れる拍子に押下がどこにも届かないことがある。
                 書き換えていないときの保存は、何も書かずに閉じるだけにする。
                 押せないボタンにすると、反応しないのと区別が付かない。 */}
             <div className="mg-bubble-edit-foot">
+              <PreviewToggle on={see} onToggle={() => setSee((v) => !v)} />
               <span className="mg-side-hint">⌘Enter で保存</span>
               <button
                 type="button"
@@ -1018,7 +1061,7 @@ function Message({
           </div>
         ) : (
           <div className="mg-bubble" ref={bubbleRef}>
-            {comment.body}
+            <CommentBody body={comment.body} />
             {mine && (
               <button
                 type="button"
