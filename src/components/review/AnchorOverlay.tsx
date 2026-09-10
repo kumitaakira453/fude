@@ -189,16 +189,18 @@ export function AnchorOverlay({
         keep();
         return;
       }
+      // カードの上ではカードの都合を優先する（触れているあいだは閉じない）。
+      // 押しながらでも同じ。押した拍子に閉じると、その押下が本文へ抜けて
+      // 選択が始まり、カードが消えたようにしか見えない。
+      if ((e.target as Element | null)?.closest?.(".mg-review-peek")) {
+        keep();
+        return;
+      }
       // 選択を引いているあいだは出さない。カードが下に出ると、ドラッグの
       // 行き先をそれが奪って選択が飛ぶ。
       if (e.buttons !== 0) {
         keep();
         if (peekRef.current) setPeek(null);
-        return;
-      }
-      // カードの上ではカードの都合を優先する（触れているあいだは閉じない）。
-      if ((e.target as Element | null)?.closest?.(".mg-review-peek")) {
-        keep();
         return;
       }
       const x = e.clientX;
@@ -389,9 +391,20 @@ export function AnchorOverlay({
           style={{ top: peek.top + PEEK_GAP, left: peek.left }}
           onMouseEnter={keep}
           onMouseLeave={hideSoon}
-          // 押したら書き直しに入る。人の言葉は書き換えられないので、
-          // そちらは一覧で開く。
-          onClick={edit ? undefined : peek.mine ? startEdit : () => onPick(peek.hit)}
+          // 押した瞬間に入る。click を待つと、その間に本文の選択が始まって
+          // カードが閉じ、押下がどこにも届かない。
+          //
+          // 人の言葉は書き換えられないので、そちらは一覧で開く。
+          onMouseDown={(e) => {
+            // 書いている間は素通し（入力欄が焦点とキャレットを取る）。
+            if (edit) return;
+            // リンクと札は自分の仕事を持っている。
+            if ((e.target as HTMLElement).closest("a, button")) return;
+            // 本文の選択を始めさせない。
+            e.preventDefault();
+            if (peek.mine) startEdit();
+            else onPick(peek.hit);
+          }}
           onKeyDown={(e) => {
             if (edit || e.key !== "Enter") return;
             if (peek.mine) startEdit();
