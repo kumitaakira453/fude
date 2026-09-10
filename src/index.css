@@ -2119,6 +2119,12 @@ body.mg-dragging .mg-sel-menu {
 .mg-prose.mg-editorial :is(ul, ol) > li {
   margin-block: 0.15em;
 }
+/* 入れ子の一覧は親の項目の一部。外側の一覧と同じ余白（1.1rem）を取ると、
+   項目とその中の一覧が離れて別の塊に見える。項目と同じ刻みに揃える。 */
+.mg-prose li > :is(ul, ol),
+.mg-prose.mg-editorial li > ol.mg-steps {
+  margin-block: 0.15em;
+}
 /* 空行で書いた（ゆるい）箇条書きは項目の中が段落になる。編集面のタスクは
    チェックと中身を分けて包むので、その中の段落も同じに扱う。 */
 .mg-prose.mg-editorial li > p,
@@ -3648,7 +3654,15 @@ svg[id^="mmd-"] foreignObject p {
 .mg-md :is(ul, ol) {
   padding-left: 1.6em;
 }
-/* 小さい字では既定の点が読み取れないので、記号だけ一段大きく組む。 */
+/* 記号は自分で決める。組版の規則（typography）に任せると、地の指定が
+   効いていないところで点が消える。小さい字では既定の点が読み取れないので、
+   記号だけ一段大きく組む。 */
+.mg-md ul {
+  list-style-type: disc;
+}
+.mg-md ol {
+  list-style-type: decimal;
+}
 .mg-md ul > li::marker {
   font-size: 1.25em;
 }
