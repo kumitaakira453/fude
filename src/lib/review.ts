@@ -38,11 +38,17 @@ export interface ResolvedCache {
   at: number;
 }
 
+// 版を残した主体。origin（何をした時点か）とは別の軸。手で打った版と
+// エージェントが打った版は、どちらも checkpoint になる。
+export type VersionActor = "you" | "ai" | "system";
+
 export interface ReviewVersion {
   id: string;
   file: string;
   label: string | null;
   origin: "comment" | "commit" | "checkpoint";
+  // 主体が記録される前の台帳には無い。読む側は origin から見なす。
+  actor?: VersionActor | null;
   created_at: number;
 }
 
@@ -129,7 +135,7 @@ export async function createCheckpoint(
 ): Promise<Checkpointed | null> {
   return call(
     () => invoke<Checkpointed>("review_checkpoint", { file, text, label }),
-    "版を保存できませんでした",
+    "バージョンを保存できませんでした",
   );
 }
 

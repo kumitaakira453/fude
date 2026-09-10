@@ -1,19 +1,28 @@
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAfterPaint } from "../../hooks/useAfterPaint";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { splitBlocks } from "../../lib/blocks";
 import { fontStack } from "../../lib/fonts";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import { readVersion, restoreVersion, type ReviewVersion } from "../../lib/review";
+import { WIDTH_CLASS } from "../../lib/ui";
 import {
-  ORIGIN_NOTE,
+  ACTOR_ICON,
   actorOf,
-  agoOf,
+  fullyOf,
   labelOf,
+  noteOf,
   versionsOf,
+  whenOf,
 } from "../../lib/versions";
-import { contentCacheAtom, editorialAtom, fontAtom } from "../../state/atoms";
+import {
+  contentCacheAtom,
+  editorialAtom,
+  fontAtom,
+  readingWidthAtom,
+} from "../../state/atoms";
 import { ledgerAtom, syncLedger, versionScreenAtom } from "../../state/review";
 import { notify } from "../../state/toast";
 import { Icon } from "../Icon";
@@ -21,17 +30,17 @@ import { Markdown } from "../Markdown";
 import { markdownContext } from "../MarkdownContext";
 import { VersionDiff, type Layout } from "./VersionDiff";
 
-// 版の履歴。左に版を新しい順に並べ、右に選んだものを出す。
+// バージョンの履歴。左にバージョンを新しい順に並べ、右に選んだものを出す。
 //
-// 本文に重ねず別画面で出す。差分は前と後を並べて見せるものなので、
+// 本文に重ねず別画面で出す。差分は変更前と変更後を並べて見せるものなので、
 // 読む画面の幅には収まらない。
 //
-// いちばん上は「いま」。版ではなく今のファイルの本文で、差分の既定の相手にも
-// なる。版を打つ前の書きかけをここで比べられる。
+// いちばん上は「いま」。バージョンではなく今のファイルの本文で、差分の既定の
+// 比較対象にもなる。バージョンを打つ前の書きかけをここで比べられる。
 
 type Mode = "body" | "diff";
 
-// 「いま」を表す選択。版 ID を持たないので null で表す。
+// 「いま」を表す選択。バージョン ID を持たないので null で表す。
 type Pick = string | null;
 
 const MODES: { id: Mode; label: string }[] = [
@@ -50,6 +59,7 @@ export function VersionScreen({ path }: { path: string }) {
   const cache = useAtomValue(contentCacheAtom);
   const editorial = useAtomValue(editorialAtom);
   const font = useAtomValue(fontAtom);
+  const width = useAtomValue(readingWidthAtom);
   const close = useSetAtom(versionScreenAtom);
   const { absOf, reloadFile, resolveAsset, peekAsset } = useWorkspace();
 
@@ -58,10 +68,11 @@ export function VersionScreen({ path }: { path: string }) {
   const list = useMemo(() => (abs ? versionsOf(ledger, abs) : []), [ledger, abs]);
 
   const [picked, setPicked] = useState<Pick>(null);
-  // 既定は本文。選んだ版が実際どう見えるかを先に出し、差分は求められたら出す。
+  // 既定は本文。選んだバージョンが実際どう見えるかを先に出し、差分は
+  // 求められたら出す。
   const [mode, setMode] = useState<Mode>("body");
   const [layout, setLayout] = useState<Layout>("unified");
-  // 差分の相手。undefined は「まだ選んでいない」で、既定に従う。
+  // 差分の比較対象。undefined は「まだ選んでいない」で、既定に従う。
   const [against, setAgainst] = useState<Pick | undefined>(undefined);
   const [restoring, setRestoring] = useState<string | null>(null);
   // state は再描画されるまで更新されないので、素早い 2 回目のクリックが
@@ -85,12 +96,14 @@ export function VersionScreen({ path }: { path: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
 
-  // 選んでいた版が消えたら（別のウィンドウで台帳が変わった等）いまへ戻す。
+  // 選んでいたバージョンが消えたら（別のウィンドウで台帳が変わった等）
+  // いまへ戻す。
   useEffect(() => {
     if (picked !== null && !list.some((v) => v.id === picked)) setPicked(null);
   }, [list, picked]);
 
-  // 版を選ぶ。相手と同じものを選ぶと差分が空になるので、相手は既定へ戻す。
+  // バージョンを選ぶ。比較対象と同じものを選ぶと差分が空になるので、
+  // 比較対象は既定へ戻す。
   const choose = useCallback(
     (id: Pick) => {
       setPicked(id);
@@ -103,7 +116,7 @@ export function VersionScreen({ path }: { path: string }) {
     (id: Pick): string => {
       if (id === null) return "いま";
       const version = list.find((v) => v.id === id);
-      return version ? labelOf(version) : "失われた版";
+      return version ? labelOf(version) : "失われたバージョン";
     },
     [list],
   );
@@ -116,17 +129,23 @@ export function VersionScreen({ path }: { path: string }) {
     [list],
   );
 
-  // 既定の相手。過去の版を見ているならいまと比べ、いまを見ているなら
-  // 直前の版と比べる。同じものを両側に置くと差分が空になる。
+  // 既定の比較対象。過去のバージョンを見ているならいまと比べ、いまを見て
+  // いるなら直前のバージョンと比べる。同じものを両側に置くと差分が空になる。
   const other =
     against === undefined
       ? picked === null
         ? (list[0]?.id ?? null)
         : null
       : against;
-  // 古いほうを前に置く。
+  // 古いほうを変更前に置く。
   const [oldId, newId] =
     stampOf(picked) >= stampOf(other) ? [other, picked] : [picked, other];
+
+  // 右ペインは画面を 1 枚描き切ってから組む。押した一枚で重い組み立てまで
+  // 走らせると、左ペインの選択やボタンの見た目もそれが終わるまで変わらない。
+  const wanted = `${mode}|${layout}|${picked ?? ""}|${other ?? ""}`;
+  const drawn = useAfterPaint(wanted);
+  const pending = drawn !== wanted;
 
   const oldText = useText(oldId, current);
   const newText = useText(newId, current);
@@ -147,14 +166,14 @@ export function VersionScreen({ path }: { path: string }) {
     [path, resolveAsset, peekAsset],
   );
 
-  // 過去の版でファイルを置き換える。今の本文は版として残るので、
-  // 押したあとでも元へ戻せる。
+  // 過去のバージョンでファイルを置き換える。今の本文はバージョンとして
+  // 残るので、押したあとでも元へ戻せる。
   const restore = useCallback(
     async (version: ReviewVersion) => {
       if (running.current || !abs || current === undefined) return;
       const name = labelOf(version);
       const ok = await confirm(
-        `「${name}」の本文でこのファイルを置き換えます。今の本文は版として履歴に残ります。`,
+        `「${name}」の本文でこのファイルを置き換えます。今の本文はバージョンとして履歴に残ります。`,
         { title: "fude", kind: "warning" },
       );
       if (!ok) return;
@@ -200,7 +219,9 @@ export function VersionScreen({ path }: { path: string }) {
           </div>
           <div className="truncate text-[13px] font-medium leading-tight" title={path}>
             {name}
-            {dir && <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">{dir}</span>}
+            {dir && (
+              <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">{dir}</span>
+            )}
           </div>
         </div>
         <span className="flex-1" />
@@ -262,65 +283,65 @@ export function VersionScreen({ path }: { path: string }) {
               <span className="mg-ver-name">いま</span>
               <span className="mg-ver-note">
                 {list.length === 0
-                  ? "まだ版がありません"
+                  ? "まだバージョンがありません"
                   : atNewest
                     ? `「${labelOf(list[0])}」のまま`
-                    : "まだ版にしていない"}
+                    : "まだバージョンにしていない"}
               </span>
             </span>
           </button>
 
-          {list.map((version) => (
-            <button
-              key={version.id}
-              onClick={() => choose(version.id)}
-              className={`mg-ver-row${picked === version.id ? " is-active" : ""}`}
-            >
-              <span className={`mg-ver-face is-${actorOf(version.origin)}`}>
-                <Icon
-                  name={actorOf(version.origin) === "ai" ? "auto_awesome" : "person"}
-                  size={13}
-                  fill
-                />
-              </span>
-              <span className="mg-ver-main">
-                <span className="mg-ver-name">{labelOf(version)}</span>
-                <span className="mg-ver-note">{ORIGIN_NOTE[version.origin]}</span>
-              </span>
-              <span className="mg-ver-when">{agoOf(version.created_at)}</span>
-            </button>
-          ))}
+          {list.map((version) => {
+            const actor = actorOf(version);
+            return (
+              <button
+                key={version.id}
+                onClick={() => choose(version.id)}
+                title={fullyOf(version)}
+                className={`mg-ver-row${picked === version.id ? " is-active" : ""}`}
+              >
+                <span className={`mg-ver-face is-${actor}`}>
+                  <Icon name={ACTOR_ICON[actor]} size={13} fill />
+                </span>
+                <span className="mg-ver-main">
+                  <span className="mg-ver-name">{whenOf(version)}</span>
+                  <span className="mg-ver-note">{noteOf(version)}</span>
+                </span>
+              </button>
+            );
+          })}
         </nav>
 
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-4xl px-6 py-6">
+          <div className="mx-auto max-w-5xl px-6 py-6">
             {current === undefined ? (
-              <p className="mg-ver-note-line">本文を読み込んでいます…</p>
+              <Waiting>本文を読み込んでいます…</Waiting>
             ) : list.length === 0 ? (
               <p className="mg-ver-note-line">
-                <Icon name="bookmark_add" size={15} />
-                この文書にはまだ版がありません。本文の画面の「版を保存」から打てます。
+                <Icon name="commit" size={15} />
+                この文書にはまだバージョンがありません。本文の画面の「バージョンを保存」から打てます。
               </p>
+            ) : pending ? (
+              <Waiting>読み込んでいます…</Waiting>
             ) : mode === "body" ? (
               pickedText === undefined ? (
-                <p className="mg-ver-note-line">版を読み込んでいます…</p>
+                <Waiting>読み込んでいます…</Waiting>
               ) : pickedText === null ? (
-                <p className="mg-ver-note-line">
-                  <Icon name="error" size={15} />
-                  この版の本文が見つかりません。
-                </p>
+                <Lost>このバージョンの本文が見つかりません。</Lost>
               ) : (
                 <markdownContext.Provider value={ctx}>
-                  <Body text={pickedText} editorial={editorial} style={style} />
+                  <Body
+                    text={pickedText}
+                    editorial={editorial}
+                    style={style}
+                    width={width}
+                  />
                 </markdownContext.Provider>
               )
             ) : oldText === undefined || newText === undefined ? (
-              <p className="mg-ver-note-line">版を読み込んでいます…</p>
+              <Waiting>読み込んでいます…</Waiting>
             ) : oldText === null || newText === null ? (
-              <p className="mg-ver-note-line">
-                <Icon name="error" size={15} />
-                比べる版の本文が見つかりません。
-              </p>
+              <Lost>比べるバージョンの本文が見つかりません。</Lost>
             ) : (
               <>
                 <p className="mg-ver-facing">
@@ -358,7 +379,7 @@ export function VersionScreen({ path }: { path: string }) {
                 size={14}
                 className={restoring === picked ? "mg-spin" : undefined}
               />
-              この版から復元
+              このバージョンを復元
             </button>
           </aside>
         )}
@@ -367,7 +388,25 @@ export function VersionScreen({ path }: { path: string }) {
   );
 }
 
-// 差分の相手を選ぶ。
+function Waiting({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mg-ver-note-line">
+      <Icon name="progress_activity" size={14} className="mg-spin" />
+      {children}
+    </p>
+  );
+}
+
+function Lost({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mg-ver-note-line">
+      <Icon name="error" size={15} />
+      {children}
+    </p>
+  );
+}
+
+// 差分の比較対象を選ぶ。
 function Against({
   label,
   options,
@@ -378,7 +417,7 @@ function Against({
   label: string;
   options: ReviewVersion[];
   current: Pick;
-  // 両側に同じものを置くと差分が空になるので、いま見ている版は出さない。
+  // 両側に同じものを置くと差分が空になるので、いま見ているバージョンは出さない。
   exclude: Pick;
   onPick: (id: Pick) => void;
 }) {
@@ -401,12 +440,12 @@ function Against({
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((o) => !o)} className="mg-ver-pick">
-        <span className="text-[var(--mg-muted)]">相手</span>
+        <span className="text-[var(--mg-muted)]">比較対象</span>
         <span className="truncate font-medium">{label}</span>
         <Icon name="unfold_more" size={15} className="text-[var(--mg-muted)]" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-1 max-h-80 w-64 overflow-y-auto rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
+        <div className="absolute right-0 top-full z-40 mt-1 max-h-80 w-72 overflow-y-auto rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
           {exclude !== null && (
             <button
               onClick={() => pick(null)}
@@ -423,9 +462,9 @@ function Against({
                 onClick={() => pick(v.id)}
                 className={`mg-ver-opt${current === v.id ? " is-on" : ""}`}
               >
-                <span className="truncate">{labelOf(v)}</span>
-                <span className="ml-auto shrink-0 text-[11px] text-[var(--mg-muted)]">
-                  {agoOf(v.created_at)}
+                <span className="shrink-0">{whenOf(v)}</span>
+                <span className="truncate text-[11px] text-[var(--mg-muted)]">
+                  {noteOf(v)}
                 </span>
               </button>
             ))}
@@ -435,8 +474,8 @@ function Against({
   );
 }
 
-// 版の本文を読む。「いま」は本文キャッシュから、それ以外はスナップショットから。
-// undefined は読み込み中、null は本文が見つからない。
+// バージョンの本文を読む。「いま」は本文キャッシュから、それ以外は
+// スナップショットから。undefined は読み込み中、null は本文が見つからない。
 function useText(id: Pick, current: string | undefined): string | null | undefined {
   const [text, setText] = useState<string | null | undefined>(undefined);
   useEffect(() => {
@@ -450,7 +489,7 @@ function useText(id: Pick, current: string | undefined): string | null | undefin
       alive = false;
     };
   }, [id]);
-  // 「いま」は控えを持たず、そのつど本文キャッシュから読む。版と違って
+  // 「いま」は控えを持たず、そのつど本文キャッシュから読む。バージョンと違って
   // 書き換わるので、控えると監視の取り込みに追いつかない。
   return id === null ? (current ?? null) : text;
 }
@@ -460,7 +499,12 @@ const FIRST_CHUNK = 12;
 // 残りを足す 1 回分。
 const NEXT_CHUNK = 160;
 
-// 版の本文をそのまま出す。閲覧専用。
+// バージョンの本文をそのまま出す。閲覧専用。
+//
+// 入れ物は読む画面と同じ形にする。1 つの mg-prose の中にブロックを並べ、
+// 入れ物の display は contents にする。ブロックごとに mg-prose を作ると、
+// prose の first-child リセットが毎ブロックに効いて見出しの上の余白が消え、
+// 段落と見出しの縦のリズムが崩れる。
 //
 // 先頭から順に足していく。全ブロックを 1 回のペイントで描くと大きな
 // ファイルで固まる。
@@ -468,10 +512,12 @@ function Body({
   text,
   editorial,
   style,
+  width,
 }: {
   text: string;
   editorial: boolean;
   style: React.CSSProperties;
+  width: string;
 }) {
   const blocks = useMemo(() => splitBlocks(parseFrontmatter(text).body), [text]);
   const [limit, setLimit] = useState(FIRST_CHUNK);
@@ -484,25 +530,28 @@ function Body({
   }, [limit, blocks.length]);
 
   if (blocks.length === 0) {
-    return <p className="mg-ver-note-line">この版の本文は空です。</p>;
+    return <p className="mg-ver-note-line">このバージョンの本文は空です。</p>;
   }
 
   return (
-    <div className="mg-doc">
-      {blocks.slice(0, limit).map((block) => (
-        <div
-          key={block.index}
-          className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
-          style={style}
-        >
-          <Markdown body={block.src} editorial={editorial} />
-        </div>
-      ))}
+    <>
+      <article
+        style={style}
+        className={`mg-prose prose ${editorial ? "mg-editorial" : ""} ${
+          WIDTH_CLASS[width]
+        } mx-auto`}
+      >
+        {blocks.slice(0, limit).map((block) => (
+          <div key={block.index} className="mg-block">
+            <Markdown body={block.src} editorial={editorial} />
+          </div>
+        ))}
+      </article>
       {limit < blocks.length && (
         <p className="mg-ver-note-line">
           残り {blocks.length - limit} ブロックを読み込んでいます…
         </p>
       )}
-    </div>
+    </>
   );
 }

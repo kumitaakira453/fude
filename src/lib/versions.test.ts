@@ -4,8 +4,10 @@ import {
   actorOf,
   compare,
   labelOf,
+  noteOf,
   unchanged,
   versionsOf,
+  whenOf,
   type DiffRow,
 } from "./versions";
 
@@ -45,16 +47,32 @@ describe("版の一覧", () => {
     expect(versionsOf(ledger, "/docs/か\u{3099}ぞう.md")).toHaveLength(1);
   });
 
-  it("主体は origin から決まる", () => {
-    expect(actorOf("commit")).toBe("ai");
-    expect(actorOf("checkpoint")).toBe("you");
-    expect(actorOf("comment")).toBe("you");
+  it("記録があればその主体、無ければ origin から見なす", () => {
+    expect(actorOf(version({ actor: "ai", origin: "checkpoint" }))).toBe("ai");
+    expect(actorOf(version({ origin: "commit" }))).toBe("ai");
+    expect(actorOf(version({ origin: "checkpoint" }))).toBe("you");
+    // 指摘を付けた時点は fude が自動で残すので、人が打った版とは区別する
+    expect(actorOf(version({ origin: "comment" }))).toBe("system");
   });
 
   it("名前が無い版は打った日時で呼ぶ", () => {
     expect(labelOf(version({ label: "下書き整理" }))).toBe("下書き整理");
-    expect(labelOf(version({ label: "  " }))).not.toBe("  ");
-    expect(labelOf(version({ label: null }))).not.toBe("");
+    expect(labelOf(version({ label: "  " }))).toBe(whenOf(version({})));
+    expect(labelOf(version({ label: null }))).toBe(whenOf(version({})));
+  });
+
+  it("添え書きは主体と、名前か何をした時点かを並べる", () => {
+    expect(noteOf(version({ actor: "you", label: "下書き整理" }))).toBe(
+      "You ・ 下書き整理",
+    );
+    // 手で打った版に名前が無ければ、主体だけで足りる
+    expect(noteOf(version({ actor: "you", label: null }))).toBe("You");
+    expect(noteOf(version({ actor: "ai", origin: "commit", label: null }))).toBe(
+      "AI ・ 対応の記録",
+    );
+    expect(noteOf(version({ origin: "comment", label: null }))).toBe(
+      "システム ・ コメント時点",
+    );
   });
 });
 

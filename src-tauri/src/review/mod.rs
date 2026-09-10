@@ -5,7 +5,7 @@ pub mod store;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use store::{Comment, Ledger, Origin, Status, Thread, Version};
+use store::{Actor, Comment, Ledger, Origin, Status, Thread, Version};
 
 // GUI（Tauri コマンド）と CLI が共通で呼ぶ操作層。
 // Markdown の解析は一切しない。指摘が今の版でどこに対応するかは GUI が
@@ -314,7 +314,15 @@ pub fn create_thread(input: NewThread) -> Result<String, String> {
     let now = store::now_millis();
 
     store::update(|ledger: &mut Ledger| {
-        record_version(ledger, &key, &base_version, Origin::Comment, None, now);
+        record_version(
+            ledger,
+            &key,
+            &base_version,
+            Origin::Comment,
+            Actor::System,
+            None,
+            now,
+        );
         let id = ledger.fresh_thread_id();
         ledger.threads.push(Thread {
             id: id.clone(),
@@ -472,7 +480,15 @@ pub fn commit(file: &Path, message: &str) -> Result<String, String> {
     let now = store::now_millis();
     let label = message.to_string();
     store::update(|ledger: &mut Ledger| {
-        record_version(ledger, &key, &id, Origin::Commit, Some(label.clone()), now);
+        record_version(
+            ledger,
+            &key,
+            &id,
+            Origin::Commit,
+            Actor::Ai,
+            Some(label.clone()),
+            now,
+        );
         Ok(())
     })?;
     Ok(id)
@@ -486,18 +502,39 @@ pub fn checkpoint(
     file: &Path,
     text: &str,
     label: Option<String>,
+    actor: Actor,
 ) -> Result<Checkpointed, String> {
     let key = normalize(file)?;
     let id = snapshot::put(text)?;
     let now = store::now_millis();
     store::update(|ledger: &mut Ledger| {
         let known = ledger.versions.iter().any(|v| v.id == id && v.file == key);
-        record_version(ledger, &key, &id, Origin::Checkpoint, label.clone(), now);
+        record_version(
+            ledger,
+            &key,
+            &id,
+            Origin::Checkpoint,
+            actor,
+            label.clone(),
+            now,
+        );
         Ok(Checkpointed {
             id: id.clone(),
             created: !known,
         })
     })
+}
+
+// ディスクの本文をそのまま版にする。CLI から使う（画面を持たないので、
+// 「画面に出ていた本文」の代わりにディスクを読む）。
+pub fn checkpoint_file(
+    file: &Path,
+    label: Option<String>,
+    actor: Actor,
+) -> Result<Checkpointed, String> {
+    let key = normalize(file)?;
+    let text = fs::read_to_string(&key).map_err(|e| format!("{key} を読めません: {e}"))?;
+    checkpoint(file, &text, label, actor)
 }
 
 // 過去の版でファイルを置き換える。
@@ -541,9 +578,9 @@ fn apply_restore(ledger: &mut Ledger, file: &str, backup: &str, target: &str, no
     } else {
         Some(BACKUP_LABEL.to_string())
     };
-    record_version(ledger, file, backup, Origin::Checkpoint, label, now);
-    // 戻した版は台帳にあるので畳まれる。名前は触らない。
-    record_version(ledger, file, target, Origin::Checkpoint, None, now);
+    record_version(ledger, file, backup, Origin::Checkpoint, Actor::System, label, now);
+    // 戻した版は台帳にあるので畳まれる。名前も主体も触らない。
+    record_version(ledger, file, target, Origin::Checkpoint, Actor::System, None, now);
 }
 
 // 同じ内容の版が既にあれば重ねて記録しない。ラベルは後から来た方を優先する。
@@ -552,6 +589,7 @@ fn record_version(
     file: &str,
     id: &str,
     origin: Origin,
+    actor: Actor,
     label: Option<String>,
     now: i64,
 ) {
@@ -563,6 +601,7 @@ fn record_version(
         if label.is_some() {
             existing.label = label;
             existing.origin = origin;
+            existing.actor = Some(actor);
         }
         return;
     }
@@ -571,6 +610,7 @@ fn record_version(
         file: file.to_string(),
         label,
         origin,
+        actor: Some(actor),
         created_at: now,
     });
 }
@@ -702,8 +742,8 @@ mod tests {
     #[test]
     fn version_records_are_deduplicated_by_content() {
         let mut ledger = Ledger::default();
-        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, None, 10);
-        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, None, 20);
+        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, Actor::System, None, 10);
+        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, Actor::System, None, 20);
         assert_eq!(ledger.versions.len(), 1);
         assert_eq!(ledger.versions[0].created_at, 10);
 
@@ -713,15 +753,17 @@ mod tests {
             "/a.md",
             "hash1",
             Origin::Commit,
+            Actor::Ai,
             Some("指摘1〜3に対応".into()),
             30,
         );
         assert_eq!(ledger.versions.len(), 1);
         assert_eq!(ledger.versions[0].label.as_deref(), Some("指摘1〜3に対応"));
         assert_eq!(ledger.versions[0].origin, Origin::Commit);
+        assert_eq!(ledger.versions[0].who(), Actor::Ai);
 
         // 別ファイルの同一内容は別の版として持つ
-        record_version(&mut ledger, "/b.md", "hash1", Origin::Comment, None, 40);
+        record_version(&mut ledger, "/b.md", "hash1", Origin::Comment, Actor::System, None, 40);
         assert_eq!(ledger.versions.len(), 2);
     }
 
@@ -733,12 +775,14 @@ mod tests {
             "/a.md",
             "h1",
             Origin::Checkpoint,
+            Actor::You,
             Some("初稿".into()),
             10,
         );
         assert_eq!(ledger.versions.len(), 1);
         assert_eq!(ledger.versions[0].origin, Origin::Checkpoint);
         assert_eq!(ledger.versions[0].label.as_deref(), Some("初稿"));
+        assert_eq!(ledger.versions[0].who(), Actor::You);
 
         // 同じ本文をもう一度打っても増えず、打った時刻も動かない
         record_version(
@@ -746,6 +790,7 @@ mod tests {
             "/a.md",
             "h1",
             Origin::Checkpoint,
+            Actor::You,
             Some("初稿".into()),
             20,
         );
@@ -761,6 +806,7 @@ mod tests {
             "/a.md",
             "old",
             Origin::Checkpoint,
+            Actor::You,
             Some("初稿".into()),
             10,
         );
@@ -770,6 +816,8 @@ mod tests {
         let backup = ledger.versions.iter().find(|v| v.id == "now").unwrap();
         assert_eq!(backup.label.as_deref(), Some(BACKUP_LABEL));
         assert_eq!(backup.origin, Origin::Checkpoint);
+        // 復元は fude が自動で残すので、人の版とは区別する
+        assert_eq!(backup.who(), Actor::System);
         assert_eq!(backup.created_at, 30);
 
         // 戻した版の名前と時刻はそのまま。履歴は巻き戻さない
@@ -787,14 +835,17 @@ mod tests {
             "/a.md",
             "now",
             Origin::Checkpoint,
+            Actor::You,
             Some("下書き整理".into()),
             10,
         );
-        record_version(&mut ledger, "/a.md", "old", Origin::Comment, None, 5);
+        record_version(&mut ledger, "/a.md", "old", Origin::Comment, Actor::System, None, 5);
         apply_restore(&mut ledger, "/a.md", "now", "old", 30);
 
         let kept = ledger.versions.iter().find(|v| v.id == "now").unwrap();
         assert_eq!(kept.label.as_deref(), Some("下書き整理"));
+        // 名前と一緒に主体も奪わない
+        assert_eq!(kept.who(), Actor::You);
         assert_eq!(ledger.versions.len(), 2);
     }
     fn open_thread(id: &str) -> Thread {

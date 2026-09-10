@@ -22,8 +22,9 @@ import {
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { createCheckpoint } from "../lib/review";
+import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
-import { closePane, inEditable, inFloating } from "../lib/ui";
+import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
 import { syncLedger, versionScreenAtom } from "../state/review";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
@@ -77,12 +78,6 @@ import { Tooltip } from "./Tooltip";
 // 外の書き換えを取り込むまでの待ち。エージェントは 1 回の作業で何度も書くので、
 // 続けて来た分をまとめる。
 const ADOPT_WAIT = 800;
-
-const WIDTH_CLASS: Record<string, string> = {
-  cozy: "max-w-[760px]",
-  wide: "max-w-[1000px]",
-  full: "max-w-none",
-};
 
 export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const cache = useAtomValue(contentCacheAtom);
@@ -239,11 +234,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // ⌘S。自動保存があるので押す必要は無いが、待たずに書ける。
   const save = () => flushRef.current?.();
 
-  // ---- 版 ----
+  // ---- バージョン ----
   const openVersions = useSetAtom(versionScreenAtom);
-  // 版の名前を打つ 1 行。押した直後に出し、Enter で確定する。
+  // バージョンの名前を決める小窓。名前は任意なので、空欄と向き合わせず
+  // 日時を入れた状態で開く。そのまま Enter でも打てる。
   const [naming, setNaming] = useState(false);
   const [versionName, setVersionName] = useState("");
+  const namingRef = useRef<HTMLDivElement>(null);
   const ime = useImeSafeEnter();
   const stamping = useRef(false);
 
@@ -258,7 +255,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return store.get(contentCacheAtom).get(path) ?? null;
   }, [path, store]);
 
-  // 版を打つ。名前は任意で、空なら日時で呼ばれる。
+  // バージョンを打つ。名前を消して確定すれば名前なしで残る。
   const stamp = useCallback(
     async (name: string) => {
       if (stamping.current || !path) return;
@@ -272,7 +269,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         await syncLedger(store);
         notify(
           store,
-          done.created ? "版を保存しました" : "同じ内容の版がすでにあります",
+          done.created
+            ? "バージョンを保存しました"
+            : "同じ内容のバージョンがすでにあります",
         );
       } finally {
         stamping.current = false;
@@ -281,12 +280,45 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [absOf, path, settled, store],
   );
 
-  // 履歴を開く。開く前に書きかけを流して、いまの本文を版と比べられるようにする。
+  // 名前を決める小窓を開く。既定の名前はそのときの日時。
+  const startNaming = useCallback(() => {
+    if (!path) return;
+    setVersionName(defaultName());
+    setNaming(true);
+  }, [path]);
+
+  // 履歴を開く。開く前に書きかけを流して、いまの本文をバージョンと
+  // 比べられるようにする。
   const showVersions = useCallback(() => {
     if (!path) return;
     settled();
     openVersions(path);
   }, [openVersions, path, settled]);
+
+  // 小窓の外を押したら閉じる。
+  useEffect(() => {
+    if (!naming) return;
+    const onDown = (e: MouseEvent) => {
+      if (namingRef.current && !namingRef.current.contains(e.target as Node)) {
+        setNaming(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [naming]);
+
+  // ⌘⇧S でバージョンを打つ。押している側のペインが受け取る。
+  useEffect(() => {
+    if (!isActive || overlayOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey) return;
+      if (e.key !== "s" && e.key !== "S") return;
+      e.preventDefault();
+      startNaming();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, overlayOpen, startNaming]);
   const exitEdit = () => {
     // 書きかけを先に流す。流れた分は自動保存が書く。
     flushRef.current?.();
@@ -1115,24 +1147,75 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           : ""
       }`}
     >
-      {/* ヘッダー */}
-      <header className="mg-pane-head flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
+      {/* ヘッダー
+          backdrop-blur は重ね順の入れ物を作るので、帯から出す小窓（バージョンの
+          名前）は帯の中に閉じ込められる。帯自身を positioned にして、本文に
+          重ねた読み込みの覆い（z-10）より上へ出す。 */}
+      <header className="mg-pane-head relative z-30 flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
           <Breadcrumbs path={shownPath} paneId={pane.id} />
         </div>
         {path && (
           <>
-            <button
-              onClick={() => {
-                setVersionName("");
-                setNaming(true);
-              }}
-              title="版を保存"
-              className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-            >
-              <Icon name="bookmark_add" size={16} />
-            </button>
-            <button onClick={showVersions} title="版の履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
+            <div ref={namingRef} className="relative">
+              <button
+                onClick={() => (naming ? setNaming(false) : startNaming())}
+                title="バージョンを保存 (⌘⇧S)"
+                className={`grid h-6 w-6 place-items-center rounded transition ${
+                  naming
+                    ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
+                    : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+                }`}
+              >
+                <Icon name="commit" size={16} />
+              </button>
+              {naming && (
+                <div className="mg-ver-name-pop">
+                  <div className="mg-ver-name-head">
+                    <Icon name="commit" size={14} />
+                    バージョンを保存
+                  </div>
+                  <input
+                    autoFocus
+                    value={versionName}
+                    placeholder="名前なしで保存"
+                    onChange={(e) => setVersionName(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onCompositionStart={ime.onCompositionStart}
+                    onCompositionEnd={ime.onCompositionEnd}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setNaming(false);
+                      } else if (e.key === "Enter" && !ime.isComposing(e)) {
+                        e.preventDefault();
+                        setNaming(false);
+                        void stamp(versionName);
+                      }
+                    }}
+                    className="mg-ver-name-input"
+                  />
+                  <div className="mg-ver-name-foot">
+                    <span>Enter で保存 / Esc で取消</span>
+                    {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
+                        入力欄から焦点が外れる拍子に押下がどこにも届かない
+                        ことがある。 */}
+                    <button
+                      type="button"
+                      className="mg-small is-go"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setNaming(false);
+                        void stamp(versionName);
+                      }}
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
               <Icon name="history" size={16} />
             </button>
           </>
@@ -1172,39 +1255,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           </button>
         )}
       </header>
-
-      {/* 版の名前。任意なので、空のまま確定すれば日時で呼ばれる。 */}
-      {naming && (
-        <div className="flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-1.5">
-          <Icon
-            name="bookmark_add"
-            size={15}
-            className="shrink-0 text-[var(--mg-accent)]"
-          />
-          <input
-            autoFocus
-            value={versionName}
-            placeholder="版の名前（空なら日時）"
-            onChange={(e) => setVersionName(e.target.value)}
-            onCompositionStart={ime.onCompositionStart}
-            onCompositionEnd={ime.onCompositionEnd}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setNaming(false);
-              } else if (e.key === "Enter" && !ime.isComposing(e)) {
-                e.preventDefault();
-                setNaming(false);
-                void stamp(versionName);
-              }
-            }}
-            className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--mg-fg)] outline-none placeholder:text-[var(--mg-muted)]"
-          />
-          <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
-            Enter で保存 / Esc で取消
-          </span>
-        </div>
-      )}
 
       {/* 読書プログレスバー */}
       <div className="h-0.5 w-full bg-transparent">

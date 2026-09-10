@@ -4528,14 +4528,15 @@ body.mg-carrying {
 }
 .mg-ver-opt {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  align-items: baseline;
+  gap: 0.45rem;
   width: 100%;
   padding: 0.3rem 0.5rem;
   border-radius: 0.4rem;
   font-size: 12.5px;
   text-align: left;
   color: var(--mg-fg-dim);
+  font-variant-numeric: tabular-nums;
 }
 .mg-ver-opt:hover {
   background: var(--mg-hover);
@@ -4543,6 +4544,58 @@ body.mg-carrying {
 .mg-ver-opt.is-on {
   color: var(--mg-accent);
   font-weight: 600;
+}
+
+/* バージョンの名前を決める小窓。帯のボタンの真下に出す。
+   名前は任意なので、開いた時点で日時を入れておき、そのまま Enter でも
+   打てるようにする。空欄と向き合わせない。 */
+.mg-ver-name-pop {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 40;
+  width: 17rem;
+  margin-top: 0.4rem;
+  padding: 0.55rem 0.6rem 0.4rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.7rem;
+  background: var(--mg-panel);
+  box-shadow: 0 14px 34px -16px rgba(0, 0, 0, 0.55);
+}
+.mg-ver-name-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding-bottom: 0.4rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--mg-accent);
+}
+.mg-ver-name-input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.45rem;
+  background: var(--mg-input-bg);
+  font-size: 12.5px;
+  color: var(--mg-fg);
+  outline: none;
+}
+.mg-ver-name-input:focus {
+  border-color: color-mix(in srgb, var(--mg-accent) 60%, var(--mg-border));
+}
+.mg-ver-name-input::placeholder {
+  color: var(--mg-muted);
+}
+.mg-ver-name-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding-top: 0.3rem;
+  font-size: 10.5px;
+  color: var(--mg-muted);
 }
 
 /* 一覧の 1 行。 */
@@ -4585,6 +4638,11 @@ body.mg-carrying {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
+/* fude が自動で残した版。人とエージェントのどちらでもないので色を持たせない。 */
+.mg-ver-face.is-system {
+  background: var(--mg-hover);
+  color: var(--mg-muted);
+}
 .mg-ver-main {
   display: flex;
   flex: 1;
@@ -4598,20 +4656,17 @@ body.mg-carrying {
   font-weight: 500;
   line-height: 1.35;
   color: var(--mg-fg);
-  /* 名前は日時のこともあるので、2 行までで切る */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
+/* 主体と、名前か何をした時点か。日時の下に添える。 */
 .mg-ver-note {
+  overflow: hidden;
   font-size: 10.5px;
   color: var(--mg-muted);
-}
-.mg-ver-when {
-  flex: none;
-  margin-top: 0.15rem;
-  font-size: 10.5px;
-  color: var(--mg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 復元。1 つしかない操作なので、列を作らず本文の上に浮かせる。 */
@@ -4649,7 +4704,7 @@ body.mg-carrying {
   color: var(--mg-fg-dim);
 }
 
-/* 差分。変わっていないところは弱め、変わったところに札を出す。 */
+/* 差分。変わっていないところは弱め、変わったところは組ごとに枠で囲む。 */
 .mg-ver-kept {
   opacity: 0.55;
 }
@@ -4675,78 +4730,86 @@ body.mg-carrying {
   color: var(--mg-fg-dim);
 }
 
+/* 変更前と変更後をまとめた 1 つの組。地色は敷かず枠で囲む。塗ると
+   本文の読み心地が変わり、テーマによっては前後が同系色で潰れる。 */
 .mg-ver-pair {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin: 1.5rem 0 1rem;
+  margin: 1.75rem 0 1.25rem;
+  padding: 0.9rem 0.9rem 0.1rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.7rem;
 }
-.mg-ver-diff.is-split .mg-ver-pair {
+.mg-ver-pair.is-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 1.1rem;
   align-items: stretch;
 }
-/* 何が起きたか（書き換え・追加・削除）。組の上端に出す。 */
-.mg-ver-pair::before {
-  content: attr(data-label);
+/* 何が起きた組か。枠線の上に載せて切り欠きにする。中身の上には重ねない
+   （組の中に「変更前 / 変更後」の見出しが入るので、浮かせると重なる）。 */
+.mg-ver-tag {
   position: absolute;
-  top: -0.7rem;
-  left: 0.6rem;
-  z-index: 1;
-  padding: 0 0.5rem;
-  border-radius: 999px;
-  background: var(--mg-panel);
-  box-shadow: 0 0 0 1px var(--mg-border);
-  font-size: 9.5px;
+  top: -0.65rem;
+  left: 0.8rem;
+  padding: 0 0.45rem;
+  background: var(--mg-bg);
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  line-height: 1.25rem;
+  line-height: 1.3;
   color: var(--mg-muted);
   white-space: nowrap;
 }
 
-.mg-ver-cell {
-  position: relative;
+/* 片側。左にレールを引き、頭に記号と語を置く。 */
+.mg-ver-side {
   min-width: 0;
-  /* 上は「前 / 後」の札の分を空ける。本文の上に重ねると 1 行目が読めない。 */
-  padding: 1.3rem 0.9rem 0.2rem;
-  border-radius: 0.6rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--mg-border);
 }
-/* 前と後。読み手は左（統合では上）を古い側として読む。 */
-.mg-ver-cell.is-base {
-  background: color-mix(in srgb, var(--mg-danger) 8%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-danger) 22%, transparent);
+.mg-ver-side.is-base {
+  border-left-color: color-mix(in srgb, var(--mg-danger) 70%, transparent);
 }
-.mg-ver-cell.is-head {
-  background: var(--mg-accent-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
+.mg-ver-side.is-head {
+  border-left-color: var(--mg-accent);
 }
-/* 片側だけの組でも列が崩れないように置く空のセル。 */
-.mg-ver-cell.is-void {
-  border-radius: 0.6rem;
-  border: 1px dashed var(--mg-border);
-  opacity: 0.4;
+/* 統合では 2 つを縦に積む。切れ目に線を挟まないと、どこまでが変更前か
+   読み取れない。 */
+.mg-ver-pair.is-unified > .mg-ver-side + .mg-ver-side {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--mg-border);
 }
-.mg-ver-cell::after {
-  content: attr(data-side);
-  position: absolute;
-  top: 0.4rem;
-  left: 0.95rem;
-  font-size: 9.5px;
+.mg-ver-side-head {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 0.1rem;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
-.mg-ver-cell.is-base::after {
-  color: color-mix(in srgb, var(--mg-danger) 80%, var(--mg-muted));
+.mg-ver-side.is-base .mg-ver-side-head {
+  color: color-mix(in srgb, var(--mg-danger) 85%, var(--mg-muted));
 }
-.mg-ver-cell.is-head::after {
+.mg-ver-side.is-head .mg-ver-side-head {
   color: var(--mg-accent);
+}
+/* 分割で片側だけの組。空の箱を描かず、無いことだけを言う。 */
+.mg-ver-side.is-void {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 1rem 0.75rem;
+  border-left: none;
+  font-size: 11.5px;
+  color: var(--mg-muted);
 }
 
 /* フロントマター。本文のブロックに割れないので、書いたままの形で出す。 */
 .mg-ver-meta {
   overflow-x: auto;
+  margin: 0.2rem 0 0.6rem;
   font-family: var(--mg-font-mono);
   font-size: 11.5px;
   line-height: 1.6;

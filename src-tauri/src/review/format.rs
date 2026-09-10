@@ -322,6 +322,7 @@ mod tests {
                 file: "/docs/05_要件定義書.md".into(),
                 label: None,
                 origin: Origin::Comment,
+                actor: None,
                 created_at: 1_772_183_400_000,
             }),
             latest: Some(Version {
@@ -329,6 +330,7 @@ mod tests {
                 file: "/docs/05_要件定義書.md".into(),
                 label: Some("指摘1〜3に対応".into()),
                 origin: Origin::Commit,
+                actor: None,
                 created_at: 1_772_190_000_000,
             }),
         }

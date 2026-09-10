@@ -13,6 +13,13 @@ function countLeaves(node: LayoutNode): number {
   return node.kind === "leaf" ? 1 : node.children.reduce((s, c) => s + countLeaves(c), 0);
 }
 
+// 本文の読み幅。設定（readingWidthAtom）の値をそのまま引く。
+export const WIDTH_CLASS: Record<string, string> = {
+  cozy: "max-w-[760px]",
+  wide: "max-w-[1000px]",
+  full: "max-w-none",
+};
+
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
 // タブの並びと作用中の位置を整える。同じファイルは 1 つに畳み、作用中の位置は

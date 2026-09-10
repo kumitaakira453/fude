@@ -76,7 +76,13 @@ async fn review_checkpoint(
     label: Option<String>,
 ) -> Result<review::Checkpointed, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        review::checkpoint(&PathBuf::from(file), &text, label)
+        // GUI から打つ版は人の操作。エージェントは CLI から打つ。
+        review::checkpoint(
+            &PathBuf::from(file),
+            &text,
+            label,
+            review::store::Actor::You,
+        )
     })
     .await
     .map_err(|e| format!("版の保存に失敗しました: {e}"))?

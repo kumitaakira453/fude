@@ -68,18 +68,49 @@ enum ReviewAction {
         #[arg(long)]
         thread: String,
     },
-    /// 対応が済んだことを宣言し、現在の内容を版として記録する
+    /// 対応が済んだことを宣言し、現在の内容をバージョンとして記録する
     Commit {
         #[arg(long)]
         file: PathBuf,
         #[arg(long)]
         message: String,
     },
-    /// ファイルの版を新しい順に一覧する
+    /// 現在の内容をバージョンとして記録する（名前は任意）
+    Checkpoint {
+        #[arg(long)]
+        file: PathBuf,
+        /// バージョンの名前。省略すると日時で呼ばれる
+        #[arg(long)]
+        label: Option<String>,
+        /// 誰が残したバージョンとして記録するか
+        #[arg(long, value_enum, default_value_t = Actor::Ai)]
+        actor: Actor,
+    },
+    /// ファイルのバージョンを新しい順に一覧する
     Versions {
         #[arg(long)]
         file: PathBuf,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Actor {
+    /// エージェントが打った
+    Ai,
+    /// 人が手で打った
+    You,
+    /// fude が自動で残した
+    System,
+}
+
+impl From<Actor> for review::store::Actor {
+    fn from(value: Actor) -> Self {
+        match value {
+            Actor::Ai => review::store::Actor::Ai,
+            Actor::You => review::store::Actor::You,
+            Actor::System => review::store::Actor::System,
+        }
+    }
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -106,7 +137,7 @@ impl From<StatusFilter> for review::StatusFilter {
 enum OutputFormat {
     /// AI 向け。要約を先に置き、行動が変わらない情報を落とす
     Agent,
-    /// 人間向け。版や絶対時刻まで出す
+    /// 人間向け。バージョンや絶対時刻まで出す
     Md,
     Json,
 }
@@ -201,18 +232,33 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
         ReviewAction::Commit { file, message } => {
             let id = review::commit(&file, &message)?;
             let short: String = id.chars().take(8).collect();
-            println!("版を記録しました: {short} \"{message}\"");
+            println!("バージョンを記録しました: {short} \"{message}\"");
+        }
+        ReviewAction::Checkpoint {
+            file,
+            label,
+            actor,
+        } => {
+            let done = review::checkpoint_file(&file, label.clone(), actor.into())?;
+            let short: String = done.id.chars().take(8).collect();
+            let name = label.unwrap_or_default();
+            if done.created {
+                println!("バージョンを記録しました: {short} \"{name}\"");
+            } else {
+                println!("同じ内容のバージョンが既にあります: {short} \"{name}\"");
+            }
         }
         ReviewAction::Versions { file } => {
             let versions = review::versions(&file)?;
             if versions.is_empty() {
-                println!("記録された版はありません。");
+                println!("記録されたバージョンはありません。");
             }
             for v in versions {
                 let short: String = v.id.chars().take(8).collect();
                 let when = review::store::format_iso_utc(v.created_at);
-                let label = v.label.unwrap_or_default();
-                println!("{short}  {when}  {:?}  {label}", v.origin);
+                let who = v.who();
+                let label = v.label.clone().unwrap_or_default();
+                println!("{short}  {when}  {:?}  {who:?}  {label}", v.origin);
             }
         }
     }

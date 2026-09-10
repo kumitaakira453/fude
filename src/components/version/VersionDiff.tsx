@@ -4,7 +4,7 @@ import { compare, unchanged, type DiffRow } from "../../lib/versions";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
-// 版と版の差分。閲覧専用。
+// バージョンとバージョンの差分。閲覧専用。
 //
 // 行ではなくブロックで突き合わせる。散文は 1 段落がソースの 1 行なので、
 // 行差分では「段落全体が変わった」しか分からない。ブロックなら変更前と
@@ -15,9 +15,12 @@ import { Markdown } from "../Markdown";
 
 export type Layout = "unified" | "split";
 
-const SIDE_LABEL: Record<"base" | "head", string> = {
-  base: "前",
-  head: "後",
+// 何が起きた組か。枠線の左上に出す。
+const TAG: Record<string, string> = {
+  changed: "書き換え",
+  added: "追加",
+  removed: "削除",
+  meta: "見出し情報",
 };
 
 export function VersionDiff({
@@ -45,7 +48,7 @@ export function VersionDiff({
   }
 
   return (
-    <div className={`mg-ver-diff is-${layout}`}>
+    <div className="mg-ver-diff">
       {rows.map((row, i) => (
         <Row
           key={i}
@@ -99,32 +102,69 @@ function Row({
   }
 
   // フロントマターは本文のブロックに割れないので、書いたままの形で並べる。
-  if (row.kind === "meta") {
-    return (
-      <Pair
-        layout={layout}
-        base={<pre className="mg-ver-meta">{row.base.trim()}</pre>}
-        head={<pre className="mg-ver-meta">{row.head.trim()}</pre>}
-        label="見出し情報"
-      />
-    );
-  }
-
   const before =
-    "base" in row ? (
+    row.kind === "meta" ? (
+      <pre className="mg-ver-meta">{row.base.trim()}</pre>
+    ) : "base" in row ? (
       <Prose src={row.base.src} editorial={editorial} style={style} />
     ) : null;
   const after =
-    "head" in row ? (
+    row.kind === "meta" ? (
+      <pre className="mg-ver-meta">{row.head.trim()}</pre>
+    ) : "head" in row ? (
       <Prose src={row.head.src} editorial={editorial} style={style} />
     ) : null;
-  const label =
-    row.kind === "changed" ? "書き換え" : row.kind === "added" ? "追加" : "削除";
 
-  return <Pair layout={layout} base={before} head={after} label={label} />;
+  return (
+    <div className={`mg-ver-pair is-${layout}`}>
+      <span className="mg-ver-tag">{TAG[row.kind]}</span>
+      <Side kind="base" body={before} layout={layout} />
+      <Side kind="head" body={after} layout={layout} />
+    </div>
+  );
 }
 
-// 変わっていないブロック。地色を付けず、周りの文脈として置く。
+const SIDE = {
+  base: { icon: "remove", label: "変更前" },
+  head: { icon: "add", label: "変更後" },
+} as const;
+
+// 変更前 / 変更後の片側。
+//
+// 色だけでは前後を言い分けられない（テーマによって danger とアクセントが
+// 同系色になる）。記号と語を必ず添える。
+//
+// 片側しか無い組では、分割のときだけ「無い」ことを言う。統合では並べる相手が
+// 無いので、言わなくても片側だけだと分かる。
+function Side({
+  kind,
+  body,
+  layout,
+}: {
+  kind: "base" | "head";
+  body: React.ReactNode;
+  layout: Layout;
+}) {
+  if (!body) {
+    if (layout === "unified") return null;
+    return (
+      <div className="mg-ver-side is-void">
+        <span>（このバージョンにはない）</span>
+      </div>
+    );
+  }
+  return (
+    <div className={`mg-ver-side is-${kind}`}>
+      <div className="mg-ver-side-head">
+        <Icon name={SIDE[kind].icon} size={13} />
+        {SIDE[kind].label}
+      </div>
+      {body}
+    </div>
+  );
+}
+
+// 変わっていないブロック。周りの文脈として置く。
 function Kept({
   block,
   editorial,
@@ -137,40 +177,6 @@ function Kept({
   return (
     <div className="mg-ver-kept">
       <Prose src={block.src} editorial={editorial} style={style} />
-    </div>
-  );
-}
-
-// 前と後。統合なら縦に重ね、分割なら左右に置く。
-//
-// 分割では grid の 1 行に 2 つのセルを入れる。行の高さは高いほうに揃うので、
-// ブロック単位で描いたまま左右が並ぶ。
-function Pair({
-  layout,
-  base,
-  head,
-  label,
-}: {
-  layout: Layout;
-  base: React.ReactNode;
-  head: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="mg-ver-pair" data-label={label}>
-      {base && (
-        <div className="mg-ver-cell is-base" data-side={SIDE_LABEL.base}>
-          {base}
-        </div>
-      )}
-      {/* 分割では、片側だけの行でも列が崩れないように空のセルを置く */}
-      {!base && layout === "split" && <div className="mg-ver-cell is-void" />}
-      {head && (
-        <div className="mg-ver-cell is-head" data-side={SIDE_LABEL.head}>
-          {head}
-        </div>
-      )}
-      {!head && layout === "split" && <div className="mg-ver-cell is-void" />}
     </div>
   );
 }

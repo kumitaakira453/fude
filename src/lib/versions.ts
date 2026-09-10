@@ -1,28 +1,36 @@
 import { diffBlocks } from "./blockDiff";
 import { splitBlocks, type Block } from "./blocks";
 import { parseFrontmatter } from "./frontmatter";
-import type { Ledger, ReviewVersion } from "./review";
+import type { Ledger, ReviewVersion, VersionActor } from "./review";
 
-// 版の履歴。台帳から 1 ファイル分の版を取り出し、版と版の差分を
+// バージョンの履歴。台帳から 1 ファイル分の版を取り出し、版と版の差分を
 // 読みやすい形に畳む。突き合わせそのものは blockDiff に任せる。
 
-// 版を打った主体。
-//
-// 台帳の origin は「何をした時点の版か」を表しており、誰が打ったかはそこから
-// 決まる。指摘を付けた時点と手で打った時点は人、対応を宣言した時点は
-// エージェント（CLI の fude review commit から来る）。
-export type Actor = "you" | "ai";
-
-export function actorOf(origin: ReviewVersion["origin"]): Actor {
-  return origin === "commit" ? "ai" : "you";
+// 誰が残した版か。記録が無い台帳では origin から見なす。指摘を付けた時点と
+// 復元前は fude が自動で残すので、人が打った版とは区別する。
+export function actorOf(version: ReviewVersion): VersionActor {
+  if (version.actor) return version.actor;
+  if (version.origin === "commit") return "ai";
+  return version.origin === "comment" ? "system" : "you";
 }
 
-// 何をした時点の版なのか。ラベルだけでは、自分で打ったのか
-// コメントやエージェントが残したのかが読めない。
-export const ORIGIN_NOTE: Record<ReviewVersion["origin"], string> = {
-  checkpoint: "手で打った版",
-  comment: "コメントを付けた時点",
-  commit: "対応を宣言した時点",
+export const ACTOR_NAME: Record<VersionActor, string> = {
+  you: "You",
+  ai: "AI",
+  system: "システム",
+};
+
+export const ACTOR_ICON: Record<VersionActor, string> = {
+  you: "person",
+  ai: "auto_awesome",
+  system: "settings",
+};
+
+// 何をした時点の版なのか。名前が付いていないときに、その代わりとして出す。
+// 手で打った版は主体だけで足りるので持たない。
+export const ORIGIN_NOTE: Partial<Record<ReviewVersion["origin"], string>> = {
+  comment: "コメント時点",
+  commit: "対応の記録",
 };
 
 // そのファイルの版を新しい順に返す。
@@ -43,19 +51,43 @@ const when = new Intl.DateTimeFormat("ja-JP", {
   minute: "2-digit",
 });
 
-// 版の名前。付けていなければ打った日時で呼ぶ。
-export function labelOf(version: ReviewVersion): string {
-  return version.label?.trim() || when.format(version.created_at);
+const fully = new Intl.DateTimeFormat("ja-JP", {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+// 一覧の見出し。名前より日時を先に読ませる。名前は付けないこともあるが、
+// 打った時刻はどの版にも必ずある。
+export function whenOf(version: ReviewVersion): string {
+  return when.format(version.created_at);
 }
 
-// 打ってからの経過。絶対時刻だけを並べるより、古い版が古いと一目で分かる。
-export function agoOf(at: number, now = Date.now()): string {
-  const min = (now - at) / 60000;
-  if (min < 1) return "たった今";
-  if (min < 60) return `${Math.floor(min)} 分前`;
-  if (min < 60 * 24) return `${Math.floor(min / 60)} 時間前`;
-  if (min < 60 * 24 * 7) return `${Math.floor(min / 60 / 24)} 日前`;
+export function fullyOf(version: ReviewVersion): string {
+  return fully.format(version.created_at);
+}
+
+// バージョンを打つときの既定の名前。名前は任意だが、空欄と向き合わせるより
+// 日時が入っている方が押しやすい。一覧の見出しと同じ形にしておく。
+export function defaultName(at = Date.now()): string {
   return when.format(at);
+}
+
+// 一覧の添え書き。主体と、名前（無ければ何をした時点か）を並べる。
+export function noteOf(version: ReviewVersion): string {
+  const parts = [ACTOR_NAME[actorOf(version)]];
+  const name = version.label?.trim() || ORIGIN_NOTE[version.origin];
+  // 既定の名前をそのまま打った版は、見出しの日時と同じ文字になる。
+  // 2 行に同じものを並べない。
+  if (name && name !== whenOf(version)) parts.push(name);
+  return parts.join(" ・ ");
+}
+
+// 1 行で呼ぶときの名前。比較対象の選択や差分の見出しで使う。
+export function labelOf(version: ReviewVersion): string {
+  return version.label?.trim() || whenOf(version);
 }
 
 // 差分の 1 行。

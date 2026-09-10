@@ -98,6 +98,10 @@ pub struct Version {
     #[serde(default)]
     pub label: Option<String>,
     pub origin: Origin,
+    // 誰が残した版か。origin より前から台帳にあるフィールドではないので、
+    // 記録が無い版は origin から見なす（who）。
+    #[serde(default)]
+    pub actor: Option<Actor>,
     pub created_at: i64,
 }
 
@@ -107,6 +111,27 @@ pub enum Origin {
     Comment,    // 指摘を付けた時点
     Commit,     // AI が対応を宣言した時点
     Checkpoint, // 人間が明示的に打った時点
+}
+
+// 版を残した主体。origin（何をした時点か）とは別の軸で持つ。手で打った版と
+// エージェントが打った版は、どちらも Checkpoint になる。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Actor {
+    You,    // 人が手で打った
+    Ai,     // エージェントが打った
+    System, // fude が自動で残した（コメントを付けた時点・復元前）
+}
+
+impl Version {
+    // 誰が残したか。記録が無い版は origin から見なす。
+    pub fn who(&self) -> Actor {
+        self.actor.unwrap_or(match self.origin {
+            Origin::Commit => Actor::Ai,
+            Origin::Comment => Actor::System,
+            Origin::Checkpoint => Actor::You,
+        })
+    }
 }
 
 impl Ledger {
@@ -409,6 +434,7 @@ mod tests {
                 file: "/tmp/a.md".into(),
                 label: None,
                 origin: Origin::Commit,
+                actor: None,
                 created_at: at,
             });
         }
@@ -417,6 +443,7 @@ mod tests {
             file: "/tmp/b.md".into(),
             label: None,
             origin: Origin::Commit,
+            actor: None,
             created_at: 999,
         });
         let ids: Vec<&str> = l
@@ -441,6 +468,38 @@ mod tests {
             assert_eq!(serde_json::to_string(&origin).unwrap(), json);
             assert_eq!(serde_json::from_str::<Origin>(json).unwrap(), origin);
         }
+    }
+
+    #[test]
+    fn actor_names_are_fixed() {
+        for (actor, json) in [
+            (Actor::You, "\"you\""),
+            (Actor::Ai, "\"ai\""),
+            (Actor::System, "\"system\""),
+        ] {
+            assert_eq!(serde_json::to_string(&actor).unwrap(), json);
+            assert_eq!(serde_json::from_str::<Actor>(json).unwrap(), actor);
+        }
+    }
+
+    #[test]
+    fn a_version_without_an_actor_is_read_from_its_origin() {
+        let version = |origin| Version {
+            id: "h".into(),
+            file: "/a.md".into(),
+            label: None,
+            origin,
+            actor: None,
+            created_at: 0,
+        };
+        assert_eq!(version(Origin::Checkpoint).who(), Actor::You);
+        assert_eq!(version(Origin::Commit).who(), Actor::Ai);
+        assert_eq!(version(Origin::Comment).who(), Actor::System);
+
+        // 記録があればそれを使う（CLI から打った Checkpoint は人ではない）
+        let mut punched = version(Origin::Checkpoint);
+        punched.actor = Some(Actor::Ai);
+        assert_eq!(punched.who(), Actor::Ai);
     }
 
     #[test]

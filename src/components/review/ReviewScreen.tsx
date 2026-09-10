@@ -1,6 +1,7 @@
 import { confirm, message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAfterPaint } from "../../hooks/useAfterPaint";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
@@ -116,29 +117,6 @@ function whereOf(thread: ReviewThread, blocks: Block[] | undefined): string {
   }
   if (thread.section_path.length > 0) return thread.section_path.join(" › ");
   return "見出しの外";
-}
-
-// 値を「画面を 1 枚描き切ってから」受け取る。
-//
-// requestAnimationFrame は次の描画の直前に呼ばれるので、1 回だけだと画面が
-// 出る前に重い処理が始まり、待っている表示が誰の目にも触れない。実際に描かれる
-// のを待つには 2 回いる。
-// React の割り込み可能な更新（startTransition / useDeferredValue）には頼らない。
-// 周りで別の更新が起き続けるかぎり後回しにされ、切り替わらないままになり得る。
-function useAfterPaint<T>(value: T): T | undefined {
-  const [shown, setShown] = useState<T | undefined>(undefined);
-  useEffect(() => {
-    if (shown === value) return;
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setShown(value));
-    });
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
-  }, [value, shown]);
-  return shown;
 }
 
 export function ReviewScreen() {
