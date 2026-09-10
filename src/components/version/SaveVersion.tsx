@@ -62,7 +62,6 @@ export function SaveVersion({
           className="mg-ver-save-input"
         />
         <div className="mg-ver-save-foot">
-          <span>名前は付けなくてもかまいません</span>
           {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
               入力欄から焦点が外れる拍子に押下がどこにも届かないことがある。 */}
           <button

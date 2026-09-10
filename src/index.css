@@ -4589,14 +4589,10 @@ body.mg-carrying {
 }
 .mg-ver-save-foot {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.3rem;
   padding-top: 0.5rem;
-  font-size: 11px;
-  color: var(--mg-muted);
-}
-.mg-ver-save-foot > span {
-  flex: 1;
 }
 
 /* 一覧の 1 行。 */
