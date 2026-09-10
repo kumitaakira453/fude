@@ -17,15 +17,22 @@
   --mg-box-out: -5px 0 0 -12px;
   --mg-box-in: 5px 12px;
 
-  /* 追加と削除の色。テーマの色ではなく差分の作法に倣う（緑が足された、
-     赤が消された）。どのテーマでも読めるよう、地の文の色を混ぜて明暗を
-     合わせる。地色は薄く敷くだけなので混ぜずに済む。 */
-  --mg-add-fg: color-mix(in srgb, #2ea043 76%, var(--mg-fg));
-  --mg-del-fg: color-mix(in srgb, #d1242f 76%, var(--mg-fg));
-  --mg-add: color-mix(in srgb, #2ea043 13%, transparent);
-  --mg-del: color-mix(in srgb, #d1242f 13%, transparent);
-  --mg-add-mark: color-mix(in srgb, #2ea043 30%, transparent);
-  --mg-del-mark: color-mix(in srgb, #d1242f 30%, transparent);
+  /* 追加と削除の色。
+     色合いはテーマから採らず、差分の作法に倣う（緑が足された、赤が消された）。
+     アクセントから採ると、テーマによって前と後が同系色になって見分けが
+     つかない。明るさだけをテーマの明暗に合わせる。
+     light-dark() は各テーマの color-scheme に従って解ける（system WKWebView
+     で実測。変数の中でも効く）。
+
+     3 段に分ける。fg は罫と記号と数、面はその側全体の地、印は変わった字。
+     字の色は変えない。読めるかどうかは地で決まるので、字まで染めると
+     かえって読みにくい。 */
+  --mg-add-fg: light-dark(#1a7f37, #57d17f);
+  --mg-del-fg: light-dark(#c2282e, #f78a8a);
+  --mg-add: light-dark(rgb(26 127 55 / 0.1), rgb(87 209 127 / 0.12));
+  --mg-del: light-dark(rgb(194 40 46 / 0.09), rgb(247 138 138 / 0.12));
+  --mg-add-mark: light-dark(rgb(26 127 55 / 0.26), rgb(87 209 127 / 0.3));
+  --mg-del-mark: light-dark(rgb(194 40 46 / 0.24), rgb(247 138 138 / 0.3));
 }
 
 html,
@@ -4835,19 +4842,23 @@ body.mg-carrying {
   align-items: start;
 }
 
-/* 片側。 */
+/* 片側。
+   その側全体に薄い面を敷く。罫だけだと、どちらが前でどちらが後かを
+   罫の色で読み分けることになり、離れた行では追えない。面は薄いので
+   本文の読み心地は残る。 */
 .mg-ver-side {
   min-width: 0;
-  padding-left: 0.85rem;
+  padding: 0.5rem 0.85rem 0.15rem;
   border-left: 2px solid var(--mg-border);
+  border-radius: 0 0.35rem 0.35rem 0;
 }
 .mg-ver-side.is-base {
-  border-left-color: color-mix(in srgb, var(--mg-danger) 60%, transparent);
-  /* 変更前は少し退けて置き、変更後を本文の濃さで読ませる。 */
-  opacity: 0.72;
+  border-left-color: var(--mg-del-fg);
+  background: var(--mg-del);
 }
 .mg-ver-side.is-head {
-  border-left-color: var(--mg-accent);
+  border-left-color: var(--mg-add-fg);
+  background: var(--mg-add);
 }
 /* 統合では 2 つを縦に積む。 */
 .mg-ver-pair.is-unified > .mg-ver-side + .mg-ver-side {
@@ -4863,10 +4874,10 @@ body.mg-carrying {
   letter-spacing: 0.04em;
 }
 .mg-ver-side.is-base .mg-ver-side-head {
-  color: color-mix(in srgb, var(--mg-danger) 85%, var(--mg-muted));
+  color: var(--mg-del-fg);
 }
 .mg-ver-side.is-head .mg-ver-side-head {
-  color: var(--mg-accent);
+  color: var(--mg-add-fg);
 }
 /* 分割で片側だけの組。空の箱を描かず、無いことだけを言う。 */
 .mg-ver-side.is-void {
@@ -4875,6 +4886,8 @@ body.mg-carrying {
   min-width: 0;
   padding: 1rem 0.85rem;
   border-left: none;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--mg-border) 22%, transparent);
   font-size: 11.5px;
   color: var(--mg-muted);
 }
@@ -4883,10 +4896,10 @@ body.mg-carrying {
    変わった字だけを立てる。DOM は書き換えず範囲だけを渡すので、
    Markdown の木は組み直されない。 */
 ::highlight(mg-diff-del) {
-  background-color: color-mix(in srgb, var(--mg-danger) 26%, transparent);
+  background-color: var(--mg-del-mark);
 }
 ::highlight(mg-diff-ins) {
-  background-color: color-mix(in srgb, var(--mg-accent) 32%, transparent);
+  background-color: var(--mg-add-mark);
 }
 
 /* フロントマター。本文のブロックに割れないので、書いたままの形で出す。 */
