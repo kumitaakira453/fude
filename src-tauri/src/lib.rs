@@ -43,6 +43,8 @@ async fn review_create_thread(
     source: String,
     author: String,
     body: String,
+    // 項目・セルを丸ごと対象にしたときの引き先。無い指摘では省かれる。
+    unit: Option<review::store::Unit>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         review::create_thread(review::NewThread {
@@ -54,6 +56,7 @@ async fn review_create_thread(
             source,
             author,
             body,
+            unit,
         })
     })
     .await

@@ -452,6 +452,14 @@ export function AnchorOverlay({
           ) : (
             <div className="mg-review-peek-body">（本文なし）</div>
           )}
+          {/* 箇所の状態は長い一言になる。操作の並びに混ぜると折り返して
+              ボタンの列が崩れるので、自分の行に置く。 */}
+          {!edit && peek.state && (
+            <p className="mg-peek-note">
+              <Icon name="history" size={11} className="mt-px shrink-0" />
+              {peek.state}
+            </p>
+          )}
           {edit ? (
             <div className="mg-peek-edit-foot">
               <PreviewToggle on={see} onToggle={flip} />
@@ -491,12 +499,6 @@ export function AnchorOverlay({
               <span className="mg-peek-chip">
                 <Icon name="forum" size={11} />
                 {peek.more}
-              </span>
-            )}
-            {peek.state && (
-              <span className="mg-peek-chip is-note">
-                <Icon name="history" size={11} />
-                {peek.state}
               </span>
             )}
             <span className="mg-peek-go">

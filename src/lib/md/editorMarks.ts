@@ -1,7 +1,7 @@
 import type { EditorView } from "prosemirror-view";
 import { clipRects, rangeAt, readBlockText, scrollBoxOf } from "../domText";
 import { findPlain } from "../projection";
-import type { ReviewThread } from "../review";
+import type { ReviewThread, ReviewUnit } from "../review";
 import {
   mergeRects,
   noteOf,
@@ -13,6 +13,7 @@ import {
   type Rect,
 } from "../reviewMarks";
 import type { Anchored } from "./reviewAnchors";
+import { schema } from "./schema";
 
 // 編集面の印。当てた節点（Anchored）から矩形を組む。
 //
@@ -33,6 +34,26 @@ function boxOf(view: EditorView, pos: number): DOMRect | null {
 function elementAt(view: EditorView, pos: number): HTMLElement | null {
   const dom = view.nodeDOM(pos);
   return dom instanceof HTMLElement ? dom : null;
+}
+
+// 引き先の項目・セルの要素。編集モデルを数えて、読む側と同じ通し番号で引く
+// （編集面の DOM には読む側の目印が無い）。
+function unitElementIn(
+  view: EditorView,
+  pos: number,
+  unit: ReviewUnit,
+): HTMLElement | null {
+  const block = view.state.doc.nodeAt(pos);
+  if (!block) return null;
+  const type = unit.kind === "cell" ? schema.nodes.tableCell : schema.nodes.listItem;
+  let at = -1;
+  let seen = 0;
+  block.descendants((node, offset) => {
+    if (node.type !== type) return true;
+    if (seen++ === unit.index) at = pos + 1 + offset;
+    return true;
+  });
+  return at < 0 ? null : elementAt(view, at);
 }
 
 // 覆っているブロックの箱を、その節点から順に並べる。
@@ -82,15 +103,19 @@ export function editorMarks(
     const spotClip = inBox ? inBox.getBoundingClientRect() : clip;
 
     const areas = clipRects(boxes, clip);
-    const cell = inner ? unitOf(inner) : null;
-    const spots = inner
-      ? clipRects(
-          cell
-            ? [cell.getBoundingClientRect()]
-            : mergeRects(textRects(inner)),
-          spotClip,
-        )
-      : [];
+    // 項目・セルを丸ごと対象にした指摘は、その箱を箇所の印にする。中身の
+    // 無い項目は選択の文字を持たないので、これが無いとブロック全体への
+    // 指摘と同じ見た目になる。
+    const marked =
+      anchor.covered > 1 || !thread.unit
+        ? null
+        : unitElementIn(view, anchor.pos, thread.unit);
+    const cell = marked ?? (inner ? unitOf(inner) : null);
+    const spots = cell
+      ? clipRects([cell.getBoundingClientRect()], spotClip)
+      : inner
+        ? clipRects(mergeRects(textRects(inner)), spotClip)
+        : [];
     // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
     const shown = spots.length === 0 || anchor.moved ? areas : [];
     if (shown.length === 0 && spots.length === 0) continue;

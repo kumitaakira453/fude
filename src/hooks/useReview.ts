@@ -19,6 +19,7 @@ import {
   spanText,
   type BlockSelection,
 } from "../lib/domText";
+import { unitFrom } from "../lib/reviewMarks";
 import { runReviewUndo, setReviewUndo } from "../lib/reviewUndo";
 import { notify } from "../state/toast";
 import { parseFrontmatter } from "../lib/frontmatter";
@@ -35,6 +36,7 @@ import {
   REVIEW_AUTHOR,
   setResolved,
   type AnchorHit,
+  type ReviewUnit,
 } from "../lib/review";
 import {
   ledgerAtom,
@@ -63,6 +65,8 @@ interface Draft {
   unit?: boolean;
   cellStart?: number;
   itemAnchor?: number;
+  // 台帳へ残す引き先（ブロックの中で何番目の項目・セルか）。
+  unitRef?: ReviewUnit;
   // 編集面から書いているとき。印はこの位置で出し、版はこの全文を渡す
   // （編集面の内容はまだディスクに無い）。
   pos?: number;
@@ -340,6 +344,10 @@ export function useReview({
         unit: opts?.unit,
         cellStart: picked.cellStart,
         itemAnchor: picked.itemAnchor,
+        unitRef:
+          opts?.unit && content
+            ? unitFrom(content, picked.blockIndex, picked)
+            : undefined,
       });
       // 対象は下書きの印で示すので、ネイティブの選択は解く。残すと、印と
       // 選択が二重に出て（チェックや `コード` の囲みを跨いで）散らかる。
@@ -377,6 +385,7 @@ export function useReview({
         pos: target.pos,
         spot: target.spot,
         source: target.source,
+        unitRef: target.unit,
       });
       // 対象は下書きの印で示すので、ネイティブの選択は解く。
       window.getSelection()?.removeAllRanges();
@@ -404,6 +413,10 @@ export function useReview({
           source: draft.source ?? raw ?? body,
           author: REVIEW_AUTHOR,
           body: text,
+          // 項目・セルを丸ごと対象にしたときは、その引き先も残す。中身の無い
+          // 項目は選択の文字を持たないので、これが無いとブロック全体への
+          // 指摘と見分けが付かない。
+          unit: draft.unitRef,
         });
         if (id) {
           await syncLedger(store);

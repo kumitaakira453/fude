@@ -30,6 +30,17 @@ export interface ReviewThread {
   comments: ReviewComment[];
   created_at: number;
   resolved?: ResolvedCache | null; // GUI が対応付けた結果の控え
+  unit?: ReviewUnit | null; // 項目・セルを丸ごと対象にしたときの引き先
+}
+
+// 丸ごと対象にした囲み。index はブロックの中で何番目の項目・セルか（0 から）。
+//
+// 中身の無い項目は選択の文字を持たない。これが無いと、ブロック全体への指摘と
+// 見分けが付かない。ソースの位置ではなく通し番号で持つ。編集面は編集モデルから
+// 対象を組むのでソースの位置を出せず、読む側と同じ値にならない。
+export interface ReviewUnit {
+  kind: "item" | "cell";
+  index: number;
 }
 
 export interface ResolvedCache {
@@ -185,6 +196,7 @@ export interface NewThreadInput {
   source: string; // 指摘した時点で画面に出ていた全文
   author: string;
   body: string;
+  unit?: ReviewUnit; // 項目・セルを丸ごと対象にしたとき
 }
 
 // 版は「画面に出ていた全文」から作る。ディスクの内容ではなくこれを渡すので、

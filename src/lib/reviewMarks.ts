@@ -12,6 +12,7 @@ import {
   REVIEW_AUTHOR,
   type AnchorHit,
   type ReviewThread,
+  type ReviewUnit,
 } from "./review";
 
 // 指摘の印を、本文の上に重ねる矩形として組む。
@@ -209,6 +210,38 @@ export function unitOf(range: Range): Element | null {
   return full.length > 0 && text === full ? start : null;
 }
 
+// 丸ごと対象にした囲みの要素。ブロックの中の通し番号で引く。文字の一致で
+// 見分けると、記法の囲みやチェックの前後で当たらないことがある。
+export function unitElement(block: HTMLElement, unit: ReviewUnit): Element | null {
+  const attr = unit.kind === "cell" ? "data-mg-cell" : "data-mg-item";
+  return block.querySelectorAll(`[${attr}]`)[unit.index] ?? null;
+}
+
+// 描画側の目印（ソース位置）から通し番号を出す。台帳へは番号で残すので、
+// 編集面から付けた指摘と同じ値になる。
+export function unitFrom(
+  content: HTMLElement,
+  blockIndex: number,
+  pick: { cellStart?: number; itemAnchor?: number },
+): ReviewUnit | undefined {
+  const block = content.querySelector<HTMLElement>(
+    `[data-mg-block="${blockIndex}"]`,
+  );
+  if (!block) return undefined;
+  const found =
+    pick.cellStart !== undefined
+      ? ({ attr: "data-mg-cell", anchor: pick.cellStart, kind: "cell" } as const)
+      : pick.itemAnchor !== undefined
+        ? ({ attr: "data-mg-item", anchor: pick.itemAnchor, kind: "item" } as const)
+        : null;
+  if (!found) return undefined;
+  const all = [...block.querySelectorAll(`[${found.attr}]`)];
+  const index = all.findIndex(
+    (el) => el.getAttribute(found.attr) === String(found.anchor),
+  );
+  return index < 0 ? undefined : { kind: found.kind, index };
+}
+
 // 指摘の中身をカードに出すための取り出し。矩形の作り方が違っても同じ。
 export function noteOf(
   thread: ReviewThread,
@@ -269,6 +302,11 @@ export function readingMarks(
         : findPlain(bt.plain, thread.selection, thread.selection_offset);
     const whole = rangeAt(bt, 0, bt.plain.length);
     const inner = span ? rangeAt(bt, span.start, span.end) : null;
+    // 項目・セルを丸ごと対象にした指摘は、その箱を箇所の印にする。中身の
+    // 無い項目は選択の文字を持たないので、これが無いとブロック全体への
+    // 指摘と同じ見た目になる。
+    const marked =
+      covered > 1 || !thread.unit ? null : unitElement(el, thread.unit);
     // 図のように選べる文字を持たないブロックは範囲を作れない。枠で示す。
     const outline = blockRect(el) ?? whole?.getBoundingClientRect() ?? null;
     if (!outline) continue;
@@ -293,15 +331,12 @@ export function readingMarks(
     }
     if (boxes.length === 0) boxes.push(outline);
     const areas = clipRects(boxes, clip);
-    const cell = inner ? unitOf(inner) : null;
-    const spots = inner
-      ? clipRects(
-          cell
-            ? [cell.getBoundingClientRect()]
-            : mergeRects(textRects(inner)),
-          spotClip,
-        )
-      : [];
+    const cell = marked ?? (inner ? unitOf(inner) : null);
+    const spots = cell
+      ? clipRects([cell.getBoundingClientRect()], spotClip)
+      : inner
+        ? clipRects(mergeRects(textRects(inner)), spotClip)
+        : [];
     // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
     // いつも二重に出すと、どこへの指摘か読み取りにくい。
     const moved = guess || resolution.state === "rewritten";

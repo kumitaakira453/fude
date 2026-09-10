@@ -231,6 +231,52 @@ describe("targetOfSpan / targetOfBlock", () => {
     expect(later?.offset).toBe("計算は $E = mc^2$ ".length);
   });
 
+  // 中身の無い項目は選んだ文字を持たない。引き先を残さないと、台帳の上では
+  // ブロック全体への指摘と区別が付かなくなる。
+  it("項目の中の範囲は、何番目の項目かを残す", () => {
+    const list = "- さいしょ\n\n- [ ]\n\n- さいご\n";
+    const { loaded, state } = opened(list);
+    const at = posOf(state.doc, 0);
+    // 3 つの項目それぞれの中を相手にする。位置は項目の段落の中。
+    const marks: number[] = [];
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === "paragraph") marks.push(pos + 1);
+      return true;
+    });
+    expect(marks).toHaveLength(3);
+    expect(targetOfSpan(state.doc, loaded, "", marks[0], marks[0] + 2)?.unit).toEqual({
+      kind: "item",
+      index: 0,
+    });
+    // 中身が無い項目は範囲を作れないので、その次の項目で番号が飛ばないことを見る。
+    expect(targetOfSpan(state.doc, loaded, "", marks[2], marks[2] + 2)?.unit).toEqual({
+      kind: "item",
+      index: 2,
+    });
+    expect(targetOfSpan(state.doc, loaded, "", marks[0], marks[0] + 2)?.pos).toBe(at);
+  });
+
+  it("項目の外の範囲は引き先を持たない", () => {
+    const { loaded, state } = opened(SRC);
+    const at = posOf(state.doc, 3);
+    expect(targetOfSpan(state.doc, loaded, "", at + 3, at + 7)?.unit).toBeUndefined();
+  });
+
+  it("表のセルの中の範囲は、何番目のセルかを残す", () => {
+    const table = "| あ | い |\n| - | - |\n| う | え |\n";
+    const { loaded, state } = opened(table);
+    const cells: number[] = [];
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === "tableCell") cells.push(pos + 1);
+      return true;
+    });
+    expect(cells.length).toBe(4);
+    expect(targetOfSpan(state.doc, loaded, "", cells[2], cells[2] + 1)?.unit).toEqual({
+      kind: "cell",
+      index: 2,
+    });
+  });
+
   it("フロントマターは版の前に付け直す", () => {
     const { loaded, state } = opened(SRC);
     const at = posOf(state.doc, 3);

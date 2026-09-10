@@ -158,6 +158,34 @@ describe("editorMarks", () => {
     expect(editorMarks(view, base, [anchored(posOf(view, 1))], [])).toHaveLength(0);
   });
 
+  it("引き先を持つ指摘は、その項目の箱に出す", () => {
+    // 中身の無い項目は選択の文字を持たない。引き先が無いと、ブロック全体への
+    // 指摘と同じ見た目（枠）になり、一覧全体に付いたように見える。
+    const { view } = editor("- さいしょ\n\n- [ ]\n\n- さいご\n");
+    const at = posOf(view, 0);
+    // 2 個目の項目の箱を当て木で置く。
+    const items: HTMLElement[] = [];
+    view.state.doc.nodeAt(at)!.descendants((node, offset) => {
+      if (node.type.name !== "listItem") return true;
+      const dom = view.nodeDOM(at + 1 + offset);
+      if (dom instanceof HTMLElement) items.push(dom);
+      return true;
+    });
+    expect(items).toHaveLength(3);
+    rects.set(items[1], new DOMRect(0, 40, 600, 30));
+
+    const marks = editorMarks(
+      view,
+      base,
+      [anchored(at)],
+      [thread({ selection: "", selection_offset: 5, unit: { kind: "item", index: 1 } })],
+    );
+    expect(marks).toHaveLength(1);
+    expect(marks[0].spots).toEqual([{ top: 40, left: 0, width: 600, height: 30 }]);
+    // 箇所が出せているので、ブロックの枠は添えない
+    expect(marks[0].areas).toHaveLength(0);
+  });
+
   it("矩形は重ねる先の左上からの座標で返す", () => {
     const { view } = editor(SRC);
     const marks = editorMarks(

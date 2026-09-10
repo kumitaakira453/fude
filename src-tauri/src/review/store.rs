@@ -61,6 +61,27 @@ pub struct Thread {
     // GUI が対応付けた結果の控え。CLI は Markdown を解析しないためこれを読む。
     #[serde(default)]
     pub resolved: Option<Resolved>,
+    // 項目・セルを丸ごと対象にしたときの引き先。中身の無い項目は選択の文字を
+    // 持たないので、これが無いとブロック全体への指摘と見分けが付かない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<Unit>,
+}
+
+// 丸ごと対象にした囲み。index はブロックの中で何番目の項目・セルか（0 から）。
+//
+// ソースの位置ではなく通し番号で持つ。編集面は編集モデルから対象を組むので
+// ソースの位置を出せず、読む側と同じ値にならない。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnitKind {
+    Item,
+    Cell,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Unit {
+    pub kind: UnitKind,
+    pub index: usize,
 }
 
 // 指摘の対象が今の版でどうなっているか。GUI が基準版との対応付けで求めて書く。
@@ -377,6 +398,7 @@ mod tests {
             }],
             created_at: 1,
             resolved: None,
+            unit: None,
         }
     }
 
@@ -468,6 +490,42 @@ mod tests {
             assert_eq!(serde_json::to_string(&origin).unwrap(), json);
             assert_eq!(serde_json::from_str::<Origin>(json).unwrap(), origin);
         }
+    }
+
+    #[test]
+    fn unit_names_are_fixed() {
+        // 綴りは台帳のファイルとフロントエンドの型に出る。変えると過去の
+        // 台帳が読めなくなる。
+        for (kind, json) in [(UnitKind::Item, "\"item\""), (UnitKind::Cell, "\"cell\"")] {
+            assert_eq!(serde_json::to_string(&kind).unwrap(), json);
+            assert_eq!(serde_json::from_str::<UnitKind>(json).unwrap(), kind);
+        }
+    }
+
+    #[test]
+    fn a_thread_without_a_unit_still_reads() {
+        // 引き先を持たない過去の指摘は、ブロック全体への指摘として読む。
+        let json = serde_json::to_string(&sample_thread()).unwrap();
+        assert!(!json.contains("unit"), "引き先が無いときは書かない: {json}");
+        let back: Thread = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.unit, None);
+
+        // 引き先を持つ指摘は、項目の位置ごと往復する。
+        let with = Thread {
+            unit: Some(Unit {
+                kind: UnitKind::Item,
+                index: 1,
+            }),
+            ..sample_thread()
+        };
+        let back: Thread = serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
+        assert_eq!(
+            back.unit,
+            Some(Unit {
+                kind: UnitKind::Item,
+                index: 1
+            })
+        );
     }
 
     #[test]

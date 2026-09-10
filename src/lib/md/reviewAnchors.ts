@@ -1,4 +1,4 @@
-import type { Node as PmNode } from "prosemirror-model";
+import type { Node as PmNode, NodeType } from "prosemirror-model";
 import {
   coverage,
   headOf,
@@ -7,7 +7,7 @@ import {
   stripMarkup,
   type Resolution,
 } from "../blockDiff";
-import type { ReviewThread } from "../review";
+import type { ReviewThread, ReviewUnit } from "../review";
 import type { Loaded } from "./fromMarkdown";
 import { schema } from "./schema";
 import { toMarkdownParts, type Part } from "./toMarkdown";
@@ -136,6 +136,42 @@ export interface Target {
   sectionPath: string[];
   // 版として残す全文。フロントマターを前に付けたもの。
   source: string;
+  // 項目・セルを丸ごと相手にしているときの引き先。中身の無い項目は選んだ
+  // 文字を持たないので、これが無いとブロック全体への指摘と区別が付かない。
+  unit?: ReviewUnit;
+}
+
+// 範囲が入っている項目・セル。ブロックの中で何番目かを返す（読む側の目印は
+// 編集面に無いので、どちらの面でも作れる通し番号で持つ）。
+function unitAt(
+  doc: PmNode,
+  blockPos: number,
+  from: number,
+): ReviewUnit | undefined {
+  const $from = doc.resolve(from);
+  const item = schema.nodes.listItem;
+  const cell = schema.nodes.tableCell;
+  let held: { type: NodeType; at: number } | null = null;
+  for (let d = $from.depth; d > 0; d--) {
+    const type = $from.node(d).type;
+    if (type === cell || type === item) {
+      held = { type, at: $from.before(d) };
+      break;
+    }
+  }
+  if (!held) return undefined;
+  const block = doc.nodeAt(blockPos);
+  if (!block) return undefined;
+  let index = -1;
+  let seen = 0;
+  block.descendants((node, offset) => {
+    if (node.type !== held.type) return true;
+    if (blockPos + 1 + offset === held.at) index = seen;
+    seen++;
+    return true;
+  });
+  if (index < 0) return undefined;
+  return { kind: held.type === cell ? "cell" : "item", index };
 }
 
 // 中身を持たない行内を字として読むときの代わり。
@@ -170,6 +206,7 @@ export function targetOfSpan(
     spot: { from, to: end },
     text: doc.textBetween(from, end, "", leafText),
     offset: doc.textBetween(pos + 1, from, "", leafText).length,
+    unit: unitAt(doc, pos, from),
   };
 }
 

@@ -74,6 +74,35 @@ function thread(over: Partial<ReviewThread> = {}): ReviewThread {
   };
 }
 
+// 箇条書きのブロック。項目には描画側と同じ目印（data-mg-item）を付ける。
+// 2 個目は中身が無い項目（`- [ ]` だけの行）で、選択の文字を持たない。
+function listContent(): { article: HTMLElement; item: HTMLElement } {
+  const article = document.createElement("article");
+  rects.set(article, new DOMRect(0, 0, 600, 200));
+  const wrap = document.createElement("div");
+  wrap.dataset.mgBlock = "0";
+  rects.set(wrap, new DOMRect(0, 0, 600, 200));
+  const ul = document.createElement("ul");
+  rects.set(ul, new DOMRect(0, 0, 600, 200));
+  const anchors = [0, 14, 21];
+  const texts = ["さいしょ", "", "さいご"];
+  let item: HTMLElement | null = null;
+  anchors.forEach((anchor, i) => {
+    const li = document.createElement("li");
+    li.dataset.mgItem = String(anchor);
+    li.textContent = texts[i];
+    rects.set(li, new DOMRect(0, i * 60, 600, 60));
+    ul.appendChild(li);
+    if (i === 1) item = li;
+  });
+  wrap.appendChild(ul);
+  article.appendChild(wrap);
+  document.body.appendChild(article);
+  return { article, item: item! };
+}
+
+const LIST_SRC = "- さいしょ\n\n- [ ]\n\n- さいご";
+
 const resolved = (r: Resolution) => new Map([["t1", r]]);
 const base = new DOMRect(0, 0, 600, 300);
 
@@ -161,6 +190,64 @@ describe("readingMarks", () => {
   it("対応付けが済んでいない指摘は出さない", () => {
     const el = content("はじめの段落。");
     expect(readingMarks(el, base, [thread()], new Map())).toHaveLength(0);
+  });
+
+  it("引き先を持つ指摘は、その項目の箱に出す", () => {
+    // 中身の無い項目は選択の文字を持たない。引き先が無いとブロック全体への
+    // 指摘と同じ見た目になり、リスト全体に付いたように見える。
+    const { article, item } = listContent();
+    const marks = readingMarks(
+      article,
+      base,
+      [
+        thread({
+          quote: LIST_SRC,
+          selection: "",
+          selection_offset: 5,
+          unit: { kind: "item", index: 1 },
+        }),
+      ],
+      resolved({ state: "unchanged", index: 0, head: block(0, LIST_SRC) }),
+    );
+    expect(marks).toHaveLength(1);
+    expect(marks[0].spots).toHaveLength(1);
+    // その項目の箱ちょうど（ブロックは 0〜200、項目は 60〜120）
+    expect(marks[0].spots[0].top).toBe(item.getBoundingClientRect().top);
+    expect(marks[0].spots[0].height).toBe(60);
+    // 箇所が出せているので、ブロックの枠は添えない
+    expect(marks[0].areas).toHaveLength(0);
+  });
+
+  it("引き先が引けなければブロックの枠に落とす", () => {
+    // 項目が消えている（書き換わった）ときは、少なくとも場所は示す。
+    const { article } = listContent();
+    const marks = readingMarks(
+      article,
+      base,
+      [
+        thread({
+          quote: LIST_SRC,
+          selection: "",
+          selection_offset: 5,
+          unit: { kind: "item", index: 9 },
+        }),
+      ],
+      resolved({ state: "unchanged", index: 0, head: block(0, LIST_SRC) }),
+    );
+    expect(marks[0].spots).toHaveLength(0);
+    expect(marks[0].areas.length).toBeGreaterThan(0);
+  });
+
+  it("引き先を持たない指摘は今までどおりブロック全体で出す", () => {
+    const { article } = listContent();
+    const marks = readingMarks(
+      article,
+      base,
+      [thread({ quote: LIST_SRC, selection: "", selection_offset: 0 })],
+      resolved({ state: "unchanged", index: 0, head: block(0, LIST_SRC) }),
+    );
+    expect(marks[0].spots).toHaveLength(0);
+    expect(marks[0].areas.length).toBeGreaterThan(0);
   });
 
   it("矩形は重ねる先の左上からの座標で返す", () => {

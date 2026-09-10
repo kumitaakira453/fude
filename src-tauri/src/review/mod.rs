@@ -5,7 +5,7 @@ pub mod store;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use store::{Actor, Comment, Ledger, Origin, Status, Thread, Version};
+use store::{Actor, Comment, Ledger, Origin, Status, Thread, Unit, Version};
 
 // GUI（Tauri コマンド）と CLI が共通で呼ぶ操作層。
 // Markdown の解析は一切しない。指摘が今の版でどこに対応するかは GUI が
@@ -306,6 +306,8 @@ pub struct NewThread {
     pub source: String,
     pub author: String,
     pub body: String,
+    // 項目・セルを丸ごと対象にしたとき、その引き先。
+    pub unit: Option<Unit>,
 }
 
 pub fn create_thread(input: NewThread) -> Result<String, String> {
@@ -342,6 +344,7 @@ pub fn create_thread(input: NewThread) -> Result<String, String> {
             }],
             created_at: now,
             resolved: None,
+            unit: input.unit,
         });
         Ok(id)
     })
@@ -665,6 +668,7 @@ mod tests {
                 .collect(),
             created_at: 0,
             resolved: None,
+            unit: None,
         }
     }
 
@@ -735,6 +739,7 @@ mod tests {
             comments: vec![],
             created_at: 0,
             resolved: None,
+            unit: None,
         };
         assert_eq!(resolve_view(&thread).0, AnchorState::NoFile);
     }
@@ -862,6 +867,7 @@ mod tests {
             comments: vec![],
             created_at: 0,
             resolved: None,
+            unit: None,
         }
     }
 

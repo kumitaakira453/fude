@@ -313,6 +313,7 @@ mod tests {
                 }],
                 created_at: 1_772_183_400_000,
                 resolved: None,
+                unit: None,
             },
             anchor,
             head_quote: Some(HEAD.into()),
