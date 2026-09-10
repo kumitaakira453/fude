@@ -714,6 +714,16 @@ export function BlockGutter({
     },
   ];
 
+  // メニューが隠してはいけない相手。塗っているのと同じ箱を画面の座標で渡す。
+  const avoidBox = (): { top: number; bottom: number } | undefined => {
+    if (!menu || !content) return undefined;
+    const rel =
+      menu.kind === "item" ? view?.item?.box : menu.kind === "block" ? view?.box : null;
+    if (!rel) return undefined;
+    const base = content.getBoundingClientRect();
+    return { top: base.top + rel.top, bottom: base.top + rel.top + rel.height };
+  };
+
   const items =
     menu === null
       ? []
@@ -1070,6 +1080,7 @@ export function BlockGutter({
         <BlockMenu
           x={menu.x}
           y={menu.y}
+          avoid={avoidBox()}
           items={items}
           onClose={() => setMenu(null)}
         />

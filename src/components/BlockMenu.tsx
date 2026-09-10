@@ -28,14 +28,23 @@ const ROW = 32;
 // 呼び出し側が「帯や段の横に入るか」を測るのに使う。
 export const MENU_WIDTH = 216;
 
+// メニューと相手の間に置く隙間。
+const GAP = 8;
+// 画面の端に残す余白。
+const EDGE = 8;
+
 export function BlockMenu({
   x,
   y,
+  avoid,
   items,
   onClose,
 }: {
   x: number;
   y: number;
+  // 隠してはいけない相手（画面の座標）。メニューが何に対するものかを
+  // 塗って示しているので、その塗りを覆うと何を選んだのか読めなくなる。
+  avoid?: { top: number; bottom: number };
   items: MenuItem[];
   onClose: () => void;
 }) {
@@ -71,7 +80,7 @@ export function BlockMenu({
           ref={box}
           style={{
             left: Math.min(x, window.innerWidth - MENU_WIDTH),
-            top: Math.min(y, window.innerHeight - items.length * ROW - 20),
+            top: placeY(y, avoid, items.length),
           }}
           onClick={(e) => e.stopPropagation()}
           className="mg-block-menu fixed z-50 w-[13.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
@@ -144,4 +153,23 @@ export function BlockMenu({
       )}
     </>
   );
+}
+
+// 縦の置き場所。相手を丸ごと覆ってしまうときだけ、その下（入らなければ上）へ
+// 逃がす。相手がメニューより背の高いブロックなら、押した高さのまま出す
+// （下へ回すとブロックの丈だけ離れてしまい、上下の余りで塗りは読める）。
+function placeY(
+  y: number,
+  avoid: { top: number; bottom: number } | undefined,
+  rows: number,
+): number {
+  const height = rows * ROW + 20;
+  const fit = Math.min(y, window.innerHeight - height - 20);
+  if (!avoid || avoid.bottom - avoid.top >= height) return fit;
+  const below = avoid.bottom + GAP;
+  if (below + height <= window.innerHeight - EDGE) return below;
+  const above = avoid.top - GAP - height;
+  if (above >= EDGE) return above;
+  // どちらにも入らないときは画面に収める（相手は覆うが、読めない方が困る）。
+  return Math.max(EDGE, fit);
 }

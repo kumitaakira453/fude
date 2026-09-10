@@ -17,12 +17,24 @@ beforeAll(() => {
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 
-function open(items: MenuItem[], onClose = () => {}) {
+function open(
+  items: MenuItem[],
+  onClose = () => {},
+  avoid?: { top: number; bottom: number },
+  y = 10,
+) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() => root!.render(<BlockMenu x={10} y={10} items={items} onClose={onClose} />));
+  act(() =>
+    root!.render(
+      <BlockMenu x={10} y={y} avoid={avoid} items={items} onClose={onClose} />,
+    ),
+  );
 }
+
+const topOf = (): number =>
+  parseFloat(document.querySelector<HTMLElement>(".mg-block-menu")!.style.top);
 
 afterEach(() => {
   act(() => root?.unmount());
@@ -112,5 +124,39 @@ describe("押せない項目", () => {
     expect(el.disabled).toBe(true);
     press(el);
     expect(ran).toEqual([]);
+  });
+});
+
+// メニューは「何に対するものか」を塗って示す。その塗りを覆うと、何を選んだのか
+// 読めなくなる（実機では選んだ項目がメニューの下に隠れていた）。
+describe("相手を隠さない置き場所", () => {
+  const three: MenuItem[] = [
+    { icon: "a", label: "ひとつ", run: () => {} },
+    { icon: "b", label: "ふたつ", run: () => {} },
+    { icon: "c", label: "みっつ", run: () => {} },
+  ];
+
+  it("相手の下に出す", () => {
+    open(three, () => {}, { top: 100, bottom: 140 }, 110);
+    // 押した高さ（110）ではなく、相手の下（140 + 隙間）へ
+    expect(topOf()).toBe(148);
+  });
+
+  it("下に入らなければ上へ逃がす", () => {
+    const tall = window.innerHeight; // jsdom は 768
+    open(three, () => {}, { top: tall - 60, bottom: tall - 20 }, tall - 30);
+    // 3 行ぶん（32 * 3 + 20 = 116）と隙間の分だけ上へ
+    expect(topOf()).toBe(tall - 60 - 8 - 116);
+  });
+
+  it("メニューより背の高い相手なら押した高さのまま", () => {
+    // 覆っても上下に余りが出るので、遠くへ動かすより近くに出す方がよい。
+    open(three, () => {}, { top: 100, bottom: 500 }, 120);
+    expect(topOf()).toBe(120);
+  });
+
+  it("相手が渡されなければ押した高さに出す", () => {
+    open(three, () => {}, undefined, 50);
+    expect(topOf()).toBe(50);
   });
 });

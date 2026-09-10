@@ -753,6 +753,16 @@ export function EditorGutter({
     setMenu({ kind, spot: where, at, x: e.clientX, y: e.clientY });
   };
 
+  // メニューが隠してはいけない相手。塗っているのと同じ箱を画面の座標で渡す。
+  const avoidBox = (): { top: number; bottom: number } | undefined => {
+    if (!menu) return undefined;
+    const rel =
+      menu.kind === "item" ? spot?.item?.box : menu.kind === "block" ? spot?.box : null;
+    if (!rel) return undefined;
+    const base = host.getBoundingClientRect();
+    return { top: base.top + rel.top, bottom: base.top + rel.top + rel.height };
+  };
+
   // 行・列のメニュー。並びは読むとき側と同じ。
   const partItems = (kind: TablePart, where: Spot, at: number): MenuItem[] => {
     const act = (a: TableAct) => () => runTable(kind, where.pos, at, a);
@@ -1104,6 +1114,7 @@ export function EditorGutter({
         <BlockMenu
           x={menu.x}
           y={menu.y}
+          avoid={avoidBox()}
           items={
             menu.kind === "block"
               ? blockItems(menu.spot)
