@@ -35,8 +35,8 @@ import { VersionDiff, type Layout } from "./VersionDiff";
 // 本文に重ねず別画面で出す。差分は変更前と変更後を並べて見せるものなので、
 // 読む画面の幅には収まらない。
 //
-// いちばん上は「いま」。バージョンではなく今のファイルの本文で、差分の既定の
-// 比較対象にもなる。バージョンを打つ前の書きかけをここで比べられる。
+// 一覧に並ぶのはバージョンだけ。まだ打っていない今の本文（「いま」）は
+// バージョンではないので並べず、差分の比較対象としてだけ選べるようにする。
 
 type Mode = "body" | "diff";
 
@@ -67,6 +67,7 @@ export function VersionScreen({ path }: { path: string }) {
   const current = cache.get(path);
   const list = useMemo(() => (abs ? versionsOf(ledger, abs) : []), [ledger, abs]);
 
+  // 選んでいるバージョン。null になるのは 1 つも無いときだけ。
   const [picked, setPicked] = useState<Pick>(null);
   // 既定は本文。選んだバージョンが実際どう見えるかを先に出し、差分は
   // 求められたら出す。
@@ -96,10 +97,12 @@ export function VersionScreen({ path }: { path: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
 
-  // 選んでいたバージョンが消えたら（別のウィンドウで台帳が変わった等）
-  // いまへ戻す。
+  // 開いた直後と、選んでいたバージョンが消えたとき（別のウィンドウで台帳が
+  // 変わった等）は、いちばん新しいバージョンへ寄せる。
   useEffect(() => {
-    if (picked !== null && !list.some((v) => v.id === picked)) setPicked(null);
+    if (picked === null || !list.some((v) => v.id === picked)) {
+      setPicked(list[0]?.id ?? null);
+    }
   }, [list, picked]);
 
   // バージョンを選ぶ。比較対象と同じものを選ぶと差分が空になるので、
@@ -129,14 +132,8 @@ export function VersionScreen({ path }: { path: string }) {
     [list],
   );
 
-  // 既定の比較対象。過去のバージョンを見ているならいまと比べ、いまを見て
-  // いるなら直前のバージョンと比べる。同じものを両側に置くと差分が空になる。
-  const other =
-    against === undefined
-      ? picked === null
-        ? (list[0]?.id ?? null)
-        : null
-      : against;
+  // 既定の比較対象は「いま」。打つ前の書きかけがどう変わったかを最初に見せる。
+  const other = against === undefined ? null : against;
 
   // 古いほうを変更前に置く。
   const order = useCallback(
@@ -168,7 +165,6 @@ export function VersionScreen({ path }: { path: string }) {
   const oldText = useText(drawnOld, current);
   const newText = useText(drawnNew, current);
   const pickedText = useText(shown.picked, current);
-  const newestText = useText(list[0]?.id ?? null, current);
 
   // 覆いを外すのは、組む値が追いつき、その本文も読めてから。先に外すと
   // 読み込みの一言が 1 枚だけ挟まって点滅する。
@@ -176,9 +172,6 @@ export function VersionScreen({ path }: { path: string }) {
     shown.mode === "body"
       ? pickedText === undefined
       : oldText === undefined || newText === undefined;
-
-  const atNewest =
-    list.length > 0 && newestText != null && newestText === current;
 
   const style = useMemo(() => ({ fontFamily: fontStack(font) }), [font]);
   const ctx = useMemo(
@@ -209,7 +202,6 @@ export function VersionScreen({ path }: { path: string }) {
         if (!done) return;
         await reloadFile(path);
         await syncLedger(store);
-        setPicked(null);
         setAgainst(undefined);
         notify(store, `「${name}」に戻しました`, "center", {
           label: "元に戻す",
@@ -251,19 +243,21 @@ export function VersionScreen({ path }: { path: string }) {
         </div>
         <span className="flex-1" />
 
-        <div className="mg-ver-seg">
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMode(m.id)}
-              className={mode === m.id ? "is-on" : undefined}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        {list.length > 0 && (
+          <div className="mg-ver-seg">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                className={mode === m.id ? "is-on" : undefined}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {mode === "diff" && (
+        {list.length > 0 && mode === "diff" && (
           <>
             <Against
               label={nameOf(other)}
@@ -297,25 +291,6 @@ export function VersionScreen({ path }: { path: string }) {
 
       <div className="flex min-h-0 flex-1">
         <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
-          <button
-            onClick={() => choose(null)}
-            className={`mg-ver-row${picked === null ? " is-active" : ""}`}
-          >
-            <span className="mg-ver-face">
-              <Icon name="edit_note" size={13} fill />
-            </span>
-            <span className="mg-ver-main">
-              <span className="mg-ver-name">いま</span>
-              <span className="mg-ver-note">
-                {list.length === 0
-                  ? "まだバージョンがありません"
-                  : atNewest
-                    ? `「${labelOf(list[0])}」のまま`
-                    : "まだバージョンにしていない"}
-              </span>
-            </span>
-          </button>
-
           {list.map((version) => {
             const actor = actorOf(version);
             return (
@@ -340,17 +315,19 @@ export function VersionScreen({ path }: { path: string }) {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* いま何を見ているか。押した瞬間の値から出すので、中身が組み
               終わるのを待たずに変わる。 */}
-          <div className="mg-ver-facing">
-            {mode === "body" ? (
-              <Facing id={picked} list={list} />
-            ) : (
-              <>
-                <Facing id={oldId} list={list} />
-                <Icon name="arrow_forward" size={14} className="shrink-0" />
-                <Facing id={newId} list={list} />
-              </>
-            )}
-          </div>
+          {list.length > 0 && (
+            <div className="mg-ver-facing">
+              {mode === "body" ? (
+                <Facing id={picked} list={list} />
+              ) : (
+                <>
+                  <Facing id={oldId} list={list} />
+                  <Icon name="arrow_forward" size={14} className="shrink-0" />
+                  <Facing id={newId} list={list} />
+                </>
+              )}
+            </div>
+          )}
 
           <div className="relative flex min-h-0 flex-1">
             <div className="min-w-0 flex-1 overflow-y-auto">
