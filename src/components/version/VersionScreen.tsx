@@ -318,7 +318,7 @@ export function VersionScreen({ path }: { path: string }) {
               <Waiting>本文を読み込んでいます…</Waiting>
             ) : list.length === 0 ? (
               <p className="mg-ver-note-line">
-                <Icon name="commit" size={15} />
+                <Icon name="save_as" size={15} />
                 この文書にはまだバージョンがありません。本文の画面の「バージョンを保存」から打てます。
               </p>
             ) : pending ? (

@@ -1167,12 +1167,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
                 }`}
               >
-                <Icon name="commit" size={16} />
+                <Icon name="save_as" size={16} />
               </button>
               {naming && (
                 <div className="mg-ver-name-pop">
                   <div className="mg-ver-name-head">
-                    <Icon name="commit" size={14} />
+                    <Icon name="save_as" size={14} />
                     バージョンを保存
                   </div>
                   <input
