@@ -9,7 +9,7 @@ import {
   type Node as PmNode,
 } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
-import { Plugin, TextSelection, type Command } from "prosemirror-state";
+import { Plugin, Selection, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import type { Transform } from "prosemirror-transform";
 import { fromMarkdown } from "./fromMarkdown";
@@ -152,10 +152,48 @@ export const eraseToLineStart: Command = (state, dispatch) => {
   if (!empty || $head.parent.type !== schema.nodes.codeBlock) return false;
   const before = $head.parent.textBetween(0, $head.parentOffset);
   const from = $head.start() + before.lastIndexOf("\n") + 1;
-  // 行の頭に居るなら消すものが無い。それでも既定へは渡さない
-  // （渡すと上と同じずれが起きる）。
-  if (from < $head.pos && dispatch) {
+  // 行の頭に居るなら消すものが無い。塊に中身が残っているなら、それでも
+  // 既定へは渡さない（渡すと上と同じずれが起きる）。空の塊は消す番へ譲る。
+  if (from >= $head.pos) return $head.parent.content.size > 0;
+  if (dispatch) {
     dispatch(state.tr.delete(from, $head.pos).scrollIntoView());
+  }
+  return true;
+};
+
+// 中身の無いブロックの先頭で Backspace。そのブロックを消す。
+//
+// 既定（joinBackward）は直前が囲みだと、その最後の子として今のブロックを
+// 差し込む。中身のあるブロックを前の行へ継ぐのは正しいが、空のブロックが
+// 囲みへ潜っても意味が無い。空の塊が callout の中へ入り、空の callout が
+// 箇条書きの項目に化けていたのはこれ。
+const HOLDERS = new Set([
+  schema.nodes.callout,
+  schema.nodes.details,
+  schema.nodes.blockquote,
+]);
+
+export const dropEmptyBack: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock) return false;
+  if ($from.parentOffset !== 0 || $from.parent.content.size > 0) return false;
+
+  let from = $from.before();
+  let to = $from.after();
+  // 囲みの唯一の子なら囲みごと消す。中身が無いので失うものがない。
+  const holder = $from.depth > 0 ? $from.node(-1) : null;
+  if (holder && HOLDERS.has(holder.type) && holder.childCount === 1) {
+    from = $from.before(-1);
+    to = $from.after(-1);
+  }
+  // 文書にこれしか無いなら、消すと空の文書になる。何もしない。
+  if (from === 0 && to === state.doc.content.size) return false;
+
+  if (dispatch) {
+    const tr = state.tr.delete(from, to);
+    // 直前のブロックの末尾へ。前に何も無ければ後ろへ送る（near が向きを見る）。
+    const at = Selection.near(tr.doc.resolve(Math.max(0, from - 1)), -1);
+    dispatch(tr.setSelection(at).scrollIntoView());
   }
   return true;
 };
@@ -417,13 +455,19 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
       // 項目の先頭では飾りを外し、装飾の末尾で消したときは打ち直しが同じ
       // 装飾へ入るようにする。
-      Backspace: chainCommands(undoRule(kept), toSourceBack, unlistBack, eraseInMark),
+      Backspace: chainCommands(
+        undoRule(kept),
+        toSourceBack,
+        unlistBack,
+        eraseInMark,
+        dropEmptyBack,
+      ),
       Delete: toSourceForward,
       "Mod-s": () => {
         onSave();
         return true;
       },
-      "Mod-Backspace": eraseToLineStart,
+      "Mod-Backspace": chainCommands(eraseToLineStart, dropEmptyBack),
       "Mod-z": undo,
       "Shift-Mod-z": redo,
       "Mod-y": redo,
