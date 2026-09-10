@@ -140,6 +140,26 @@ const splitItem: Command = (state, dispatch, view) => {
   )(state, dispatch, view);
 };
 
+// ⌘⌫。コードの塊の中では行の頭までを消す。
+//
+// 既定の動作に任せると、塊の中では DOM だけが書き換わって編集モデルとずれる。
+// 消したあとカーソルが行の端まで来ず、押しても塊へ入れ直せなくなる（塊の頭に
+// 触れない札を置いているので、WebKit の行削除がそこをまたいで働く）。
+//
+// 塊の中の改行は字として持っているので、直前の改行の後ろまでを消せばよい。
+export const eraseToLineStart: Command = (state, dispatch) => {
+  const { empty, $head } = state.selection;
+  if (!empty || $head.parent.type !== schema.nodes.codeBlock) return false;
+  const before = $head.parent.textBetween(0, $head.parentOffset);
+  const from = $head.start() + before.lastIndexOf("\n") + 1;
+  // 行の頭に居るなら消すものが無い。それでも既定へは渡さない
+  // （渡すと上と同じずれが起きる）。
+  if (from < $head.pos && dispatch) {
+    dispatch(state.tr.delete(from, $head.pos).scrollIntoView());
+  }
+  return true;
+};
+
 // 項目の先頭で Backspace。飾りを外して 1 段浅くする。いちばん外なら
 // 箇条書きを抜けて段落に戻る。
 //
@@ -403,6 +423,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         onSave();
         return true;
       },
+      "Mod-Backspace": eraseToLineStart,
       "Mod-z": undo,
       "Shift-Mod-z": redo,
       "Mod-y": redo,
