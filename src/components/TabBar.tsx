@@ -133,8 +133,14 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                title={path}
-                onClick={() => activateTab(store, pane.id, i)}
+                title={selected ? `${path}\n押すとツリーで表示` : path}
+                // 開いているタブをもう一度押すのは「ここを出して」という合図。
+                // 切り替えのたびにツリーが動くと、狙って触るまで読めなくなる。
+                onClick={() =>
+                  selected
+                    ? revealInTree(store, path)
+                    : activateTab(store, pane.id, i)
+                }
                 // 中クリックで閉じる（タブの慣習）
                 onAuxClick={(e) => {
                   if (e.button === 1) {
