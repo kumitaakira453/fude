@@ -108,9 +108,9 @@ export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {
 // 選んだだけで子まで選んだように見え、コメントの相手も子ごとになる。
 export function itemOwnRect(li: HTMLElement): DOMRect {
   const box = li.getBoundingClientRect();
-  const nested = [...li.children].find(
-    (el) => el.tagName === "UL" || el.tagName === "OL",
-  );
+  // 文書順で最初の一覧が、この項目が抱えている入れ子。直下だけを見ると、
+  // チェックの項目（中身が .mg-task-body に包まれる）で取りこぼす。
+  const nested = li.querySelector("ul, ol");
   if (!nested) return box;
   const under = nested.getBoundingClientRect();
   const height = Math.max(0, under.top - box.top);

@@ -46,6 +46,7 @@ import {
   itemAtY,
   itemEdge,
   itemLine,
+  itemOwnRect,
   lineHeight,
   ONLY,
   relative,
@@ -391,7 +392,9 @@ export function EditorGutter({
                 at: spot.at,
                 mid: line.top - base.top + line.height / 2,
                 edge: itemEdge(li) - base.left,
-                box: relative(liBox, base),
+                // メニューの相手として塗るのは項目そのもの。入れ子の一覧は
+                // 別の項目なので含めない。
+                box: relative(itemOwnRect(li), base),
               }
             : null,
         // 1 行目の字に合わせる。測れないもの（図・区切り線など）は、上端から

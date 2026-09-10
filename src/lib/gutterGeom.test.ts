@@ -228,6 +228,25 @@ describe("項目そのものの箱", () => {
     expect(box.width).toBe(400);
   });
 
+  // 編集面のチェックの項目は、中身が .mg-task-body に包まれる。直下だけを
+  // 見ると入れ子を取りこぼし、箱が子まで伸びる。
+  it("包みの中の入れ子も見る", () => {
+    const li = document.createElement("li");
+    const body = document.createElement("div");
+    body.className = "mg-task-body";
+    const p = document.createElement("p");
+    p.textContent = "おや";
+    const ul = document.createElement("ul");
+    ul.appendChild(document.createElement("li"));
+    body.append(p, ul);
+    li.appendChild(body);
+    rect(li, new DOMRect(20, 100, 400, 90));
+    rect(ul, new DOMRect(40, 130, 380, 60));
+    document.body.appendChild(li);
+
+    expect(itemOwnRect(li).height).toBe(30);
+  });
+
   it("入れ子が無ければ元の箱のまま", () => {
     const box = itemOwnRect(item(false));
     expect(box.top).toBe(100);

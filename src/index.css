@@ -2150,9 +2150,11 @@ body.mg-dragging .mg-sel-menu {
   margin-block: 0.15em;
 }
 /* 入れ子の一覧は親の項目の一部。外側の一覧と同じ余白（1.1rem）を取ると、
-   項目とその中の一覧が離れて別の塊に見える。項目と同じ刻みに揃える。 */
-.mg-prose li > :is(ul, ol),
-.mg-prose.mg-editorial li > ol.mg-steps {
+   項目とその中の一覧が離れて別の塊に見える。項目と同じ刻みに揃える。
+   直下に限らないのは、編集面のチェックの項目が中身を .mg-task-body で
+   包むため（直下だけを見ると当たらない）。 */
+.mg-prose li :is(ul, ol),
+.mg-prose.mg-editorial li ol.mg-steps {
   margin-block: 0.15em;
 }
 /* 空行で書いた（ゆるい）箇条書きは項目の中が段落になる。編集面のタスクは
