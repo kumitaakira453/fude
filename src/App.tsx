@@ -109,34 +109,41 @@ export default function App() {
     });
   }, [activeFolderId, folders]);
 
-  // どの画面を出すか。押した瞬間の値と、実際に組む値を分ける。
+  // どの画面を出すか。
+  //
+  // 読む画面は出しっぱなしにして、重ねる画面（コメント・バージョン）が出て
+  // いるあいだは隠すだけにする。組み立て直すと、戻ってくるのに本文の組み立てと
+  // 編集面の構築で 0.5 秒かかる。
+  //
+  // 見せる / 隠すは押した瞬間の値で決め、木から外すのは塗った後の値で決める。
+  // 閉じた一枚では class の付け替えだけが起き、重ねた画面の片付けは次の一枚へ
+  // 移る。
+  //
+  // 隠すのは visibility。display を落とすと箱が消え、隠れているあいだに
+  // 走った測り直し（コメントの印の位置）が 0 になる。
+  const over = versionFile !== null || reviewOpen;
   const want = useMemo(
-    () => ({
-      landing: !activeFolderId,
-      version: versionFile,
-      review: reviewOpen,
-    }),
-    [activeFolderId, versionFile, reviewOpen],
+    () => ({ version: versionFile, review: reviewOpen }),
+    [versionFile, reviewOpen],
   );
   const drawn = useAfterPaint(want);
-  const screen = drawn ?? want;
-  const switching = drawn !== want;
+  const shown = drawn ?? want;
+  const versionPath = want.version ?? shown.version;
+  // 開くほうは新しく組むので待たせる。閉じるほうは待たせない。
+  const opening = drawn !== want && over;
 
   return (
     <>
-      {screen.landing ? (
+      {activeFolderId === null ? (
         <div className="h-screen w-screen bg-[var(--mg-bg)] text-[var(--mg-fg)]">
           <Landing />
         </div>
-      ) : screen.version !== null ? (
-        // バージョンの履歴は専用画面。前と後を並べるので、読む画面の幅には
-        // 収まらない。
-        <VersionScreen path={screen.version} />
-      ) : screen.review ? (
-        // レビューも専用画面。読書ビューに重ねると差分を並べて見せられない。
-        <ReviewScreen />
       ) : (
-        <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
+        <div
+          className={`flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)] ${
+            over ? "invisible" : ""
+          }`}
+        >
           <Toolbar />
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
@@ -151,11 +158,30 @@ export default function App() {
           <Settings />
         </div>
       )}
-      {/* 画面を入れ替えているあいだの覆い。
-          入れ替えは重い（本文の組み立て、指摘の一覧の突き合わせ）。押した一枚で
+
+      {/* バージョンの履歴は専用画面。前と後を並べるので、読む画面の幅には
+          収まらない。隠しているあいだも同じファイルを持ち続ける（閉じた
+          瞬間に道筋が消えると、片付けが押した一枚に戻ってくる）。 */}
+      {versionPath !== null && (
+        <div
+          className={`fixed inset-0 z-50 ${want.version === null ? "invisible" : ""}`}
+        >
+          <VersionScreen path={versionPath} />
+        </div>
+      )}
+
+      {/* コメントも専用画面。読む画面に重ねると差分を並べて見せられない。 */}
+      {(want.review || shown.review) && (
+        <div className={`fixed inset-0 z-50 ${want.review ? "" : "invisible"}`}>
+          <ReviewScreen />
+        </div>
+      )}
+
+      {/* 重ねる画面を組んでいるあいだの覆い。
+          組み立ては重い（本文の組み立て、指摘の一覧の突き合わせ）。押した一枚で
           やると、React は組み終わるまでコミットせず、ブラウザはコミットまで
           塗れないので、押した手応えがまるで無い。覆いだけを先に重ねる。 */}
-      {switching && (
+      {opening && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-[var(--mg-bg)]">
           <Icon
             name="progress_activity"

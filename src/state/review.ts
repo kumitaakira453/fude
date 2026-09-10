@@ -32,6 +32,12 @@ export const reviewThreadAtom = atom<string | null>(null);
 // 並べて見せるので、読む画面の幅では足りない。
 export const versionScreenAtom = atom<string | null>(null);
 
+// 重ねる画面（コメント・バージョン）が出ているか。読む画面は出しっぱなしで
+// 隠すだけなので、本文向けのキー操作はこの間だけ止める。
+export const screenOpenAtom = atom(
+  (get) => get(reviewScreenAtom) || get(versionScreenAtom) !== null,
+);
+
 // 未解決の総数。ツールバーの入口に出す。
 //
 // 台帳はマシンに 1 つで、他のフォルダの指摘も入っている。入口の数はいま開いて

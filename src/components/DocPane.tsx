@@ -24,7 +24,7 @@ import { createCheckpoint } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
-import { syncLedger, versionScreenAtom } from "../state/review";
+import { screenOpenAtom, syncLedger, versionScreenAtom } from "../state/review";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
   activePath,
@@ -94,10 +94,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   // 重ねた画面が出ているか。本文向けのキー操作をそこへ効かせないための判定。
+  // コメント・バージョンの画面が出ているあいだ、読む画面は隠れているだけで
+  // 生きているので、ここで止めないとキー操作がその画面の上でも効いてしまう。
   const settingsOpen = useAtomValue(settingsOpenAtom);
   const shortcutsOpen = useAtomValue(shortcutsOpenAtom);
   const paletteOpen = useAtomValue(paletteOpenAtom);
-  const overlayOpen = settingsOpen || shortcutsOpen || paletteOpen;
+  const screenOpen = useAtomValue(screenOpenAtom);
+  const overlayOpen = settingsOpen || shortcutsOpen || paletteOpen || screenOpen;
   const store = useStore();
   const {
     absOf,
@@ -404,7 +407,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // ドキュメント全体の Undo/Redo（アクティブペインのみ、CM 編集中は CM に任せる）
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || overlayOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || (e.key !== "z" && e.key !== "Z")) return;
       // 編集中の入力欄（CodeMirror・セルのインライン textarea 等）では、
@@ -433,7 +436,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isActive, path, undoFile, redoFile, store]);
+  }, [isActive, overlayOpen, path, undoFile, redoFile, store]);
 
   const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
@@ -883,7 +886,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   useEffect(() => {
     // 帯を出しているときだけ受ける（editSel が入るのは編集面が組めていて、
     // かつ範囲を選んでいるときだけ）。
-    if (!pm || !editSel) return;
+    if (!pm || !editSel || overlayOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       if (e.key !== "k" && e.key !== "K") return;
@@ -892,7 +895,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pm, editSel]);
+  }, [pm, editSel, overlayOpen]);
 
   // 編集面から指摘を始める。対象は編集モデルから組み立てる。
   const commentOnSpan = useCallback(() => {
