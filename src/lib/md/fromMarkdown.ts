@@ -223,7 +223,11 @@ function nodeOf(g: Group, source: string, base: number, id: string | null): Buil
   const attrs = id ? { id } : {};
   if (g.kind === "plain") return blockOf(g.node!, source, base, id);
 
-  const inner = blocksOfText(source.slice(g.innerStart!, g.innerEnd!), base + g.innerStart!);
+  const inner = innerBlocks(
+    source.slice(g.innerStart!, g.innerEnd!),
+    base + g.innerStart!,
+    padOf(source, g.start),
+  );
   const at = span(base + g.start, base + g.end, inner.spans);
   if (g.kind === "details") {
     return { node: schema.nodes.details.create({ ...attrs, head: g.head }, inner.nodes), span: at };
@@ -249,6 +253,64 @@ interface Blocks {
 // 囲みの中身は文字列から読み直す。入れ子も同じ道を通る。
 function blocksOfText(text: string, base: number): Blocks {
   return collect(group(parseTree(text).children, text), text, base);
+}
+
+// 箇条書きの項目の中に書かれた囲みは、中身の行も項目の分だけ字下げされている。
+// そのまま読み直すと字下げ 4 で字下げのコードになるので、囲みが立っている桁だけ
+// 落として読む。落とした分は位置に足し戻す（指摘の居場所は原文の位置で持つ）。
+function innerBlocks(text: string, base: number, pad: string): Blocks {
+  const cut = unpad(text, pad);
+  if (!cut) return blocksOfText(text, base);
+  const inner = blocksOfText(cut.text, 0);
+  return {
+    nodes: inner.nodes,
+    spans: inner.spans.map((s) => moveSpan(s, (at) => base + cut.back(at))),
+  };
+}
+
+// 各行の頭から pad を落とし、落とした後の位置から元の位置を引ける表を作る。
+function unpad(
+  text: string,
+  pad: string,
+): { text: string; back: (at: number) => number } | null {
+  if (!pad) return null;
+  const out: string[] = [];
+  const map: number[] = [];
+  let at = 0;
+  text.split("\n").forEach((line, i) => {
+    if (i > 0) {
+      map.push(at);
+      at += 1;
+    }
+    // 字下げが揃っていない行は、空白のあるところまでしか落とさない。
+    const room = line.startsWith(pad) ? pad.length : indentOf(line).length;
+    const drop = Math.min(pad.length, room);
+    at += drop;
+    const rest = line.slice(drop);
+    for (let j = 0; j < rest.length; j++) map.push(at + j);
+    at += rest.length;
+    out.push(rest);
+  });
+  map.push(at);
+  return {
+    text: out.join("\n"),
+    back: (i) => map[Math.min(Math.max(i, 0), map.length - 1)],
+  };
+}
+
+const moveSpan = (s: Span, f: (at: number) => number): Span => ({
+  start: f(s.start),
+  end: f(s.end),
+  children: s.children.map((k) => moveSpan(k, f)),
+});
+
+const indentOf = (line: string): string =>
+  line.slice(0, line.length - line.trimStart().length);
+
+// 囲みが立っている桁。開きタグより前が空白だけのときに限る。
+function padOf(source: string, at: number): string {
+  const head = source.slice(source.lastIndexOf("\n", at - 1) + 1, at);
+  return head.trim() === "" ? head : "";
 }
 
 function blocksOf(nodes: RootContent[], source: string, base: number): Blocks {

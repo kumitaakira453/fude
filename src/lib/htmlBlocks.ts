@@ -12,6 +12,11 @@ const DETAILS_OPEN = /^<details(\s[^>]*)?>$/;
 const DETAILS_CLOSE = "</details>";
 const SUMMARY = /^<summary(\s[^>]*)?>.*<\/summary>$/;
 
+// 行頭の空白。
+function indentOf(line: string): string {
+  return line.slice(0, line.length - line.trimStart().length);
+}
+
 function attr(attrs: string, name: string): string {
   const m = new RegExp(`${name}="([^"]*)"`).exec(attrs);
   return m ? m[1] : "";
@@ -39,6 +44,9 @@ export function openHtmlContainers(src: string): string {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
+    // 箇条書きの項目の中に書かれた囲みは字下げされている。出す行にも同じ
+    // 字下げを付けないと、div が最上位の HTML ブロックになって項目の外へ出る。
+    const pad = indentOf(lines[i]);
 
     const callout = CALLOUT_OPEN.exec(line);
     if (callout) {
@@ -53,11 +61,11 @@ export function openHtmlContainers(src: string): string {
         // 押すとアイコンを選び直せる。目印だけ置き、扱いは描画側に任せる。
         const ico = `<span class="mg-callout-ico" data-mg-callout-ico="1">${icon}</span>`;
         out.push(
-          `<div class="mg-callout notion"${color}>${ico}<div class="mg-callout-body">`,
+          `${pad}<div class="mg-callout notion"${color}>${ico}<div class="mg-callout-body">`,
           "",
           ...lines.slice(i + 1, end),
           "",
-          "</div></div>",
+          `${pad}</div></div>`,
         );
         changed = true;
         i = end;
@@ -99,9 +107,10 @@ export function setCalloutIcon(src: string, icon: string): string {
   const at = lines.findIndex((line) => CALLOUT_OPEN.test(line.trim()));
   if (at < 0) return src;
   const line = lines[at].trim();
+  const pad = indentOf(lines[at]);
   const attrs = (CALLOUT_OPEN.exec(line)?.[1] ?? "").trim();
   const rest = attrs.replace(/\s*icon="[^"]*"/, "").trim();
   const next = icon ? `icon="${icon}"${rest ? ` ${rest}` : ""}` : rest;
-  lines[at] = next ? `<callout ${next}>` : "<callout>";
+  lines[at] = next ? `${pad}<callout ${next}>` : `${pad}<callout>`;
   return lines.join("\n");
 }

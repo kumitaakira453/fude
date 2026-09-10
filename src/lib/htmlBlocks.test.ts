@@ -112,6 +112,29 @@ describe("openHtmlContainers", () => {
     const src = "文中に <details> と書いただけ。";
     expect(openHtmlContainers(src)).toBe(src);
   });
+
+  // 字下げを落とすと div が最上位の HTML ブロックになり、囲みが項目の外へ出て
+  // 全幅で描かれる。後ろの項目も箇条書きから切れる。
+  it("項目の中の callout は、出す行も同じ字下げで出す", () => {
+    const src = [
+      "- 項目のあたま",
+      "",
+      '  <callout icon="💡">',
+      "  中の文",
+      "  </callout>",
+      "- つぎの項目",
+    ].join("\n");
+    expect(openHtmlContainers(src).split("\n")).toEqual([
+      "- 項目のあたま",
+      "",
+      '  <div class="mg-callout notion"><span class="mg-callout-ico" data-mg-callout-ico="1">💡</span><div class="mg-callout-body">',
+      "",
+      "  中の文",
+      "",
+      "  </div></div>",
+      "- つぎの項目",
+    ]);
+  });
 });
 
 describe("setCalloutIcon", () => {
@@ -160,5 +183,10 @@ describe("setCalloutIcon", () => {
 
   it("callout でなければ触らない", () => {
     expect(setCalloutIcon("ただの段落。", "💡")).toBe("ただの段落。");
+  });
+
+  it("項目の中の callout は字下げを保つ", () => {
+    const src = ['  <callout icon="ℹ️">', "  中の文", "  </callout>"].join("\n");
+    expect(setCalloutIcon(src, "🔥").split("\n")[0]).toBe('  <callout icon="🔥">');
   });
 });

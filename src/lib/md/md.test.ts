@@ -198,3 +198,60 @@ describe("1 文字打っても他は動かない", () => {
     expect(fromMarkdown(out).doc.child(0).textContent).toBe("ふつうの段落*");
   });
 });
+
+describe("項目の中の囲み", () => {
+  const para = (text: string) => schema.nodes.paragraph.create(null, [schema.text(text)]);
+  const callout = () => schema.nodes.callout.create({ icon: "💡" }, [para("中の文")]);
+  const list = (items: PmNode[][]) =>
+    schema.nodes.bulletList.create(
+      { tight: true },
+      items.map((kids) => schema.nodes.listItem.create({ checked: null }, kids)),
+    );
+  const wrote = (...blocks: PmNode[]) =>
+    toMarkdown(schema.nodes.doc.create(null, blocks), fromMarkdown(""));
+
+  const IN_ITEM = wrote(list([[para("項目のあたま"), callout()], [para("つぎの項目")]]));
+
+  // callout は Markdown に無いタグなので、開きの前に空行が無いと読み直しで
+  // 段落に溶けてタグが字になる。
+  it("開きタグの前に空行を入れて書き出す", () => {
+    expect(IN_ITEM).toBe(
+      '- 項目のあたま\n\n  <callout icon="💡">\n  中の文\n  </callout>\n- つぎの項目\n',
+    );
+  });
+
+  it("読み直しても項目の中の囲みのまま", () => {
+    const item = fromMarkdown(IN_ITEM).doc.child(0).child(0);
+    expect(item.child(1).type.name).toBe("callout");
+    expect(item.child(1).textContent).toBe("中の文");
+  });
+
+  it("読み書きしても動かない", () => {
+    expect(round(IN_ITEM)).toBe(IN_ITEM);
+  });
+
+  it("項目の先頭に置いた囲みは印の直後に書く", () => {
+    expect(wrote(list([[callout()]]))).toBe('- <callout icon="💡">\n  中の文\n  </callout>\n');
+  });
+
+  // 字下げ 4 以上をそのまま読み直すと、中身が字下げのコードになる。
+  it("入れ子の項目の中でも、中身は段落のまま", () => {
+    const nested = wrote(list([[para("親"), list([[para("子"), callout()]])]]));
+    const inner = fromMarkdown(nested).doc.child(0).child(0).child(1).child(0).child(1);
+    expect(inner.type.name).toBe("callout");
+    expect(inner.child(0).type.name).toBe("paragraph");
+    expect(inner.child(0).textContent).toBe("中の文");
+  });
+
+  it("中身の位置は原文のその字を指す", () => {
+    const loaded = fromMarkdown(IN_ITEM);
+    const item = loaded.spans.get("b0")!.children[0];
+    const inside = item.children[1].children[0];
+    expect(loaded.source.slice(inside.start, inside.end)).toBe("中の文");
+  });
+
+  it("最上位の囲みは字下げのコードを字下げのコードとして読む", () => {
+    const top = fromMarkdown("<callout>\n    code だけ\n</callout>\n").doc.child(0);
+    expect(top.child(0).type.name).toBe("codeBlock");
+  });
+});

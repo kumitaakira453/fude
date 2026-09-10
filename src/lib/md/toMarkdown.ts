@@ -227,7 +227,10 @@ function toMdast(node: PmNode): RootContent {
           return {
             type: "listItem" as const,
             checked: box,
-            spread: false,
+            // callout は Markdown に無いタグなので、HTML ブロックとして読ませる
+            // には前に空行が要る（未知タグの塊は段落の途中に割り込めない）。
+            // 空行なしで書くと、読み直したときタグが字になって囲みが消える。
+            spread: heldCallout(item),
             children: childBlocks(item),
           };
         }),
@@ -275,6 +278,15 @@ function mathText(node: PmNode, fence: string): string {
   const tex = (node.attrs.tex as string).trim();
   if (!tex) return "";
   return fence === "$" ? `$${tex}$` : `$$\n${tex}\n$$`;
+}
+
+// 項目の 2 つ目以降の子に callout を持つか。先頭の子なら項目の印の直後に
+// 立つので、前の行を割り込む形にならない。
+function heldCallout(item: PmNode): boolean {
+  for (let i = 1; i < item.childCount; i++) {
+    if (item.child(i).type.name === "callout") return true;
+  }
+  return false;
 }
 
 // 中身が空っぽの項目か。段落 1 つだけを持ち、その段落に何も無いもの。
