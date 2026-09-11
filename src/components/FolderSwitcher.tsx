@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { activeFolderIdAtom, foldersAtom } from "../state/atoms";
 import { pickDirectory } from "../lib/fsAccess";
 import { folderDisplayName, removeFolder, renameFolder } from "../lib/idb";
@@ -10,7 +10,7 @@ import { Icon } from "./Icon";
 export function FolderSwitcher() {
   const folders = useAtomValue(foldersAtom);
   const setFolders = useSetAtom(foldersAtom);
-  const [activeId, setActiveId] = useAtom(activeFolderIdAtom);
+  const activeId = useAtomValue(activeFolderIdAtom);
   const { openFolder, openFolderInNewWindow, refreshFolders } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -31,11 +31,12 @@ export function FolderSwitcher() {
 
   const active = folders.find((f) => f.id === activeId);
 
+  // 開いているフォルダは openFolder が控えを読んだ後に切り替える。ここで先に
+  // 切り替えると、前のフォルダのレイアウトが新しいフォルダの控えを潰す。
   const switchTo = async (id: string) => {
     const entry = folders.find((f) => f.id === id);
     if (!entry) return;
     setOpen(false);
-    setActiveId(id);
     await openFolder(entry.path);
   };
 

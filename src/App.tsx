@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue, useStore } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Settings } from "./components/Settings";
@@ -20,16 +20,13 @@ import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
 import { setNotionKeys } from "./lib/md/inputRules";
 import { useWatcher } from "./hooks/useWatcher";
+import { useKeepLayout } from "./hooks/useKeepLayout";
 import { folderDisplayName } from "./lib/idb";
 import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
 import { setWindowTitle } from "./lib/windows";
 import {
   activeFolderIdAtom,
-  activePaneIdAtom,
   foldersAtom,
-  layoutAtom,
-  savedLayoutsAtom,
-  sessionLayoutsAtom,
   sidebarOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
@@ -48,17 +45,15 @@ export default function App() {
   const theme = useAtomValue(themeAtom);
   const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
-  const layout = useAtomValue(layoutAtom);
-  const activePaneId = useAtomValue(activePaneIdAtom);
   const reviewOpen = useAtomValue(reviewScreenAtom);
   const versionFile = useAtomValue(versionScreenAtom);
-  const store = useStore();
 
   useHotkeys();
   useDragging();
   useWatcher();
   useUrlSync();
   useReviewLedger();
+  useKeepLayout();
 
   // テーマを html 要素に反映
   useEffect(() => {
@@ -109,16 +104,6 @@ export default function App() {
     window.addEventListener("click", onClick);
     return () => window.removeEventListener("click", onClick);
   }, []);
-
-  // 分割レイアウトをフォルダごとに永続化（保存先はウィンドウごとに分かれている）。
-  // ウィンドウを問わない控えにも同じものを書く。新しいウィンドウで同じフォルダを
-  // 開いたときや、ウィンドウの名前が変わったときの戻り先になる。
-  useEffect(() => {
-    if (!activeFolderId) return;
-    const entry = { layout, active: activePaneId };
-    store.set(savedLayoutsAtom, (prev) => ({ ...prev, [activeFolderId]: entry }));
-    store.set(sessionLayoutsAtom, (prev) => ({ ...prev, [activeFolderId]: entry }));
-  }, [layout, activePaneId, activeFolderId, store]);
 
   // ウィンドウのタイトルは開いているフォルダ名。macOS はこれを Dock メニューの
   // ウィンドウ一覧にそのまま並べるので、どのウィンドウが何かを名前で選べる。
