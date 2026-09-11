@@ -386,9 +386,8 @@ export function FrontmatterFields({
   if (fm === "") {
     return (
       <header className="mg-frontmatter mb-8">
-        <button type="button" className="mg-fm-add" onClick={start}>
-          <Icon name="add" size={14} />
-          情報を足す
+        <button type="button" title="情報を足す" className="mg-fm-add" onClick={start}>
+          <Icon name="add" size={15} />
         </button>
       </header>
     );
@@ -477,9 +476,8 @@ export function FrontmatterFields({
             {gone(f)}
           </span>
         ))}
-        <button type="button" className="mg-fm-plus" onClick={addRow}>
-          <Icon name="add" size={14} />
-          欄を足す
+        <button type="button" title="欄を足す" className="mg-fm-plus" onClick={addRow}>
+          <Icon name="add" size={15} />
         </button>
       </div>
 

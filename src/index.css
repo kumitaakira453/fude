@@ -5414,29 +5414,22 @@ body.mg-carrying {
 }
 
 /* 足す口。行並びの末尾（欄を足す）と、何も無いファイルの先頭（情報を足す）。
-   破線の囲みにして、休んでいるときも「ここに足せる」と分かるようにする。
-   常に出しておくものなので、地色は指したときだけ付ける。 */
+   常に出しておくものなので、囲みだけを置いて地色は指したときに付ける。 */
 .mg-fm-plus,
 .mg-fm-add {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.1rem 0.55rem 0.1rem 0.35rem;
-  border: 1px dashed var(--mg-border);
-  border-radius: 999px;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.4rem;
   color: var(--mg-muted);
   transition:
     border-color 0.12s,
     background 0.12s,
     color 0.12s;
-}
-.mg-fm-plus {
-  font-size: 12px;
-}
-.mg-fm-add {
-  padding: 0.2rem 0.7rem 0.2rem 0.5rem;
-  font-size: 13px;
 }
 .mg-fm-plus:hover,
 .mg-fm-add:hover,
