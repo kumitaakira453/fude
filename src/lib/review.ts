@@ -92,14 +92,15 @@ export function isOpen(thread: ReviewThread): boolean {
 
 let storePathCache: string | null = null;
 
-async function storePath(): Promise<string> {
+// 台帳の置き場所。読むだけでなく、見張る側も同じ道を使う。
+export async function ledgerPath(): Promise<string> {
   if (!storePathCache) storePathCache = await invoke<string>("review_store_path");
   return storePathCache;
 }
 
 export async function loadLedger(): Promise<Ledger> {
   try {
-    const text = await readTextFile(await storePath());
+    const text = await readTextFile(await ledgerPath());
     const parsed = JSON.parse(text) as Ledger;
     return {
       format_version: parsed.format_version ?? 1,
