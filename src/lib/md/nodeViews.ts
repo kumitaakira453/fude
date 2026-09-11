@@ -667,6 +667,12 @@ class ListItemView implements NodeView {
   }
 }
 
+// 字の幅を測る物差し。押した場所から何文字目かを出すのに使う（測るだけなので
+// 1 つを使い回す）。
+let paper: CanvasRenderingContext2D | null | undefined;
+const ruler = (): CanvasRenderingContext2D | null =>
+  (paper ??= document.createElement("canvas").getContext("2d"));
+
 // トグルの見出し。原文では開きタグの中の <summary> なので、本文のブロックとして
 // は編集できない。入力欄として出し、打ったぶんを attrs へ差し戻す。
 class DetailsView implements NodeView {
@@ -694,12 +700,19 @@ class DetailsView implements NodeView {
     head.className = "mg-details-head";
     // 入力欄は編集できないところに置いても打てる。ProseMirror には渡さない。
     head.contentEditable = "false";
-    // 帯の余白を押したときも見出しを打てるようにする。
+    // 帯を押したら題へ入る。
+    //
+    // WebKit は contenteditable="false" の中に置いた入力欄へ、押しただけでは
+    // 焦点を渡さない（外側の編集面が持ったままになる）。押した場所から何文字目
+    // かを出し、自分で焦点とカーソルを置く。入ったあとは既定に任せる（言葉を
+    // 選ぶ・引いて選ぶがそのまま効く）。
     head.addEventListener("mousedown", (e) => {
-      if (e.target === head) {
-        e.preventDefault();
-        this.title.focus();
-      }
+      if (this.mark.contains(e.target as Node)) return;
+      if (document.activeElement === this.title) return;
+      e.preventDefault();
+      const caret = this.caretAt(e.clientX);
+      this.title.focus();
+      this.title.setSelectionRange(caret, caret);
     });
     this.head = head;
     // 書いている最中でも畳める。閉じるのは見た目だけで、中身は doc に残る。
@@ -788,6 +801,25 @@ class DetailsView implements NodeView {
       this.title.focus();
       if (caret !== null) this.title.setSelectionRange(caret, caret);
     }
+  }
+
+  // 押した横位置が、題の何文字目か。入力欄は余白も枠も持たないので、字の幅を
+  // 前から積んで探す。
+  private caretAt(x: number): number {
+    const text = this.title.value;
+    const box = this.title.getBoundingClientRect();
+    const at = x - box.left;
+    if (at <= 0 || !text) return 0;
+    const ctx = ruler();
+    if (!ctx) return text.length;
+    ctx.font = getComputedStyle(this.title).font;
+    let prev = 0;
+    for (let i = 1; i <= text.length; i++) {
+      const now = ctx.measureText(text.slice(0, i)).width;
+      if (now >= at) return at - prev > now - at ? i : i - 1;
+      prev = now;
+    }
+    return text.length;
   }
 
   // 作り直されたあとの入力欄へ焦点を戻す。

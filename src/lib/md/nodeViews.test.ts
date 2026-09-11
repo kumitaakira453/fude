@@ -230,6 +230,26 @@ describe("トグルの見出しを直す", () => {
   const press = (el: Element, key: string) =>
     el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
 
+  it("帯を押すと題へ焦点が入る（編集面の中の入力欄は押しただけでは入らない）", () => {
+    const view = editor(TOGGLE);
+    const head = view.dom.querySelector(".mg-details-head")!;
+    const title = view.dom.querySelector(".mg-details-title")!;
+    const ev = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    head.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(title);
+  });
+
+  it("三角を押したときは畳むだけで、題へは入らない", () => {
+    // カーソルが囲みの外に居る形で試す（中に居るときは題へ逃がすのが決まり）。
+    const view = editor("前の段落\n\n" + TOGGLE);
+    const box = view.dom.querySelector(".mg-details")!;
+    const mark = box.querySelector(".mg-details-mark")!;
+    mark.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(box.classList.contains("is-closed")).toBe(true);
+    expect(document.activeElement).not.toBe(view.dom.querySelector(".mg-details-title"));
+  });
+
   it("打った題が開きタグへ戻る", () => {
     const view = editor(TOGGLE);
     const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
