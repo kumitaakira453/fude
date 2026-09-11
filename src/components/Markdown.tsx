@@ -28,6 +28,7 @@ import { CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
 import { remarkSoftBreaks } from "../lib/md/softBreaks";
 import { rehypeSummaryInline } from "../lib/md/summaryInline";
+import { foldKey, recallFold, rememberFold } from "../lib/folds";
 import { MdImage } from "./MdImage";
 import { Mermaid } from "./Mermaid";
 
@@ -56,6 +57,48 @@ const rehypePlugins = [
   // 書いている間は色が付いた言語が読むときに素になる。
   [rehypeHighlight, { ignoreMissing: true, languages: all }] as const,
 ];
+
+// トグル。開いて始めるかは原文のタグで決まり、押して変えた分はファイルを
+// 開いているあいだ覚える。
+function Toggle({
+  node,
+  open,
+  children,
+}: {
+  node?: unknown;
+  open?: boolean;
+  children?: ReactNode;
+}) {
+  const ctx = useContext(markdownContext);
+  const key = foldKey(ctx?.docPath ?? null, summaryText(node));
+  const [shown, setShown] = useState(() => recallFold(key, open === true));
+  return (
+    <details
+      open={shown}
+      onToggle={(e) => {
+        const next = e.currentTarget.open;
+        setShown(next);
+        rememberFold(key, next);
+      }}
+    >
+      {children}
+    </details>
+  );
+}
+
+// トグルの題の字。鍵に使うので、印の中の字も拾って繋げる。
+function summaryText(node: unknown): string {
+  const kids = (node as { children?: HastChild[] } | undefined)?.children ?? [];
+  const head = kids.find((c) => c.tagName === "summary");
+  return head ? textOf(head) : "";
+}
+
+function textOf(node: HastChild): string {
+  if (node.type === "text") return node.value ?? "";
+  return ((node as { children?: HastChild[] }).children ?? [])
+    .map(textOf)
+    .join("");
+}
 
 function childrenToString(children: ReactNode): string {
   return Children.toArray(children)
@@ -340,6 +383,7 @@ export const Markdown = memo(function Markdown({
           }
           return <pre>{children}</pre>;
         },
+        details: Toggle,
         p({ children }) {
           // 単独の外部リンク → リンクカード
           if (editorial) {

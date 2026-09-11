@@ -1258,6 +1258,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               key={path}
               body={body}
               prefix={fmPrefix}
+              path={path}
               viewpoint={recallViewpoint(viewKey(pane.id, absPath))}
               onViewpoint={(at, into) => {
                 rememberViewpoint(viewKey(pane.id, absPath), at, into);

@@ -52,6 +52,20 @@ describe("ブロックごとに描いたときの囲み", () => {
     expect(host.textContent?.replace(/\s/g, "")).toBe("ひらく中の本文");
   });
 
+  it("トグルは閉じて出る", () => {
+    const host = show(
+      lines("<details>", "<summary>ひらく</summary>", "", "中の本文", "", "</details>", ""),
+    );
+    expect(host.querySelector("details")?.open).toBe(false);
+  });
+
+  it("原文が <details open> なら開いて出る", () => {
+    const host = show(
+      lines("<details open>", "<summary>ひらく</summary>", "", "中の本文", "", "</details>", ""),
+    );
+    expect(host.querySelector("details")?.open).toBe(true);
+  });
+
   it("題の行内の印は印として描かれる", () => {
     const host = show(
       lines("<details>", "<summary>**太字**の題</summary>", "", "中の本文", "", "</details>", ""),

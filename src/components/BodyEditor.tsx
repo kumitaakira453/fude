@@ -468,6 +468,7 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
 export function BodyEditor({
   body,
   prefix,
+  path,
   className,
   fontFamily,
   dark,
@@ -486,6 +487,8 @@ export function BodyEditor({
   body: string;
   // フロントマター。本文の前にそのまま戻す。
   prefix: string;
+  // いま書いているファイル。トグルの開閉を覚える鍵に使う。
+  path?: string | null;
   className?: string;
   // 読むときと同じ書体で書けるように、本文の入れ物と同じ指定を渡す。
   fontFamily?: string;
@@ -628,6 +631,7 @@ export function BodyEditor({
   });
   deps.current.resolveAsset = resolveAsset;
   deps.current.peekAsset = peekAsset;
+  deps.current.path = path;
 
   // 書体は設定で後から変わる。組み立て直しは本文の大きさに比例して高いので、
   // 編集面の要素へ直に書く（EditorView の attributes は組み立てた時点で

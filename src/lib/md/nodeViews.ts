@@ -11,6 +11,7 @@ import katex from "katex";
 import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
 import { openMath } from "./math";
+import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import { schema } from "./schema";
 
@@ -44,6 +45,8 @@ export interface EditorDeps {
   modes: Map<string, MermaidMode>;
   // 描き直しの頼み口。テーマの明暗が変わったとき、開いている図をまとめて描き直す。
   redraws: Set<() => void>;
+  // いま開いているファイル。トグルの開閉を覚える鍵に使う。
+  path?: string | null;
 }
 
 export function icon(name: string, size = 15, fill = false): HTMLElement {
@@ -679,12 +682,21 @@ class DetailsView implements NodeView {
   private view: EditorView;
   private getPos: () => number | undefined;
   private mark: HTMLButtonElement;
-  private open = true;
+  private deps: EditorDeps;
+  // 開いて始めるかは原文のタグ。押して変えた分は覚えている方を使う。
+  private open: boolean;
 
-  constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
+  constructor(
+    node: PmNode,
+    view: EditorView,
+    getPos: () => number | undefined,
+    deps: EditorDeps,
+  ) {
     this.node = node;
     this.view = view;
     this.getPos = getPos;
+    this.deps = deps;
+    this.open = recallFold(this.foldKey(), /\bopen\b/.test(node.attrs.head ?? ""));
 
     this.dom = document.createElement("div");
     this.dom.className = "mg-details";
@@ -707,6 +719,16 @@ class DetailsView implements NodeView {
     this.contentDOM.className = "mg-details-inner";
     this.dom.appendChild(this.contentDOM);
     this.markLevel();
+    this.show();
+  }
+
+  private foldKey(): string | null {
+    return foldKey(this.deps.path ?? null, this.node.firstChild?.textContent ?? "");
+  }
+
+  private show() {
+    this.dom.classList.toggle("is-closed", !this.open);
+    this.mark.setAttribute("aria-expanded", String(this.open));
   }
 
   // 三角は題の 1 行目の中央に置く。行の高さは見出しの段で変わるので、段を
@@ -718,8 +740,8 @@ class DetailsView implements NodeView {
 
   private fold(open: boolean) {
     this.open = open;
-    this.dom.classList.toggle("is-closed", !open);
-    this.mark.setAttribute("aria-expanded", String(open));
+    this.show();
+    rememberFold(this.foldKey(), open);
     if (open) return;
     // 畳んだ中にカーソルを置き去りにしない。囲みの手前へ出す。
     const at = this.getPos();
@@ -755,7 +777,7 @@ export function nodeViews(deps: EditorDeps) {
     codeBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new CodeBlockView(node, view, getPos, deps),
     details: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
-      new DetailsView(node, view, getPos),
+      new DetailsView(node, view, getPos, deps),
     listItem: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new ListItemView(node, view, getPos),
     image: (node: PmNode) => new ImageView(node, deps),

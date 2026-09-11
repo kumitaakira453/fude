@@ -20,7 +20,7 @@ if (!Range.prototype.getBoundingClientRect) Range.prototype.getBoundingClientRec
 
 let open: { view: EditorView; loaded: Loaded; place: HTMLElement } | null = null;
 
-function editor(body: string) {
+function editor(body: string, path?: string) {
   const loaded = fromMarkdown(body);
   const place = document.createElement("div");
   document.body.appendChild(place);
@@ -29,7 +29,7 @@ function editor(body: string) {
       doc: loaded.doc,
       plugins: editorPlugins({ onSave: () => {} }),
     }),
-    nodeViews: nodeViews({ dark: false, modes: new Map(), redraws: new Set() }),
+    nodeViews: nodeViews({ dark: false, modes: new Map(), redraws: new Set(), path }),
   });
   open = { view, loaded, place };
   return view;
@@ -178,21 +178,54 @@ describe("トグル", () => {
   const press = (el: Element) =>
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
 
-  it("三角を押すと中身を畳み、もう一度押すと戻る", () => {
+  it("三角を押すと中身が出て、もう一度押すと畳む", () => {
     const view = editor(TOGGLE);
     const box = view.dom.querySelector(".mg-details")!;
     const mark = box.querySelector(".mg-details-mark")!;
-    expect(box.classList.contains("is-closed")).toBe(false);
-    press(mark);
+    // 原文が <details> なら閉じて始まる
     expect(box.classList.contains("is-closed")).toBe(true);
     press(mark);
     expect(box.classList.contains("is-closed")).toBe(false);
+    press(mark);
+    expect(box.classList.contains("is-closed")).toBe(true);
     // 畳んでも中身は doc に残る（原文も動かない）
     expect(source()).toBe(TOGGLE);
   });
 
+  it("原文が <details open> なら開いて始まる", () => {
+    const view = editor("<details open>\n<summary>ひらく</summary>\n\n中の本文\n\n</details>\n");
+    expect(view.dom.querySelector(".mg-details")!.classList.contains("is-closed")).toBe(
+      false,
+    );
+  });
+
+  it("押して変えた開閉は、作り直しても覚えている", () => {
+    const at = "/覚える.md";
+    const first = editor(TOGGLE, at);
+    press(first.dom.querySelector(".mg-details-mark")!);
+    expect(first.dom.querySelector(".mg-details")!.classList.contains("is-closed")).toBe(
+      false,
+    );
+    open?.view.destroy();
+    open?.place.remove();
+
+    // 同じファイルを開き直すと、閉じた原文でも開いたまま
+    const again = editor(TOGGLE, at);
+    expect(again.dom.querySelector(".mg-details")!.classList.contains("is-closed")).toBe(
+      false,
+    );
+    // 別のファイルには移らない
+    open?.view.destroy();
+    open?.place.remove();
+    const other = editor(TOGGLE, "/別.md");
+    expect(other.dom.querySelector(".mg-details")!.classList.contains("is-closed")).toBe(
+      true,
+    );
+  });
+
   it("畳むとき、カーソルが中に居たら手前へ出す", () => {
     const view = editor("前の段落\n\n" + TOGGLE);
+    press(view.dom.querySelector(".mg-details-mark")!);
     // トグルの中身（段落）の中へカーソルを置く
     let at = -1;
     view.state.doc.descendants((node, pos) => {
