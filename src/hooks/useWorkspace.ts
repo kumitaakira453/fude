@@ -25,6 +25,7 @@ import {
   loadFolders,
   registerDoc,
   registerFolder,
+  removeDoc,
 } from "../lib/idb";
 import {
   openDocWindow,
@@ -32,6 +33,7 @@ import {
   type DropPoint,
 } from "../lib/windows";
 import { moveReviewFile } from "../lib/review";
+import { notify } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
   remapLeafPaths,
@@ -341,10 +343,10 @@ export function useWorkspace() {
     async (path: string, opts: { file?: string; only?: boolean } = {}) => {
       const now = Math.floor(performance.timeOrigin + performance.now());
       store.set(A.soleAtom, null);
-      const folders = await registerFolder(path, now);
-      store.set(A.foldersAtom, folders);
       const activeId = path;
-      // Dock メニューから読めるよう、Rust 側にも履歴を残す
+      // 履歴への登録は画面を進めてからでよい。待つと、押してから何も変わらない
+      // 間ができる。Dock メニューから読めるよう Rust 側にも残す。
+      void registerFolder(path, now).then((list) => store.set(A.foldersAtom, list));
       void recordRecentFolder(path, now).catch((e: unknown) => {
         console.error("最近開いたフォルダを記録できません", e);
       });
@@ -385,10 +387,10 @@ export function useWorkspace() {
   // 親フォルダは最近のフォルダに登録しない（開いたのはファイルであって
   // フォルダではない）。
   const openDoc = useCallback(
-    async (abs: string) => {
-      const now = Math.floor(performance.timeOrigin + performance.now());
-      store.set(A.recentDocsAtom, await registerDoc(abs, now));
+    (abs: string) => {
       const { root, node } = soleTree(abs);
+      // 画面を先に進める。ここに await を挟むと、押してから何も変わらない間が
+      // できて、反応していないように見える。
       store.set(A.soleAtom, abs);
       store.set(A.activeFolderIdAtom, root);
       resetLayout(store);
@@ -397,6 +399,21 @@ export function useWorkspace() {
       store.set(A.treeAtom, [node]);
       store.set(A.filesAtom, [node]);
       openFile(node.path);
+
+      // 実体の確かめと履歴への登録は後ろへ回す。無ければ開いた画面を畳んで
+      // 履歴から落とす（先に確かめると、その往復のぶん画面が止まる）。
+      void pathExists(abs).then((there) => {
+        if (store.get(A.soleAtom) !== abs) return;
+        if (!there) {
+          void removeDoc(abs).then((list) => store.set(A.recentDocsAtom, list));
+          store.set(A.soleAtom, null);
+          store.set(A.activeFolderIdAtom, null);
+          notify(store, "そのファイルはもうありません");
+          return;
+        }
+        const now = Math.floor(performance.timeOrigin + performance.now());
+        void registerDoc(abs, now).then((list) => store.set(A.recentDocsAtom, list));
+      });
     },
     [store, openFile],
   );

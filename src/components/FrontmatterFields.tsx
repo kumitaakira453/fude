@@ -386,8 +386,9 @@ export function FrontmatterFields({
   if (fm === "") {
     return (
       <header className="mg-frontmatter mb-8">
-        <button type="button" title="情報を足す" className="mg-fm-add" onClick={start}>
+        <button type="button" className="mg-fm-add" onClick={start}>
           <Icon name="add" size={15} />
+          フロントマターを追加する
         </button>
       </header>
     );

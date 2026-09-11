@@ -115,7 +115,9 @@ export function useWatcher() {
         }
         if (structural) scheduleTreeRefresh();
       },
-      { recursive: true, delayMs: 250 },
+      // 1 枚だけ開いているときは下の階層まで見張らない。見るのはその 1 枚で、
+      // 親が ~/Downloads のような大きなフォルダだと丸ごと見張る意味が無い。
+      { recursive: !store.get(A.soleAtom), delayMs: 250 },
     )
       .then((fn) => {
         if (disposed) fn();

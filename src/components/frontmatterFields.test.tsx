@@ -321,10 +321,10 @@ describe("並べ替え", () => {
 });
 
 describe("何も無いファイル", () => {
-  it("入口だけが出る", () => {
+  it("入口だけが出る。記号だけでは分からないので字を添える", () => {
     const r = rig("");
     expect(r.cells()).toEqual([]);
-    expect(r.add()).not.toBe(null);
+    expect(r.add()?.textContent).toContain("フロントマターを追加する");
   });
 
   it("押すとファイル名を題にして付く。題は選ばれた状態", () => {

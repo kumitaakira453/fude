@@ -3,25 +3,26 @@ import { Provider, createStore } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DocEntry } from "../lib/idb";
-import { recentDocsAtom } from "../state/atoms";
+import type { DocEntry, FolderEntry } from "../lib/idb";
+import { foldersAtom, recentDocsAtom } from "../state/atoms";
 import { Landing } from "./Landing";
 
 // スタート画面の「最近のファイル」。一度開いた 1 枚へ戻る入口なので、
 // 新しい順に出ること・押すと開くこと・消えたものを引きずらないことを見る。
 
 const opened: string[] = [];
-const dropped: string[] = [];
-let onDisk = new Set<string>();
+const entered: string[] = [];
 let picked: string | null = null;
 
 vi.mock("../hooks/useWorkspace", () => ({
   useWorkspace: () => ({
-    openFolder: async () => {},
-    openDoc: async (abs: string) => {
+    openFolder: async (path: string) => {
+      entered.push(path);
+    },
+    // 実物と同じく、待たずにその場で開く（確かめは開いたあと）。
+    openDoc: (abs: string) => {
       opened.push(abs);
     },
-    refreshFolders: async () => {},
   }),
 }));
 
@@ -29,20 +30,8 @@ vi.mock("../lib/fsAccess", async (real) => {
   const mod = await real<typeof import("../lib/fsAccess")>();
   return {
     ...mod,
-    pathExists: async (abs: string) => onDisk.has(abs),
     pickDirectory: async () => null,
     pickMarkdownFile: async () => picked,
-  };
-});
-
-vi.mock("../lib/idb", async (real) => {
-  const mod = await real<typeof import("../lib/idb")>();
-  return {
-    ...mod,
-    removeDoc: async (id: string) => {
-      dropped.push(id);
-      return [];
-    },
   };
 });
 
@@ -58,12 +47,15 @@ const doc = (path: string, lastOpened: number): DocEntry => ({
   lastOpened,
 });
 
+const folder = (path: string, lastOpened: number): FolderEntry => doc(path, lastOpened);
+
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 
-function show(docs: DocEntry[]) {
+function show(docs: DocEntry[], folders: FolderEntry[] = []) {
   const store = createStore();
   store.set(recentDocsAtom, docs);
+  store.set(foldersAtom, folders);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -79,8 +71,7 @@ function show(docs: DocEntry[]) {
 
 beforeEach(() => {
   opened.length = 0;
-  dropped.length = 0;
-  onDisk = new Set();
+  entered.length = 0;
   picked = null;
 });
 
@@ -98,70 +89,93 @@ function under(at: HTMLElement, title: string): HTMLElement[] {
   return [...(head.nextElementSibling?.querySelectorAll("button") ?? [])];
 }
 
+const cards = (at: HTMLElement) => [
+  ...at.querySelectorAll<HTMLElement>(".mg-start-card"),
+];
+const card = (at: HTMLElement, title: string) =>
+  cards(at).find((b) => b.textContent?.includes(title))!;
+
 const click = (el: Element) =>
   act(() => {
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 
-describe("最近のファイル", () => {
-  it("新しい順に並び、名前と親フォルダが出る", () => {
-    const at = show([
-      doc("/Users/me/docs/新しい.md", 200),
-      doc("/Users/me/別/古い.md", 100),
+describe("最近", () => {
+  it("フォルダとファイルが 1 本の一覧に混ざり、新しい順に並ぶ", () => {
+    const at = show(
+      [doc("/Users/me/docs/新しい.md", 300), doc("/Users/me/別/古い.md", 100)],
+      [folder("/Users/me/仕事", 200)],
+    );
+    // 名前は印（アイコン）の字と混ざるので、行の指す道筋で見る。
+    expect(under(at, "最近").map((b) => b.title)).toEqual([
+      "/Users/me/docs/新しい.md",
+      "/Users/me/仕事",
+      "/Users/me/別/古い.md",
     ]);
-    const rows = under(at, "最近のファイル");
-    expect(rows.length).toBe(2);
-    expect(rows[0].textContent).toContain("新しい");
-    expect(rows[0].textContent).toContain("docs");
-    expect(rows[1].textContent).toContain("古い");
-    expect(rows[1].textContent).toContain("別");
   });
 
-  it("拡張子は落として出す", () => {
-    const at = show([doc("/a/設計.md", 1)]);
-    expect(under(at, "最近のファイル")[0].textContent).not.toContain(".md");
+  it("ファイルには親フォルダを添え、拡張子は落とす", () => {
+    const at = show([doc("/Users/me/docs/設計.md", 1)]);
+    const row = under(at, "最近")[0];
+    expect(row.textContent).toContain("設計");
+    expect(row.textContent).not.toContain(".md");
+    expect(row.textContent).toContain("docs");
   });
 
-  it("押すとその 1 枚が開く", async () => {
-    onDisk.add("/a/設計.md");
+  it("ファイルを押すとその 1 枚が開く", () => {
     const at = show([doc("/a/設計.md", 1)]);
-    click(under(at, "最近のファイル")[0]);
-    await act(async () => {});
+    click(under(at, "最近")[0]);
     expect(opened).toEqual(["/a/設計.md"]);
+    expect(entered).toEqual([]);
   });
 
-  it("実体が無ければ開かず、一覧から落とす", async () => {
-    const at = show([doc("/a/消えた.md", 1)]);
-    click(under(at, "最近のファイル")[0]);
-    await act(async () => {});
+  it("フォルダを押すとフォルダが開く", () => {
+    const at = show([], [folder("/a/仕事", 1)]);
+    click(under(at, "最近")[0]);
+    expect(entered).toEqual(["/a/仕事"]);
     expect(opened).toEqual([]);
-    expect(dropped).toEqual(["/a/消えた.md"]);
   });
 
   it("履歴が無ければ見出しごと出さない", () => {
-    const at = show([]);
-    expect(under(at, "最近のファイル")).toEqual([]);
+    expect(under(show([]), "最近")).toEqual([]);
+  });
+
+  it("開く前に実体を確かめない（待たせず先に開く）", () => {
+    const at = show([doc("/a/消えたかも.md", 1)]);
+    click(under(at, "最近")[0]);
+    // 押したその場で開いている。無ければ開いたあとに畳む。
+    expect(opened).toEqual(["/a/消えたかも.md"]);
   });
 });
 
-describe("ファイルを選んで開く", () => {
+describe("開く口", () => {
+  it("札は 2 枚。フォルダとファイル", () => {
+    const at = show([]);
+    expect(cards(at).length).toBe(2);
+    expect(card(at, "フォルダを開く")).toBeTruthy();
+    expect(card(at, "ファイルを開く")).toBeTruthy();
+  });
+
   it("選んだ 1 枚を開く", async () => {
     picked = "/a/選んだ.md";
     const at = show([]);
-    const start = under(at, "スタート");
-    const one = start.find((b) => b.textContent?.includes("Markdown ファイル"));
-    click(one!);
+    click(card(at, "ファイルを開く"));
     await act(async () => {});
     expect(opened).toEqual(["/a/選んだ.md"]);
   });
 
   it("選ばずに閉じたら何も開かない", async () => {
     const at = show([]);
-    const one = under(at, "スタート").find((b) =>
-      b.textContent?.includes("Markdown ファイル"),
-    );
-    click(one!);
+    click(card(at, "ファイルを開く"));
     await act(async () => {});
     expect(opened).toEqual([]);
+  });
+});
+
+describe("画面の中身", () => {
+  it("ショートカットの欄は出さない（⌘/ に全部ある）", () => {
+    const at = show([]);
+    expect(at.textContent).not.toContain("ショートカット");
+    expect(at.textContent).not.toContain("クイックオープン");
   });
 });

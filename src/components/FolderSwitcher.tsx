@@ -100,6 +100,18 @@ export function FolderSwitcher() {
       </button>
       {open && (
         <div className="absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
+          {sole && (
+            <div className="mb-1 flex items-center gap-1.5 rounded-lg bg-[var(--mg-accent-soft)] px-2 py-1.5 text-[12px] text-[var(--mg-muted)]">
+              <Icon name="description" size={15} className="shrink-0" />
+              <span className="truncate">1 枚だけ開いています</span>
+              <button
+                onClick={openHome}
+                className="ml-auto shrink-0 font-medium text-[var(--mg-accent)] transition hover:opacity-80"
+              >
+                このフォルダを開く
+              </button>
+            </div>
+          )}
           <div className="mb-1 px-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
             登録フォルダ
           </div>
@@ -170,29 +182,17 @@ export function FolderSwitcher() {
             })}
           </div>
           <div className="my-1 h-px bg-[var(--mg-border)]" />
-          {sole && (
-            <button
-              onClick={openHome}
-              className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
-            >
-              <Icon name="folder_open" size={17} />
-              このファイルのフォルダを開く
+          {/* 開く口は 2 つしかないので、行を積まずに横へ並べる。 */}
+          <div className="flex gap-1">
+            <button onClick={addFolder} className="mg-switch-open">
+              <Icon name="folder_open" size={16} />
+              フォルダ…
             </button>
-          )}
-          <button
-            onClick={addDoc}
-            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
-          >
-            <Icon name="description" size={17} />
-            Markdown ファイルを開く…
-          </button>
-          <button
-            onClick={addFolder}
-            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
-          >
-            <Icon name="create_new_folder" size={17} />
-            フォルダを追加
-          </button>
+            <button onClick={addDoc} className="mg-switch-open">
+              <Icon name="description" size={16} />
+              ファイル…
+            </button>
+          </div>
         </div>
       )}
     </div>
