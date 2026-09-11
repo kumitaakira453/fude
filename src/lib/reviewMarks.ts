@@ -145,13 +145,16 @@ export function textRects(range: Range): DOMRect[] {
   return out;
 }
 
+const WRAP = ".mg-table-wrap";
+
 // 表を出すときに印を切る範囲。
 //
 // 表の入れ物は本文の桁いっぱいに広がるので、それで切るとブロック丸ごとの印が
 // 表よりずっと広く出る。切るのは「見えている入れ物」と「表そのもの」の重なり
 // （表が桁より狭いときは表の幅、桁より広いときは入れ物の見えている幅）。
 export function tableClip(el: Element): DOMRect | null {
-  const wrap = el.querySelector(".mg-table-wrap");
+  // 編集面は節点の DOM が表の枠そのもの。読む面はブロックの入れ物の中にある。
+  const wrap = el.matches(WRAP) ? el : el.querySelector(WRAP);
   if (!wrap) return null;
   const box = wrap.getBoundingClientRect();
   const table = wrap.querySelector("table");

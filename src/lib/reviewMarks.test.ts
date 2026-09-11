@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "./blocks";
 import type { Resolution } from "./blockDiff";
 import type { ReviewThread } from "./review";
-import { readingMarks, readingPending, textRects } from "./reviewMarks";
+import { readingMarks, readingPending, tableClip, textRects } from "./reviewMarks";
 
 // 印の組み立て。jsdom は描画を持たないので矩形は当て木で置き、見るのは
 // 「箇所を塗るのか、枠で示すのか、そもそも出さないのか」の分かれ方。
@@ -316,5 +316,46 @@ describe("textRects", () => {
     range.setStart(first, 0);
     range.setEnd(first, 3);
     expect(textRects(range).length).toBeGreaterThan(0);
+  });
+});
+
+// 印を切る枠。横に長い表は枠の中でスクロールするので、隠れている側へ
+// はみ出さないようここで切る。編集面は節点の DOM が枠そのもの、読む面は
+// ブロックの入れ物の中に枠がある——どちらの形でも引けること。
+describe("tableClip", () => {
+  const put = (el: Element, rc: DOMRect) => {
+    rects.set(el, rc);
+    return el;
+  };
+
+  // 見えている枠 600 幅・中の表 900 幅（右へはみ出している）
+  const table = () => {
+    const wrap = document.createElement("div");
+    wrap.className = "mg-table-wrap";
+    const inner = document.createElement("table");
+    wrap.appendChild(inner);
+    put(wrap, new DOMRect(100, 0, 600, 200));
+    put(inner, new DOMRect(100, 0, 900, 200));
+    return wrap;
+  };
+
+  it("枠そのものを渡しても切る（編集面の形）", () => {
+    const clip = tableClip(table());
+    expect(clip).not.toBeNull();
+    expect(clip!.left).toBe(100);
+    expect(clip!.right).toBe(700);
+  });
+
+  it("枠を子に持つ入れ物でも切る（読む面の形）", () => {
+    const box = document.createElement("div");
+    box.appendChild(table());
+    put(box, new DOMRect(0, 0, 900, 200));
+    const clip = tableClip(box);
+    expect(clip!.right).toBe(700);
+  });
+
+  it("表が無ければ切らない", () => {
+    const box = document.createElement("div");
+    expect(tableClip(box)).toBeNull();
   });
 });
