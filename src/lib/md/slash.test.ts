@@ -288,7 +288,8 @@ const CASES: { id: string; query: string; want: string }[] = [
   {
     id: "toggle",
     query: "toggle",
-    want: "あ\n\n<details>\n<summary>トグル</summary>\n\nい\n\n</details>\n",
+    // 題から書き始める（打った字が題に入り、中身は空のまま）
+    want: "あ\n\n<details>\n<summary>い</summary>\n\n</details>\n",
   },
   { id: "quote", query: "quote", want: "あ\n\n> い\n" },
   { id: "code", query: "codeblock", want: "あ\n\n```\nい\n```\n" },
@@ -412,36 +413,83 @@ describe("トグルの見出し", () => {
 });
 
 describe("トグル要素", () => {
-  it("段落の上で使うと、書きかけの字がトグルの中身になる", () => {
+  it("段落の上で使うと、書きかけの字が中身に入り、題から書き始める", () => {
     const view = editor("Regagaga\n");
     caretAtStartOf(view, 0);
     type(view, "/トグル");
     press(view, "Enter");
     const node = view.state.doc.child(0);
     expect(node.type.name).toBe("details");
-    expect(node.textContent).toBe("Regagaga");
-    expect(source()).toBe("<details>\n<summary>トグル</summary>\n\nRegagaga\n\n</details>\n");
+    expect(node.child(0).type.name).toBe("detailsSummary");
+    expect(node.child(1).textContent).toBe("Regagaga");
+    // カーソルは題の中
+    expect(view.state.selection.$from.parent.type.name).toBe("detailsSummary");
+    type(view, "題");
+    expect(source()).toBe("<details>\n<summary>題</summary>\n\nRegagaga\n\n</details>\n");
   });
 
-  it("見出しの上で使うと、その見出しがトグルの頭になる", () => {
+  it("見出しの上で使うと、その見出しが題になる", () => {
     const view = editor("## 決め方\n");
     caretAtStartOf(view, 0);
     type(view, "/トグル");
     press(view, "Enter");
     const node = view.state.doc.child(0);
     expect(node.type.name).toBe("details");
-    expect(node.attrs.head).toBe("<details>\n<summary><h2>決め方</h2></summary>");
+    expect(node.child(0).textContent).toBe("決め方");
+    expect(node.child(0).attrs.level).toBe(2);
     // 中身は空から書き始める
-    expect(node.textContent).toBe("");
+    expect(node.child(1).textContent).toBe("");
+    expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
+    expect(source()).toBe("<details>\n<summary><h2>決め方</h2></summary>\n\n</details>\n");
+  });
+
+  it("題に打った字は <summary> に入る", () => {
+    const view = editor("<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
+    // 文字塊の 1 つ目は題
+    caretAtEndOf(view, 0);
+    expect(view.state.selection.$from.parent.type.name).toBe("detailsSummary");
+    type(view, "！");
+    expect(source()).toBe(
+      "<details>\n<summary>トグル！</summary>\n\n中の本文\n\n</details>\n",
+    );
+  });
+
+  it("題で `## ` と打つと見出しトグルになる", () => {
+    const view = editor("<details>\n<summary></summary>\n\n中の本文\n\n</details>\n");
+    caretAtEndOf(view, 0);
+    type(view, "## ");
+    type(view, "決め方");
+    expect(view.state.doc.child(0).child(0).attrs.level).toBe(2);
+    expect(source()).toBe(
+      "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n",
+    );
+  });
+
+  it("題で Enter を押すと中身へ移る（題は割れない）", () => {
+    const view = editor("<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
+    caretAtEndOf(view, 0);
+    press(view, "Enter");
+    expect(view.state.selection.$from.parent.textContent).toBe("中の本文");
+    expect(view.state.doc.child(0).childCount).toBe(2);
+  });
+
+  it("見出しトグルの題の頭で Backspace を押すと素のトグルへ戻る", () => {
+    const view = editor(
+      "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n",
+    );
+    caretAtStartOf(view, 0);
+    press(view, "Backspace");
+    expect(view.state.doc.child(0).child(0).attrs.level).toBeNull();
+    expect(source()).toBe(
+      "<details>\n<summary>決め方</summary>\n\n中の本文\n\n</details>\n",
+    );
   });
 
   it("見出しトグルは読み書きしても動かない", () => {
     const src = "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n";
     const loaded = fromMarkdown(src);
     expect(toMarkdown(loaded.doc, loaded)).toBe(src);
-    expect(loaded.doc.child(0).attrs.head).toBe(
-      "<details>\n<summary><h2>決め方</h2></summary>",
-    );
+    expect(loaded.doc.child(0).child(0).attrs.level).toBe(2);
   });
 });
 

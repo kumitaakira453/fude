@@ -12,7 +12,7 @@ import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
 import { openMath } from "./math";
 import { MERMAID, PLAIN, languages } from "./highlight";
-import { headLevelOf, schema, summaryOf, withHeadLevel, withSummary } from "./schema";
+import { schema } from "./schema";
 
 // 編集面の専用の描画。
 //
@@ -667,14 +667,10 @@ class ListItemView implements NodeView {
   }
 }
 
-// 字の幅を測る物差し。押した場所から何文字目かを出すのに使う（測るだけなので
-// 1 つを使い回す）。
-let paper: CanvasRenderingContext2D | null | undefined;
-const ruler = (): CanvasRenderingContext2D | null =>
-  (paper ??= document.createElement("canvas").getContext("2d"));
-
-// トグルの見出し。原文では開きタグの中の <summary> なので、本文のブロックとして
-// は編集できない。入力欄として出し、打ったぶんを attrs へ差し戻す。
+// トグル。題も中身も本文の節点なので、描くのは畳む三角だけ。
+//
+// 題を入力欄で出していた頃は、押しても焦点が入らない・矢印で行き来できない、
+// といった手当てが要った。本文の一部にしたので、そこは既定の仕組みに乗る。
 class DetailsView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
@@ -682,11 +678,8 @@ class DetailsView implements NodeView {
   private node: PmNode;
   private view: EditorView;
   private getPos: () => number | undefined;
-  private head: HTMLElement;
-  private title: HTMLInputElement;
   private mark: HTMLButtonElement;
   private open = true;
-  private level: number | null = null;
 
   constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
     this.node = node;
@@ -696,28 +689,6 @@ class DetailsView implements NodeView {
     this.dom = document.createElement("div");
     this.dom.className = "mg-details";
 
-    const head = document.createElement("div");
-    head.className = "mg-details-head";
-    // 入力欄は編集できないところに置いても打てる。ProseMirror には渡さない。
-    head.contentEditable = "false";
-    // 帯を押したら題へ入る。
-    //
-    // WebKit は contenteditable="false" の中に置いた入力欄へ、押しただけでは
-    // 焦点を渡さない（外側の編集面が持ったままになる）。押した場所から何文字目
-    // かを出し、自分で焦点とカーソルを置く。入ったあとは既定に任せる（言葉を
-    // 選ぶ・引いて選ぶがそのまま効く）。
-    const enter = (e: MouseEvent) => {
-      if (this.mark.contains(e.target as Node)) return;
-      if (document.activeElement === this.title) return;
-      e.preventDefault();
-      const caret = this.caretAt(e.clientX);
-      this.title.focus();
-      this.title.setSelectionRange(caret, caret);
-    };
-    head.addEventListener("mousedown", enter);
-    // 押下をどこかに取られても、離した時点で拾い直す。
-    head.addEventListener("click", enter);
-    this.head = head;
     // 書いている最中でも畳める。閉じるのは見た目だけで、中身は doc に残る。
     this.mark = document.createElement("button");
     this.mark.type = "button";
@@ -725,29 +696,15 @@ class DetailsView implements NodeView {
     this.mark.title = "折りたたむ";
     this.mark.setAttribute("aria-label", "折りたたむ");
     this.mark.setAttribute("aria-expanded", "true");
+    this.mark.contentEditable = "false";
     this.mark.addEventListener("mousedown", (e) => {
       e.preventDefault();
       this.fold(!this.open);
     });
-    head.appendChild(this.mark);
-    this.title = document.createElement("input");
-    this.title.type = "text";
-    this.title.className = "mg-details-title";
-    this.title.placeholder = "トグル";
-    this.title.value = summaryOf(node.attrs.head as string);
-    this.title.addEventListener("input", () => this.push());
-    this.title.addEventListener("keydown", (e) => this.onKey(e));
-    // 見出しトグルは、読む面と同じ見出しのタグで包む。組み方（大きさ・太さ・
-    // 罫）はそちらに揃うので、こちらで大きさを決め直さない。
-    this.level = headLevelOf(node.attrs.head as string);
-    const box = document.createElement(this.level ? `h${this.level}` : "span");
-    box.className = "mg-details-title-box";
-    box.appendChild(this.title);
-    head.appendChild(box);
-    this.dom.appendChild(head);
+    this.dom.appendChild(this.mark);
 
     this.contentDOM = document.createElement("div");
-    this.contentDOM.className = "mg-details-body";
+    this.contentDOM.className = "mg-details-inner";
     this.dom.appendChild(this.contentDOM);
   }
 
@@ -756,133 +713,27 @@ class DetailsView implements NodeView {
     this.dom.classList.toggle("is-closed", !open);
     this.mark.setAttribute("aria-expanded", String(open));
     if (open) return;
-    // 畳んだ中にカーソルを置き去りにしない。囲みの手前へ出し、手前に置ける
-    // ところが無ければ見出しの入力欄へ移す。
+    // 畳んだ中にカーソルを置き去りにしない。囲みの手前へ出す。
     const at = this.getPos();
     if (at === undefined) return;
     const { state } = this.view;
     const { from } = state.selection;
     if (from <= at || from >= at + this.node.nodeSize) return;
-    const out = TextSelection.near(state.doc.resolve(at), -1);
-    if (out.from > at) {
-      this.title.focus();
-      return;
-    }
-    this.view.dispatch(state.tr.setSelection(out));
-  }
-
-  private push() {
-    const at = this.getPos();
-    if (at === undefined) return;
-    // 原文では生 HTML なので、タグを作れる字は入れさせない。
-    let text = this.title.value.replace(/[<>]/g, "");
-    const caret = this.title.selectionStart;
-
-    // "## " と打ったら見出しのトグルにする。本文の見出しと同じ打ち方。
-    const hashes = /^(#{1,6})\s/.exec(text);
-    let head = this.node.attrs.head as string;
-    if (hashes) {
-      text = text.slice(hashes[0].length);
-      head = withHeadLevel(head, hashes[1].length);
-    }
-    if (text !== this.title.value) this.title.value = text;
-
     this.view.dispatch(
-      this.view.state.tr.setNodeMarkup(at, undefined, {
-        ...this.node.attrs,
-        head: withSummary(head, text),
-      }),
+      state.tr.setSelection(TextSelection.near(state.doc.resolve(at), -1)),
     );
-    // 見出しの階層が変わると、包むタグごと作り直される（update が false を
-    // 返す）。新しい入力欄へ焦点を渡し直す。
-    if (hashes) {
-      this.keepFocus(at, Math.max(0, (caret ?? 0) - hashes[0].length));
-      return;
-    }
-    // 書き換えで焦点が編集面へ戻ることがある。打っている場所へ返す。
-    if (document.activeElement !== this.title) {
-      this.title.focus();
-      if (caret !== null) this.title.setSelectionRange(caret, caret);
-    }
-  }
-
-  // 押した横位置が、題の何文字目か。入力欄は余白も枠も持たないので、字の幅を
-  // 前から積んで探す。
-  private caretAt(x: number): number {
-    const text = this.title.value;
-    const box = this.title.getBoundingClientRect();
-    const at = x - box.left;
-    if (at <= 0 || !text) return 0;
-    const ctx = ruler();
-    if (!ctx) return text.length;
-    ctx.font = getComputedStyle(this.title).font;
-    let prev = 0;
-    for (let i = 1; i <= text.length; i++) {
-      const now = ctx.measureText(text.slice(0, i)).width;
-      if (now >= at) return at - prev > now - at ? i : i - 1;
-      prev = now;
-    }
-    return text.length;
-  }
-
-  // 作り直されたあとの入力欄へ焦点を戻す。
-  private keepFocus(at: number, caret: number) {
-    const dom = this.view.nodeDOM(at);
-    const title =
-      dom instanceof HTMLElement
-        ? dom.querySelector<HTMLInputElement>(".mg-details-title")
-        : null;
-    if (!title) return;
-    title.focus();
-    title.setSelectionRange(caret, caret);
-  }
-
-  // Enter と下矢印で中身へ入る。Escape は編集面へ戻す。
-  // 頭で Backspace を押したら、見出しトグルを素のトグルへ戻す。
-  private onKey(e: KeyboardEvent) {
-    if (e.key === "Backspace") {
-      const at = this.getPos();
-      if (at === undefined) return;
-      if (this.title.selectionStart !== 0 || this.title.selectionEnd !== 0) return;
-      if (this.level === null) return;
-      e.preventDefault();
-      this.view.dispatch(
-        this.view.state.tr.setNodeMarkup(at, undefined, {
-          ...this.node.attrs,
-          head: withHeadLevel(this.node.attrs.head as string, null),
-        }),
-      );
-      this.keepFocus(at, 0);
-      return;
-    }
-    if (e.key !== "Enter" && e.key !== "ArrowDown" && e.key !== "Escape") return;
-    e.preventDefault();
-    const at = this.getPos();
-    if (at === undefined) return;
-    const { state } = this.view;
-    this.view.dispatch(
-      state.tr.setSelection(TextSelection.near(state.doc.resolve(at + 1), 1)).scrollIntoView(),
-    );
-    this.view.focus();
   }
 
   update(node: PmNode): boolean {
     if (node.type !== this.node.type) return false;
-    // 見出しの階層が変わったら、包むタグごと作り直す。
-    if (headLevelOf(node.attrs.head as string) !== this.level) return false;
     this.node = node;
-    const text = summaryOf(node.attrs.head as string);
-    // 打っている最中に入れ直すと、カーソルが頭へ戻る。
-    if (document.activeElement !== this.title && this.title.value !== text) {
-      this.title.value = text;
-    }
     return true;
   }
 
-  // 見出しの帯の操作は編集面に渡さない。中身を押したときは渡す。
+  // 三角の操作は編集面に渡さない。中身を押したときは渡す。
   stopEvent(event: Event): boolean {
     const at = event.target;
-    return at instanceof Node && this.head.contains(at);
+    return at instanceof Node && this.mark.contains(at);
   }
 
   ignoreMutation(m: ViewMutationRecord): boolean {

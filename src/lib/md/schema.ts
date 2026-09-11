@@ -37,7 +37,7 @@ export const headLevelOf = (head: string): number | null => {
 
 // 新しく作るトグルの開きタグ。書き戻しは開き・中身・閉じの間を 1 行空けるので、
 // この形のまま読み直せる。
-export const DETAILS_HEAD = "<details>\n<summary>トグル</summary>";
+export const DETAILS_HEAD = "<details>";
 
 // 見出しをトグルの頭にした形。原文は生 HTML なので、見出しもタグで書く。
 export const headingHead = (level: number, text: string): string =>
@@ -259,25 +259,34 @@ export const schema = new Schema({
         ] as DOMOutputSpec,
     },
 
-    // 開きタグから </summary> までは原文のまま持つ。実データの summary は
-    // 複数行に割れていたり入れ子になっていたりで、組み直すと崩れる。
-    // 中身のブロックは普通に編集できる。
-    details: {
-      group: "block",
-      content: "block+",
-      attrs: { ...id, head: { default: "<details>" } },
-      parseDOM: [{ tag: "div.mg-details" }],
+    // トグルの題。原文では <summary> の中身。本文の節点として持つので、押した
+    // ところにカーソルが入り、矢印で行き来でき、変換もそのまま効く（入力欄で
+    // 出していた頃は、本文の外に居るぶんどれも自前で面倒を見る必要があった）。
+    //
+    // level が入っていれば見出しトグル。組み方は本文の見出しの指定に揃う。
+    detailsSummary: {
+      content: "inline*",
+      defining: true,
+      attrs: { level: { default: null as number | null } },
+      parseDOM: [{ tag: "div.mg-details-head" }],
       toDOM: (node) =>
         [
           "div",
-          { class: "mg-details" },
-          [
-            "div",
-            { class: "mg-details-head", contenteditable: "false" },
-            summaryOf(node.attrs.head),
-          ],
-          ["div", { class: "mg-details-body" }, 0],
+          { class: "mg-details-head" },
+          node.attrs.level
+            ? [`h${node.attrs.level}`, { class: "mg-details-title" }, 0]
+            : ["span", { class: "mg-details-title" }, 0],
         ] as DOMOutputSpec,
+    },
+
+    // 開きタグは原文のまま持つ（属性が付くことがある）。題は最初の子、
+    // 中身はその後ろのブロック。
+    details: {
+      group: "block",
+      content: "detailsSummary block+",
+      attrs: { ...id, head: { default: "<details>" } },
+      parseDOM: [{ tag: "div.mg-details" }],
+      toDOM: () => ["div", { class: "mg-details" }, 0] as DOMOutputSpec,
     },
 
     // 独立した数式（$$…$$）。読むときは KaTeX で組まれるので、編集面でも

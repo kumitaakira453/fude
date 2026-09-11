@@ -180,8 +180,10 @@ export const dropEmptyBack: Command = (state, dispatch) => {
 
   let from = $from.before();
   let to = $from.after();
-  // 囲みの唯一の子なら囲みごと消す。中身が無いので失うものがない。
   const holder = $from.depth > 0 ? $from.node(-1) : null;
+  // トグルは題と中身で組むので、中身を空にはできない。題へ移る番に譲る。
+  if (holder?.type === schema.nodes.details && holder.childCount === 2) return false;
+  // 囲みの唯一の子なら囲みごと消す。中身が無いので失うものがない。
   if (holder && HOLDERS.has(holder.type) && holder.childCount === 1) {
     from = $from.before(-1);
     to = $from.after(-1);
@@ -220,7 +222,8 @@ export const outEnter: Command = (state, dispatch) => {
   if ($from.depth < 2) return false;
   const depth = $from.depth - 1;
   const holder = $from.node(depth);
-  if (holder.type !== schema.nodes.details || holder.childCount !== 1) return false;
+  // 題（1 つ目）＋空の中身（2 つ目）だけのとき。
+  if (holder.type !== schema.nodes.details || holder.childCount !== 2) return false;
 
   if (dispatch) {
     const after = $from.after(depth);
@@ -241,24 +244,47 @@ export const outEnter: Command = (state, dispatch) => {
 //
 // 中身が無くなってもトグルは残す（見出しの字は書いたもの）。続けて押したときの
 // 行き先は、その見出しの入力欄。ここから題を直せる。
-export const toDetailsHead: Command = (state, dispatch, view) => {
+export const toDetailsHead: Command = (state, dispatch) => {
   const { empty, $from } = state.selection;
   if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
   if ($from.parent.content.size > 0 || $from.depth < 2) return false;
   const depth = $from.depth - 1;
   if ($from.node(depth).type !== schema.nodes.details) return false;
-  if ($from.index(depth) !== 0 || !view) return false;
+  // 中身の先頭（題のすぐ下）に居るときだけ。
+  if ($from.index(depth) !== 1) return false;
   if (dispatch) {
-    const dom = view.nodeDOM($from.before(depth));
-    const title =
-      dom instanceof HTMLElement
-        ? dom.querySelector<HTMLInputElement>(".mg-details-title")
-        : null;
-    if (!title) return false;
-    title.focus();
-    // 頭に置く。末尾に置くと、続けて押した Backspace が題を後ろから
-    // 食べ始める（消したいのは中身であって、題ではない）。
-    title.setSelectionRange(0, 0);
+    const title = $from.before();
+    dispatch(
+      state.tr
+        .setSelection(TextSelection.near(state.doc.resolve(title - 1), -1))
+        .scrollIntoView(),
+    );
+  }
+  return true;
+};
+
+// トグルの題で Enter。題を割らず、中身の先頭へ移る。
+export const outOfDetailsHead: Command = (state, dispatch) => {
+  const { $from } = state.selection;
+  if ($from.parent.type !== schema.nodes.detailsSummary) return false;
+  if (dispatch) {
+    dispatch(
+      state.tr
+        .setSelection(TextSelection.near(state.doc.resolve($from.after() + 1), 1))
+        .scrollIntoView(),
+    );
+  }
+  return true;
+};
+
+// 見出しトグルの題の頭で Backspace。見出しを外して素のトグルへ戻す。
+export const plainDetailsHead: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || $from.parentOffset !== 0) return false;
+  if ($from.parent.type !== schema.nodes.detailsSummary) return false;
+  if ($from.parent.attrs.level === null) return false;
+  if (dispatch) {
+    dispatch(state.tr.setNodeMarkup($from.before(), undefined, { level: null }));
   }
   return true;
 };
@@ -278,8 +304,10 @@ export const outdentBack: Command = (state, dispatch, view) => {
   const depth = $from.depth - 1;
   const holder = $from.node(depth);
   if (!HOLDERS.has(holder.type)) return false;
-  // 2 つ目以降の塊は、同じ囲みの中で手前の塊へ継ぐのが正しい。
-  if ($from.index(depth) !== 0) return false;
+  // トグルは先頭の子が題なので、中身の先頭は 1 つ目。
+  const first = holder.type === schema.nodes.details ? 1 : 0;
+  // それより後ろの塊は、同じ囲みの中で手前の塊へ継ぐのが正しい。
+  if ($from.index(depth) !== first) return false;
 
   // 引用と callout は、囲みが先頭に居るなら既定に任せる（塊が外へ出て囲みが
   // 畳まれる、Markdown として自然な形）。手前に別の塊があるときだけ自分で
@@ -622,6 +650,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         toSourceBack,
         unlistBack,
         eraseInMark,
+        plainDetailsHead,
         toDetailsHead,
         dropEmptyBack,
         outdentBack,
@@ -636,7 +665,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       "Mod-z": undo,
       "Shift-Mod-z": redo,
       "Mod-y": redo,
-      Enter: chainCommands(cellEnter, fenceOnEnter, outEnter, splitItem),
+      Enter: chainCommands(cellEnter, outOfDetailsHead, fenceOnEnter, outEnter, splitItem),
       ArrowUp: cellUp,
       ArrowDown: cellDown,
       ArrowLeft: cellLeft,

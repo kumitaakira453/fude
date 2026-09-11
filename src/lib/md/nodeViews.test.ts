@@ -194,86 +194,32 @@ describe("トグル", () => {
   it("畳むとき、カーソルが中に居たら手前へ出す", () => {
     const view = editor("前の段落\n\n" + TOGGLE);
     // トグルの中身（段落）の中へカーソルを置く
-    view.dispatch(
-      view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(9), 1)),
-    );
-    const was = view.state.selection.from;
+    let at = -1;
+    view.state.doc.descendants((node, pos) => {
+      if (at < 0 && node.isTextblock && node.textContent === "中の本文") at = pos + 1;
+    });
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
     press(view.dom.querySelector(".mg-details-mark")!);
-    expect(view.state.selection.from).toBeLessThan(was);
+    expect(view.state.selection.from).toBeLessThan(at);
     expect(view.state.doc.resolve(view.state.selection.from).parent.textContent).toBe(
       "前の段落",
     );
   });
 
-  it("手前に置くところが無ければ、見出しの入力欄へ移す", () => {
-    const view = editor(TOGGLE);
-    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(3), 1)));
-    press(view.dom.querySelector(".mg-details-mark")!);
-    expect(document.activeElement).toBe(view.dom.querySelector(".mg-details-title"));
-  });
-
-  it("見出しトグルは見出しのタグで包む", () => {
-    const view = editor("<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n");
-    const box = view.dom.querySelector(".mg-details-title-box")!;
-    expect(box.tagName).toBe("H2");
-    expect(box.querySelector("input")?.value).toBe("決め方");
-  });
-});
-
-// トグルの見出しは入力欄。ここから題も階層も直せる。
-describe("トグルの見出しを直す", () => {
-  const TOGGLE = "<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n";
-  const type = (el: HTMLInputElement, value: string) => {
-    el.value = value;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  };
-  const press = (el: Element, key: string) =>
-    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-
-  it("帯を押すと題へ焦点が入る（編集面の中の入力欄は押しただけでは入らない）", () => {
+  it("題は本文として描かれる（入力欄ではない）", () => {
     const view = editor(TOGGLE);
     const head = view.dom.querySelector(".mg-details-head")!;
-    const title = view.dom.querySelector(".mg-details-title")!;
-    const ev = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
-    head.dispatchEvent(ev);
-    expect(ev.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(title);
+    expect(head.textContent).toBe("ひらく");
+    expect(head.querySelector("input")).toBeNull();
+    // 中身は題の後ろに並ぶ
+    expect(view.state.doc.child(0).child(0).type.name).toBe("detailsSummary");
+    expect(view.state.doc.child(0).child(1).textContent).toBe("中の本文");
   });
 
-  it("三角を押したときは畳むだけで、題へは入らない", () => {
-    // カーソルが囲みの外に居る形で試す（中に居るときは題へ逃がすのが決まり）。
-    const view = editor("前の段落\n\n" + TOGGLE);
-    const box = view.dom.querySelector(".mg-details")!;
-    const mark = box.querySelector(".mg-details-mark")!;
-    mark.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-    expect(box.classList.contains("is-closed")).toBe(true);
-    expect(document.activeElement).not.toBe(view.dom.querySelector(".mg-details-title"));
-  });
-
-  it("打った題が開きタグへ戻る", () => {
-    const view = editor(TOGGLE);
-    const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
-    type(title, "決め方");
-    expect(view.state.doc.child(0).attrs.head).toBe("<details>\n<summary>決め方</summary>");
-  });
-
-  it("`## ` と打つと見出しトグルになる", () => {
-    const view = editor(TOGGLE);
-    const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
-    type(title, "## 決め方");
-    expect(view.state.doc.child(0).attrs.head).toBe(
-      "<details>\n<summary><h2>決め方</h2></summary>",
-    );
-    // 包むタグも見出しに変わる
-    expect(view.dom.querySelector(".mg-details-title-box")?.tagName).toBe("H2");
-  });
-
-  it("見出しの頭で Backspace を押すと素のトグルへ戻る", () => {
+  it("見出しトグルは見出しのタグで描く", () => {
     const view = editor("<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n");
-    const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
-    title.setSelectionRange(0, 0);
-    press(title, "Backspace");
-    expect(view.state.doc.child(0).attrs.head).toBe("<details>\n<summary>決め方</summary>");
-    expect(view.dom.querySelector(".mg-details-title-box")?.tagName).toBe("SPAN");
+    const head = view.dom.querySelector(".mg-details-head")!;
+    expect(head.querySelector("h2")?.textContent).toBe("決め方");
+    expect(view.state.doc.child(0).child(0).attrs.level).toBe(2);
   });
 });

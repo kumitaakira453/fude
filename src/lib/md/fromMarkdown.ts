@@ -287,6 +287,57 @@ function loneBox(item: { checked?: boolean | null; children: unknown[] }):
   return mark === "[x]" || mark === "[X]" ? true : null;
 }
 
+// トグルの題。開きタグの行と、<summary> の中身に分ける。
+//
+// 題は本文の節点として持つので、押した場所にカーソルが入り、矢印でも行き来
+// できる。範囲は原文の <summary> の中身（前後の空白を除いたところ）に取る。
+// 打ち直したときはそこへ差し込むだけで済み、複数行に割れた summary も形が
+// 崩れない。
+const SUMMARY_TAG = /<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary>/;
+const SUMMARY_HEADING = /^\s*<h([1-6])(?:\s[^>]*)?>([\s\S]*?)<\/h\1>\s*$/;
+
+function summaryOf(g: Group, base: number): Built & { head: string } {
+  const head = g.head ?? "<details>";
+  const open = head.slice(0, lineEnd(head, 0));
+  const found = SUMMARY_TAG.exec(head);
+  if (!found) {
+    const at = base + g.start + open.length;
+    return {
+      head: open,
+      node: schema.nodes.detailsSummary.create(),
+      span: span(at, at),
+    };
+  }
+
+  // <summary> の中身の位置（head の中での位置 → 原文の位置）
+  const tag = found[0].slice(0, found[0].indexOf(">") + 1);
+  let from = found.index + tag.length;
+  let text = found[1];
+  let level: number | null = null;
+
+  const heading = SUMMARY_HEADING.exec(text);
+  if (heading) {
+    level = Number(heading[1]);
+    const inner = heading[2];
+    from += text.indexOf(inner, text.indexOf(">") + 1);
+    text = inner;
+  }
+  // 前後の空白は原文に残す（複数行の summary をそのまま保つ）。
+  const lead = text.length - text.trimStart().length;
+  from += lead;
+  text = text.trim();
+
+  const at = base + g.start + from;
+  return {
+    head: open,
+    node: schema.nodes.detailsSummary.create(
+      { level },
+      text ? [schema.text(text)] : [],
+    ),
+    span: span(at, at + text.length, text ? [span(at, at + text.length)] : []),
+  };
+}
+
 const span = (start: number, end: number, children: Span[] = []): Span => ({
   start,
   end,
@@ -336,10 +387,17 @@ function nodeOf(g: Group, source: string, base: number, id: string | null): Buil
     base + g.innerStart!,
     innerPad(body.split("\n"), padOf(source, g.start)),
   );
-  const at = span(base + g.start, base + g.end, inner.spans);
   if (g.kind === "details") {
-    return { node: schema.nodes.details.create({ ...attrs, head: g.head }, inner.nodes), span: at };
+    const title = summaryOf(g, base);
+    return {
+      node: schema.nodes.details.create({ ...attrs, head: title.head }, [
+        title.node,
+        ...inner.nodes,
+      ]),
+      span: span(base + g.start, base + g.end, [title.span, ...inner.spans]),
+    };
   }
+  const at = span(base + g.start, base + g.end, inner.spans);
   return {
     node: schema.nodes.callout.create(
       {

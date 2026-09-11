@@ -82,19 +82,28 @@ describe("構造を読み取る", () => {
     expect(node.child(0).textContent).toBe("本文");
   });
 
-  it("details は開きから </summary> までを原文のまま持つ", () => {
+  it("details は開きタグを持ち、題は最初の子になる", () => {
     const node = fromMarkdown("<details>\n<summary>題</summary>\n本文\n</details>\n").doc.child(0);
     expect(node.type.name).toBe("details");
-    expect(node.attrs.head).toBe("<details>\n<summary>題</summary>");
-    expect(node.child(0).textContent).toBe("本文");
+    expect(node.attrs.head).toBe("<details>");
+    expect(node.child(0).type.name).toBe("detailsSummary");
+    expect(node.child(0).textContent).toBe("題");
+    expect(node.child(1).textContent).toBe("本文");
+  });
+
+  it("開きタグの属性は原文のまま持つ", () => {
+    const node = fromMarkdown("<details open>\n<summary>題</summary>\n本文\n</details>\n").doc.child(0);
+    expect(node.attrs.head).toBe("<details open>");
   });
 
   it("summary が複数行でも入れ子でも壊れない", () => {
     const src = "<details>\n<summary>\n外\n</summary>\n\n<details>\n<summary>内</summary>\n中身\n</details>\n\n</details>\n";
     const node = fromMarkdown(src).doc.child(0);
     expect(node.type.name).toBe("details");
-    expect(node.attrs.head).toBe("<details>\n<summary>\n外\n</summary>");
-    expect(node.child(0).type.name).toBe("details");
+    // 題は前後の空白を除いた字だけ持つ（原文の改行はそのまま残る）
+    expect(node.child(0).textContent).toBe("外");
+    expect(node.child(1).type.name).toBe("details");
+    expect(round(src)).toBe(src);
   });
 
   it("桁が揃った表は幅を覚える", () => {
@@ -276,12 +285,14 @@ describe("囲みの範囲は行で決める", () => {
     const doc = fromMarkdown(src).doc;
     expect(doc.childCount).toBe(1);
     expect(doc.child(0).type.name).toBe("details");
-    expect(doc.child(0).textContent).toBe("中の本文");
+    // 題（ひらく）と中身
+    expect(doc.child(0).child(0).textContent).toBe("ひらく");
+    expect(doc.child(0).child(1).textContent).toBe("中の本文");
   });
 
   it("タブ字下げの中身も、コードではなく中身として読む", () => {
     const src = "<details>\n<summary>ひらく</summary>\n\t- 中の項目\n</details>\n";
-    const inner = fromMarkdown(src).doc.child(0).child(0);
+    const inner = fromMarkdown(src).doc.child(0).child(1);
     expect(inner.type.name).toBe("bulletList");
     expect(round(src)).toBe(src);
   });

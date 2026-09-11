@@ -19,7 +19,7 @@ import type { EditorView } from "prosemirror-view";
 import { icon } from "./nodeViews";
 import { openEmojiBoard } from "./emoji";
 import { openMath } from "./math";
-import { DETAILS_HEAD, headingHead, schema } from "./schema";
+import { schema } from "./schema";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
 //
@@ -113,26 +113,39 @@ function toWrapper(type: NodeType, attrs: Attrs): Command {
 // <summary> の中へ移り、中身は空から書き始める）。段落なら今までどおり、
 // 書きかけの文字がトグルの中身になる。
 const toToggle: Command = (state, dispatch) => {
-  const { $from, $to } = state.selection;
+  const { $from, $to, from, to, empty } = state.selection;
   const details = schema.nodes.details;
   if (!$from.sameParent($to) || !$from.parent.isTextblock || !fits($from, details)) {
     return false;
   }
-  if ($from.parent.type !== schema.nodes.heading) {
-    return toWrapper(details, { head: DETAILS_HEAD })(state, dispatch);
-  }
+  const block = $from.parent;
+  const heading = block.type === schema.nodes.heading;
+
   if (dispatch) {
-    // 原文では生 HTML なので、タグを作れる字は入れさせない。
-    const text = $from.parent.textContent.replace(/[<>]/g, "");
-    const head = headingHead($from.parent.attrs.level as number, text);
-    const at = $from.before();
-    const tr = state.tr.replaceRangeWith(
-      at,
-      $from.after(),
-      details.create({ head }, [schema.nodes.paragraph.create()]),
+    // 見出しなら、その見出しがトグルの題になる（中身は空から書き始める）。
+    // 段落なら、書きかけの字が中身に入り、題は空のまま。
+    const title = schema.nodes.detailsSummary.create(
+      { level: heading ? (block.attrs.level as number) : null },
+      heading ? block.content : undefined,
     );
+    const body = schema.nodes.paragraph.create(null, heading ? undefined : block.content);
+    const at = $from.before();
+    const tr = state.tr.replaceRangeWith(at, $from.after(), details.create(null, [title, body]));
+    // 字を選んで変えたときは、選んだところをそのまま選んだままにする
+    // （囲みと題のぶんだけ位置が内側へずれる）。それ以外は、見出しなら中身から、
+    // 素のトグルなら題から書き始める。
+    const shift = 1 + title.nodeSize;
     dispatch(
-      tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1)).scrollIntoView(),
+      tr
+        .setSelection(
+          empty
+            ? TextSelection.near(
+                tr.doc.resolve(heading ? at + title.nodeSize + 1 : at + 1),
+                1,
+              )
+            : TextSelection.create(tr.doc, from + shift, to + shift),
+        )
+        .scrollIntoView(),
     );
   }
   return true;

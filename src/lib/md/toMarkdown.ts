@@ -10,7 +10,7 @@ import type {
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { toMarkdown as mdastToMarkdown, type Options } from "mdast-util-to-markdown";
 import { fromMarkdown, parseTree, type Loaded, type Span } from "./fromMarkdown";
-import { nestOf } from "./schema";
+import { nestOf, schema } from "./schema";
 import { splitRow } from "../blocks";
 import { plainEdit, sameShape, spliceNode } from "./splice";
 
@@ -257,15 +257,28 @@ function toMdast(node: PmNode): RootContent {
       return verbatim([open, ...mapChildren(node, blockText), "</callout>"].join("\n"));
     }
 
-    case "details":
+    case "details": {
+      // 先頭の子は題。開きタグと <summary> に組み直し、残りが中身になる。
       // Notion が書き出す形に合わせ、開き・中身・閉じの間を 1 行空ける。
       // 中身の無い塊は書き出さない（畳んだ直後の空のトグルで、空行だけが
       // 積み上がる）。読み直すと空の段落へ戻るので、往復しても同じ。
+      const body: string[] = [];
+      let title = "";
+      node.forEach((child, _offset, index) => {
+        if (index === 0 && child.type === schema.nodes.detailsSummary) {
+          // 原文では生 HTML なので、タグを作れる字は入れさせない。
+          const text = child.textContent.replace(/[<>]/g, "");
+          const level = child.attrs.level as number | null;
+          title = level === null ? text : `<h${level}>${text}</h${level}>`;
+          return;
+        }
+        const out = blockText(child);
+        if (out) body.push(out);
+      });
       return verbatim(
-        [node.attrs.head, ...mapChildren(node, blockText).filter(Boolean), "</details>"].join(
-          "\n\n",
-        ),
+        [`${node.attrs.head}\n<summary>${title}</summary>`, ...body, "</details>"].join("\n\n"),
       );
+    }
 
     default:
       return verbatim(node.attrs.value ?? "");

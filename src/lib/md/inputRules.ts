@@ -5,7 +5,7 @@ import {
 } from "prosemirror-inputrules";
 import type { MarkType } from "prosemirror-model";
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
-import { DETAILS_HEAD, schema } from "./schema";
+import { schema } from "./schema";
 
 // 打った記号から構造を作る。
 //
@@ -88,7 +88,7 @@ export const setNotionKeys = (on: boolean) => {
   notionKeys = on;
 };
 
-// いまの塊をトグルの中身にする。`/トグル要素` と同じ形。
+// いまの塊をトグルにする。`/トグル要素` と同じ形（題は空、中身に書きかけの字）。
 function toToggle(state: EditorState, start: number, end: number): Transaction | null {
   const details = schema.nodes.details;
   const $start = state.doc.resolve(start);
@@ -98,8 +98,10 @@ function toToggle(state: EditorState, start: number, end: number): Transaction |
   const tr = state.tr.delete(start, end);
   const $from = tr.selection.$from;
   const at = $from.before();
-  const inner = schema.nodes.paragraph.create(null, $from.parent.content);
-  tr.replaceRangeWith(at, $from.after(), details.create({ head: DETAILS_HEAD }, inner));
+  const title = schema.nodes.detailsSummary.create();
+  const body = schema.nodes.paragraph.create(null, $from.parent.content);
+  tr.replaceRangeWith(at, $from.after(), details.create(null, [title, body]));
+  // 題から書き始める。
   return tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1));
 }
 
@@ -107,6 +109,17 @@ function toToggle(state: EditorState, start: number, end: number): Transaction |
 const toggleRule = new InputRule(/^\s*>\s$/, (state, _match, start, end) =>
   notionKeys ? toToggle(state, start, end) : null,
 );
+
+// 題で "## " と打ったら見出しトグルにする。本文の見出しと同じ打ち方。
+const titleHeadingRule = new InputRule(/^(#{1,6})\s$/, (state, match, start, end) => {
+  const { $from } = state.selection;
+  if ($from.parent.type !== schema.nodes.detailsSummary) return null;
+  const level = match[1].length;
+  if ($from.parent.attrs.level === level) return null;
+  return state.tr
+    .delete(start, end)
+    .setNodeMarkup($from.before(), undefined, { level });
+});
 
 const quoteByPipe = wrappingInputRule(/^\s*\|\s$/, schema.nodes.blockquote);
 
@@ -139,6 +152,7 @@ export const rules = [
     (match, node) => node.childCount + node.attrs.start === Number(match[1]),
   ),
   taskRule,
+  titleHeadingRule,
   ruleRule,
 
   // 行内。強い → 取り消し → 斜めの順に見る（** を * が先に拾わないように）。

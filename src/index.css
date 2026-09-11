@@ -1860,6 +1860,13 @@ body.mg-dragging .mg-sel-menu {
 .mg-prose.mg-editorial h2 {
   margin-top: 2.1em;
 }
+/* 囲みの中の見出しには縦線を引かない。囲みの中でさらに線が立つと、どこまでが
+   囲みの中身なのか読み取れなくなる（トグルの題は特に紛らわしい）。 */
+.mg-prose.mg-editorial
+  :is(.mg-callout, .mg-details, details)
+  :is(h1, h2, h3, h4, h5, h6)::before {
+  content: none;
+}
 
 /* typography は引用の中の段落に引用符を足す（blockquote p:first-of-type::before
    と p:last-of-type::after）。:first-of-type は親ごとに数えるので、引用の中の
@@ -1938,13 +1945,20 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details {
   margin: 0.6em 0;
 }
-.mg-prose summary,
-.mg-pm .mg-details-head {
+.mg-prose summary {
   display: flex;
   gap: 0.4rem;
   align-items: baseline;
   cursor: pointer;
   list-style: none;
+}
+/* 編集面の題は本文の節点。三角は本文の中に置けないので、左の余白へ重ねる
+   （読む面は印と字が同じ行に並ぶので、同じぶんだけ字を送る）。 */
+.mg-pm .mg-details {
+  position: relative;
+}
+.mg-pm .mg-details-head {
+  padding-left: 1.15rem;
 }
 .mg-prose summary::-webkit-details-marker {
   display: none;
@@ -1965,11 +1979,14 @@ body.mg-dragging .mg-sel-menu {
   transition: transform 120ms ease;
 }
 .mg-pm .mg-details-mark {
+  position: absolute;
+  left: 0.2rem;
+  top: 0.55em;
   cursor: pointer;
   color: inherit;
 }
 .mg-prose details[open] > summary::before,
-.mg-pm .mg-details:not(.is-closed) > .mg-details-head > .mg-details-mark {
+.mg-pm .mg-details:not(.is-closed) > .mg-details-mark {
   transform: translateY(-0.1em) rotate(90deg);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1981,28 +1998,33 @@ body.mg-dragging .mg-sel-menu {
 /* 中身は見出しの下に 1 段字下げして並べる。頭とのあいだは、段落 1 つぶんの
    行送り（20px）が空くと離れて見えるので詰める。 */
 .mg-prose details > :not(summary),
-.mg-pm .mg-details-body {
+.mg-pm .mg-details-inner > :not(.mg-details-head) {
   margin-left: 1.5rem;
 }
 .mg-prose details > summary + *,
-.mg-pm .mg-details-body > :first-child {
+.mg-pm .mg-details-head + * {
   margin-top: 0.25em;
 }
 .mg-prose details > :not(summary):last-child,
-.mg-pm .mg-details-body > :last-child {
+.mg-pm .mg-details-inner > :last-child {
   margin-bottom: 0;
 }
 /* 畳んでいる間は中身を隠す。doc からは消さないので、開けばそのまま戻る。 */
-.mg-pm .mg-details.is-closed > .mg-details-body {
+.mg-pm .mg-details.is-closed > .mg-details-inner > :not(.mg-details-head) {
   display: none;
 }
-/* 見出しトグル。頭は本物の見出しのタグなので、大きさ・太さ・罫は見出しの
+/* 見出しトグル。題は本物の見出しのタグなので、大きさ・太さ・罫は見出しの
    指定がそのまま効く。帯の中では余白だけ落とす。 */
 .mg-prose summary > :is(h1, h2, h3, h4, h5, h6),
-.mg-pm .mg-details-title-box {
+.mg-pm .mg-details-head > :is(h1, h2, h3, h4, h5, h6) {
   flex: 1;
   min-width: 0;
   margin: 0;
+}
+/* 題が空のときに、押せる行として見えるようにする。 */
+.mg-pm .mg-details-head > .mg-details-title:empty::before {
+  content: "トグル";
+  color: var(--mg-muted);
 }
 /* 種別の配色（accent とは別のセマンティックカラー） */
 .mg-callout.note {
@@ -4317,23 +4339,6 @@ body.mg-carrying {
   padding: 0.6rem 0.75rem;
   color: var(--mg-muted);
   font-size: 0.9em;
-}
-/* トグルの見出し。原文では開きタグの中なので、本文とは別に入力欄で打つ。
-   見た目は帯のままにして、欄であることを見せない。 */
-.mg-pm .mg-details-title {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-}
-.mg-pm .mg-details-title:focus {
-  outline: none;
-}
-.mg-pm .mg-details-title::placeholder {
-  color: var(--mg-muted);
-  font-weight: 400;
 }
 /* 詰まった箇条書きの項目。読むときは項目の中が段落にならないので、
    編集面でも段落の余白を落として同じ間隔にする。 */

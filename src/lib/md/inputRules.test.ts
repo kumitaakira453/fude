@@ -154,7 +154,9 @@ describe("Notion 風の打ち込み（試験中の設定）", () => {
     setNotionKeys(true);
     const node = first("> ");
     expect(node.type.name).toBe("details");
-    expect(node.attrs.head).toBe("<details>\n<summary>トグル</summary>");
+    // 先頭の子は題（空のまま。ここから打ち始める）
+    expect(node.child(0).type.name).toBe("detailsSummary");
+    expect(node.child(0).textContent).toBe("");
   });
 
   it("入れると `|` が引用になる", () => {
