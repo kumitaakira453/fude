@@ -434,6 +434,44 @@ pub fn reopen(thread_id: &str) -> Result<(), String> {
     })
 }
 
+// 名前が変わったファイルの行を、新しいパスへ付け替える。
+//
+// 指摘も版も絶対パスで紐付いているので、付け替えないと名前を変えた時点で
+// どちらも引けなくなる。版の控えは内容ハッシュで置いてあり実体は動かないので、
+// 台帳の行だけを書き換える。フォルダごと動いたときは、その下の行も連れていく。
+pub fn move_file(from: &Path, to: &Path) -> Result<usize, String> {
+    let from = normalize(from)?;
+    let to = normalize(to)?;
+    if from == to {
+        return Ok(0);
+    }
+    store::update(|ledger: &mut Ledger| Ok(apply_move(ledger, &from, &to)))
+}
+
+fn apply_move(ledger: &mut Ledger, from: &str, to: &str) -> usize {
+    let mut moved = 0;
+    for file in ledger
+        .threads
+        .iter_mut()
+        .map(|t| &mut t.file)
+        .chain(ledger.versions.iter_mut().map(|v| &mut v.file))
+    {
+        if let Some(next) = renamed(file, from, to) {
+            *file = next;
+            moved += 1;
+        }
+    }
+    moved
+}
+
+// そのパスが from そのものか、from の下に居るなら、新しいパスを返す。
+fn renamed(file: &str, from: &str, to: &str) -> Option<String> {
+    if file == from {
+        return Some(to.to_string());
+    }
+    under(file, from).then(|| format!("{to}{}", &file[from.trim_end_matches('/').len()..]))
+}
+
 // 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
 // 既に解決済みのものは飛ばし、解決にした件数を返す。
 pub fn resolve_many(thread_ids: &[String], by: &str) -> Result<usize, String> {
@@ -621,6 +659,10 @@ fn record_version(
 // ---- パス ----
 
 // 指摘のキーは NFC 正規化した絶対パス。相対パスは実行時のカレントから解決する。
+//
+// 名前が変わった後の「古い名前」のように、もう無いパスもキーにできる必要が
+// ある。葉が解決できないときは親を解決して名前を継ぐ。素の絶対パスへ落とすと、
+// symlink 越しに開いたファイルで台帳のキー（実体のパス）と食い違う。
 fn normalize(path: &Path) -> Result<String, String> {
     let abs = if path.is_absolute() {
         path.to_path_buf()
@@ -629,11 +671,21 @@ fn normalize(path: &Path) -> Result<String, String> {
             .map_err(|e| format!("カレントディレクトリを取れません: {e}"))?
             .join(path)
     };
-    let cleaned = fs::canonicalize(&abs).unwrap_or(abs);
+    let cleaned = fs::canonicalize(&abs).unwrap_or_else(|_| real_parent(&abs));
     let text = cleaned
         .to_str()
         .ok_or_else(|| format!("パスを文字列にできません: {}", cleaned.display()))?;
     Ok(store::normalize_path(text))
+}
+
+fn real_parent(abs: &Path) -> PathBuf {
+    match (abs.parent(), abs.file_name()) {
+        (Some(dir), Some(name)) => match fs::canonicalize(dir) {
+            Ok(real) => real.join(name),
+            Err(_) => abs.to_path_buf(),
+        },
+        _ => abs.to_path_buf(),
+    }
 }
 
 fn under(file: &str, dir: &str) -> bool {
@@ -916,5 +968,59 @@ mod tests {
         let ids = ["a".to_string(), "gone".to_string()];
         assert!(apply_resolve_many(&mut ledger, &ids, "you", 99).is_err());
         assert!(ledger.threads.iter().all(|t| matches!(t.status, Status::Open)));
+    }
+
+    fn ledger_with(files: &[&str]) -> Ledger {
+        let mut ledger = Ledger::default();
+        for (i, file) in files.iter().enumerate() {
+            let mut thread = thread_with(vec![]);
+            thread.id = format!("t{i}");
+            thread.file = (*file).into();
+            ledger.threads.push(thread);
+            ledger.versions.push(Version {
+                id: format!("v{i}"),
+                file: (*file).into(),
+                label: None,
+                origin: Origin::Comment,
+                actor: None,
+                created_at: 0,
+            });
+        }
+        ledger
+    }
+
+    #[test]
+    fn moving_a_file_takes_its_threads_and_versions() {
+        let mut ledger = ledger_with(&["/docs/a.md", "/docs/b.md"]);
+        assert_eq!(apply_move(&mut ledger, "/docs/a.md", "/docs/新しい.md"), 2);
+        assert_eq!(ledger.threads[0].file, "/docs/新しい.md");
+        assert_eq!(ledger.versions[0].file, "/docs/新しい.md");
+        // 関係の無い行は動かない
+        assert_eq!(ledger.threads[1].file, "/docs/b.md");
+        assert_eq!(ledger.versions[1].file, "/docs/b.md");
+    }
+
+    #[test]
+    fn moving_a_folder_takes_everything_under_it() {
+        let mut ledger = ledger_with(&["/docs/設計/a.md", "/docs/設計案.md"]);
+        assert_eq!(apply_move(&mut ledger, "/docs/設計", "/docs/仕様"), 2);
+        assert_eq!(ledger.threads[0].file, "/docs/仕様/a.md");
+        assert_eq!(ledger.versions[0].file, "/docs/仕様/a.md");
+        // 名前が前方一致するだけの兄弟は巻き込まない
+        assert_eq!(ledger.threads[1].file, "/docs/設計案.md");
+    }
+
+    #[test]
+    fn the_key_survives_a_path_that_is_gone() {
+        // 名前を変えた後の「古い名前」でもキーを作れる（親を辿る）
+        let dir = std::env::temp_dir();
+        let real = fs::canonicalize(&dir).expect("一時フォルダを解決できません");
+        let gone = dir.join("fude-もう無いファイル.md");
+        assert_eq!(
+            normalize(&gone).expect("キーを作れません"),
+            store::normalize_path(
+                real.join("fude-もう無いファイル.md").to_str().expect("文字列にできません")
+            )
+        );
     }
 }

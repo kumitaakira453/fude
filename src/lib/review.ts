@@ -170,6 +170,16 @@ export async function restoreVersion(
   );
 }
 
+// 名前が変わったファイルの指摘と版を、新しいパスへ連れていく。台帳は絶対パスで
+// 紐付いているので、呼ばないと名前を変えた時点でその指摘が引けなくなる。
+export async function moveReviewFile(from: string, to: string): Promise<void> {
+  try {
+    await invoke<number>("review_move_file", { from, to });
+  } catch {
+    // 付け替えられなくても本文の表示には影響しないので黙って諦める
+  }
+}
+
 // 解決結果を台帳に控える。CLI は Markdown を解析しないため、GUI が対応付けた
 // 結果をここに置いて読ませる。headQuote は解決時点の「現在のブロック本文」で、
 // CLI はそれが今のファイルに含まれるかでキャッシュの新しさを自分で判定できる。

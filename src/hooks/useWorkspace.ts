@@ -24,6 +24,7 @@ import {
   recordRecentFolder,
   type DropPoint,
 } from "../lib/windows";
+import { moveReviewFile } from "../lib/review";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
   remapLeafPaths,
@@ -32,6 +33,7 @@ import {
   openInPane,
 } from "../lib/ui";
 import * as A from "../state/atoms";
+import { syncLedger } from "../state/review";
 
 // ファイル単位のドキュメント Undo/Redo 履歴（保存＝1ステップ）。
 const contentHistory = new Map<string, { undo: string[]; redo: string[] }>();
@@ -91,6 +93,14 @@ export function useWorkspace() {
     const folders = store.get(A.foldersAtom);
     return folders.find((f) => f.id === id)?.path ?? null;
   }, [store]);
+
+  const absOf = useCallback(
+    (rel: string): string | null => {
+      const root = getRootPath();
+      return root ? `${root}/${rel}` : null;
+    },
+    [getRootPath],
+  );
 
   const getFileNode = useCallback(
     (path: string): TreeNode | null => {
@@ -214,7 +224,16 @@ export function useWorkspace() {
         if (nk && nk !== k) times.set(nk, v);
       }
       store.set(A.mtimeCacheAtom, times);
-      if (moved) moveViewpoints(moved[0], moved[1]);
+      if (moved) {
+        moveViewpoints(moved[0], moved[1]);
+        // 指摘と版は絶対パスで台帳に紐付いている。ここで連れていかないと、
+        // 名前を変えた時点でそのファイルの指摘が引けなくなる。
+        const from = absOf(moved[0]);
+        const to = absOf(moved[1]);
+        if (from && to) {
+          void moveReviewFile(from, to).then(() => syncLedger(store));
+        }
+      }
       remapLeafPaths(store, remap);
       await refreshTreeStructure();
       const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
@@ -223,7 +242,7 @@ export function useWorkspace() {
         new Map([...store.get(A.contentCacheAtom)].filter(([k]) => valid.has(k))),
       );
     },
-    [store, refreshTreeStructure],
+    [store, refreshTreeStructure, absOf],
   );
 
   const refreshFolders = useCallback(async () => {
@@ -405,14 +424,6 @@ export function useWorkspace() {
   );
 
   // ---- ファイル操作（Obsidian 風の編集機能） ----
-  const absOf = useCallback(
-    (rel: string): string | null => {
-      const root = getRootPath();
-      return root ? `${root}/${rel}` : null;
-    },
-    [getRootPath],
-  );
-
   // 一意な名前を作る（重複時に連番）。
   const uniqueRel = useCallback(
     async (rel: string): Promise<string> => {

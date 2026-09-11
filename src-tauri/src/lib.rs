@@ -106,6 +106,17 @@ async fn review_restore(
     .map_err(|e| format!("復元に失敗しました: {e}"))?
 }
 
+// 名前が変わったファイルの指摘と版を、新しいパスへ連れていく。台帳は絶対パスで
+// 紐付いているので、これを呼ばないと名前を変えた時点で引けなくなる。
+#[tauri::command]
+async fn review_move_file(from: String, to: String) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        review::move_file(&PathBuf::from(from), &PathBuf::from(to))
+    })
+    .await
+    .map_err(|e| format!("コメントの付け替えに失敗しました: {e}"))?
+}
+
 // GUI が求めた対応付けの結果を控える。CLI はこれを読んで「現在の本文」を出す。
 #[tauri::command]
 async fn review_set_resolved(
@@ -301,6 +312,7 @@ pub fn run() {
             review_version_text,
             review_checkpoint,
             review_restore,
+            review_move_file,
             review_set_resolved,
             review_reply,
             review_resolve,
