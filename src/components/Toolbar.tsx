@@ -13,6 +13,7 @@ import {
   tocOpenAtom,
 } from "../state/atoms";
 import { openTotalAtom, reviewScreenAtom } from "../state/review";
+import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
 import { SettingsButton } from "./SettingsButton";
 
@@ -83,12 +84,7 @@ export function Toolbar() {
         title="スタート画面へ"
         className="mx-1 flex select-none items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:bg-[var(--mg-hover)]"
       >
-        <Icon
-          name="auto_awesome"
-          size={17}
-          fill
-          className="text-[var(--mg-accent)]"
-        />
+        <AppIcon size={19} className="text-[var(--mg-accent)]" />
         <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">
           fude
         </span>

@@ -5,9 +5,11 @@ import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import {
   childrenAt,
+  crumbsOf,
   displayName,
   filterTree,
   parentPath,
+  readLevel,
   type TreeNode,
 } from "../lib/fsAccess";
 import { revealInTree } from "../lib/ui";
@@ -20,6 +22,9 @@ import { Icon } from "./Icon";
 // メニューの幅。位置を内側へ寄せるときにも使う。
 const WIDTH = 300;
 
+// 1 枚だけ開いているときに、絶対パスから出す区切りの数（末尾から）。
+const KEEP = 2;
+
 interface Row {
   node: TreeNode;
   depth: number;
@@ -29,13 +34,14 @@ interface Row {
 function rowsOf(
   nodes: TreeNode[],
   open: (path: string) => boolean,
+  kids: (node: TreeNode) => TreeNode[],
   depth = 0,
 ): Row[] {
   const out: Row[] = [];
   for (const n of nodes) {
     out.push({ node: n, depth });
-    if (n.kind === "dir" && n.children && open(n.path)) {
-      out.push(...rowsOf(n.children, open, depth + 1));
+    if (n.kind === "dir" && open(n.path)) {
+      out.push(...rowsOf(kids(n), open, kids, depth + 1));
     }
   }
   return out;
@@ -44,13 +50,19 @@ function rowsOf(
 export function Breadcrumbs({
   path,
   paneId,
+  lazy = false,
 }: {
   path: string | null;
   paneId: string;
+  // 1 枚だけ開いているとき。path は絶対パスで、木を持っていないので
+  // プルダウンの中身はその場でフォルダを読んで出す。
+  lazy?: boolean;
 }) {
   const store = useStore();
   const tree = useAtomValue(treeAtom);
-  const { openFile } = useWorkspace();
+  const { openFile, openDoc } = useWorkspace();
+  // 1 枚だけのときに読み込んだ階層。道筋（絶対パス）から引く。
+  const [level, setLevel] = useState<Map<string, TreeNode[]>>(new Map());
   const navRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,18 +78,47 @@ export function Breadcrumbs({
   const [cursor, setCursor] = useState<number | null>(null);
   const ime = useImeSafeEnter();
 
-  const segs = path ? path.split("/") : [];
-  const target = picker ? segs.slice(0, picker.index + 1).join("/") : "";
-  const roots = useMemo(
-    () => (picker ? childrenAt(tree, parentPath(target)) : []),
-    [picker, tree, target],
+  const crumbs = useMemo(
+    () => crumbsOf(path ?? "", lazy ? KEEP : Infinity),
+    [path, lazy],
+  );
+  const target = picker ? (crumbs[picker.index]?.path ?? "") : "";
+  const here = parentPath(target);
+  const roots = useMemo(() => {
+    if (!picker) return [];
+    return lazy ? (level.get(here) ?? []) : childrenAt(tree, here);
+  }, [picker, lazy, level, here, tree]);
+  const kids = useMemo(
+    () => (n: TreeNode) => (lazy ? (level.get(n.path) ?? []) : (n.children ?? [])),
+    [lazy, level],
   );
   const filtered = useMemo(() => filterTree(roots, query), [roots, query]);
   // 絞り込み中は全部開いた状態で出す。奥にある一致が隠れないようにする。
   const rows = useMemo(
-    () => rowsOf(filtered, (p) => (query ? true : expanded.has(p))),
-    [filtered, query, expanded],
+    () => rowsOf(filtered, (p) => (query ? true : expanded.has(p)), kids),
+    [filtered, query, expanded, kids],
   );
+  // まだ読めていない階層があれば読む。押した瞬間に開いて、中身は後から入る。
+  const waiting = lazy && !!picker && !level.has(here);
+  useEffect(() => {
+    if (!lazy || !picker) return;
+    const want = [here, ...expanded].filter((d) => d && !level.has(d));
+    if (want.length === 0) return;
+    let dead = false;
+    void Promise.all(
+      want.map(async (dir) => [dir, await readLevel(dir)] as const),
+    ).then((pairs) => {
+      if (dead) return;
+      setLevel((prev) => {
+        const next = new Map(prev);
+        for (const [dir, nodes] of pairs) next.set(dir, nodes);
+        return next;
+      });
+    });
+    return () => {
+      dead = true;
+    };
+  }, [lazy, picker, here, expanded, level]);
 
   const close = () => {
     setPicker(null);
@@ -86,8 +127,8 @@ export function Breadcrumbs({
 
   const open = (index: number, at: HTMLElement) => {
     const box = at.getBoundingClientRect();
-    const seg = segs.slice(0, index + 1).join("/");
-    const isDir = index < segs.length - 1;
+    const seg = crumbs[index]?.path ?? "";
+    const isDir = index < crumbs.length - 1;
     setPicker({
       index,
       left: Math.min(box.left, window.innerWidth - WIDTH - 8),
@@ -137,6 +178,10 @@ export function Breadcrumbs({
       toggle(node.path);
       // 行を押すと焦点がそこへ移る。戻さないと続けて絞り込みが打てない。
       inputRef.current?.focus();
+    } else if (lazy) {
+      // 木を持っていないので、選んだ 1 枚へそのまま切り替える。
+      openDoc(node.abs);
+      close();
     } else {
       openFile(node.path, paneId);
       close();
@@ -176,19 +221,19 @@ export function Breadcrumbs({
   return (
     <>
       <div ref={navRef} className="truncate">
-        {segs.map((seg, i, arr) => (
-          <span key={i}>
+        {crumbs.map((crumb, i) => (
+          <span key={crumb.path}>
             {i > 0 && <span className="mx-1.5 opacity-60">›</span>}
             <button
               onClick={(e) =>
                 picker?.index === i ? close() : open(i, e.currentTarget)
               }
-              title={arr.slice(0, i + 1).join("/")}
+              title={crumb.path}
               className={`rounded px-0.5 hover:text-[var(--mg-accent)] hover:underline ${
                 picker?.index === i ? "text-[var(--mg-accent)]" : ""
               }`}
             >
-              {seg}
+              {crumb.name}
             </button>
           </span>
         ))}
@@ -216,7 +261,11 @@ export function Breadcrumbs({
               className="mb-1 shrink-0 rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2 py-1 text-[12.5px] outline-none focus:border-[var(--mg-accent)]"
             />
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {rows.length === 0 ? (
+              {waiting ? (
+                <div className="px-2 py-6 text-center text-[12px] text-[var(--mg-muted)]">
+                  読み込み中…
+                </div>
+              ) : rows.length === 0 ? (
                 <div className="px-2 py-6 text-center text-[12px] text-[var(--mg-muted)]">
                   一致するファイルがありません
                 </div>
@@ -235,6 +284,8 @@ export function Breadcrumbs({
                 ))
               )}
             </div>
+            {/* 1 枚だけのときは木そのものが無いので出さない。 */}
+            {!lazy && (
             <div className="mt-1 shrink-0 border-t border-[var(--mg-border)] pt-1">
               <button
                 onClick={() => {
@@ -251,6 +302,7 @@ export function Breadcrumbs({
                 ツリーで表示
               </button>
             </div>
+            )}
           </div>,
           document.body,
         )}

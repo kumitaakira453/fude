@@ -4,6 +4,7 @@ import {
   childrenAt,
   filterTree,
   findNode,
+  crumbsOf,
   parentPath,
   soleTree,
   type TreeNode,
@@ -153,5 +154,38 @@ describe("1 枚だけ開くときのファイル一覧", () => {
     const { root, node } = soleTree("/めも.md");
     expect(root).toBe("/");
     expect(node.abs).toBe("/めも.md");
+  });
+});
+
+describe("道筋の区切り", () => {
+  it("フォルダの中の相対パスは、そのまま全部出す", () => {
+    expect(crumbsOf("requirements/請求/05_設計.md")).toEqual([
+      { name: "requirements", path: "requirements" },
+      { name: "請求", path: "requirements/請求" },
+      { name: "05_設計.md", path: "requirements/請求/05_設計.md" },
+    ]);
+  });
+
+  it("絶対パスは先頭の / を保つ", () => {
+    expect(crumbsOf("/a/b.md").map((c) => c.path)).toEqual(["/a", "/a/b.md"]);
+  });
+
+  it("長い絶対パスは先頭側を 1 つに畳み、末尾は必ず残す", () => {
+    const got = crumbsOf("/Users/me/Downloads/設計.md", 2);
+    expect(got.map((c) => c.name)).toEqual(["…", "Downloads", "設計.md"]);
+    // 畳んだ区切りを押したら、そこまでの階層が開く。
+    expect(got[0].path).toBe("/Users/me");
+    expect(got[0].folded).toBe(true);
+    expect(got.at(-1)!.path).toBe("/Users/me/Downloads/設計.md");
+  });
+
+  it("畳む必要が無ければ畳まない", () => {
+    expect(crumbsOf("/a/b.md", 2).map((c) => c.name)).toEqual(["a", "b.md"]);
+    expect(crumbsOf("/a/b.md", 2).some((c) => c.folded)).toBe(false);
+  });
+
+  it("空の道筋からは何も出ない", () => {
+    expect(crumbsOf("")).toEqual([]);
+    expect(crumbsOf("/")).toEqual([]);
   });
 });

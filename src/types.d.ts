@@ -28,3 +28,9 @@ declare class FileSystemObserver {
 interface Window {
   FileSystemObserver?: typeof FileSystemObserver;
 }
+
+// 画像の取り込み。Vite が URL の字として返す。
+declare module "*.png" {
+  const src: string;
+  export default src;
+}

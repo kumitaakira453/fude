@@ -6,6 +6,7 @@ import { folderDisplayName } from "../lib/idb";
 import { isOpen } from "../lib/review";
 import { foldersAtom, recentDocsAtom } from "../state/atoms";
 import { ledgerAtom } from "../state/review";
+import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
 
 function timeAgo(ts: number): string {
@@ -80,16 +81,24 @@ export function Landing() {
   };
 
   return (
-    <div className="mg-landing h-full overflow-y-auto">
-      <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center px-8 py-16">
-        <div className="mb-11 flex items-center gap-4">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)]">
-            <Icon name="auto_awesome" size={28} className="text-[var(--mg-accent)]" />
-          </div>
+    <div className="mg-landing relative h-full overflow-y-auto">
+      {/* 地の色をゆっくり動かす。読むものが無い画面なので、ここだけ息をさせる。
+          画面の外へはみ出す円なので、切り取る層に入れる。入れないと
+          スクロールできる範囲が広がって、下に空白ができる。 */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div className="mg-blob mg-blob-a" />
+        <div className="mg-blob mg-blob-b" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-full max-w-2xl flex-col justify-center px-8 py-16">
+        <div className="mg-mark mb-12 flex items-center gap-4">
+          <AppIcon size={58} className="mg-mark-icon text-[var(--mg-accent)]" />
           <div>
-            <h1 className="text-[2.1rem] font-semibold leading-none tracking-[-0.03em] text-[var(--mg-fg)]">
+            <h1 className="text-[2.3rem] font-semibold leading-none tracking-[-0.035em] text-[var(--mg-fg)]">
               fude
             </h1>
+            {/* 筆で引いた墨の線。開いたときに左から伸びる。 */}
+            <span className="mg-mark-stroke" aria-hidden />
             <p className="mt-1.5 text-[13.5px] text-[var(--mg-muted)]">
               ローカルの Markdown を、美しく読む
             </p>
@@ -148,7 +157,7 @@ export function Landing() {
                       {r.open}
                     </span>
                   )}
-                  <span className="ml-auto shrink-0 text-[11px] text-[var(--mg-muted)]">
+                  <span className="ml-auto shrink-0 tabular-nums text-[11px] text-[var(--mg-muted)]">
                     {timeAgo(r.lastOpened)}
                   </span>
                 </button>
@@ -174,9 +183,12 @@ function StartCard({
 }) {
   return (
     <button onClick={onClick} className="mg-start-card">
-      <Icon name={icon} size={22} className="text-[var(--mg-accent)]" />
-      <span className="mt-2.5 block text-[14.5px] font-semibold text-[var(--mg-fg)]">
+      <span className="mg-start-tile">
+        <Icon name={icon} size={20} />
+      </span>
+      <span className="mg-start-name">
         {title}
+        <Icon name="arrow_forward" size={16} className="mg-start-go" />
       </span>
       <span className="mt-0.5 block text-[12px] text-[var(--mg-muted)]">{lead}</span>
     </button>

@@ -58,6 +58,53 @@ export async function pickMarkdownFile(): Promise<string | null> {
   return typeof sel === "string" ? sel : null;
 }
 
+export interface Crumb {
+  name: string;
+  // その区切りまでの道筋。押したときに開く階層を決める。
+  path: string;
+  // 先頭側を畳んだ印。
+  folded?: boolean;
+}
+
+// 道筋を区切りに割る。keep を超える分は、先頭側を「…」1 つに畳む。
+// 絶対パスは先頭の / を保つ。畳むのは、末尾のファイル名を必ず見せるため。
+export function crumbsOf(path: string, keep = Infinity): Crumb[] {
+  const abs = path.startsWith("/");
+  const segs = path.split("/").filter(Boolean);
+  const upto = (n: number) => (abs ? "/" : "") + segs.slice(0, n).join("/");
+  const all: Crumb[] = segs.map((name, i) => ({ name, path: upto(i + 1) }));
+  if (all.length <= keep) return all;
+  const cut = all.length - keep;
+  return [{ name: "…", path: upto(cut), folded: true }, ...all.slice(cut)];
+}
+
+// 1 階層だけ読む。木を持っていないとき（1 枚だけ開いているとき）に、
+// 道筋のプルダウンでその場の中身を出すために使う。道筋は絶対パスで持つ。
+export async function readLevel(dirAbs: string): Promise<TreeNode[]> {
+  let entries: Awaited<ReturnType<typeof readDir>>;
+  try {
+    entries = await readDir(dirAbs);
+  } catch {
+    return [];
+  }
+  const base = dirAbs === "/" ? "" : dirAbs;
+  const out: TreeNode[] = [];
+  for (const e of entries) {
+    const abs = `${base}/${e.name}`;
+    if (e.isDirectory) {
+      if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
+      out.push({ name: e.name, path: abs, abs, kind: "dir", children: [] });
+    } else if (e.isFile && isMarkdown(e.name)) {
+      out.push({ name: e.name, path: abs, abs, kind: "file" });
+    }
+  }
+  out.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name, "ja");
+  });
+  return out;
+}
+
 // 1 枚だけ開くときのファイル一覧。親フォルダを root に据え、その 1 枚しか
 // 置かない（走査しない）。相対リンクと相対画像は root 基準で解ける。
 export function soleTree(abs: string): { root: string; node: TreeNode } {

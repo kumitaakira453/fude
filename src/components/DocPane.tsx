@@ -37,6 +37,7 @@ import {
   readingWidthAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
+  soleAtom,
   themeAtom,
   tocOpenAtom,
   watchModeAtom,
@@ -751,6 +752,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 消えて「読み込んでいる」ことが分からなくなっていた（実測で 900 ブロック
   // なら 432ms、2000 ブロックなら 951ms のあいだ）。捨てた編集面へ
   // transaction を流して落ちる元でもあった。
+  const sole = useAtomValue(soleAtom);
   const [built, setBuilt] = useState<{ path: string; view: Editing } | null>(
     null,
   );
@@ -1186,7 +1188,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* ヘッダー */}
       <header className="mg-pane-head flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
         <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
-          <Breadcrumbs path={shownPath} paneId={pane.id} />
+          {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
+          <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
         </div>
         {path && (
           <>

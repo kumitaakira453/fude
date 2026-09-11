@@ -17,6 +17,7 @@ import {
   updateCheckNonceAtom,
   updateStatusAtom,
 } from "../state/atoms";
+import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
 
 // 設定。⌘, で開く。
@@ -268,7 +269,7 @@ export function Settings() {
                   className="mg-set-row"
                 >
                   <Icon
-                    name="auto_awesome"
+                    name="brush"
                     size={18}
                     fill={editorial}
                     className={
@@ -296,12 +297,7 @@ export function Settings() {
             {tab === "app" && (
               <section className="mg-set-sec">
                 <div className="mg-set-row is-static">
-                  <Icon
-                    name="auto_awesome"
-                    size={18}
-                    fill
-                    className="text-[var(--mg-accent)]"
-                  />
+                  <AppIcon size={18} className="text-[var(--mg-accent)]" />
                   <span className="mg-set-row-main">
                     <span className="mg-set-row-name">fude</span>
                     <span className="mg-set-note">
