@@ -1958,7 +1958,7 @@ body.mg-dragging .mg-sel-menu {
   position: relative;
 }
 .mg-pm .mg-details-head {
-  padding-left: 1.15rem;
+  padding-left: 1.3rem;
 }
 .mg-prose summary::-webkit-details-marker {
   display: none;
@@ -1971,9 +1971,9 @@ body.mg-dragging .mg-sel-menu {
   height: 0;
   padding: 0;
   border: 0;
-  border-left: 0.36rem solid currentColor;
-  border-top: 0.28rem solid transparent;
-  border-bottom: 0.28rem solid transparent;
+  border-left: 0.47rem solid currentColor;
+  border-top: 0.36rem solid transparent;
+  border-bottom: 0.36rem solid transparent;
   background: none;
   transform: translateY(-0.1em);
   transition: transform 120ms ease;
@@ -1981,9 +1981,20 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details-mark {
   position: absolute;
   left: 0.2rem;
-  top: 0.55em;
+  top: 0.63rem;
   cursor: pointer;
   color: inherit;
+}
+/* 見出しの段ごとに題の行の高さが変わるので、三角もその中央へ寄せる。 */
+.mg-pm .mg-details[data-level="1"] > .mg-details-mark {
+  top: 1rem;
+}
+.mg-pm .mg-details[data-level="2"] > .mg-details-mark,
+.mg-pm .mg-details[data-level="3"] > .mg-details-mark {
+  top: 0.76rem;
+}
+.mg-pm .mg-details[data-level="4"] > .mg-details-mark {
+  top: 0.5rem;
 }
 .mg-prose details[open] > summary::before,
 .mg-pm .mg-details:not(.is-closed) > .mg-details-mark {

@@ -222,4 +222,16 @@ describe("トグル", () => {
     expect(head.querySelector("h2")?.textContent).toBe("決め方");
     expect(view.state.doc.child(0).child(0).attrs.level).toBe(2);
   });
+
+  it("見出しの段を印として出す（三角の置き場所に使う）", () => {
+    const view = editor("<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n");
+    const box = view.dom.querySelector(".mg-details") as HTMLElement;
+    expect(box.dataset.level).toBe("2");
+    // 素のトグルに戻すと印も落ちる
+    const at = view.state.doc.child(0).child(0);
+    view.dispatch(
+      view.state.tr.setNodeMarkup(1, undefined, { ...at.attrs, level: null }),
+    );
+    expect((view.dom.querySelector(".mg-details") as HTMLElement).dataset.level).toBe("0");
+  });
 });

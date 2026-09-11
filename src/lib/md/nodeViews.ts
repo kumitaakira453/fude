@@ -706,6 +706,14 @@ class DetailsView implements NodeView {
     this.contentDOM = document.createElement("div");
     this.contentDOM.className = "mg-details-inner";
     this.dom.appendChild(this.contentDOM);
+    this.markLevel();
+  }
+
+  // 三角は題の 1 行目の中央に置く。行の高さは見出しの段で変わるので、段を
+  // 印として出し、置き場所は CSS 側で決める。
+  private markLevel() {
+    const level = this.node.firstChild?.attrs.level ?? 0;
+    this.dom.dataset.level = String(level);
   }
 
   private fold(open: boolean) {
@@ -727,6 +735,7 @@ class DetailsView implements NodeView {
   update(node: PmNode): boolean {
     if (node.type !== this.node.type) return false;
     this.node = node;
+    this.markLevel();
     return true;
   }
 
