@@ -6,7 +6,6 @@ import {
   readBlockText,
   scrollBoxOf,
 } from "./domText";
-import { itemOwnRect } from "./gutterGeom";
 import { findPlain } from "./projection";
 import {
   answeredByAgent,
@@ -218,13 +217,6 @@ export function unitElement(block: HTMLElement, unit: ReviewUnit): Element | nul
   return block.querySelectorAll(`[${attr}]`)[unit.index] ?? null;
 }
 
-// 囲みの箱。項目なら入れ子の一覧を含めない（親を選んだ印が子まで覆う）。
-export function unitRect(el: Element): DOMRect {
-  return el instanceof HTMLElement && el.tagName === "LI"
-    ? itemOwnRect(el)
-    : el.getBoundingClientRect();
-}
-
 // 描画側の目印（ソース位置）から通し番号を出す。台帳へは番号で残すので、
 // 編集面から付けた指摘と同じ値になる。
 export function unitFrom(
@@ -341,7 +333,7 @@ export function readingMarks(
     const areas = clipRects(boxes, clip);
     const cell = marked ?? (inner ? unitOf(inner) : null);
     const spots = cell
-      ? clipRects([unitRect(cell)], spotClip)
+      ? clipRects([cell.getBoundingClientRect()], spotClip)
       : inner
         ? clipRects(mergeRects(textRects(inner)), spotClip)
         : [];
@@ -410,7 +402,7 @@ export function readingPending(
     boxes.length > 0
       ? boxes
       : cell
-        ? [unitRect(cell)]
+        ? [cell.getBoundingClientRect()]
         : range
           ? mergeRects(textRects(range))
           : [],

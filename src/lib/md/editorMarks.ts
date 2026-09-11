@@ -9,7 +9,6 @@ import {
   tableClip,
   textRects,
   unitOf,
-  unitRect,
   type Mark,
   type Rect,
 } from "../reviewMarks";
@@ -113,7 +112,7 @@ export function editorMarks(
         : unitElementIn(view, anchor.pos, thread.unit);
     const cell = marked ?? (inner ? unitOf(inner) : null);
     const spots = cell
-      ? clipRects([unitRect(cell)], spotClip)
+      ? clipRects([cell.getBoundingClientRect()], spotClip)
       : inner
         ? clipRects(mergeRects(textRects(inner)), spotClip)
         : [];
@@ -165,7 +164,9 @@ export function editorPending(
   const cell = unitOf(range);
   const inBox = scrollBoxOf(range.startContainer);
   return clipRects(
-    cell ? [unitRect(cell)] : mergeRects(textRects(range)),
+    cell
+      ? [cell.getBoundingClientRect()]
+      : mergeRects(textRects(range)),
     inBox ? inBox.getBoundingClientRect() : clip,
   ).map((rc) => relTo(base, rc));
 }

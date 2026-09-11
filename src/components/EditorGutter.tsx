@@ -1,4 +1,3 @@
-import type { Node as PmNode } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "react";
@@ -46,7 +45,6 @@ import {
   itemAtY,
   itemEdge,
   itemLine,
-  itemOwnRect,
   lineHeight,
   ONLY,
   relative,
@@ -392,9 +390,7 @@ export function EditorGutter({
                 at: spot.at,
                 mid: line.top - base.top + line.height / 2,
                 edge: itemEdge(li) - base.left,
-                // メニューの相手として塗るのは項目そのもの。入れ子の一覧は
-                // 別の項目なので含めない。
-                box: relative(itemOwnRect(li), base),
+                box: relative(liBox, base),
               }
             : null,
         // 1 行目の字に合わせる。測れないもの（図・区切り線など）は、上端から
@@ -802,30 +798,12 @@ export function EditorGutter({
     ];
   };
 
-  // 項目そのものの終わり。最初の入れ子の一覧で止める。
-  const ownEnd = (item: PmNode, pos: number): number => {
-    let end = pos + 1;
-    for (let i = 0; i < item.childCount; i++) {
-      const child = item.child(i);
-      if (
-        child.type === schema.nodes.bulletList ||
-        child.type === schema.nodes.orderedList
-      ) {
-        break;
-      }
-      end += child.nodeSize;
-    }
-    return end;
-  };
-
   // 箇条書きの項目のメニュー。ブロックと同じ並びに揃える。
   const itemItems = (where: Spot): MenuItem[] => {
     const at = where.item;
     if (!at) return [];
     const run = (a: ItemAct) => () => runItem(at.pos, a);
     // 項目への指摘。相手はリストの塊で、範囲はその項目の中身。
-    // 入れ子の一覧は別の項目なので範囲に入れない（親を選んだだけで子まで
-    // 引用に入ってしまう）。
     const node = view.state.doc.nodeAt(at.pos);
     const comment: MenuItem[] =
       onComment && node
@@ -836,7 +814,7 @@ export function EditorGutter({
               run: () =>
                 onComment(where.pos, {
                   from: at.pos + 1,
-                  to: ownEnd(node, at.pos),
+                  to: at.pos + node.nodeSize - 1,
                 }),
             },
           ]

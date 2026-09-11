@@ -76,10 +76,7 @@ function thread(over: Partial<ReviewThread> = {}): ReviewThread {
 
 // 箇条書きのブロック。項目には描画側と同じ目印（data-mg-item）を付ける。
 // 2 個目は中身が無い項目（`- [ ]` だけの行）で、選択の文字を持たない。
-function listContent(opts?: { nested?: boolean }): {
-  article: HTMLElement;
-  item: HTMLElement;
-} {
+function listContent(): { article: HTMLElement; item: HTMLElement } {
   const article = document.createElement("article");
   rects.set(article, new DOMRect(0, 0, 600, 200));
   const wrap = document.createElement("div");
@@ -96,21 +93,7 @@ function listContent(opts?: { nested?: boolean }): {
     li.textContent = texts[i];
     rects.set(li, new DOMRect(0, i * 60, 600, 60));
     ul.appendChild(li);
-    if (i === 1) {
-      item = li;
-      // 2 個目に入れ子を持たせる。親の箱は子の分だけ下へ伸びる。
-      if (opts?.nested) {
-        const inner = document.createElement("ul");
-        const child = document.createElement("li");
-        child.dataset.mgItem = "40";
-        child.textContent = "こ";
-        rects.set(inner, new DOMRect(20, 100, 580, 100));
-        rects.set(child, new DOMRect(20, 100, 580, 100));
-        inner.appendChild(child);
-        li.appendChild(inner);
-        rects.set(li, new DOMRect(0, 60, 600, 140));
-      }
-    }
+    if (i === 1) item = li;
   });
   wrap.appendChild(ul);
   article.appendChild(wrap);
@@ -233,27 +216,6 @@ describe("readingMarks", () => {
     expect(marks[0].spots[0].height).toBe(60);
     // 箇所が出せているので、ブロックの枠は添えない
     expect(marks[0].areas).toHaveLength(0);
-  });
-
-  it("親の項目の印は、入れ子の一覧まで伸びない", () => {
-    // 親の箱は入れ子を抱えている（40〜200）。印は親の分（40〜100）で終える。
-    const { article } = listContent({ nested: true });
-    const marks = readingMarks(
-      article,
-      base,
-      [
-        thread({
-          quote: LIST_SRC,
-          selection: "",
-          selection_offset: 5,
-          unit: { kind: "item", index: 1 },
-        }),
-      ],
-      resolved({ state: "unchanged", index: 0, head: block(0, LIST_SRC) }),
-    );
-    expect(marks[0].spots).toHaveLength(1);
-    expect(marks[0].spots[0].top).toBe(60);
-    expect(marks[0].spots[0].height).toBe(40);
   });
 
   it("引き先が引けなければブロックの枠に落とす", () => {

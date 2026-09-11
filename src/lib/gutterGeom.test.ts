@@ -1,13 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  addBelow,
-  holdAt,
-  itemOwnRect,
-  nearEdge,
-  onLine,
-  tableGeometry,
-} from "./gutterGeom";
+import { addBelow, holdAt, nearEdge, onLine, tableGeometry } from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -196,60 +189,5 @@ describe("nearEdge", () => {
   it("帯の広さは変えられる", () => {
     expect(nearEdge(110, 100, 5)).toBe(false);
     expect(nearEdge(104, 100, 5)).toBe(true);
-  });
-});
-
-describe("項目そのものの箱", () => {
-  // 入れ子を 1 つ持つ項目を組む。項目は上 100 から 90、入れ子はその下半分。
-  function item(nested: boolean) {
-    const li = document.createElement("li");
-    const p = document.createElement("p");
-    p.textContent = "おや";
-    li.appendChild(p);
-    rect(li, new DOMRect(20, 100, 400, nested ? 90 : 30));
-    if (nested) {
-      const ul = document.createElement("ul");
-      const child = document.createElement("li");
-      child.textContent = "こ";
-      ul.appendChild(child);
-      li.appendChild(ul);
-      rect(ul, new DOMRect(40, 130, 380, 60));
-    }
-    document.body.appendChild(li);
-    return li;
-  }
-
-  it("入れ子の一覧の手前で終わる", () => {
-    const box = itemOwnRect(item(true));
-    expect(box.top).toBe(100);
-    // 入れ子が始まる 130 まで。子の 60 ぶんは含めない。
-    expect(box.height).toBe(30);
-    expect(box.left).toBe(20);
-    expect(box.width).toBe(400);
-  });
-
-  // 編集面のチェックの項目は、中身が .mg-task-body に包まれる。直下だけを
-  // 見ると入れ子を取りこぼし、箱が子まで伸びる。
-  it("包みの中の入れ子も見る", () => {
-    const li = document.createElement("li");
-    const body = document.createElement("div");
-    body.className = "mg-task-body";
-    const p = document.createElement("p");
-    p.textContent = "おや";
-    const ul = document.createElement("ul");
-    ul.appendChild(document.createElement("li"));
-    body.append(p, ul);
-    li.appendChild(body);
-    rect(li, new DOMRect(20, 100, 400, 90));
-    rect(ul, new DOMRect(40, 130, 380, 60));
-    document.body.appendChild(li);
-
-    expect(itemOwnRect(li).height).toBe(30);
-  });
-
-  it("入れ子が無ければ元の箱のまま", () => {
-    const box = itemOwnRect(item(false));
-    expect(box.top).toBe(100);
-    expect(box.height).toBe(30);
   });
 });
