@@ -6,6 +6,7 @@ import {
   dropEmptyBack,
   editorPlugins,
   keepOutOfHolder,
+  outEnter,
   outdentBack,
   toDetailsHead,
   unlistBack,
@@ -19,7 +20,7 @@ import { toMarkdown } from "./toMarkdown";
 // callout が箇条書きの項目に化けていた。空のブロックは消えるのが正しい。
 
 // 中身の無いブロックのうち、上から n 番目の先頭で押す。
-function drop(body: string, nth = 0) {
+function drop(body: string, nth = 0, cmd: Command = dropEmptyBack) {
   const loaded = fromMarkdown(body);
   const opened = EditorState.create({
     doc: loaded.doc,
@@ -36,7 +37,7 @@ function drop(body: string, nth = 0) {
   });
   if (at < 0) throw new Error("空のブロックが無い");
 
-  return run(opened, at, loaded);
+  return run(opened, at, loaded, cmd);
 }
 
 // text で始まるブロックの中身を消してから、その先頭で押す
@@ -327,5 +328,57 @@ describe("空のトグルは残す", () => {
     // 囲みを消す番には渡さない
     const shape = (s: typeof ready) => s.doc.children.map((n) => n.type.name);
     expect(shape(ready)).toEqual(["details"]);
+  });
+});
+
+// 空になったトグルから下へ抜ける。囲みは残したまま、その下の行へ出る。
+describe("空のトグルから下へ抜ける", () => {
+  const EMPTY = `<details>
+<summary>トグル</summary>
+
+</details>
+
+あとの段落
+`;
+
+  it("空の中身で Enter を押すと、囲みの下に行ができる", () => {
+    const { ran, shape, md } = drop(EMPTY, 0, outEnter);
+    expect(ran).toBe(true);
+    // 囲みは残る
+    expect(shape).toEqual(["details", "paragraph", "paragraph"]);
+    // 出た先は空の行（打ち始めるところ）。原文では空行として出る。
+    expect(md).toBe(`<details>
+<summary>トグル</summary>
+
+</details>
+
+
+
+あとの段落
+`);
+  });
+
+  it("すぐ下が空の行なら、行を積み増さない", () => {
+    const src = `<details>
+<summary>トグル</summary>
+
+</details>
+
+`;
+    const { ran, shape } = drop(src, 0, outEnter);
+    expect(ran).toBe(true);
+    expect(shape).toEqual(["details", "paragraph"]);
+  });
+
+  it("中身が残っているときは、既定どおり行を増やす", () => {
+    const src = `<details>
+<summary>トグル</summary>
+
+中の本文
+
+</details>
+`;
+    // 空の塊が無いので、この道には来ない
+    expect(() => drop(src, 0, outEnter)).toThrow();
   });
 });

@@ -198,6 +198,45 @@ export const dropEmptyBack: Command = (state, dispatch) => {
   return true;
 };
 
+// ---- トグルの中の行き来 ----
+//
+// トグルは「見出し（入力欄）」と「中身（ブロック）」の 2 段でできている。
+// 見出しは本文の木に居ないので、既定の鍵だけでは行き来できない。行き先を
+// 1 か所に決めておく。
+//
+//   見出しで Enter / ↓     … 中身の先頭へ
+//   見出しの頭で Backspace … 見出しトグルなら素のトグルへ戻す
+//   中身の先頭で Backspace … その塊を囲みの外（直後）へ出す。囲みは残る
+//   空の中身で Backspace   … 見出しへ（頭に置く。題を後ろから食べない）
+//   空の中身で Enter       … 囲みの外（直後）の行へ出る。囲みは残る
+//
+// 「囲みは残る」を通している。見出しの字は書いたものなので、中身が空になった
+// くらいで消さない。
+
+// 空になったトグルの中で Enter。囲みは残し、その下の行へ出る。
+export const outEnter: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parent.content.size > 0) return false;
+  if ($from.depth < 2) return false;
+  const depth = $from.depth - 1;
+  const holder = $from.node(depth);
+  if (holder.type !== schema.nodes.details || holder.childCount !== 1) return false;
+
+  if (dispatch) {
+    const after = $from.after(depth);
+    const next = state.doc.resolve(after).nodeAfter;
+    // すぐ下が空の行なら、そこへ移るだけ（空行を積み増さない）。
+    const tr =
+      next?.isTextblock && next.content.size === 0
+        ? state.tr
+        : state.tr.insert(after, schema.nodes.paragraph.create());
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(after + 1), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
+
 // 空になったトグルの中で Backspace。囲みは消さず、見出しへ移る。
 //
 // 中身が無くなってもトグルは残す（見出しの字は書いたもの）。続けて押したときの
@@ -217,7 +256,9 @@ export const toDetailsHead: Command = (state, dispatch, view) => {
         : null;
     if (!title) return false;
     title.focus();
-    title.setSelectionRange(title.value.length, title.value.length);
+    // 頭に置く。末尾に置くと、続けて押した Backspace が題を後ろから
+    // 食べ始める（消したいのは中身であって、題ではない）。
+    title.setSelectionRange(0, 0);
   }
   return true;
 };
@@ -595,7 +636,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       "Mod-z": undo,
       "Shift-Mod-z": redo,
       "Mod-y": redo,
-      Enter: chainCommands(cellEnter, fenceOnEnter, splitItem),
+      Enter: chainCommands(cellEnter, fenceOnEnter, outEnter, splitItem),
       ArrowUp: cellUp,
       ArrowDown: cellDown,
       ArrowLeft: cellLeft,
