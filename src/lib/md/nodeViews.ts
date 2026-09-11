@@ -706,14 +706,17 @@ class DetailsView implements NodeView {
     // 焦点を渡さない（外側の編集面が持ったままになる）。押した場所から何文字目
     // かを出し、自分で焦点とカーソルを置く。入ったあとは既定に任せる（言葉を
     // 選ぶ・引いて選ぶがそのまま効く）。
-    head.addEventListener("mousedown", (e) => {
+    const enter = (e: MouseEvent) => {
       if (this.mark.contains(e.target as Node)) return;
       if (document.activeElement === this.title) return;
       e.preventDefault();
       const caret = this.caretAt(e.clientX);
       this.title.focus();
       this.title.setSelectionRange(caret, caret);
-    });
+    };
+    head.addEventListener("mousedown", enter);
+    // 押下をどこかに取られても、離した時点で拾い直す。
+    head.addEventListener("click", enter);
     this.head = head;
     // 書いている最中でも畳める。閉じるのは見た目だけで、中身は doc に残る。
     this.mark = document.createElement("button");

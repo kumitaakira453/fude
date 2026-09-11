@@ -1961,16 +1961,12 @@ body.mg-dragging .mg-sel-menu {
   border-top: 0.28rem solid transparent;
   border-bottom: 0.28rem solid transparent;
   background: none;
-  opacity: 0.45;
   transform: translateY(-0.1em);
   transition: transform 120ms ease;
 }
 .mg-pm .mg-details-mark {
   cursor: pointer;
   color: inherit;
-}
-.mg-pm .mg-details-mark:hover {
-  opacity: 0.8;
 }
 .mg-prose details[open] > summary::before,
 .mg-pm .mg-details:not(.is-closed) > .mg-details-head > .mg-details-mark {
