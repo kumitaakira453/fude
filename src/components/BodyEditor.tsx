@@ -483,7 +483,6 @@ export function BodyEditor({
   onSave,
   flushRef,
   adoptRef,
-  onTop,
 }: {
   body: string;
   // フロントマター。本文の前にそのまま戻す。
@@ -516,8 +515,6 @@ export function BodyEditor({
   flushRef?: { current: (() => void) | null };
   // 外で書き換わった本文を入れる口。
   adoptRef?: { current: ((text: string) => void) | null };
-  // 本文の先頭からさらに上へ出ようとしたとき。受け取る先が無ければ偽を返す。
-  onTop?: () => boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
@@ -526,12 +523,10 @@ export function BodyEditor({
   // フロントマターは書いている最中にも差し替わる。組み立ての閉包に捕まえると
   // 次の保存で古いものを書き戻すので、毎描画で写して ref から読む。
   const fmText = useRef(prefix);
-  const topped = useRef(onTop);
   changed.current = onChange;
   saved.current = onSave;
   moved.current = onViewpoint;
   fmText.current = prefix;
-  topped.current = onTop;
 
   // 組み上がった編集面。表のつまみのように、編集面の外側に重ねる React の
   // 部品へ渡す（層を編集面の中に置くと、ProseMirror が本文の書き換えと
@@ -749,10 +744,7 @@ export function BodyEditor({
               first.resolve(Math.min(target.pos + 1, first.content.size)),
             )
           : undefined,
-        plugins: editorPlugins({
-          onSave: () => saved.current(),
-          onTop: () => topped.current?.() ?? false,
-        }),
+        plugins: editorPlugins({ onSave: () => saved.current() }),
       });
 
       const view = new EditorView(at, {

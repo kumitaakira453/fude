@@ -20,6 +20,7 @@ import {
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
+import { displayName } from "../lib/fsAccess";
 import { createCheckpoint } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
@@ -43,12 +44,9 @@ import {
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
-import { BlockSourceEditor } from "./BlockSourceEditor";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
-import { Frontmatter } from "./Frontmatter";
-import { FrontmatterFields } from "./FrontmatterFields";
-import { BrokenFields, BrokenNote } from "./BrokenFrontmatter";
+import { MetaModal } from "./meta/MetaModal";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
@@ -67,7 +65,6 @@ import {
   type Marked,
 } from "../lib/reviewMarks";
 import { anchorsKey } from "../lib/md/anchors";
-import { Selection } from "prosemirror-state";
 import { editorMarks, editorPending } from "../lib/md/editorMarks";
 import {
   anchorThreads,
@@ -149,9 +146,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     itemAnchor?: number;
     nonce: number;
   } | null>(null);
-  const [editingFm, setEditingFm] = useState<{ x: number; y: number } | null>(
-    null,
-  );
   // 編集面の要素と、その入れ物。目次が本文の DOM を見るのに使う。
   const [editContent, setEditContent] = useState<HTMLElement | null>(null);
   const [editScroller, setEditScroller] = useState<HTMLElement | null>(null);
@@ -245,6 +239,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const openVersions = useSetAtom(versionScreenAtom);
   // バージョンの名前を決める小窓。開くたびに日時を入れ直す。
   const [naming, setNaming] = useState<string | null>(null);
+  // メタ情報の小窓。ペインごとに開く。
+  const [metaOpen, setMetaOpen] = useState(false);
   const stamping = useRef(false);
 
   // 書きかけを先に流し、そのうえで今の本文を読む。
@@ -351,7 +347,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // fromMarkdown 130ms → 組み立て 28ms → 焦点 375ms が**2 度**走っていた。
   useEffect(() => {
     marked.current = false;
-    setEditingFm(null);
+    setMetaOpen(false);
     // 本文は控えから読む。raw を依存に入れると、自分の保存が返ってきた
     // だけでもここが走り、書きかけを取り込みの手順より先に踏んでしまう。
     const text = rawRef.current;
@@ -1014,21 +1010,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     write(path, full);
   };
 
-  // フロントマターの欄と本文のあいだの行き来。
-  const intoFm = useRef<(() => void) | null>(null);
-  const intoBody = () => {
-    const view = pm?.view;
-    if (!view) return;
-    view.focus();
-    view.dispatch(
-      view.state.tr.setSelection(Selection.atStart(view.state.doc)).scrollIntoView(),
-    );
-  };
-  const upToFm = () => {
-    if (!intoFm.current) return false;
-    intoFm.current();
-    return true;
-  };
 
   // path はあるが未読込なら読み込む。
   // 読み始めは押した瞬間の値で動かす。遅らせた値で待つと、読み取りの開始が
@@ -1207,6 +1188,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
               <Icon name="history" size={16} />
             </button>
+            <button
+              onClick={() => setMetaOpen(true)}
+              title="メタ情報"
+              className={`grid h-6 w-6 place-items-center rounded transition ${
+                data || broken
+                  ? "text-[var(--mg-accent)] hover:bg-[var(--mg-hover)]"
+                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              }`}
+            >
+              <Icon name="label" size={16} fill={!!data || broken} />
+            </button>
           </>
         )}
         {saving > 0 && (
@@ -1244,6 +1236,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           </button>
         )}
       </header>
+
+      {metaOpen && path && (
+        <MetaModal
+          key={path}
+          name={displayName(path)}
+          fm={fmPrefix}
+          broken={broken}
+          onChange={saveFm}
+          onClose={() => setMetaOpen(false)}
+        />
+      )}
 
       {naming !== null && (
         <SaveVersion
@@ -1287,24 +1290,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 </div>
               </div>
             )}
-            <div className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}>
-              {broken ? (
-                <BrokenFields src={fmPrefix} onCommit={saveFm} />
-              ) : (
-                <FrontmatterFields
-                  key={path}
-                  fm={fmPrefix}
-                  onChange={saveFm}
-                  onOut={intoBody}
-                  enterRef={intoFm}
-                />
-              )}
-            </div>
             <BodyEditor
               key={path}
               body={body}
               prefix={fmPrefix}
-              onTop={upToFm}
               path={path}
               viewpoint={recallViewpoint(viewKey(pane.id, absPath))}
               onViewpoint={(at, into) => {
@@ -1352,32 +1341,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       editorial ? "mg-editorial" : ""
                     } ${WIDTH_CLASS[width]} mx-auto`}
                   >
-                    {(data || broken) &&
-                      (editingFm ? (
-                        <BlockSourceEditor
-                          src={fmPrefix}
-                          clickX={editingFm.x}
-                          clickY={editingFm.y}
-                          onCommit={(s) => {
-                            setEditingFm(null);
-                            saveFm(s);
-                          }}
-                          onCancel={() => setEditingFm(null)}
-                        />
-                      ) : (
-                        <div
-                          className="mg-block"
-                          onDoubleClick={(e) =>
-                            setEditingFm({ x: e.clientX, y: e.clientY })
-                          }
-                        >
-                          {data ? (
-                            <Frontmatter data={data} />
-                          ) : (
-                            <BrokenNote src={fmPrefix} />
-                          )}
-                        </div>
-                      ))}
                     <markdownContext.Provider value={ctx}>
                       {/* 選択メニューやつまみから、そのブロックだけを生ソース編集 */}
                       {/* key でファイルごとに貼り替え、漸進描画を先頭からやり直す */}

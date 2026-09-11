@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addField,
   addItem,
@@ -13,20 +14,20 @@ import {
   withValue,
   type Cell,
   type Field,
-} from "../lib/frontmatterFields";
-import { throttled, type Throttled } from "../lib/later";
-import { Icon } from "./Icon";
-import { iconFor, isLede, norm } from "./Frontmatter";
+} from "../../lib/frontmatterFields";
+import { throttled, type Throttled } from "../../lib/later";
+import { BlockSourceEditor } from "../BlockSourceEditor";
+import { Icon } from "../Icon";
+import { kindOf, LIST, type Kind } from "./kinds";
 
-// 書くときのフロントマター。見た目は読むときの札（Frontmatter.tsx）に揃えつつ、
-// 鍵も値も打てて、行を足す・消す・動かせる。
+// ファイルの先頭に置くメタ情報（フロントマター）を読み書きする小窓。
+//
+// 本文には出さない。読むときの邪魔になるうえ、鍵を足す口が本文の中にあると
+// 落ち着かないので、ここだけで完結させる。
 //
 // 欄の字は React では持たない。制御すると打つたびに塗り直しが入ってカーソルが
 // 飛ぶので、素の contenteditable に置いて中身は DOM から読む。おかげで欄の中の
 // ⌘Z は browser の undo がそのまま効く。
-//
-// 読むときは鍵に印があると鍵の字を出さないが、書くときは必ず出す。
-// 出ていないものは打てないため。
 
 // 保存の間合い。本文の自動保存と揃える。
 const WAIT = 500;
@@ -35,61 +36,47 @@ const CAP = 3000;
 // 足すときの既定の鍵。
 const NEW_KEY = "項目";
 
-type Kind = "key" | "value";
+type Part = "key" | "value";
 
 interface Spot {
   field: Field;
   // 鍵の欄では null。
   cell: Cell | null;
-  kind: Kind;
+  part: Part;
 }
 
-interface Plan {
-  title: Field | null;
-  lede: Field | null;
-  meta: Field[];
-  tags: Field | null;
-  // 焦点を移す順。画面に出ている順と同じ。
-  order: Spot[];
-}
-
-function plan(rows: Field[]): Plan {
-  const title = rows.find((f) => norm(f.key) === "title") ?? null;
-  const tags = rows.find((f) => ["tags", "tag"].includes(norm(f.key))) ?? null;
-  const lede = rows.find((f) => isLede(f.key)) ?? null;
-  const meta = rows.filter((f) => f !== title && f !== tags && f !== lede);
-  const order: Spot[] = [];
-  const vals = (f: Field) => {
-    for (const cell of f.cells) order.push({ field: f, cell, kind: "value" });
-  };
-  if (title) vals(title);
-  if (lede) vals(lede);
-  for (const f of meta) {
-    order.push({ field: f, cell: null, kind: "key" });
-    vals(f);
+// 焦点を移す順。画面に出ている順（鍵 → 値…）と同じ。
+function plan(rows: Field[]): Spot[] {
+  const out: Spot[] = [];
+  for (const field of rows) {
+    out.push({ field, cell: null, part: "key" });
+    for (const cell of field.cells) out.push({ field, cell, part: "value" });
   }
-  if (tags) vals(tags);
-  return { title, lede, meta, tags, order };
+  return out;
 }
 
-// 組み替えたあとに焦点を戻す先。鍵は nth を見ない。
-function spotAt(p: Plan, field: Field | undefined, kind: Kind, nth: number): number {
+function spotAt(order: Spot[], field: Field | undefined, part: Part, nth: number) {
   if (!field) return 0;
   let seen = 0;
-  for (let i = 0; i < p.order.length; i++) {
-    const s = p.order[i];
-    if (s.field !== field || s.kind !== kind) continue;
-    if (kind === "key" || seen === nth) return i;
+  for (let i = 0; i < order.length; i++) {
+    const s = order[i];
+    if (s.field !== field || s.part !== part) continue;
+    if (part === "key" || seen === nth) return i;
     seen++;
   }
   return 0;
 }
 
-const nthOf = (spot: Spot) =>
-  spot.cell ? spot.field.cells.indexOf(spot.cell) : 0;
+const nthOf = (spot: Spot) => (spot.cell ? spot.field.cells.indexOf(spot.cell) : 0);
 
 const textOf = (spot: Spot) =>
-  spot.kind === "key" ? spot.field.key : (spot.cell?.text ?? "");
+  spot.part === "key" ? spot.field.key : (spot.cell?.text ?? "");
+
+// その行の見出しに出す種類。並びは字から見分けられないので行の形で決める。
+function kindFor(field: Field): Kind {
+  if (field.list) return LIST;
+  return kindOf(field.cells[0]?.text ?? field.shown);
+}
 
 // カーソルを欄に置く。"all" はその欄の字を選んだ状態にする。
 function place(el: HTMLElement, where: "start" | "end" | "all") {
@@ -115,33 +102,34 @@ function edge(el: HTMLElement, where: "start" | "end"): boolean {
   return range.toString().length === 0;
 }
 
-export function FrontmatterFields({
+export function MetaModal({
+  name,
   fm,
+  broken,
   onChange,
-  onOut,
-  enterRef,
+  onClose,
 }: {
+  // 見出しに添えるファイル名。
+  name: string;
   fm: string;
-  // 生のフロントマターが書き換わった。親が本文と繋いで保存する。
+  // 対応表として読めない。生の字で直させる。
+  broken: boolean;
   onChange: (fm: string) => void;
-  // 本文の先頭へ抜ける。
-  onOut: () => void;
-  // 本文の先頭から戻ってくる口。親が本文の割り当てから呼ぶ。
-  enterRef?: { current: (() => void) | null };
+  onClose: () => void;
 }) {
-  const box = useRef<HTMLElement | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
   const spots = useRef<(HTMLElement | null)[]>([]);
   const text = useRef(fm);
   const [rows, setRows] = useState(() => fieldsOf(fm));
 
   // 範囲は打つたびに動く。React の描画を挟まずに持ち回る。
-  const laid = useRef<Plan>(plan(rows));
+  const laid = useRef<Spot[]>(plan(rows));
   const seen = useRef(rows);
   if (seen.current !== rows) {
     seen.current = rows;
     laid.current = plan(rows);
   }
-  const view = laid.current;
+  const order = laid.current;
 
   // 行を組み替えたあと、どの欄へ焦点を戻すか。
   const want = useRef<{ at: number; where: "start" | "end" | "all" } | null>(null);
@@ -159,6 +147,14 @@ export function FrontmatterFields({
     };
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   // 外で書き換わったら組み直す。ただし打っている最中は触らない。
   useEffect(() => {
     if (fm === text.current) return;
@@ -175,7 +171,7 @@ export function FrontmatterFields({
   useLayoutEffect(() => {
     const go = want.current;
     want.current = null;
-    laid.current.order.forEach((spot, n) => {
+    laid.current.forEach((spot, n) => {
       const el = spots.current[n];
       if (!el) return;
       if (!go && el === document.activeElement) return;
@@ -193,23 +189,13 @@ export function FrontmatterFields({
     if (el) place(el, where);
   };
 
-  useEffect(() => {
-    if (!enterRef) return;
-    enterRef.current = () => {
-      const last = laid.current.order.length - 1;
-      if (last >= 0) focusAt(last, "end");
-    };
-    return () => {
-      enterRef.current = null;
-    };
-    // focusAt は spots を見るだけで、描画ごとに作り直しても指す先は変わらない。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enterRef]);
-
   // 行を組み替える。打鍵と違って待たずに書き、焦点の戻り先を決めておく。
   const apply = (
     next: string,
-    pick: (p: Plan, rows: Field[]) => { at: number; where: "start" | "end" | "all" },
+    pick: (order: Spot[], rows: Field[]) => {
+      at: number;
+      where: "start" | "end" | "all";
+    },
   ) => {
     const grid = fieldsOf(next);
     const p = plan(grid);
@@ -224,28 +210,16 @@ export function FrontmatterFields({
 
   // 打鍵。字は DOM から読み、その範囲だけを差し込む。
   const type = (n: number) => {
-    const spot = laid.current.order[n];
+    const spot = laid.current[n];
     const el = spots.current[n];
     if (!spot || !el) return;
     const typed = (el.textContent ?? "").replace(/\r?\n/g, " ");
     const next =
-      spot.kind === "key"
+      spot.part === "key"
         ? withKey(text.current, spot.field, typed)
         : withValue(text.current, spot.cell!, typed);
     text.current = next;
-    const rows2 = fieldsOf(next);
-    const grid = plan(rows2);
-    laid.current = grid;
-    // ふつうは欄の数は変わらないが、鍵を title や tags に打ち替えると役どころが
-    // 変わって出る場所ごと移る。そのときは組み直して、同じ欄へ焦点を戻す。
-    if (grid.order.length !== view.order.length) {
-      const key = spot.kind === "key" ? typed : spot.field.key;
-      const moved = rows2.find((f) => f.key === key);
-      const kind = moved?.cells.length && spot.kind === "value" ? "value" : "key";
-      const at = spotAt(grid, moved, kind, nthOf(spot));
-      want.current = { at: Math.min(at, grid.order.length - 1), where: "end" };
-      setRows(rows2);
-    }
+    laid.current = plan(fieldsOf(next));
     send.current?.();
   };
 
@@ -258,24 +232,20 @@ export function FrontmatterFields({
     }));
   };
 
-  // 何も無いところに付ける。することは行を 1 つ足すのと同じで、
-  // 違いは入れ物がまだ無いことだけ。
-  const start = () => addRow(newFrontmatter());
-
   // 欄ごと消す。最後の 1 つを消したらフロントマターそのものを畳む。
   const remove = (field: Field) => {
-    const before = laid.current.order.findIndex((s) => s.field === field);
+    const before = laid.current.findIndex((s) => s.field === field);
     const cut = dropField(text.current, field);
     const next = fieldsOf(cut).length === 0 ? "" : cut;
     apply(next, (p) => ({
-      at: Math.max(0, Math.min(before - 1, p.order.length - 1)),
+      at: Math.max(0, Math.min(before - 1, p.length - 1)),
       where: "end",
     }));
   };
 
-  // ⌥↑ / ⌥↓。並びの項目にいるならその項目が、そうでなければ欄ごと動く。
+  // ⌥↑ / ⌥↓。並びの項目にいるならその項目が、そうでなければ行ごと動く。
   const move = (n: number, dir: -1 | 1) => {
-    const spot = laid.current.order[n];
+    const spot = laid.current[n];
     if (!spot) return;
 
     if (spot.cell && spot.field.list) {
@@ -290,20 +260,19 @@ export function FrontmatterFields({
       return;
     }
 
-    // 題・導入・印は出る場所が決まっているので動かさない。
-    const i = laid.current.meta.indexOf(spot.field);
+    const i = rows.indexOf(spot.field);
     const to = i + dir;
-    if (i < 0 || to < 0 || to >= laid.current.meta.length) return;
+    if (i < 0 || to < 0 || to >= rows.length) return;
     const nth = nthOf(spot);
-    apply(swapFields(text.current, spot.field, laid.current.meta[to]), (p) => ({
-      at: spotAt(p, p.meta[to], spot.kind, nth),
+    apply(swapFields(text.current, spot.field, rows[to]), (p, grid) => ({
+      at: spotAt(p, grid[to], spot.part, nth),
       where: "end",
     }));
   };
 
   // 並びの項目を足す・消す。
   const addOne = (n: number) => {
-    const spot = laid.current.order[n];
+    const spot = laid.current[n];
     if (!spot?.cell) return;
     const i = spot.field.cells.indexOf(spot.cell);
     const key = spot.field.key;
@@ -314,7 +283,7 @@ export function FrontmatterFields({
   };
 
   const dropOne = (n: number) => {
-    const spot = laid.current.order[n];
+    const spot = laid.current[n];
     if (!spot?.cell) return;
     const i = spot.field.cells.indexOf(spot.cell);
     const key = spot.field.key;
@@ -325,13 +294,12 @@ export function FrontmatterFields({
   };
 
   const onKey = (n: number) => (e: React.KeyboardEvent<HTMLElement>) => {
-    const spot = laid.current.order[n];
+    const spot = laid.current[n];
     const el = e.currentTarget;
-    const last = laid.current.order.length - 1;
+    const last = laid.current.length - 1;
     const forward = () => {
       e.preventDefault();
       if (n < last) focusAt(n + 1, "start");
-      else onOut();
     };
     const back = () => {
       if (n === 0) return;
@@ -354,7 +322,7 @@ export function FrontmatterFields({
       return forward();
     }
     if (e.key === "Backspace" && (el.textContent ?? "") === "") {
-      if (spot?.kind === "key") {
+      if (spot?.part === "key") {
         e.preventDefault();
         remove(spot.field);
         return;
@@ -364,10 +332,6 @@ export function FrontmatterFields({
         dropOne(n);
         return;
       }
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      return onOut();
     }
     if (e.key === "Tab") {
       if (e.shiftKey) return back();
@@ -386,23 +350,10 @@ export function FrontmatterFields({
     document.execCommand("insertText", false, flat);
   };
 
-  // ---- 見た目 ----
+  spots.current.length = order.length;
 
-  if (fm === "") {
-    return (
-      <header className="mg-frontmatter mb-8">
-        <button type="button" className="mg-fm-add" onClick={start}>
-          <Icon name="add" size={15} />
-          フロントマターを追加する
-        </button>
-      </header>
-    );
-  }
-
-  spots.current.length = view.order.length;
-
-  const hole = (field: Field, kind: Kind, cell: Cell | null) => {
-    const n = spotAt(view, field, kind, cell ? field.cells.indexOf(cell) : 0);
+  const hole = (field: Field, part: Part, cell: Cell | null, cls: string) => {
+    const n = spotAt(order, field, part, cell ? field.cells.indexOf(cell) : 0);
     return (
       <span
         ref={(el) => {
@@ -411,7 +362,7 @@ export function FrontmatterFields({
         contentEditable="plaintext-only"
         suppressContentEditableWarning
         spellCheck={false}
-        className="mg-fm-cell"
+        className={cls}
         onInput={() => type(n)}
         onKeyDown={onKey(n)}
         onPaste={onPaste}
@@ -420,86 +371,111 @@ export function FrontmatterFields({
     );
   };
 
-  const value = (f: Field) => {
-    if (f.cells.length === 0)
-      return <span className="text-[var(--mg-muted)]">{f.shown}</span>;
+  const body = () => {
+    if (broken)
+      return (
+        <div className="mg-meta-broken">
+          <p className="mg-meta-say">
+            <Icon name="error" size={14} />
+            この情報は形が崩れていて読めません。直すと欄になります。
+          </p>
+          <BlockSourceEditor src={fm} onCommit={onChange} onCancel={() => {}} />
+        </div>
+      );
+
+    if (rows.length === 0)
+      return (
+        <div className="mg-meta-empty">
+          <Icon name="label" size={30} className="text-[var(--mg-muted)]/50" />
+          <p>まだ何もありません</p>
+          <button
+            type="button"
+            className="mg-meta-add"
+            onClick={() => addRow(fm === "" ? newFrontmatter() : fm)}
+          >
+            <Icon name="add" size={16} />
+            最初の項目を追加
+          </button>
+        </div>
+      );
+
     return (
       <>
-        {f.cells.map((cell, i) => (
-          <span key={i}>
-            {i > 0 && <span className="text-[var(--mg-muted)]"> / </span>}
-            {hole(f, "value", cell)}
-          </span>
-        ))}
+        <div className="mg-meta-rows">
+          {rows.map((field, i) => {
+            const kind = kindFor(field);
+            const one = field.cells.length === 1 ? field.cells[0] : null;
+            return (
+              <div key={i} className="mg-meta-row">
+                <span className="mg-meta-kind" title={kind.id}>
+                  <Icon name={kind.icon} size={15} />
+                </span>
+                {hole(field, "key", null, "mg-meta-key")}
+                <span className="mg-meta-val">
+                  {field.cells.length === 0 ? (
+                    <span className="text-[var(--mg-muted)]">{field.shown}</span>
+                  ) : (
+                    field.cells.map((cell, c) => (
+                      <span key={c}>
+                        {c > 0 && <span className="mg-meta-sep">/</span>}
+                        {hole(field, "value", cell, "mg-meta-cell")}
+                      </span>
+                    ))
+                  )}
+                </span>
+                <span className="mg-meta-acts">
+                  {one && kind.act && (
+                    <button
+                      type="button"
+                      title={kind.act.title}
+                      onClick={() => kind.act!.run(one.text)}
+                    >
+                      <Icon name={kind.act.icon} size={13} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title={`「${field.key}」を消す`}
+                    onClick={() => remove(field)}
+                  >
+                    <Icon name="close" size={13} />
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mg-meta-foot">
+          <button type="button" className="mg-meta-add" onClick={() => addRow(text.current)}>
+            <Icon name="add" size={16} />
+            項目を追加
+          </button>
+          <span className="mg-meta-hint">⌥↑ ⌥↓ で並べ替え</span>
+        </div>
       </>
     );
   };
 
-  // 消す釦は行を指したときだけ出す。場所は空けたままにして、出入りで
-  // 行が詰まらないようにする。
-  const gone = (f: Field) => (
-    <button
-      type="button"
-      title={`「${f.key}」を消す`}
-      className="mg-fm-gone"
-      onClick={() => remove(f)}
-    >
-      <Icon name="close" size={11} />
-    </button>
-  );
-
-  return (
-    <header
-      ref={box}
-      className="mg-frontmatter mb-8 border-b border-[var(--mg-border)] pb-5"
-    >
-      {view.title && (
-        <h1 className="mg-fm-row !mb-0 !mt-0 flex items-center gap-1 !text-[2.1rem] !font-bold !leading-[1.15] tracking-[-0.02em]">
-          <span className="min-w-0">{value(view.title)}</span>
-          {gone(view.title)}
-        </h1>
-      )}
-
-      {view.lede && (
-        <p className="mg-fm-row !mb-0 mt-2 flex items-center gap-1 text-[14.5px] leading-relaxed text-[var(--mg-muted)]">
-          <span className="min-w-0">{value(view.lede)}</span>
-          {gone(view.lede)}
-        </p>
-      )}
-
-      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12.5px] text-[var(--mg-muted)]">
-        {view.meta.map((f, i) => (
-          <span key={i} className="mg-fm-row inline-flex max-w-full items-center gap-1.5">
-            <Icon
-              name={iconFor(f.key) ?? "chevron_right"}
-              size={14}
-              className="shrink-0 text-[var(--mg-accent)]/70"
-            />
-            <span className="shrink-0 text-[var(--mg-muted)]">
-              {hole(f, "key", null)}:
-            </span>
-            <span className="min-w-0 break-all text-[var(--mg-fg-dim)]">{value(f)}</span>
-            {gone(f)}
+  return createPortal(
+    <div className="mg-meta-back" onMouseDown={onClose}>
+      <div
+        ref={box}
+        className="mg-meta"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="mg-meta-head">
+          <Icon name="label" size={17} className="text-[var(--mg-accent)]" />
+          <span className="mg-meta-title">メタ情報</span>
+          <span className="mg-meta-file" title={name}>
+            {name}
           </span>
-        ))}
-        <button type="button" title="欄を足す" className="mg-fm-plus" onClick={() => addRow(text.current)}>
-          <Icon name="add" size={15} />
-        </button>
-      </div>
-
-      {view.tags && (
-        <div className="mg-fm-row mt-3 flex flex-wrap items-center gap-1.5">
-          {view.tags.cells.map((cell, i) => (
-            <span
-              key={i}
-              className="rounded-full bg-[var(--mg-accent-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--mg-accent)]"
-            >
-              #{hole(view.tags!, "value", cell)}
-            </span>
-          ))}
-          {gone(view.tags)}
+          <button type="button" title="閉じる（Esc）" onClick={onClose}>
+            <Icon name="close" size={16} />
+          </button>
         </div>
-      )}
-    </header>
+        <div className="mg-meta-body">{body()}</div>
+      </div>
+    </div>,
+    document.body,
   );
 }

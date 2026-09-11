@@ -203,12 +203,39 @@ function blockAtY(view: EditorView, y: number): Hit | null {
 }
 
 // 「足す」ボタンの帯に手が入っているか。ボタンの置き場所と同じ式で見る。
+// ---- 一時計測（調査用・あとで消す）----
+let lastProbe = "";
+function probe(geo: NonNullable<ReturnType<typeof tableGeometry>>, below: number) {
+  const t = geo.table;
+  const away = addAway(below, ADD_GAP);
+  const line = JSON.stringify({
+    tableLeft: t.left,
+    tableWidth: t.width,
+    tableRight: t.left + t.width,
+    tableTop: t.top,
+    tableHeight: t.height,
+    geoBottom: geo.bottom,
+    below,
+    ADD_GAP,
+    away,
+    colLeft: t.left + t.width + away,
+    rowTop: geo.bottom + away,
+    atRight: geo.atRight,
+  });
+  if (line === lastProbe) return;
+  lastProbe = line;
+  void import("@tauri-apps/plugin-fs").then((fs) =>
+    fs.writeTextFile("fude-geom.json", line, { baseDir: fs.BaseDirectory.Home }),
+  );
+}
+
 function onAddBand(
   geo: NonNullable<ReturnType<typeof tableGeometry>>,
   below: number,
   x: number,
   y: number,
 ): "row" | "col" | null {
+  probe(geo, below);
   const slack = 2;
   const t = geo.table;
   const rowTop = addBelow(geo.bottom, below, ADD_GAP);
