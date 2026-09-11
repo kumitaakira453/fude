@@ -19,3 +19,15 @@ export const MIN_DOC = 360;
 export function fitSidebarWidth(w: number): number {
   return Math.min(Math.max(Math.round(w), SIDEBAR_MIN), SIDEBAR_MAX);
 }
+
+// レビュー画面の右の欄（やり取りと操作）の幅。
+//
+// やり取りが長くなると狭く、本文を広く見たいときは縮めたい。左の欄と同じく
+// 掴んで変えられるようにし、窓ごとに覚える。
+export const REVIEW_SIDE_WIDTH = 368;
+export const REVIEW_SIDE_MIN = 280;
+export const REVIEW_SIDE_MAX = 640;
+
+export function fitReviewSideWidth(w: number): number {
+  return Math.min(Math.max(Math.round(w), REVIEW_SIDE_MIN), REVIEW_SIDE_MAX);
+}

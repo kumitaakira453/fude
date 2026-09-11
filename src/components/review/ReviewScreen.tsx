@@ -15,6 +15,7 @@ import {
   type BlockChange,
 } from "../../lib/blockDiff";
 import { fontStack } from "../../lib/fonts";
+import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
 import { inEditable } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
@@ -38,6 +39,7 @@ import { runReviewUndo, setReviewUndo } from "../../lib/reviewUndo";
 import { notify } from "../../state/toast";
 import {
   activeFolderIdAtom,
+  reviewSideWidthAtom,
   contentCacheAtom,
   editorialAtom,
   fontAtom,
@@ -51,6 +53,7 @@ import {
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
+import { SidebarGrip } from "../SidebarGrip";
 import { useFileBody } from "./useFileBody";
 import { SelectionMenu } from "./SelectionMenu";
 import { CommentComposer } from "./CommentComposer";
@@ -169,6 +172,9 @@ export function ReviewScreen() {
     [all, root],
   );
   const elsewhere = all.length - threads.length;
+  // 解決の処理の中で「次の指摘」を引くための控え。押した瞬間の並びを見る。
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
 
   // 選んだ指摘を、画面を 1 枚描き切ってから受け取る。押した手応えと
   // 待っている表示を先に出し、重い本文の組み立てはその後に回す。
@@ -252,6 +258,55 @@ export function ReviewScreen() {
     },
     [store],
   );
+
+  // 指摘を 1 件、解決にする。一覧の札・キー操作・右の欄の釦が同じ道を通る。
+  //
+  // 解決にすると一覧から消えるので、それを見ていたときだけ次の指摘へ送る
+  // （一覧の別の札から解決したときは、見ているものを動かさない）。
+  const oneRunning = useRef(false);
+  const resolveOne = useCallback(
+    async (id: string) => {
+      if (oneRunning.current) return;
+      oneRunning.current = true;
+      try {
+        const list = threadsRef.current;
+        const i = list.findIndex((t) => t.id === id);
+        const next = list[i + 1]?.id ?? list[i - 1]?.id ?? null;
+        if (!(await resolveThread(id, REVIEW_AUTHOR))) return;
+        if (store.get(reviewThreadAtom) === id) setSelectedId(next);
+        await syncLedger(store);
+        const restore = async () => {
+          setReviewUndo(null);
+          if (!(await reopenThread(id))) return;
+          setSelectedId(id);
+          await syncLedger(store);
+          notify(store, "未解決に戻しました");
+        };
+        setReviewUndo(restore);
+        notify(store, "解決にしました", "center", {
+          label: "元に戻す",
+          run: () => void restore(),
+        });
+      } finally {
+        oneRunning.current = false;
+      }
+    },
+    [setSelectedId, store],
+  );
+
+  // いま選んでいる指摘を解決にする。⌘D（サイドバー）と重ならないよう ⇧ を足す。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      if (e.key !== "d" && e.key !== "D") return;
+      const id = store.get(reviewThreadAtom);
+      if (!id) return;
+      e.preventDefault();
+      void resolveOne(id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [resolveOne, store]);
 
   // 1 ファイル分の指摘を短い文にして写す。台帳は画面が持っているので、
   // 押した瞬間に組んでそのまま書き込む。await を挟むと WebKit が
@@ -389,6 +444,7 @@ export function ReviewScreen() {
                     }
                     active={thread.id === selected?.id}
                     onPick={() => setSelectedId(thread.id)}
+                    onResolve={() => void resolveOne(thread.id)}
                   />
                 ))}
               </section>
@@ -414,6 +470,7 @@ export function ReviewScreen() {
               key={shown.id}
               thread={shown}
               nextId={nextId}
+              onResolve={resolveOne}
               onSettled={markSettled}
             />
             {(pending || settledId !== shown.id) && (
@@ -432,6 +489,9 @@ export function ReviewScreen() {
 // 中身が入ったときに視線が飛ばない。
 function DetailSkeleton() {
   const widths = ["70%", "100%", "94%", "88%", "100%", "62%", "100%", "80%"];
+  // 右の欄は掴んで幅を変えられる。骨組みも同じ幅で出す（入れ替わる瞬間に
+  // 欄の幅が動くと、読んでいる場所が横へ飛ぶ）。
+  const sideWidth = useAtomValue(reviewSideWidthAtom);
   return (
     <div className="mg-loading flex min-w-0 flex-1">
       <div className="min-w-0 flex-1 overflow-hidden">
@@ -445,7 +505,7 @@ function DetailSkeleton() {
           </div>
         </div>
       </div>
-      <aside className="mg-side">
+      <aside className="mg-side" style={{ width: sideWidth }}>
         <div className="mg-side-head">読み込んでいます…</div>
         <div className="mg-talk">
           <div className="mg-skeleton w-full">
@@ -488,19 +548,44 @@ function targetLine(thread: ReviewThread): string {
   return line;
 }
 
-function ThreadCard({
+export function ThreadCard({
   thread,
   where,
   active,
   onPick,
+  onResolve,
 }: {
   thread: ReviewThread;
   where: string;
   active: boolean;
   onPick: () => void;
+  onResolve: () => void;
 }) {
   return (
-    <button onClick={onPick} className={`mg-thread-card ${active ? "is-active" : ""}`}>
+    // 釦の中に釦は置けないので、札そのものは div で受ける（押す・Enter・Space
+    // は自分で見る）。解決の釦は押した先を分ける。
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onPick}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        onPick();
+      }}
+      className={`mg-thread-card ${active ? "is-active" : ""}`}
+    >
+      <button
+        type="button"
+        title="解決にする（⌘⇧D）"
+        className="mg-thread-done"
+        onClick={(e) => {
+          e.stopPropagation();
+          onResolve();
+        }}
+      >
+        <Icon name="check" size={14} />
+      </button>
       {/* 読みたいのは指摘そのもの。対象はその下に、手がかりとして小さく添える。 */}
       <div className="mg-thread-body">
         {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
@@ -530,7 +615,7 @@ function ThreadCard({
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -584,10 +669,14 @@ const when = new Intl.DateTimeFormat("ja-JP", {
 function ThreadDetail({
   thread,
   nextId,
+  onResolve,
   onSettled,
 }: {
   thread: ReviewThread;
+  // 消したときに見せる次の指摘。
   nextId: string | null;
+  // 解決の道は画面が持つ（一覧の札・キー操作と同じものを通す）。
+  onResolve: (id: string) => Promise<void>;
   onSettled: (id: string) => void;
 }) {
   const store = useStore();
@@ -626,6 +715,9 @@ function ThreadDetail({
   const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
 
   const { body: currentBody, raw, reading } = useFileBody(rel);
+  // 右の欄の幅。掴んでいるあいだは仕切りが DOM へ直に書き、離したら控える。
+  const [sideWidth, setSideWidth] = useAtom(reviewSideWidthAtom);
+  const sideRef = useRef<HTMLElement>(null);
   // 出している本文の入れ物。ここで選んだ字に対してコメントを書く。
   const [paper, setPaper] = useState<HTMLElement | null>(null);
   const write = useReview({
@@ -707,30 +799,12 @@ function ThreadDetail({
     resolvingRef.current = true;
     setResolving(true);
     try {
-      if (await resolveThread(thread.id, REVIEW_AUTHOR)) {
-        // 次に見せる指摘へ先に移す。読み直しで一覧から消えるのを待つと、
-        // 選択が暗黙で倒れて中央ペインが作り直され、ちらついて見える。
-        const back = thread.id;
-        setSelectedId(nextId);
-        await syncLedger(store);
-        const restore = async () => {
-          setReviewUndo(null);
-          if (!(await reopenThread(back))) return;
-          setSelectedId(back);
-          await syncLedger(store);
-          notify(store, "未解決に戻しました");
-        };
-        setReviewUndo(restore);
-        notify(store, "解決にしました", "center", {
-          label: "元に戻す",
-          run: () => void restore(),
-        });
-      }
+      await onResolve(thread.id);
     } finally {
       resolvingRef.current = false;
       setResolving(false);
     }
-  }, [thread.id, nextId, setSelectedId, store]);
+  }, [thread.id, onResolve]);
 
   // 解決とは意味が違う操作。片付いた記録ではなく、指摘そのものを取り消す。
   // 確認は出さず、戻せるようにする（消す前の姿をそのまま台帳へ戻す）。
@@ -834,7 +908,15 @@ function ThreadDetail({
         />
       )}
 
-      <aside className="mg-side">
+      <SidebarGrip
+        target={sideRef}
+        width={sideWidth}
+        onWidth={setSideWidth}
+        side="right"
+        fit={fitReviewSideWidth}
+        reset={REVIEW_SIDE_WIDTH}
+      />
+      <aside ref={sideRef} className="mg-side" style={{ width: sideWidth }}>
         <div className="mg-side-head">
           <span className="mg-review-place flex-1" title={thread.file}>
             <span className="mg-review-name">{where.name}</span>

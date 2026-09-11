@@ -25,7 +25,7 @@ let asked: number[] = [];
 // 幅を当てる入れ物。
 let box: HTMLDivElement | null = null;
 
-function mount(width: number) {
+function mount(width: number, side: "left" | "right" = "left") {
   asked = [];
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -40,6 +40,7 @@ function mount(width: number) {
         target={target}
         width={width}
         onWidth={(w) => asked.push(w)}
+        side={side}
       />,
     ),
   );
@@ -137,5 +138,18 @@ describe("左の欄の仕切り", () => {
       grip.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     });
     expect(last()).toBe(SIDEBAR_WIDTH);
+  });
+
+  // 右の欄（レビュー画面のやり取り）は仕切りが左の縁に付く。引いた向きと
+  // 幅の増減が逆になる。
+  it("右の欄では、左へ引くと広がる", () => {
+    const grip = mount(300, "right");
+    at("pointerdown", 300, grip);
+    at("pointermove", 220);
+    expect(shown()).toBe("380px");
+    at("pointermove", 340);
+    expect(shown()).toBe("260px");
+    at("pointerup", 340);
+    expect(last()).toBe(260);
   });
 });

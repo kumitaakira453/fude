@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  REVIEW_SIDE_MAX,
+  REVIEW_SIDE_MIN,
+  REVIEW_SIDE_WIDTH,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   SIDEBAR_WIDTH,
+  fitReviewSideWidth,
   fitSidebarWidth,
 } from "./sidebar";
 
@@ -25,5 +29,16 @@ describe("左の欄の幅", () => {
 
   it("端数は丸める（style に載る値なので）", () => {
     expect(fitSidebarWidth(320.6)).toBe(321);
+  });
+});
+
+describe("レビュー画面の右の欄の幅", () => {
+  it("収まっている値はそのまま", () => {
+    expect(fitReviewSideWidth(REVIEW_SIDE_WIDTH)).toBe(REVIEW_SIDE_WIDTH);
+  });
+
+  it("上下限へ収める", () => {
+    expect(fitReviewSideWidth(0)).toBe(REVIEW_SIDE_MIN);
+    expect(fitReviewSideWidth(9999)).toBe(REVIEW_SIDE_MAX);
   });
 });

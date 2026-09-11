@@ -2,7 +2,7 @@ import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
 import type { FolderEntry } from "../lib/idb";
-import { SIDEBAR_WIDTH } from "../lib/sidebar";
+import { REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { windowScopedKey } from "../lib/windows";
 
 // ---- ワークスペース ----
@@ -127,6 +127,11 @@ export const sidebarOpenAtom = atomWithStorage<boolean>(
 export const sidebarWidthAtom = atomWithStorage<number>(
   windowScopedKey("mdglow:sidebarw"),
   SIDEBAR_WIDTH,
+);
+// レビュー画面の右の欄の幅。左の欄と同じく窓ごとに覚える。
+export const reviewSideWidthAtom = atomWithStorage<number>(
+  windowScopedKey("mdglow:reviewsidew"),
+  REVIEW_SIDE_WIDTH,
 );
 export const tocOpenAtom = atomWithStorage<boolean>(
   windowScopedKey("mdglow:toc"),

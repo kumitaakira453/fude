@@ -3305,7 +3305,38 @@ svg[id^="mmd-"] foreignObject p {
   background: transparent;
   transition: background 0.12s;
 }
+.mg-thread-card {
+  cursor: pointer;
+}
 .mg-thread-card:hover {
+  background: var(--mg-hover);
+}
+/* 一覧からそのまま解決にする。一覧は字を読む場所なので、指した札にだけ出す。 */
+.mg-thread-done {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 0.35rem;
+  color: var(--mg-muted);
+  background: var(--mg-panel);
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+.mg-thread-card:hover .mg-thread-done,
+.mg-thread-done:focus-visible {
+  opacity: 1;
+}
+.mg-thread-done:hover {
+  color: var(--mg-accent);
   background: var(--mg-hover);
 }
 /* 選ばれている札は面を塗らない。塗ると、ファイルの見出しの面と 2 つの色面が

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { SIDEBAR_WIDTH, fitSidebarWidth } from "../lib/sidebar";
 
-// 左の欄と本文のあいだの仕切り。掴んで欄の幅を変える。
+// 欄と本文のあいだの仕切り。掴んで欄の幅を変える。
 //
 // 幅は持たず受け取るだけ。控えの読み書きは呼び出し側に任せる。
 //
@@ -12,11 +12,21 @@ export function SidebarGrip({
   target,
   width,
   onWidth,
+  side = "left",
+  fit = fitSidebarWidth,
+  reset = SIDEBAR_WIDTH,
 }: {
   // 幅を当てる入れ物。掴んでいるあいだはここへ直に書く。
   target: React.RefObject<HTMLElement | null>;
   width: number;
   onWidth: (w: number) => void;
+  // 欄が画面のどちら側にあるか。右の欄は仕切りが左の縁に付くので、引いた
+  // 向きと幅の増減が逆になる。
+  side?: "left" | "right";
+  // 控えに入れる値の丸め（上下限）。
+  fit?: (w: number) => number;
+  // 二度押しで戻す幅。
+  reset?: number;
 }) {
   // 掴んでいる最中の後片付け。掴んだまま部品が消えても張った分を外す。
   const release = useRef<(() => void) | null>(null);
@@ -30,7 +40,8 @@ export function SidebarGrip({
       let last = base;
 
       const onMove = (ev: PointerEvent) => {
-        last = fitSidebarWidth(base + (ev.clientX - from));
+        const moved = ev.clientX - from;
+        last = fit(base + (side === "left" ? moved : -moved));
         // 掴んでいるあいだは DOM へ直に書く。
         //
         // 状態を通すと、動かした一枚ごとに木全体（ファイルツリーと本文）が
@@ -56,13 +67,13 @@ export function SidebarGrip({
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [target, width, onWidth],
+    [target, width, onWidth, side, fit],
   );
 
   return (
     <div
       onPointerDown={start}
-      onDoubleClick={() => onWidth(SIDEBAR_WIDTH)}
+      onDoubleClick={() => onWidth(reset)}
       title="ドラッグで幅を変える / ダブルクリックで元に戻す"
       className="mg-side-grip"
     >
