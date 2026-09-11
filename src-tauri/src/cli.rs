@@ -91,6 +91,12 @@ enum ReviewAction {
         #[arg(long)]
         file: PathBuf,
     },
+    /// バージョンの控えを片付ける（畳む・捨てる・圧縮し直す）
+    Gc {
+        /// 何がどれだけ減るかだけを出す
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -247,6 +253,15 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
             } else {
                 println!("同じ内容のバージョンが既にあります: {short} \"{name}\"");
             }
+        }
+        ReviewAction::Gc { dry_run } => {
+            let out = review::sweep(dry_run)?;
+            let mb = out.freed as f64 / 1_048_576.0;
+            let head = if dry_run { "減らせます" } else { "減らしました" };
+            println!(
+                "{head}: {:.2} MB（畳んだ版 {} / 捨てた控え {} / 圧縮し直した控え {}）",
+                mb, out.folded, out.dropped, out.squeezed
+            );
         }
         ReviewAction::Versions { file } => {
             let versions = review::versions(&file)?;

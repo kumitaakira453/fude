@@ -98,18 +98,32 @@ export async function ledgerPath(): Promise<string> {
   return storePathCache;
 }
 
+// 読み込んだ台帳と、その素の字。字をそのまま返すのは、読み直したときに
+// 「前と同じ中身か」を突き合わせるため（同じなら差し替えずに済む）。
+export interface LoadedLedger {
+  ledger: Ledger;
+  text: string;
+}
+
 export async function loadLedger(): Promise<Ledger> {
+  return (await readLedger()).ledger;
+}
+
+export async function readLedger(): Promise<LoadedLedger> {
   try {
     const text = await readTextFile(await ledgerPath());
     const parsed = JSON.parse(text) as Ledger;
     return {
-      format_version: parsed.format_version ?? 1,
-      threads: parsed.threads ?? [],
-      versions: parsed.versions ?? [],
+      ledger: {
+        format_version: parsed.format_version ?? 1,
+        threads: parsed.threads ?? [],
+        versions: parsed.versions ?? [],
+      },
+      text,
     };
   } catch {
     // まだ 1 件も指摘が無ければ台帳のファイルが存在しない
-    return EMPTY_LEDGER;
+    return { ledger: EMPTY_LEDGER, text: "" };
   }
 }
 

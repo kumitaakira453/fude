@@ -1,12 +1,25 @@
 import { createStore } from "jotai";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReviewThread } from "../lib/review";
 import { EMPTY_LEDGER } from "../lib/review";
 import { activeFolderIdAtom } from "./atoms";
-import { ledgerAtom, openCountsAtom, openTotalAtom } from "./review";
+import { forgetLedger, ledgerAtom, openCountsAtom, openTotalAtom, refreshLedger } from "./review";
 
 // 台帳はマシンに 1 つで、他のフォルダの指摘も入っている。入口の数とツリーの
 // 数字は、いま開いているフォルダの分だけで揃っていないといけない。
+
+// 台帳の読み込みは Tauri 側の口を叩くので、試験では字を差し替える。
+let onDisk = "";
+vi.mock("../lib/review", async (real) => {
+  const mod = await real<typeof import("../lib/review")>();
+  return {
+    ...mod,
+    readLedger: async () => ({
+      ledger: onDisk ? (JSON.parse(onDisk) as never) : mod.EMPTY_LEDGER,
+      text: onDisk,
+    }),
+  };
+});
 
 const thread = (id: string, file: string, open = true): ReviewThread => ({
   id,
@@ -73,5 +86,44 @@ describe("未解決の数え方", () => {
       "/w",
     );
     expect(store.get(openTotalAtom)).toBe(1);
+  });
+});
+
+// 読み直しの合図は重なる（自分の書き込みと、ファイルの見張りと、窓の数だけ）。
+// 中身が同じなら台帳を差し替えない——差し替えると、見ている画面が一斉に
+// 描き直される。
+describe("台帳の読み直し", () => {
+  afterEach(() => {
+    forgetLedger();
+    onDisk = "";
+  });
+
+  const ledgerOf = (ids: string[]) =>
+    JSON.stringify({
+      format_version: 1,
+      threads: ids.map((id) => thread(id, "/a.md")),
+      versions: [],
+    });
+
+  it("中身が変わったときだけ差し替える", async () => {
+    const store = createStore();
+    let swaps = 0;
+    store.sub(ledgerAtom, () => swaps++);
+
+    onDisk = ledgerOf(["t1"]);
+    await refreshLedger(store);
+    expect(swaps).toBe(1);
+    expect(store.get(ledgerAtom).threads).toHaveLength(1);
+
+    // 同じ字が 2 回届いても差し替えない
+    await refreshLedger(store);
+    await refreshLedger(store);
+    expect(swaps).toBe(1);
+
+    // 外から書き換わったら差し替える
+    onDisk = ledgerOf(["t1", "t2"]);
+    await refreshLedger(store);
+    expect(swaps).toBe(2);
+    expect(store.get(ledgerAtom).threads).toHaveLength(2);
   });
 });

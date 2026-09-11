@@ -2,6 +2,7 @@ pub mod format;
 pub mod snapshot;
 pub mod store;
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -470,6 +471,126 @@ fn renamed(file: &str, from: &str, to: &str) -> Option<String> {
         return Some(to.to_string());
     }
     under(file, from).then(|| format!("{to}{}", &file[from.trim_end_matches('/').len()..]))
+}
+
+// ---- 掃除 ----
+
+// 掃除で何がどれだけ減るか。
+#[derive(Debug, Default, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct Swept {
+    // 畳んだ版の行。
+    pub folded: usize,
+    // 捨てた控えのファイル。
+    pub dropped: usize,
+    // 圧縮し直した控えのファイル。
+    pub squeezed: usize,
+    // 減ったバイト数。
+    pub freed: u64,
+}
+
+// 版の控えを片付ける。
+//
+// 控えは全文を内容ハッシュで置いていて、捨てる仕組みが無いまま増え続ける。
+// ここで 3 つやる。どれも「読めるものを減らさない」ことを守る。
+//
+//   1. 連なった system の版のうち、どの指摘も基準にしていないものを畳む
+//      （コメントを付けた時点の自動保存。人と AI が残した版は畳まない）
+//   2. どの版も、どの指摘も指していない控えを捨てる
+//   3. 素のまま置いてある控えを圧縮し直す（中身は変えない）
+//
+// dry なら数えるだけで、何も書き換えない。
+pub fn sweep(dry: bool) -> Result<Swept, String> {
+    let ledger = store::load()?;
+    let folded = foldable(&ledger);
+    let mut out = Swept {
+        folded: folded.len(),
+        ..Swept::default()
+    };
+
+    let mut alive: HashSet<String> = ledger
+        .versions
+        .iter()
+        .map(|v| v.id.clone())
+        .filter(|id| !folded.contains(id))
+        .collect();
+    for thread in &ledger.threads {
+        alive.insert(thread.base_version.clone());
+    }
+
+    let dir = store::snapshots_dir()?;
+    let entries = match fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        // まだ 1 つも控えが無い
+        Err(_) => return Ok(out),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name.to_string(),
+            None => continue,
+        };
+        let was = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        if !alive.contains(&name) {
+            out.dropped += 1;
+            out.freed += was;
+            if !dry {
+                let _ = fs::remove_file(&path);
+            }
+            continue;
+        }
+        // 素のまま置いてあるものを圧縮し直す。中身（＝ID）は変わらない。
+        let bytes = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(_) => continue,
+        };
+        if snapshot::is_squeezed(&bytes) {
+            continue;
+        }
+        let text = snapshot::unsqueeze(&bytes)?;
+        let packed = snapshot::squeeze(&text)?;
+        if packed.len() >= bytes.len() {
+            continue;
+        }
+        out.squeezed += 1;
+        out.freed += was - packed.len() as u64;
+        if !dry {
+            store::write_atomic(&path, &packed)?;
+        }
+    }
+
+    if !dry && !folded.is_empty() {
+        store::update(|ledger: &mut Ledger| {
+            ledger.versions.retain(|v| !folded.contains(&v.id));
+            Ok(())
+        })?;
+    }
+    Ok(out)
+}
+
+// 畳んでよい版。
+//
+// 畳むのは「コメントを付けた時点の自動保存（system）」が連なっているところ
+// だけ。人が打った版と AI の対応の宣言は履歴として残す。どの指摘も基準に
+// している版は、コメントした時点の差分を出せなくなるので残す。
+// 連なりの最後は代表として残す。
+fn foldable(ledger: &Ledger) -> HashSet<String> {
+    let pinned: HashSet<&str> = ledger.threads.iter().map(|t| t.base_version.as_str()).collect();
+    let mut by_file: HashMap<&str, Vec<&Version>> = HashMap::new();
+    for v in &ledger.versions {
+        by_file.entry(v.file.as_str()).or_default().push(v);
+    }
+    let mut out = HashSet::new();
+    for rows in by_file.values_mut() {
+        rows.sort_by_key(|v| v.created_at);
+        for (i, v) in rows.iter().enumerate() {
+            let next = rows.get(i + 1);
+            let run = next.is_some_and(|n| n.who() == Actor::System);
+            if v.who() == Actor::System && run && !pinned.contains(v.id.as_str()) {
+                out.insert(v.id.clone());
+            }
+        }
+    }
+    out
 }
 
 // 指摘をまとめて解決にする。1 ファイル分を片付けるときに使う。
@@ -987,6 +1108,61 @@ mod tests {
             });
         }
         ledger
+    }
+
+    fn version_of(id: &str, file: &str, at: i64, origin: Origin, actor: Actor) -> Version {
+        Version {
+            id: id.into(),
+            file: file.into(),
+            label: None,
+            origin,
+            actor: Some(actor),
+            created_at: at,
+        }
+    }
+
+    #[test]
+    fn folding_keeps_what_people_and_agents_left() {
+        let mut ledger = Ledger::default();
+        ledger.versions = vec![
+            version_of("s1", "/a.md", 1, Origin::Comment, Actor::System),
+            version_of("s2", "/a.md", 2, Origin::Comment, Actor::System),
+            version_of("s3", "/a.md", 3, Origin::Comment, Actor::System),
+            version_of("ai", "/a.md", 4, Origin::Commit, Actor::Ai),
+            version_of("you", "/a.md", 5, Origin::Checkpoint, Actor::You),
+        ];
+        // 連なった system のうち、最後（s3）は代表として残す
+        let folded = foldable(&ledger);
+        assert!(folded.contains("s1") && folded.contains("s2"));
+        assert!(!folded.contains("s3"), "連なりの最後は残す");
+        assert!(!folded.contains("ai") && !folded.contains("you"));
+    }
+
+    #[test]
+    fn folding_keeps_versions_a_thread_stands_on() {
+        let mut ledger = Ledger::default();
+        ledger.versions = vec![
+            version_of("s1", "/a.md", 1, Origin::Comment, Actor::System),
+            version_of("s2", "/a.md", 2, Origin::Comment, Actor::System),
+            version_of("s3", "/a.md", 3, Origin::Comment, Actor::System),
+        ];
+        let mut thread = thread_with(vec![]);
+        thread.base_version = "s1".into();
+        ledger.threads.push(thread);
+        let folded = foldable(&ledger);
+        assert!(!folded.contains("s1"), "指摘が基準にしている版は残す");
+        assert!(folded.contains("s2"));
+    }
+
+    #[test]
+    fn folding_does_not_reach_across_files() {
+        let mut ledger = Ledger::default();
+        ledger.versions = vec![
+            version_of("a1", "/a.md", 1, Origin::Comment, Actor::System),
+            version_of("b1", "/b.md", 2, Origin::Comment, Actor::System),
+        ];
+        // どちらもそのファイルでは 1 つきりなので畳まない
+        assert!(foldable(&ledger).is_empty());
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { atom, type getDefaultStore } from "jotai";
-import { EMPTY_LEDGER, isOpen, loadLedger, type Ledger } from "../lib/review";
+import { EMPTY_LEDGER, isOpen, readLedger, type Ledger } from "../lib/review";
 import { activeFolderIdAtom } from "./atoms";
 
 type Store = ReturnType<typeof getDefaultStore>;
@@ -50,8 +50,23 @@ export const openTotalAtom = atom((get) => {
   return total;
 });
 
+// 最後に読み込んだ台帳の素の字。
+//
+// 読み直しの合図は重なる。自分で書いたとき（syncLedger）とファイルの見張りで
+// 2 回、窓の数だけそれが起きる。中身が前と同じなら差し替えない——そうすれば
+// 台帳を見ている画面が一斉に描き直されるのは、本当に変わった 1 回だけになる。
+let seen: string | null = null;
+
 export async function refreshLedger(store: Store): Promise<void> {
-  store.set(ledgerAtom, await loadLedger());
+  const { ledger, text } = await readLedger();
+  if (text === seen) return;
+  seen = text;
+  store.set(ledgerAtom, ledger);
+}
+
+// 試験用。読み込みの控えを捨てて、次の読み直しを必ず通す。
+export function forgetLedger(): void {
+  seen = null;
 }
 
 // 台帳はマシンに 1 つで、どのウィンドウからでも書き換わる。書いた側が
