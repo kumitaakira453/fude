@@ -212,6 +212,10 @@ export function DocumentView({
             )}
             <div
               ref={isTarget && !gone ? targetRef : undefined}
+              // 選んだ字がどのブロックかを引く目印。本文の画面と同じ名前で
+              // 持つので、コメントを書く仕組みがそのまま乗る。「コメントした
+              // 時点」の字（上に出す古い版）には付けない。
+              data-mg-block={block.index}
               data-label={
                 isSpot
                   ? SPOT_LABEL[anchor.state]

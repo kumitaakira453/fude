@@ -14,6 +14,8 @@ import { contentCacheAtom } from "../../state/atoms";
 // 叩き直さないため。
 export function useFileBody(rel: string | null): {
   body: string | null;
+  // 前書きを含む生の字。指摘を付けたときの版として残すのはこちら。
+  raw: string | undefined;
   reading: boolean;
 } {
   const cache = useAtomValue(contentCacheAtom);
@@ -31,6 +33,7 @@ export function useFileBody(rel: string | null): {
   const raw = rel === null ? undefined : cache.get(rel);
   return {
     body: raw === undefined ? null : parseFrontmatter(raw).body,
+    raw,
     reading,
   };
 }

@@ -31,10 +31,11 @@ let host: HTMLElement | null = null;
 
 function show(store: ReturnType<typeof createStore>, rel: string | null) {
   function Peek() {
-    const { body, reading } = useFileBody(rel);
+    const { body, raw, reading } = useFileBody(rel);
     return (
       <div>
         <span id="body">{body ?? "(なし)"}</span>
+        <span id="raw">{raw ?? "(なし)"}</span>
         <span id="reading">{String(reading)}</span>
       </div>
     );
@@ -51,6 +52,7 @@ function show(store: ReturnType<typeof createStore>, rel: string | null) {
   );
   return {
     body: () => host!.querySelector("#body")!.textContent,
+    raw: () => host!.querySelector("#raw")!.textContent,
     reading: () => host!.querySelector("#reading")!.textContent,
   };
 }
@@ -85,11 +87,13 @@ describe("指摘のファイルの本文", () => {
     expect(peek.body()).toBe("もう在る");
   });
 
-  it("前書きは落として本文だけ出す", () => {
+  it("前書きは落として本文だけ出す。生の字も返す（版に残すのはこちら）", () => {
     const store = createStore();
-    store.set(contentCacheAtom, new Map([["docs/a.md", "---\ntitle: 題\n---\n本文\n"]]));
+    const text = "---\ntitle: 題\n---\n本文\n";
+    store.set(contentCacheAtom, new Map([["docs/a.md", text]]));
     const peek = show(store, "docs/a.md");
     expect(peek.body()).toBe("本文\n");
+    expect(peek.raw()).toBe(text);
   });
 
   it("フォルダの外（パスが無い）なら読みに行かない", () => {

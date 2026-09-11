@@ -73,6 +73,7 @@ import {
 import { TextSelection } from "prosemirror-state";
 import { domSpan } from "../lib/md/domSpan";
 import { CommentComposer } from "./review/CommentComposer";
+import { SelectionAct, SelectionMenu } from "./review/SelectionMenu";
 import { Toc } from "./Toc";
 import { Tooltip } from "./Tooltip";
 
@@ -1401,70 +1402,19 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
 
         {!editing && review.selection && !review.draft && (
-          // 選択したときの操作。mousedown で処理する。click を待つと、押した時点で
-          // ブラウザが選択を解除し selectionchange でこのメニュー自身が消えるため
-          // mouseup がどこにも届かない。preventDefault で選択の解除も止める。
-          <div
-            style={{
-              top: review.selection.rect.bottom + 6,
-              left: review.selection.rect.left,
-            }}
-            className="mg-sel-menu"
-          >
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                review.startDraft();
-              }}
-            >
-              <Icon name="add_comment" size={14} />
-              コメント
-            </button>
+          <SelectionMenu at={review.selection.rect} onComment={review.startDraft}>
             {review.selection.cellStart !== undefined && (
-              <>
-                <span className="mg-sel-menu-sep" />
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    commentOnCell();
-                  }}
-                >
-                  <Icon name="table" size={14} />
-                  セルにコメント
-                </button>
-              </>
+              <SelectionAct icon="table" label="セルにコメント" onPick={commentOnCell} />
             )}
             {/* またいだ選択では出さない。先頭のブロックだけに効くと、
                 選んだ範囲と食い違う。 */}
             {review.selection.endBlockIndex === undefined && (
               <>
-                <span className="mg-sel-menu-sep" />
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    startEdit();
-                  }}
-                >
-                  <Icon name="edit" size={14} />
-                  編集する
-                </button>
-                <span className="mg-sel-menu-sep" />
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    deleteSelection();
-                  }}
-                >
-                  <Icon name="backspace" size={14} />
-                  削除
-                </button>
+                <SelectionAct icon="edit" label="編集する" onPick={startEdit} />
+                <SelectionAct icon="backspace" label="削除" onPick={deleteSelection} />
               </>
             )}
-          </div>
+          </SelectionMenu>
         )}
 
         {writing && pm && editSel && !review.draft && (

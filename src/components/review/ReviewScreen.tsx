@@ -52,6 +52,9 @@ import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
 import { useFileBody } from "./useFileBody";
+import { SelectionMenu } from "./SelectionMenu";
+import { CommentComposer } from "./CommentComposer";
+import { useReview } from "../../hooks/useReview";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
 import { DocumentView, type Anchor } from "./DocumentView";
 import { Quote } from "./Quote";
@@ -622,7 +625,16 @@ function ThreadDetail({
   const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
   const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
 
-  const { body: currentBody, reading } = useFileBody(rel);
+  const { body: currentBody, raw, reading } = useFileBody(rel);
+  // 出している本文の入れ物。ここで選んだ字に対してコメントを書く。
+  const [paper, setPaper] = useState<HTMLElement | null>(null);
+  const write = useReview({
+    absPath: thread.file,
+    body: currentBody ?? "",
+    raw,
+    content: paper,
+    isActive: true,
+  });
 
   useEffect(() => {
     let alive = true;
@@ -778,7 +790,7 @@ function ThreadDetail({
   return (
     <div className="flex min-w-0 flex-1">
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6">
+        <div ref={setPaper} className="mx-auto max-w-3xl px-6 py-6">
           {rel === null ? (
             <p className="text-[12px] text-[var(--mg-muted)]">
               このファイルは今開いているフォルダの中にないため、現在の本文を出せません。
@@ -805,6 +817,22 @@ function ThreadDetail({
           )}
         </div>
       </div>
+
+      {/* 読んでいる最中に気付いたことを、その場で書けるようにする。選択と
+          入力の作りは本文の画面と同じ（同じ部品・同じ決まり）。 */}
+      {write.selection && !write.draft && (
+        <SelectionMenu at={write.selection.rect} onComment={write.startDraft} />
+      )}
+      {write.draft && (
+        <CommentComposer
+          anchorRect={write.draft.hit}
+          selection={write.draft.text}
+          source={write.draft.whole ? write.draft.quote : undefined}
+          busy={write.busy}
+          onSubmit={(text: string) => void write.submit(text)}
+          onClose={write.close}
+        />
+      )}
 
       <aside className="mg-side">
         <div className="mg-side-head">
