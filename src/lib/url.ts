@@ -8,6 +8,9 @@ export interface UrlState {
   // だけ載る。控えのレイアウト（他のウィンドウで開いていたタブ）を並べ直すと
   // 窓を複製しただけになるので、それを止めるための印。
   only?: boolean;
+  // フォルダを開かずに 1 枚だけ開いているときの、そのファイルの絶対パス。
+  // folder と file の組とは別の道（親フォルダは履歴に登録しない）。
+  doc?: string;
 }
 
 // ハッシュを読む。追加ウィンドウの起動 URL はここを経由して復元されるため、
@@ -20,6 +23,7 @@ export function parseHash(): UrlState {
     folderId: pick("folder"),
     file: pick("file"),
     only: pick("only") === "1",
+    doc: pick("doc"),
   };
 }
 
@@ -27,11 +31,17 @@ export function buildHash(
   folderId?: string | null,
   file?: string | null,
   only = false,
+  doc?: string | null,
 ): string {
   const p = new URLSearchParams();
-  if (folderId) p.set("folder", folderId);
+  // 1 枚で開いているときはそれだけを載せる。親フォルダは履歴に登録しないので、
+  // folder として書いても開き直せない。
+  if (doc) p.set("doc", doc);
+  else {
+    if (folderId) p.set("folder", folderId);
+    if (only) p.set("only", "1");
+  }
   if (file) p.set("file", file);
-  if (only) p.set("only", "1");
   const s = p.toString();
   return s ? `#${s}` : "#";
 }

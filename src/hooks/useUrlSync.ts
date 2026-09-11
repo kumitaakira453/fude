@@ -10,8 +10,9 @@ import { useWorkspace } from "./useWorkspace";
 // - popstate: URL を解釈して状態へ反映（権限が無ければスタート画面へ）
 export function useUrlSync() {
   const store = useStore();
-  const { refreshFolders, openFolder, openFile } = useWorkspace();
+  const { refreshFolders, openFolder, openDoc, openFile } = useWorkspace();
   const activeFolderId = useAtomValue(A.activeFolderIdAtom);
+  const sole = useAtomValue(A.soleAtom);
   const activePane = useAtomValue(A.activePaneAtom);
   const activeFile = A.activePath(activePane);
   const applyingRef = useRef(false);
@@ -27,14 +28,20 @@ export function useUrlSync() {
 
   const applyUrl = useRef(
     async (
-      state: { folderId?: string; file?: string; only?: boolean },
+      state: { folderId?: string; file?: string; only?: boolean; doc?: string },
       opts: { force?: boolean } = {},
     ) => {
       applyingRef.current = true;
       try {
-        const { folderId, file, only } = state;
+        const { folderId, file, only, doc } = state;
+        // 1 枚だけの窓。親フォルダは履歴に無いので、フォルダの枝には乗せない。
+        if (doc) {
+          if (store.get(A.soleAtom) !== doc) await openDoc(doc);
+          return;
+        }
         if (!folderId) {
           store.set(A.activeFolderIdAtom, null);
+          store.set(A.soleAtom, null);
           return;
         }
         const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
@@ -66,13 +73,17 @@ export function useUrlSync() {
       const state = parseHash();
       await refreshFolders();
       if (cancelled) return;
-      if (state.folderId) {
+      if (state.folderId || state.doc) {
         await applyUrl.current(state);
       } else {
-        // 起動直後は最後に開いていたフォルダへ戻す。履歴は新しい順なので
-        // 先頭がそれ。保存レイアウトからタブもそのまま復元される。
-        const last = store.get(A.foldersAtom)[0];
-        if (last) await openFolder(last.path);
+        // 起動直後は最後に開いていたものへ戻す。フォルダと 1 枚のファイルの
+        // どちらもありうるので、時刻の新しいほうを選ぶ。どちらの履歴も
+        // 新しい順なので、比べるのは先頭どうしでよい。
+        const folder = store.get(A.foldersAtom)[0];
+        const doc = store.get(A.recentDocsAtom)[0];
+        if (doc && (!folder || doc.lastOpened > folder.lastOpened))
+          await openDoc(doc.path);
+        else if (folder) await openFolder(folder.path);
       }
       readyRef.current = true;
     })();
@@ -97,7 +108,7 @@ export function useUrlSync() {
   // 状態変化を URL へ反映
   useEffect(() => {
     if (!readyRef.current || applyingRef.current) return;
-    const desired = buildHash(activeFolderId, activeFile);
+    const desired = buildHash(activeFolderId, activeFile, false, sole);
     if (
       location.hash !== desired &&
       !(location.hash === "" && desired === "#")
@@ -107,5 +118,5 @@ export function useUrlSync() {
       history.pushState({ fudeIdx: navIdx.current }, "", desired);
       updateNav.current();
     }
-  }, [activeFolderId, activeFile]);
+  }, [activeFolderId, activeFile, sole]);
 }

@@ -3,6 +3,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { splitInto } from "../lib/ui";
 import {
   activeFolderIdAtom,
+  soleAtom,
   canBackAtom,
   canForwardAtom,
   paletteOpenAtom,
@@ -53,6 +54,7 @@ export function Toolbar() {
   const openTotal = useAtomValue(openTotalAtom);
   const setReviewOpen = useSetAtom(reviewScreenAtom);
   const setActiveFolderId = useSetAtom(activeFolderIdAtom);
+  const setSole = useSetAtom(soleAtom);
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const [tocOpen, setTocOpen] = useAtom(tocOpenAtom);
   const [, setTab] = useAtom(sidebarTabAtom);
@@ -74,7 +76,10 @@ export function Toolbar() {
         icon={sidebarOpen ? "left_panel_close" : "left_panel_open"}
       />
       <button
-        onClick={() => setActiveFolderId(null)}
+        onClick={() => {
+          setSole(null);
+          setActiveFolderId(null);
+        }}
         title="スタート画面へ"
         className="mx-1 flex select-none items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:bg-[var(--mg-hover)]"
       >

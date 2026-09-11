@@ -1,13 +1,17 @@
 import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
-import type { FolderEntry } from "../lib/idb";
+import type { DocEntry, FolderEntry } from "../lib/idb";
 import { REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { windowScopedKey } from "../lib/windows";
 
 // ---- ワークスペース ----
 export const foldersAtom = atom<FolderEntry[]>([]); // 登録フォルダ（履歴）
 export const activeFolderIdAtom = atom<string | null>(null);
+// フォルダを開かずに 1 枚だけ読んでいるときの、そのファイルの絶対パス。
+// 親フォルダが activeFolderId に入るが、履歴には登録しない。
+export const soleAtom = atom<string | null>(null);
+export const recentDocsAtom = atom<DocEntry[]>([]); // 1 枚で開いたファイル（履歴）
 export const treeAtom = atom<TreeNode[]>([]);
 export const filesAtom = atom<TreeNode[]>([]); // ツリーを平坦化したファイル一覧
 export const loadingAtom = atom<{ active: boolean; message: string; done: number; total: number }>({

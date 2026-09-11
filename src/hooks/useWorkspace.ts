@@ -15,10 +15,17 @@ import {
   readText,
   removePath,
   renamePath,
+  soleTree,
   writeFile,
   type TreeNode,
 } from "../lib/fsAccess";
-import { folderDisplayName, loadFolders, registerFolder } from "../lib/idb";
+import {
+  folderDisplayName,
+  loadDocs,
+  loadFolders,
+  registerDoc,
+  registerFolder,
+} from "../lib/idb";
 import {
   openDocWindow,
   recordRecentFolder,
@@ -88,10 +95,10 @@ function whenIdle(run: () => void) {
 export function useWorkspace() {
   const store = useStore();
 
+  // 作用中の根。フォルダ ID は絶対パスそのものなので、登録の有無に関わらず
+  // これが根になる（1 枚だけ開いているときは、そのファイルの親フォルダ）。
   const getRootPath = useCallback((): string | null => {
-    const id = store.get(A.activeFolderIdAtom);
-    const folders = store.get(A.foldersAtom);
-    return folders.find((f) => f.id === id)?.path ?? null;
+    return store.get(A.activeFolderIdAtom);
   }, [store]);
 
   const absOf = useCallback(
@@ -153,6 +160,15 @@ export function useWorkspace() {
   const refreshTree = useCallback(async () => {
     const root = getRootPath();
     if (!root) return;
+    // 1 枚だけ開いているときはフォルダを走査しない。数千のファイルを辿っても
+    // 出すのは 1 行だけで、索引も要らない。
+    const sole = store.get(A.soleAtom);
+    if (sole) {
+      const { node } = soleTree(sole);
+      store.set(A.treeAtom, [node]);
+      store.set(A.filesAtom, [node]);
+      return;
+    }
     // 走査の間も何か出しておく。数百のフォルダを辿るので、無言で止まると
     // 固まったように見える。
     store.set(A.loadingAtom, {
@@ -182,6 +198,14 @@ export function useWorkspace() {
   const refreshTreeStructure = useCallback(async () => {
     const root = getRootPath();
     if (!root) return;
+    // 1 枚だけ開いているときは走査しない（出すのはその 1 行だけ）。
+    const sole = store.get(A.soleAtom);
+    if (sole) {
+      const { node } = soleTree(sole);
+      store.set(A.treeAtom, [node]);
+      store.set(A.filesAtom, [node]);
+      return;
+    }
     const tree = await buildTree(root);
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, flattenFiles(tree));
@@ -226,6 +250,13 @@ export function useWorkspace() {
       store.set(A.mtimeCacheAtom, times);
       if (moved) {
         moveViewpoints(moved[0], moved[1]);
+        // 1 枚だけ開いているなら、その 1 枚が動いたときに指す先も連れていく。
+        // 置いていくと、次に木を組み直したときに消えたファイルを指す。
+        const sole = store.get(A.soleAtom);
+        if (sole && sole === absOf(moved[0])) {
+          const next = absOf(moved[1]);
+          if (next) store.set(A.soleAtom, next);
+        }
         // 指摘と版は絶対パスで台帳に紐付いている。ここで連れていかないと、
         // 名前を変えた時点でそのファイルの指摘が引けなくなる。
         const from = absOf(moved[0]);
@@ -247,6 +278,7 @@ export function useWorkspace() {
 
   const refreshFolders = useCallback(async () => {
     store.set(A.foldersAtom, await loadFolders());
+    store.set(A.recentDocsAtom, await loadDocs());
   }, [store]);
 
   const reloadFile = useCallback(
@@ -308,6 +340,7 @@ export function useWorkspace() {
   const openFolder = useCallback(
     async (path: string, opts: { file?: string; only?: boolean } = {}) => {
       const now = Math.floor(performance.timeOrigin + performance.now());
+      store.set(A.soleAtom, null);
       const folders = await registerFolder(path, now);
       store.set(A.foldersAtom, folders);
       const activeId = path;
@@ -343,6 +376,29 @@ export function useWorkspace() {
       }
     },
     [store, refreshTree, openFile, revealTabs],
+  );
+
+  // Markdown を 1 枚だけ開く。
+  //
+  // 親フォルダを根に据え、ファイル一覧をその 1 枚に絞るだけ。こうすると
+  // 相対リンク・相対画像・レビュー・版がフォルダを開いたときと同じ道を通る。
+  // 親フォルダは最近のフォルダに登録しない（開いたのはファイルであって
+  // フォルダではない）。
+  const openDoc = useCallback(
+    async (abs: string) => {
+      const now = Math.floor(performance.timeOrigin + performance.now());
+      store.set(A.recentDocsAtom, await registerDoc(abs, now));
+      const { root, node } = soleTree(abs);
+      store.set(A.soleAtom, abs);
+      store.set(A.activeFolderIdAtom, root);
+      resetLayout(store);
+      store.set(A.contentCacheAtom, new Map());
+      store.set(A.mtimeCacheAtom, new Map());
+      store.set(A.treeAtom, [node]);
+      store.set(A.filesAtom, [node]);
+      openFile(node.path);
+    },
+    [store, openFile],
   );
 
   // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
@@ -608,6 +664,7 @@ export function useWorkspace() {
     absOf,
     refreshFolders,
     openFolder,
+    openDoc,
     refreshTree,
     refreshTreeStructure,
     reloadFile,

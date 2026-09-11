@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { activeFolderIdAtom, foldersAtom } from "../state/atoms";
-import { pickDirectory } from "../lib/fsAccess";
+import { activeFolderIdAtom, foldersAtom, soleAtom } from "../state/atoms";
+import { displayName, pickDirectory, pickMarkdownFile } from "../lib/fsAccess";
 import { folderDisplayName, removeFolder, renameFolder } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
@@ -11,7 +11,8 @@ export function FolderSwitcher() {
   const folders = useAtomValue(foldersAtom);
   const setFolders = useSetAtom(foldersAtom);
   const activeId = useAtomValue(activeFolderIdAtom);
-  const { openFolder, openFolderInNewWindow, refreshFolders } = useWorkspace();
+  const sole = useAtomValue(soleAtom);
+  const { openFolder, openDoc, openFolderInNewWindow, refreshFolders } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -46,6 +47,19 @@ export function FolderSwitcher() {
     if (path) await openFolder(path);
   };
 
+  const addDoc = async () => {
+    setOpen(false);
+    const path = await pickMarkdownFile();
+    if (path) await openDoc(path);
+  };
+
+  // 1 枚で開いているファイルの、そのフォルダをふつうに開く。
+  const openHome = async () => {
+    if (!activeId) return;
+    setOpen(false);
+    await openFolder(activeId);
+  };
+
   const remove = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     await removeFolder(id);
@@ -70,9 +84,17 @@ export function FolderSwitcher() {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
       >
-        <Icon name="folder" size={18} fill className="text-[var(--mg-accent2)]" />
-        <span className="truncate text-[13px] font-semibold text-[var(--mg-fg)]">
-          {active ? folderDisplayName(active) : "フォルダ"}
+        <Icon
+          name={sole ? "description" : "folder"}
+          size={18}
+          fill
+          className="text-[var(--mg-accent2)]"
+        />
+        <span
+          className="truncate text-[13px] font-semibold text-[var(--mg-fg)]"
+          title={sole ?? undefined}
+        >
+          {sole ? displayName(sole) : active ? folderDisplayName(active) : "フォルダ"}
         </span>
         <Icon name="unfold_more" size={17} className="ml-auto text-[var(--mg-muted)]" />
       </button>
@@ -148,6 +170,22 @@ export function FolderSwitcher() {
             })}
           </div>
           <div className="my-1 h-px bg-[var(--mg-border)]" />
+          {sole && (
+            <button
+              onClick={openHome}
+              className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
+            >
+              <Icon name="folder_open" size={17} />
+              このファイルのフォルダを開く
+            </button>
+          )}
+          <button
+            onClick={addDoc}
+            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
+          >
+            <Icon name="description" size={17} />
+            Markdown ファイルを開く…
+          </button>
           <button
             onClick={addFolder}
             className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"

@@ -80,6 +80,11 @@ export function useWatcher() {
           scheduleTreeRefresh();
           return;
         }
+        // 1 枚だけ開いているときは、その 1 枚に当たる合図だけを通す。
+        // 親フォルダには他のファイルがいくらでもあり、それで木を組み直しても
+        // 出すものは変わらない。
+        const sole = store.get(A.soleAtom);
+        if (sole && !event.paths.includes(sole)) return;
         const known = new Set(store.get(A.filesAtom).map((f) => f.path));
         const touched = new Map(store.get(A.touchedAtom));
         const gone = vanished(event);

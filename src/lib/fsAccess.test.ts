@@ -5,6 +5,7 @@ import {
   filterTree,
   findNode,
   parentPath,
+  soleTree,
   type TreeNode,
 } from "./fsAccess";
 
@@ -129,5 +130,28 @@ describe("filterTree", () => {
       "requirements",
       "README.md",
     ]);
+  });
+});
+
+describe("1 枚だけ開くときのファイル一覧", () => {
+  it("親フォルダを root にして、その 1 枚だけを置く", () => {
+    const { root, node } = soleTree("/Users/me/docs/設計.md");
+    expect(root).toBe("/Users/me/docs");
+    expect(node).toEqual({
+      name: "設計.md",
+      path: "設計.md",
+      abs: "/Users/me/docs/設計.md",
+      kind: "file",
+    });
+  });
+
+  it("path は root からの相対なので、そのままファイル名になる", () => {
+    expect(soleTree("/a/b/c/めも.md").node.path).toBe("めも.md");
+  });
+
+  it("root 直下のファイルでも root が消えない", () => {
+    const { root, node } = soleTree("/めも.md");
+    expect(root).toBe("/");
+    expect(node.abs).toBe("/めも.md");
   });
 });

@@ -1,40 +1,45 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { buildHash, parseHash } from "./url";
 
-// 追加ウィンドウの起動 URL はここを経由して復元される。「そのファイルだけの窓」
-// の印が往復することを押さえる。
+// 窓の復元はこのハッシュだけを頼りにする。フォルダの窓と、1 枚だけの窓を
+// 取り違えないこと。
 
-const go = (url: string) => {
-  window.history.replaceState(null, "", url);
+const at = (hash: string) => {
+  location.hash = hash;
 };
 
-afterEach(() => go("/"));
+beforeEach(() => at(""));
 
-describe("URL とフォルダ・ファイルの往復", () => {
-  it("フォルダとファイルを載せる", () => {
-    expect(buildHash("/w", "a/b.md")).toBe("#folder=%2Fw&file=a%2Fb.md");
-    go(buildHash("/w", "a/b.md"));
-    expect(parseHash()).toEqual({ folderId: "/w", file: "a/b.md", only: false });
+describe("フォルダの窓", () => {
+  it("フォルダとファイルが往復する", () => {
+    const h = buildHash("/root", "docs/a.md");
+    at(h);
+    expect(parseHash()).toMatchObject({ folderId: "/root", file: "docs/a.md" });
   });
 
-  it("そのファイルだけの窓の印を載せる", () => {
-    go(buildHash("/w", "a/b.md", true));
-    expect(parseHash()).toEqual({ folderId: "/w", file: "a/b.md", only: true });
+  it("そのファイルだけの窓の印も往復する", () => {
+    at(buildHash("/root", "a.md", true));
+    expect(parseHash().only).toBe(true);
   });
 
-  it("印は既定では載らない", () => {
-    expect(buildHash("/w", "a/b.md")).not.toContain("only");
-  });
-
-  it("何も無ければ空のハッシュ", () => {
+  it("何も開いていなければ空になる", () => {
     expect(buildHash(null, null)).toBe("#");
-    go("/");
-    expect(parseHash()).toEqual({ folderId: undefined, file: undefined, only: false });
+  });
+});
+
+describe("1 枚だけの窓", () => {
+  it("doc が往復する", () => {
+    at(buildHash(null, null, false, "/Users/me/docs/設計.md"));
+    expect(parseHash().doc).toBe("/Users/me/docs/設計.md");
   });
 
-  it("フラグメントが落ちてもクエリから読む", () => {
-    go("/index.html?folder=%2Fw&file=a.md&only=1");
-    expect(parseHash()).toEqual({ folderId: "/w", file: "a.md", only: true });
+  it("doc があればフォルダは載せない（親は履歴に無いので開き直せない）", () => {
+    const h = buildHash("/Users/me/docs", "設計.md", false, "/Users/me/docs/設計.md");
+    at(h);
+    const got = parseHash();
+    expect(got.doc).toBe("/Users/me/docs/設計.md");
+    expect(got.folderId).toBe(undefined);
+    expect(got.file).toBe("設計.md");
   });
 });

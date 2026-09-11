@@ -46,6 +46,27 @@ export async function pickDirectory(): Promise<string | null> {
   return typeof sel === "string" ? sel : null;
 }
 
+// Markdown を 1 枚だけ選ぶダイアログ。フォルダを開かずに読むときの入口。
+export async function pickMarkdownFile(): Promise<string | null> {
+  const sel = await open({
+    multiple: false,
+    title: "Markdown ファイルを選択",
+    filters: [
+      { name: "Markdown", extensions: MD_EXTENSIONS.map((e) => e.slice(1)) },
+    ],
+  });
+  return typeof sel === "string" ? sel : null;
+}
+
+// 1 枚だけ開くときのファイル一覧。親フォルダを root に据え、その 1 枚しか
+// 置かない（走査しない）。相対リンクと相対画像は root 基準で解ける。
+export function soleTree(abs: string): { root: string; node: TreeNode } {
+  const cut = abs.replace(/[/\\]+$/, "").lastIndexOf("/");
+  const root = cut > 0 ? abs.slice(0, cut) : "/";
+  const name = abs.slice(cut + 1);
+  return { root, node: { name, path: name, abs, kind: "file" } };
+}
+
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",

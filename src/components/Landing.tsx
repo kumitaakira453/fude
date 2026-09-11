@@ -1,11 +1,12 @@
-import { useAtomValue } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { useMemo } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { pickDirectory } from "../lib/fsAccess";
-import { folderDisplayName } from "../lib/idb";
+import { displayName, pathExists, pickDirectory, pickMarkdownFile } from "../lib/fsAccess";
+import { folderDisplayName, removeDoc } from "../lib/idb";
 import { isOpen } from "../lib/review";
-import { foldersAtom } from "../state/atoms";
+import { foldersAtom, recentDocsAtom } from "../state/atoms";
 import { ledgerAtom } from "../state/review";
+import { notify } from "../state/toast";
 import { Icon } from "./Icon";
 
 function timeAgo(ts: number): string {
@@ -35,9 +36,11 @@ function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 export function Landing() {
+  const store = useStore();
   const folders = useAtomValue(foldersAtom);
+  const docs = useAtomValue(recentDocsAtom);
   const ledger = useAtomValue(ledgerAtom);
-  const { openFolder } = useWorkspace();
+  const { openFolder, openDoc, refreshFolders } = useWorkspace();
 
   // フォルダごとの未解決の指摘の数。台帳は絶対パスで持っているので、
   // フォルダの道筋で前方一致を数える。開く前に「読むものがある」と
@@ -58,6 +61,22 @@ export function Landing() {
   const open = async () => {
     const path = await pickDirectory();
     if (path) await openFolder(path);
+  };
+
+  const openOne = async () => {
+    const path = await pickMarkdownFile();
+    if (path) await openDoc(path);
+  };
+
+  // 履歴から開き直す。実体が無ければ黙って何もせず、一覧から落とす。
+  const reopen = async (id: string, path: string) => {
+    if (await pathExists(path)) {
+      await openDoc(path);
+      return;
+    }
+    await removeDoc(id);
+    await refreshFolders();
+    notify(store, "そのファイルはもうありません");
   };
 
   return (
@@ -92,9 +111,51 @@ export function Landing() {
                 <Icon name="folder_open" size={19} />
                 <span className="font-medium">フォルダを開く…</span>
               </button>
+              <button
+                onClick={openOne}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[14px] text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
+              >
+                <Icon name="description" size={19} />
+                <span className="font-medium">Markdown ファイルを開く…</span>
+              </button>
             </div>
 
-            <SectionTitle className="mt-8">最近</SectionTitle>
+            {docs.length > 0 && (
+              <>
+                <SectionTitle className="mt-8">最近のファイル</SectionTitle>
+                <div className="mt-1">
+                  {docs.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => reopen(d.id, d.path)}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
+                    >
+                      <Icon
+                        name="description"
+                        size={17}
+                        className="shrink-0 text-[var(--mg-muted)]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className="block truncate text-[13.5px] font-medium text-[var(--mg-fg-dim)]"
+                          title={d.path}
+                        >
+                          {displayName(d.name)}
+                        </span>
+                        <span className="block truncate text-[11px] text-[var(--mg-muted)]">
+                          {folderOf(d.path)}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[11px] text-[var(--mg-muted)]">
+                        {timeAgo(d.lastOpened)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <SectionTitle className="mt-8">最近のフォルダ</SectionTitle>
             <div className="mt-1">
               {folders.length === 0 ? (
                 <p className="px-2 py-2 text-[13px] text-[var(--mg-muted)]">
@@ -168,6 +229,12 @@ export function Landing() {
       </div>
     </div>
   );
+}
+
+// 道筋のうち、親フォルダの名前だけ。どのフォルダの 1 枚かが分かればよい。
+function folderOf(path: string): string {
+  const parts = path.split("/");
+  return parts[parts.length - 2] ?? path;
 }
 
 function SectionTitle({
