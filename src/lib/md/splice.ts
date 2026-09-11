@@ -135,6 +135,15 @@ function byChar(value: string, raw: string): number[] | null {
       v++;
       continue;
     }
+    // 実体参照。原文では数文字で、読むと 1 文字になる。素の字より先に見る
+    // （&amp; のように、頭の 1 文字が読んだ後の字と同じことがある）。
+    const held = entityAt(raw, r);
+    if (held && held.text === value[v]) {
+      map[v] = r;
+      r += held.length;
+      v++;
+      continue;
+    }
     if (raw[r] === value[v]) {
       map[v] = r;
       const wasBreak = value[v] === "\n";
@@ -143,7 +152,7 @@ function byChar(value: string, raw: string): number[] | null {
       if (wasBreak) skipAfterBreak();
       continue;
     }
-    // 実体参照など、1 文字ずつ対応しない書き方。
+    // それ以外の、1 文字ずつ対応しない書き方。
     return null;
   }
 
@@ -152,6 +161,42 @@ function byChar(value: string, raw: string): number[] | null {
   if (r !== raw.length) return null;
   map[value.length] = r;
   return map;
+}
+
+// 原文のその位置から始まる実体参照。読めない書き方なら null。
+//
+// 当てずっぽうで進めると、触っていない所まで書き換えてしまう。Notion の
+// 書き出しと手書きで実際に出てくるものだけを読む。
+const NAMED: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: "\u00a0",
+};
+
+const ENTITY = /^&(#\d{1,7}|#x[0-9a-f]{1,6}|[a-z]+);/i;
+
+function entityAt(raw: string, at: number): { text: string; length: number } | null {
+  if (raw[at] !== "&") return null;
+  const found = ENTITY.exec(raw.slice(at, at + 12));
+  if (!found) return null;
+  const body = found[1];
+  const code = body.startsWith("#x") || body.startsWith("#X")
+    ? Number.parseInt(body.slice(2), 16)
+    : body.startsWith("#")
+      ? Number.parseInt(body.slice(1), 10)
+      : null;
+  const text = code === null ? NAMED[body.toLowerCase()] : codeText(code);
+  return text === undefined || text === null ? null : { text, length: found[0].length };
+}
+
+function codeText(code: number): string | null {
+  if (!Number.isInteger(code) || code < 0 || code > 0x10ffff) return null;
+  // 対になる片割れ（サロゲート）はそれ自体では字にならない。
+  if (code >= 0xd800 && code <= 0xdfff) return null;
+  return String.fromCodePoint(code);
 }
 
 // 文字と数字だけの書き換えなら、Markdown の記号を作りようがない。
