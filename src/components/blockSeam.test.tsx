@@ -52,6 +52,33 @@ describe("ブロックごとに描いたときの囲み", () => {
     expect(host.textContent?.replace(/\s/g, "")).toBe("ひらく中の本文");
   });
 
+  it("題の行内の印は印として描かれる", () => {
+    const host = show(
+      lines("<details>", "<summary>**太字**の題</summary>", "", "中の本文", "", "</details>", ""),
+    );
+    const head = host.querySelector("summary");
+    expect(head?.querySelector("strong")?.textContent).toBe("太字");
+    expect(head?.textContent).toBe("太字の題");
+    // 段落としてではなく、行内に戻して描く
+    expect(head?.querySelector("p")).toBeNull();
+  });
+
+  it("見出しの題も行内の印が効く", () => {
+    const host = show(
+      lines(
+        "<details>",
+        "<summary><h2>**太字**の題</h2></summary>",
+        "",
+        "中の本文",
+        "",
+        "</details>",
+        "",
+      ),
+    );
+    const head = host.querySelector("summary");
+    expect(head?.querySelector("h2 strong")?.textContent).toBe("太字");
+  });
+
   it("トグルの後ろの本文は一覧として描かれる", () => {
     const host = show(
       lines("<details>", "<summary>Figma</summary>", "<!-- x -->", "</details>", "- 変更点", ""),

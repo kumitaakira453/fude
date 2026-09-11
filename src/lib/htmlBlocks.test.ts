@@ -70,22 +70,51 @@ describe("openHtmlContainers", () => {
     expect(got.match(/mg-callout-body/g)?.length).toBe(2);
   });
 
-  it("details は summary を残したまま本文だけ空行で挟む", () => {
+  it("details は題も本文も空行で挟む", () => {
     const src = [
       "<details>",
-      "<summary>詳細</summary>",
+      "<summary>**太字**の題</summary>",
       "`code` を含む本文",
       "</details>",
     ].join("\n");
     expect(opened(src)).toBe(
       [
         "<details>",
-        "<summary>詳細</summary>",
+        "<summary>",
+        "",
+        "**太字**の題",
+        "",
+        "</summary>",
         "",
         "`code` を含む本文",
         "",
         "</details>",
       ].join("\n"),
+    );
+  });
+
+  it("見出しの題は markdown の見出しに置き換える", () => {
+    const src = ["<details>", "<summary><h2>題</h2></summary>", "本文", "</details>"].join("\n");
+    expect(opened(src)).toBe(
+      ["<details>", "<summary>", "", "## 題", "", "</summary>", "", "本文", "", "</details>"].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("割った題でも位置は原文へ戻せる", () => {
+    const src = ["<details>", "<summary>**太字**の題</summary>", "本文", "</details>"].join("\n");
+    const out = openHtmlContainers(src);
+    // 組み替えた側の「太字」と、原文の「太字」が同じ位置を指す
+    expect(out.back(out.text.indexOf("太字"))).toBe(src.indexOf("太字"));
+    expect(out.back(out.text.indexOf("本文"))).toBe(src.indexOf("本文"));
+    expect(out.back(out.text.indexOf("</details>"))).toBe(src.indexOf("</details>"));
+  });
+
+  it("段落にならない題は割らずに出す", () => {
+    const src = ["<details>", "<summary>- 項目</summary>", "本文", "</details>"].join("\n");
+    expect(opened(src)).toBe(
+      ["<details>", "<summary>- 項目</summary>", "", "本文", "", "</details>"].join("\n"),
     );
   });
 

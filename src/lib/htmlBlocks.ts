@@ -19,6 +19,11 @@ import {
 } from "./htmlSpans";
 
 const SUMMARY = /^<summary(\s[^>]*)?>.*<\/summary>$/;
+const CLOSE = "</summary>";
+const HEADING = /^\s*<h([1-6])(?:\s[^>]*)?>([\s\S]*)<\/h\1>\s*$/;
+// 行の頭で塊の印になる字。1 行に置くと段落にならないので、割らずに出す。
+const BLOCKISH = /^(#{1,6}\s|[-*+>]\s|\d+[.)]\s|```|~~~|---|===)/;
+const blockish = (text: string): boolean => BLOCKISH.test(text);
 
 function attr(attrs: string, name: string): string {
   const m = new RegExp(`${name}="([^"]*)"`).exec(attrs);
@@ -91,7 +96,8 @@ function open(src: string, back: Back): Row[] {
       kind === "details" && SUMMARY.test((lines[i + 1] ?? "").trim()) ? i + 2 : i + 1;
 
     if (kind === "details") {
-      for (let k = i; k < head; k++) out.push(row(k));
+      out.push(row(i));
+      if (head === i + 2) out.push(...summary(lines[i + 1], i + 1));
       out.push(blank(head - 1));
     } else {
       out.push(wrapper(lines[i], pad, back(heads[i])), blank(i));
@@ -107,6 +113,30 @@ function open(src: string, back: Back): Row[] {
   }
 
   return out;
+
+  // 題。1 行に詰まった <summary>…</summary> を、中の字が markdown として
+  // 読まれるよう空行で挟んで割る（中身と同じ扱い）。見出しの題はタグを
+  // markdown の見出しに置き換える。段落にならない字はそのまま出す。
+  function summary(line: string, i: number): Row[] {
+    const pad = indentOf(line);
+    const text = line.trim();
+    const open = text.slice(0, text.indexOf(">") + 1);
+    const inner = text.slice(open.length, text.length - CLOSE.length);
+    const found = HEADING.exec(inner);
+    const title = (found ? found[2] : inner).trim();
+    if (!title || blockish(title)) return [row(i)];
+
+    const lead = found ? "#".repeat(Number(found[1])) + " " : "";
+    const from = heads[i] + pad.length + open.length + inner.indexOf(title);
+    const close = `${pad}${CLOSE}`;
+    return [
+      { text: pad + open, at: back(heads[i]), lead: 0 },
+      blank(i),
+      { text: pad + lead + title, at: back(from), lead: pad.length + lead.length },
+      blank(i),
+      { text: close, at: back(from + title.length), lead: pad.length },
+    ];
+  }
 
   // 中身。囲みが立っている桁に合わせ直してから、中の囲みもほどく。
   function body(inner: string[], at: number, pad: string): Row[] {

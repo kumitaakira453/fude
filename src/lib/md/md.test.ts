@@ -106,6 +106,51 @@ describe("構造を読み取る", () => {
     expect(round(src)).toBe(src);
   });
 
+  it("題の行内の印を読む", () => {
+    const src = "<details>\n<summary>**太字**と`コード`</summary>\n本文\n</details>\n";
+    const title = fromMarkdown(src).doc.child(0).child(0);
+    expect(title.textContent).toBe("太字とコード");
+    expect(title.child(0).marks.map((m) => m.type.name)).toEqual(["strong"]);
+    expect(title.child(2).marks.map((m) => m.type.name)).toEqual(["code"]);
+    expect(round(src)).toBe(src);
+  });
+
+  it("見出しの題でも行内の印を読む", () => {
+    const src = "<details>\n<summary><h2>**太字**の題</h2></summary>\n本文\n</details>\n";
+    const title = fromMarkdown(src).doc.child(0).child(0);
+    expect(title.attrs.level).toBe(2);
+    expect(title.textContent).toBe("太字の題");
+    expect(title.child(0).marks.map((m) => m.type.name)).toEqual(["strong"]);
+    expect(round(src)).toBe(src);
+  });
+
+  it("題に付けた印は記号に戻して書き出す", () => {
+    const loaded = fromMarkdown("<details>\n<summary>題</summary>\n本文\n</details>\n");
+    const box = loaded.doc.child(0);
+    const title = box.child(0);
+    const next = loaded.doc.copy(
+      Fragment.fromArray([
+        box.type.create(
+          box.attrs,
+          Fragment.fromArray([
+            title.type.create(title.attrs, schema.text("題", [schema.marks.strong.create()])),
+            box.child(1),
+          ]),
+        ),
+      ]),
+    );
+    expect(toMarkdown(next, loaded)).toBe(
+      "<details>\n<summary>**題**</summary>\n\n本文\n\n</details>\n",
+    );
+  });
+
+  it("段落にならない題は字のまま持つ", () => {
+    const src = "<details>\n<summary>- 項目</summary>\n本文\n</details>\n";
+    const title = fromMarkdown(src).doc.child(0).child(0);
+    expect(title.textContent).toBe("- 項目");
+    expect(round(src)).toBe(src);
+  });
+
   it("桁が揃った表は幅を覚える", () => {
     const src = "| key    | value  |\n|--------|--------|\n| a      | b      |";
     const table = fromMarkdown(src).doc.child(0);

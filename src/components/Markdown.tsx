@@ -27,6 +27,7 @@ import { markdownContext } from "./MarkdownContext";
 import { CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
 import { remarkSoftBreaks } from "../lib/md/softBreaks";
+import { rehypeSummaryInline } from "../lib/md/summaryInline";
 import { MdImage } from "./MdImage";
 import { Mermaid } from "./Mermaid";
 
@@ -44,6 +45,7 @@ const remarkPlugins = [
 const remarkPluginsWithBreaks = [...remarkPlugins, remarkSoftBreaks];
 const rehypePlugins = [
   rehypeRaw,
+  rehypeSummaryInline,
   rehypeSlug,
   rehypeKatex,
   // detect は付けない。言語指定のないコードフェンス 1 個ごとに highlight.js の

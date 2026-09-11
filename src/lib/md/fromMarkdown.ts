@@ -328,14 +328,24 @@ function summaryOf(g: Group, base: number): Built & { head: string } {
   text = text.trim();
 
   const at = base + g.start + from;
+  const inline = titleInline(text, at);
   return {
     head: open,
-    node: schema.nodes.detailsSummary.create(
-      { level },
-      text ? [schema.text(text)] : [],
-    ),
-    span: span(at, at + text.length, text ? [span(at, at + text.length)] : []),
+    node: schema.nodes.detailsSummary.create({ level }, inline.nodes),
+    span: span(at, at + text.length, inline.spans),
   };
+}
+
+// 題の字も行内の印が効く。単独の markdown として読み直し、1 つの段落に
+// なったときだけその中身を使う（項目や見出しになる字は素の字のまま）。
+function titleInline(text: string, at: number): Inline {
+  if (!text) return { nodes: [], spans: [] };
+  const tree = parseTree(text);
+  const first = tree.children.length === 1 ? tree.children[0] : null;
+  if (first?.type !== "paragraph") {
+    return { nodes: [schema.text(text)], spans: [span(at, at + text.length)] };
+  }
+  return inlineOf(first.children, text, at);
 }
 
 const span = (start: number, end: number, children: Span[] = []): Span => ({

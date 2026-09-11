@@ -266,8 +266,7 @@ function toMdast(node: PmNode): RootContent {
       let title = "";
       node.forEach((child, _offset, index) => {
         if (index === 0 && child.type === schema.nodes.detailsSummary) {
-          // 原文では生 HTML なので、タグを作れる字は入れさせない。
-          const text = child.textContent.replace(/[<>]/g, "");
+          const text = titleText(child);
           const level = child.attrs.level as number | null;
           title = level === null ? text : `<h${level}>${text}</h${level}>`;
           return;
@@ -283,6 +282,19 @@ function toMdast(node: PmNode): RootContent {
     default:
       return verbatim(node.attrs.value ?? "");
   }
+}
+
+// トグルの題。行内の印はそのまま Markdown の記号に戻す。落とすのは題の形を
+// 壊す字だけ（題は 1 行で、<summary> の中に収まっていなければならない）。
+function titleText(node: PmNode): string {
+  const md = mdastToMarkdown(
+    { type: "root", children: [{ type: "paragraph", children: inlineToMdast(node) }] },
+    OPTIONS,
+  );
+  return relax(md)
+    .replace(/\s+$/, "")
+    .replace(/\n/g, " ")
+    .replace(/<\/?summary(\s[^>]*)?>/g, "");
 }
 
 // 数式の書き戻し。触っていなければ原文の書き方のまま、打ち直したら囲み直す。
