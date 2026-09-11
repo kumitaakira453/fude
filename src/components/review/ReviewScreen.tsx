@@ -51,6 +51,7 @@ import {
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
+import { useFileBody } from "./useFileBody";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
 import { DocumentView, type Anchor } from "./DocumentView";
 import { Quote } from "./Quote";
@@ -588,7 +589,6 @@ function ThreadDetail({
 }) {
   const store = useStore();
   const setSelectedId = useSetAtom(reviewThreadAtom);
-  const cache = useAtomValue(contentCacheAtom);
   const root = useAtomValue(activeFolderIdAtom);
   const editorial = useAtomValue(editorialAtom);
   const font = useAtomValue(fontAtom);
@@ -622,10 +622,7 @@ function ThreadDetail({
   const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
   const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
 
-  const currentBody = useMemo(() => {
-    const raw = rel === null ? undefined : cache.get(rel);
-    return raw === undefined ? null : parseFrontmatter(raw).body;
-  }, [cache, rel]);
+  const { body: currentBody, reading } = useFileBody(rel);
 
   useEffect(() => {
     let alive = true;
@@ -651,9 +648,10 @@ function ThreadDetail({
 
   const settle = useCallback(() => onSettled(thread.id), [onSettled, thread.id]);
   // 本文を出せないと分かったときは、寄せる先が無いので待たせない。
+  // 読んでいる最中はまだ分からないので、骨組みを出したまま待つ。
   useEffect(() => {
-    if (currentBody === null) settle();
-  }, [currentBody, settle]);
+    if (currentBody === null && !reading) settle();
+  }, [currentBody, reading, settle]);
 
   const ctx = useMemo(
     () => ({
@@ -781,9 +779,13 @@ function ThreadDetail({
     <div className="flex min-w-0 flex-1">
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-6 py-6">
-          {currentBody === null ? (
+          {rel === null ? (
             <p className="text-[12px] text-[var(--mg-muted)]">
               このファイルは今開いているフォルダの中にないため、現在の本文を出せません。
+            </p>
+          ) : currentBody === null && !reading ? (
+            <p className="text-[12px] text-[var(--mg-muted)]">
+              このファイルの本文を読めませんでした。
             </p>
           ) : view === null ? (
             <p className="text-[12px] text-[var(--mg-muted)]">読み込んでいます…</p>
