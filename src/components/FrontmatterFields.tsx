@@ -117,14 +117,11 @@ function edge(el: HTMLElement, where: "start" | "end"): boolean {
 
 export function FrontmatterFields({
   fm,
-  name,
   onChange,
   onOut,
   enterRef,
 }: {
   fm: string;
-  // 何も無いところに付けるときの既定の題。ふつうはファイル名。
-  name: string;
   // 生のフロントマターが書き換わった。親が本文と繋いで保存する。
   onChange: (fm: string) => void;
   // 本文の先頭へ抜ける。
@@ -236,26 +233,34 @@ export function FrontmatterFields({
         ? withKey(text.current, spot.field, typed)
         : withValue(text.current, spot.cell!, typed);
     text.current = next;
-    const grid = plan(fieldsOf(next));
+    const rows2 = fieldsOf(next);
+    const grid = plan(rows2);
     laid.current = grid;
-    // 打つだけで欄の数は変わらないはずだが、変わったなら組み直す。
-    if (grid.order.length !== view.order.length) setRows(fieldsOf(next));
+    // ふつうは欄の数は変わらないが、鍵を title や tags に打ち替えると役どころが
+    // 変わって出る場所ごと移る。そのときは組み直して、同じ欄へ焦点を戻す。
+    if (grid.order.length !== view.order.length) {
+      const key = spot.kind === "key" ? typed : spot.field.key;
+      const moved = rows2.find((f) => f.key === key);
+      const kind = moved?.cells.length && spot.kind === "value" ? "value" : "key";
+      const at = spotAt(grid, moved, kind, nthOf(spot));
+      want.current = { at: Math.min(at, grid.order.length - 1), where: "end" };
+      setRows(rows2);
+    }
     send.current?.();
   };
 
-  // 何も無いところに付ける。
-  const start = () => {
-    apply(newFrontmatter(name), () => ({ at: 0, where: "all" }));
-  };
-
-  // 末尾に鍵を足す。鍵の字を選んだ状態にして、そのまま打ち替えられるようにする。
-  const addRow = () => {
-    const key = freeKey(text.current, NEW_KEY);
-    apply(addField(text.current, key), (p, grid) => ({
+  // 鍵を 1 つ足す。鍵の字を選んだ状態にして、そのまま打ち替えられるようにする。
+  const addRow = (base: string) => {
+    const key = freeKey(base, NEW_KEY);
+    apply(addField(base, key), (p, grid) => ({
       at: spotAt(p, grid.find((f) => f.key === key), "key", 0),
       where: "all",
     }));
   };
+
+  // 何も無いところに付ける。することは行を 1 つ足すのと同じで、
+  // 違いは入れ物がまだ無いことだけ。
+  const start = () => addRow(newFrontmatter());
 
   // 欄ごと消す。最後の 1 つを消したらフロントマターそのものを畳む。
   const remove = (field: Field) => {
@@ -477,7 +482,7 @@ export function FrontmatterFields({
             {gone(f)}
           </span>
         ))}
-        <button type="button" title="欄を足す" className="mg-fm-plus" onClick={addRow}>
+        <button type="button" title="欄を足す" className="mg-fm-plus" onClick={() => addRow(text.current)}>
           <Icon name="add" size={15} />
         </button>
       </div>

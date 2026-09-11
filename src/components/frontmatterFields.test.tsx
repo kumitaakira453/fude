@@ -58,7 +58,6 @@ function rig(fm = FM): Rig {
   const made = (text: string) => (
     <FrontmatterFields
       fm={text}
-      name="めも"
       onChange={(next) => {
         wrote.push(next);
         held = next;
@@ -327,12 +326,31 @@ describe("何も無いファイル", () => {
     expect(r.add()?.textContent).toContain("フロントマターを追加する");
   });
 
-  it("押すとファイル名を題にして付く。題は選ばれた状態", () => {
+  it("押すと行が 1 つ増える。+ と同じで、鍵を決め打ちしない", () => {
     const r = rig("");
     click(r.add()!);
-    expect(r.now()).toBe("---\ntitle: めも\n---\n\n");
-    expect(document.activeElement?.textContent).toBe("めも");
+    expect(r.now()).toBe("---\n項目:\n---\n\n");
+    expect(r.text()).toEqual(["項目", ""]);
+    expect(document.activeElement?.textContent).toBe("項目");
     expect(window.getSelection()?.isCollapsed).toBe(false);
+  });
+
+  it("足した鍵はそのまま打ち替えられる", () => {
+    const r = rig("");
+    click(r.add()!);
+    const at = document.activeElement as HTMLElement;
+    type(at, "担当");
+    leave(at);
+    expect(r.now()).toBe("---\n担当:\n---\n\n");
+  });
+
+  it("鍵を title にすると大見出しへ移り、カーソルはその値へ付いていく", () => {
+    const r = rig("");
+    click(r.add()!);
+    type(document.activeElement as HTMLElement, "title");
+    // 題は鍵を出さないので、欄はその値だけになる。
+    expect(r.text()).toEqual([""]);
+    expect(document.activeElement).toBe(r.cells()[0]);
   });
 });
 

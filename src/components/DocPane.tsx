@@ -20,7 +20,6 @@ import {
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
-import { displayName } from "../lib/fsAccess";
 import { createCheckpoint } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
@@ -1292,7 +1291,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 <FrontmatterFields
                   key={path}
                   fm={fmPrefix}
-                  name={displayName(path)}
                   onChange={saveFm}
                   onOut={intoBody}
                   enterRef={intoFm}

@@ -196,9 +196,10 @@ export function dropItem(fm: string, cell: Cell): string {
   return fm.slice(0, from) + fm.slice(to);
 }
 
-// 何も無いファイルに付けるフロントマター。
-export function newFrontmatter(title: string): string {
-  return `---\ntitle: ${safeScalar(title)}\n---\n\n`;
+// 何も無いファイルに付ける、中身の無いフロントマター。
+// 鍵は決め打ちしない（title が要るという決まりは無い）。行は addField で足す。
+export function newFrontmatter(): string {
+  return "---\n---\n\n";
 }
 
 // 打った字を YAML の scalar として置ける形にする。元が引用符付きなら形を保つ

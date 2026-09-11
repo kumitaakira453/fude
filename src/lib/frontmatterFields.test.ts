@@ -307,15 +307,21 @@ describe("並びの項目を足す・消す", () => {
 });
 
 describe("何も無いファイルに付ける", () => {
-  it("題だけのフロントマターを作る", () => {
-    const fm = newFrontmatter("設計メモ");
-    expect(fm).toBe("---\ntitle: 設計メモ\n---\n\n");
-    expect(fieldsOf(fm).map((f) => f.key)).toEqual(["title"]);
+  it("中身の無い入れ物を作る。鍵は決め打ちしない", () => {
+    expect(newFrontmatter()).toBe("---\n---\n\n");
+    expect(fieldsOf(newFrontmatter())).toEqual([]);
   });
 
-  it("記号を含むファイル名でも読み直せる", () => {
-    const fm = newFrontmatter("[草案] 1: はじめ");
-    expect(() => read(fm)).not.toThrow();
+  it("そこへ行を足せる", () => {
+    const fm = addField(newFrontmatter(), freeKey(newFrontmatter(), "項目"));
+    expect(fm).toBe("---\n項目:\n---\n\n");
+    expect(fieldsOf(fm).map((f) => f.key)).toEqual(["項目"]);
+  });
+
+  it("足した行は鍵も値も打てる", () => {
+    let fm = addField(newFrontmatter(), "項目");
+    fm = withKey(fm, fieldsOf(fm)[0], "title");
+    fm = withValue(fm, fieldsOf(fm)[0].cells[0], "[草案] 1: はじめ");
     expect(read(fm).title).toBe("[草案] 1: はじめ");
   });
 });
