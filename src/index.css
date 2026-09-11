@@ -1982,12 +1982,18 @@ body.mg-dragging .mg-sel-menu {
     transition: none;
   }
 }
-/* 中身は見出しの下に 1 段字下げして並べる。 */
+/* 中身は見出しの下に 1 段字下げして並べる。頭とのあいだは、段落 1 つぶんの
+   行送り（20px）が空くと離れて見えるので詰める。 */
 .mg-prose details > :not(summary),
 .mg-pm .mg-details-body {
   margin-left: 1.5rem;
 }
-.mg-prose details > :not(summary):last-child {
+.mg-prose details > summary + *,
+.mg-pm .mg-details-body > :first-child {
+  margin-top: 0.25em;
+}
+.mg-prose details > :not(summary):last-child,
+.mg-pm .mg-details-body > :last-child {
   margin-bottom: 0;
 }
 /* 畳んでいる間は中身を隠す。doc からは消さないので、開けばそのまま戻る。 */
