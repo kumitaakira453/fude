@@ -1945,60 +1945,74 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details {
   margin: 0.6em 0;
 }
-.mg-prose summary {
-  display: flex;
-  gap: 0.4rem;
-  align-items: baseline;
-  cursor: pointer;
-  list-style: none;
-}
-/* 編集面の題は本文の節点。三角は本文の中に置けないので、左の余白へ重ねる
-   （読む面は印と字が同じ行に並ぶので、同じぶんだけ字を送る）。 */
+/* 題の字は中身と同じ桁に置き、三角はその左の余白へ重ねる。2 面で同じ桁。
+   置き場所の親は、読む面は summary、編集面は囲みそのもの（三角は本文の外）。 */
+.mg-prose summary,
 .mg-pm .mg-details {
   position: relative;
 }
+.mg-prose summary,
 .mg-pm .mg-details-head {
-  padding-left: 1.3rem;
+  padding-left: 1.5rem;
+}
+.mg-prose summary {
+  cursor: pointer;
+  list-style: none;
 }
 .mg-prose summary::-webkit-details-marker {
   display: none;
 }
+/* 三角は題の字面の中央に置く。字面の高さは書体で違う（ゴシックは行の中央、
+   明朝・丸ゴシック・ヒューマニストはそれより上）ので、書体ごとに寄せる。
+   辺は丸めで歪まないよう整数の px で持つ（8 × 12）。 */
+:root {
+  --mg-mark-lift: 0px;
+}
+:root[data-font="serif"],
+:root[data-font="anthropic-serif"],
+:root[data-font="rounded"] {
+  --mg-mark-lift: 1px;
+}
+:root[data-font="humanist"] {
+  --mg-mark-lift: 1.5px;
+}
 .mg-prose summary::before,
 .mg-pm .mg-details-mark {
   content: "";
-  flex: none;
+  position: absolute;
+  left: 4px;
+  top: calc(8px - var(--mg-mark-lift));
   width: 0;
   height: 0;
   padding: 0;
   border: 0;
-  border-left: 0.47rem solid currentColor;
-  border-top: 0.36rem solid transparent;
-  border-bottom: 0.36rem solid transparent;
+  border-left: 8px solid currentColor;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
   background: none;
-  transform: translateY(-0.1em);
   transition: transform 120ms ease;
 }
 .mg-pm .mg-details-mark {
-  position: absolute;
-  left: 0.2rem;
-  top: 0.63rem;
   cursor: pointer;
   color: inherit;
 }
-/* 見出しの段ごとに題の行の高さが変わるので、三角もその中央へ寄せる。 */
+/* 題の 1 行目の中央に合わせる。行の高さは見出しの段で変わる。 */
+.mg-prose summary:has(> h1)::before,
 .mg-pm .mg-details[data-level="1"] > .mg-details-mark {
-  top: 1rem;
+  top: calc(14px - var(--mg-mark-lift));
 }
+.mg-prose summary:has(> :is(h2, h3))::before,
 .mg-pm .mg-details[data-level="2"] > .mg-details-mark,
 .mg-pm .mg-details[data-level="3"] > .mg-details-mark {
-  top: 0.76rem;
+  top: calc(10px - var(--mg-mark-lift));
 }
+.mg-prose summary:has(> h4)::before,
 .mg-pm .mg-details[data-level="4"] > .mg-details-mark {
-  top: 0.5rem;
+  top: calc(6px - var(--mg-mark-lift));
 }
 .mg-prose details[open] > summary::before,
 .mg-pm .mg-details:not(.is-closed) > .mg-details-mark {
-  transform: translateY(-0.1em) rotate(90deg);
+  transform: rotate(90deg);
 }
 @media (prefers-reduced-motion: reduce) {
   .mg-prose summary::before,
@@ -2028,8 +2042,6 @@ body.mg-dragging .mg-sel-menu {
    指定がそのまま効く。帯の中では余白だけ落とす。 */
 .mg-prose summary > :is(h1, h2, h3, h4, h5, h6),
 .mg-pm .mg-details-head > :is(h1, h2, h3, h4, h5, h6) {
-  flex: 1;
-  min-width: 0;
   margin: 0;
 }
 /* 題が空のときに、押せる行として見えるようにする。 */

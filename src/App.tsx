@@ -33,6 +33,7 @@ import {
   sidebarOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
+  fontAtom,
   themeAtom,
 } from "./state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "./state/review";
@@ -45,6 +46,7 @@ export default function App() {
   // 掴んでいるあいだは仕切りが幅を直に書く（状態を通すと木全体が描き直される）。
   const sideRef = useRef<HTMLDivElement>(null);
   const theme = useAtomValue(themeAtom);
+  const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
   const layout = useAtomValue(layoutAtom);
   const activePaneId = useAtomValue(activePaneIdAtom);
@@ -62,6 +64,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // 書体は字面の高さが書体ごとに違うので、寄せ幅を CSS に渡す。
+  useEffect(() => {
+    document.documentElement.dataset.font = font;
+  }, [font]);
 
   // 打ち込みの規則は打鍵のたびに走るので、設定は編集面の外から渡しておく。
   useEffect(() => {
