@@ -575,17 +575,6 @@ export function ThreadCard({
       }}
       className={`mg-thread-card ${active ? "is-active" : ""}`}
     >
-      <button
-        type="button"
-        title="解決にする（⌘⇧D）"
-        className="mg-thread-done"
-        onClick={(e) => {
-          e.stopPropagation();
-          onResolve();
-        }}
-      >
-        <Icon name="check" size={14} />
-      </button>
       {/* 読みたいのは指摘そのもの。対象はその下に、手がかりとして小さく添える。 */}
       <div className="mg-thread-body">
         {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
@@ -614,6 +603,18 @@ export function ThreadCard({
             {thread.comments.length}
           </span>
         )}
+        {/* 解決は手がかりの列の端に置く。指摘の字に重ねると読めなくなる。 */}
+        <button
+          type="button"
+          title="解決にする（⌘⇧D）"
+          className="mg-thread-done"
+          onClick={(e) => {
+            e.stopPropagation();
+            onResolve();
+          }}
+        >
+          <Icon name="check" size={12} />
+        </button>
       </div>
     </div>
   );

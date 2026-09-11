@@ -3311,21 +3311,20 @@ svg[id^="mmd-"] foreignObject p {
 .mg-thread-card:hover {
   background: var(--mg-hover);
 }
-/* 一覧からそのまま解決にする。一覧は字を読む場所なので、指した札にだけ出す。 */
+/* 一覧からそのまま解決にする。指した札にだけ出すが、場所は空けたままにする
+   （出入りで手がかりの列が詰まると、指しただけで字が動いて見える）。
+   指摘の字には重ねない。重ねると 2 行目まで使う指摘が読めなくなる。 */
 .mg-thread-done {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.5rem;
-  z-index: 1;
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 0.35rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 0.3rem;
   color: var(--mg-muted);
-  background: var(--mg-panel);
   opacity: 0;
+  pointer-events: none;
   transition:
     opacity 0.12s,
     background 0.12s,
@@ -3334,6 +3333,7 @@ svg[id^="mmd-"] foreignObject p {
 .mg-thread-card:hover .mg-thread-done,
 .mg-thread-done:focus-visible {
   opacity: 1;
+  pointer-events: auto;
 }
 .mg-thread-done:hover {
   color: var(--mg-accent);
@@ -3390,6 +3390,7 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  min-height: 1.15rem;
   font-size: 10px;
   color: var(--mg-muted);
 }
@@ -5382,4 +5383,96 @@ body.mg-carrying {
 }
 .mg-fm-cell:focus:empty::before {
   content: "";
+}
+
+/* フロントマターの行に添える釦。指したときだけ出すが、場所は空けたままに
+   して、出入りで行が詰まらないようにする。 */
+.mg-fm-gone {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 0.3rem;
+  color: var(--mg-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+.mg-fm-row:hover .mg-fm-gone,
+.mg-fm-gone:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mg-fm-gone:hover {
+  color: var(--mg-fg);
+  background: var(--mg-hover);
+}
+
+/* 欄を足す。行並びの末尾に薄く置く。 */
+.mg-fm-plus {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 0.3rem;
+  color: var(--mg-muted);
+  opacity: 0.5;
+  transition:
+    opacity 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+.mg-fm-plus:hover {
+  color: var(--mg-accent);
+  background: var(--mg-hover);
+  opacity: 1;
+}
+
+/* 何も無いファイルに情報を付ける入口。 */
+.mg-fm-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.35rem;
+  border-radius: 0.4rem;
+  font-size: 12.5px;
+  color: var(--mg-muted);
+  opacity: 0.6;
+  transition:
+    opacity 0.12s,
+    background 0.12s,
+    color 0.12s;
+}
+.mg-fm-add:hover {
+  color: var(--mg-accent);
+  background: var(--mg-hover);
+  opacity: 1;
+}
+
+/* 読めないフロントマターの断り書きと、その生の字。 */
+.mg-fm-say {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.5rem;
+  font-size: 12.5px;
+  color: var(--mg-muted);
+}
+.mg-fm-raw {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.4rem;
+  background: var(--mg-hover);
+  font-family: var(--mg-font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--mg-fg-dim);
 }

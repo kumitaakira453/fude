@@ -20,6 +20,7 @@ import {
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
 import { parseFrontmatter } from "../lib/frontmatter";
+import { displayName } from "../lib/fsAccess";
 import { createCheckpoint } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
@@ -47,6 +48,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
 import { FrontmatterFields } from "./FrontmatterFields";
+import { BrokenFields, BrokenNote } from "./BrokenFrontmatter";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
@@ -444,7 +446,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [isActive, overlayOpen, path, undoFile, redoFile, store]);
 
-  const { data, body } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
+  const { data, body, broken } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
   const review = useReview({ absPath, body, raw, content, isActive });
   // キー操作から今の選択を読むための控え。毎描画で作り直さずに済む。
@@ -1283,17 +1285,20 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 </div>
               </div>
             )}
-            {data && (
-              <div className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}>
+            <div className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}>
+              {broken ? (
+                <BrokenFields src={fmPrefix} onCommit={saveFm} />
+              ) : (
                 <FrontmatterFields
                   key={path}
                   fm={fmPrefix}
+                  name={displayName(path)}
                   onChange={saveFm}
                   onOut={intoBody}
                   enterRef={intoFm}
                 />
-              </div>
-            )}
+              )}
+            </div>
             <BodyEditor
               key={path}
               body={body}
@@ -1346,7 +1351,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       editorial ? "mg-editorial" : ""
                     } ${WIDTH_CLASS[width]} mx-auto`}
                   >
-                    {data &&
+                    {(data || broken) &&
                       (editingFm ? (
                         <BlockSourceEditor
                           src={fmPrefix}
@@ -1365,7 +1370,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                             setEditingFm({ x: e.clientX, y: e.clientY })
                           }
                         >
-                          <Frontmatter data={data} />
+                          {data ? (
+                            <Frontmatter data={data} />
+                          ) : (
+                            <BrokenNote src={fmPrefix} />
+                          )}
                         </div>
                       ))}
                     <markdownContext.Provider value={ctx}>

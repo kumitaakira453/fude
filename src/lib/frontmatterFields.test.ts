@@ -1,6 +1,18 @@
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
-import { fieldsOf, safeScalar, withValue } from "./frontmatterFields";
+import {
+  addField,
+  addItem,
+  dropField,
+  dropItem,
+  fieldsOf,
+  freeKey,
+  newFrontmatter,
+  safeScalar,
+  swapFields,
+  withKey,
+  withValue,
+} from "./frontmatterFields";
 
 // Notion から降りてくるフロントマターの実物の形。鍵に「4. 」が付いたものや、
 // 値が空で次の行から並びが始まるものが混ざる。
@@ -150,5 +162,160 @@ describe("手に負えない値", () => {
   it("流し書きの並びは打たせない", () => {
     const fm = "---\ntags: [a, b]\n---\n";
     expect(fieldsOf(fm)[0].cells).toEqual([]);
+  });
+});
+
+describe("鍵の打ち替え", () => {
+  it("鍵だけが変わる", () => {
+    const next = withKey(FM, find(FM, "種別"), "区分");
+    expect(next).toContain("区分: 新規依頼");
+    expect(next.split("\n").length).toBe(FM.split("\n").length);
+    expect(read(next)["区分"]).toBe("新規依頼");
+  });
+
+  it("そのままでは鍵にできない字は引用符で包む", () => {
+    const next = withKey(FM, find(FM, "種別"), "a: b");
+    expect(next).toContain("'a: b': 新規依頼");
+    expect(read(next)["a: b"]).toBe("新規依頼");
+  });
+
+  it("値が並びの鍵でも打ち替えられる", () => {
+    const next = withKey(FM, find(FM, "4. 画面・機能案"), "案");
+    expect(read(next)["案"]).toEqual([
+      "3ce53222-ff1e-813b-934d-d06774db8c13",
+      "3ce53222-ff1e-8000-0000-000000000000",
+    ]);
+  });
+});
+
+describe("欄を消す", () => {
+  it("その行だけが消える", () => {
+    const next = dropField(FM, find(FM, "種別"));
+    expect(keys(next)).toEqual([
+      "notion_id",
+      "依頼日",
+      "4. 画面・機能案",
+      "title",
+      "url",
+      "last_synced",
+    ]);
+    expect(next).not.toContain("新規依頼");
+    expect(next).toContain("依頼日: '2026-09-02'");
+  });
+
+  it("並びを持つ欄は項目ごと消える", () => {
+    const next = dropField(FM, find(FM, "4. 画面・機能案"));
+    expect(next).not.toContain("3ce53222");
+    expect(keys(next)).not.toContain("4. 画面・機能案");
+    expect(read(next).title).toBe(read(FM).title);
+  });
+
+  it("入れ子を持つ欄は中身ごと消える", () => {
+    const fm = "---\nowner:\n  name: 汲田\n  team: 開発\nnext: あと\n---\n";
+    const next = dropField(fm, fieldsOf(fm)[0]);
+    expect(next).toBe("---\nnext: あと\n---\n");
+  });
+});
+
+describe("欄を入れ替える", () => {
+  it("2 つの欄が入れ替わり、間の行は動かない", () => {
+    const next = swapFields(FM, find(FM, "notion_id"), find(FM, "依頼日"));
+    expect(keys(next)).toEqual([
+      "依頼日",
+      "種別",
+      "notion_id",
+      "4. 画面・機能案",
+      "title",
+      "url",
+      "last_synced",
+    ]);
+    expect(read(next)).toEqual(read(FM));
+  });
+
+  it("並びを持つ欄は項目ごと動く", () => {
+    const next = swapFields(FM, find(FM, "4. 画面・機能案"), find(FM, "種別"));
+    // 種別（1 行）と 4. 画面・機能案（3 行）が、互いの居場所へ入れ替わる。
+    expect(keys(next)).toEqual([
+      "notion_id",
+      "4. 画面・機能案",
+      "依頼日",
+      "種別",
+      "title",
+      "url",
+      "last_synced",
+    ]);
+    expect(read(next)).toEqual(read(FM));
+  });
+
+  it("どちらを先に渡しても同じ", () => {
+    const a = swapFields(FM, find(FM, "種別"), find(FM, "title"));
+    const b = swapFields(FM, find(FM, "title"), find(FM, "種別"));
+    expect(a).toBe(b);
+  });
+});
+
+describe("欄を足す", () => {
+  it("閉じの --- の直前に入る", () => {
+    const next = addField(FM, "担当");
+    expect(keys(next).at(-1)).toBe("担当");
+    expect(next).toContain("last_synced: '2026-09-10T08:07:09.068081+00:00'\n担当:\n---");
+    expect(read(next)["担当"]).toBe(null);
+  });
+
+  it("足したばかりの欄にも打てる", () => {
+    const added = addField(FM, "担当");
+    const next = withValue(added, find(added, "担当").cells[0], "汲田");
+    expect(next).toContain("担当: 汲田");
+  });
+
+  it("重なる鍵は番号を付けて避ける", () => {
+    expect(freeKey(FM, "担当")).toBe("担当");
+    expect(freeKey(FM, "種別")).toBe("種別 2");
+    expect(freeKey(addField(FM, "種別 2"), "種別")).toBe("種別 3");
+  });
+});
+
+describe("並びの項目を足す・消す", () => {
+  it("指した項目の下に入る", () => {
+    const f = find(FM, "4. 画面・機能案");
+    const next = addItem(FM, f.cells[0]);
+    const now = find(next, "4. 画面・機能案");
+    expect(now.cells.map((c) => c.text)).toEqual([
+      "3ce53222-ff1e-813b-934d-d06774db8c13",
+      "",
+      "3ce53222-ff1e-8000-0000-000000000000",
+    ]);
+    expect(withValue(next, now.cells[1], "足した")).toContain("- 足した");
+  });
+
+  it("項目を 1 つ消す", () => {
+    const f = find(FM, "4. 画面・機能案");
+    const next = dropItem(FM, f.cells[0]);
+    expect(read(next)["4. 画面・機能案"]).toEqual([
+      "3ce53222-ff1e-8000-0000-000000000000",
+    ]);
+  });
+
+  it("最後の 1 つを消すと、値の無い鍵に戻る", () => {
+    let next = FM;
+    for (const cell of find(FM, "4. 画面・機能案").cells.slice().reverse()) {
+      next = dropItem(next, cell);
+    }
+    expect(find(next, "4. 画面・機能案").cells.map((c) => c.text)).toEqual([""]);
+    expect(read(next)["4. 画面・機能案"]).toBe(null);
+  });
+});
+
+describe("何も無いファイルに付ける", () => {
+  it("題だけのフロントマターを作る", () => {
+    const fm = newFrontmatter("設計メモ");
+    expect(fm).toBe("---\ntitle: 設計メモ\n---\n\n");
+    expect(fieldsOf(fm).map((f) => f.key)).toEqual(["title"]);
+  });
+
+  it("記号を含むファイル名でも読み直せる", () => {
+    const fm = newFrontmatter("[草案] 1: はじめ");
+    expect(() => read(fm)).not.toThrow();
+    expect(read(fm).title).toBe("[草案] 1: はじめ");
   });
 });
