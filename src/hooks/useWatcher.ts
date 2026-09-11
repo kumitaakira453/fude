@@ -1,10 +1,37 @@
-import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import { watch, type UnwatchFn, type WatchEvent } from "@tauri-apps/plugin-fs";
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
 import { invalidateImage, isImage, isMarkdown } from "../lib/fsAccess";
-import { pairRenames } from "../lib/renames";
+import { matchRenames, newRenameMemo } from "../lib/renames";
 import * as A from "../state/atoms";
 import { useWorkspace } from "./useWorkspace";
+
+// 監視の合図の読み方。notify の種別はそのまま届くので、名前の変更と消滅は
+// 当てずっぽうではなく合図で分かる。
+const modifyOf = (event: WatchEvent) => {
+  const kind = event.type;
+  return typeof kind === "object" && "modify" in kind ? kind.modify : null;
+};
+
+// 古い名前と新しい名前がまとめて届いたときの組。
+function renamedPair(event: WatchEvent, root: string): [string, string] | null {
+  const mod = modifyOf(event);
+  if (!mod || mod.kind !== "rename" || mod.mode !== "both") return null;
+  if (event.paths.length !== 2) return null;
+  const [from, to] = event.paths;
+  if (!from.startsWith(root) || !to.startsWith(root)) return null;
+  // 本文かフォルダのときだけ。画像などの付け替えは開いているタブに関わらない。
+  if (!isMarkdown(to) && /\.[a-z0-9]+$/i.test(to)) return null;
+  return [from.slice(root.length + 1), to.slice(root.length + 1)];
+}
+
+// そのパスが消えた合図か（消滅、または名前の変更の「古い方」）。
+function vanished(event: WatchEvent): boolean {
+  const kind = event.type;
+  if (typeof kind === "object" && "remove" in kind) return true;
+  const mod = modifyOf(event);
+  return mod?.kind === "rename" && mod.mode === "from";
+}
 
 // Tauri の OS ネイティブ file watcher でアクティブフォルダを監視し、変更を即反映する。
 export function useWatcher() {
@@ -19,8 +46,10 @@ export function useWatcher() {
     let disposed = false;
     let unwatch: UnwatchFn | null = null;
     let treeTimer: number | undefined;
-    // 名前の変更は「古い名前が消えた」「新しい名前が現れた」として届く。
-    // 木を取り直す前後の顔ぶれを比べれば、届き方に関わらず組にできる。
+    // 名前の変更は届き方が一定しない。両方まとめて届くこともあれば、
+    // 「古い名前が消えた」「新しい名前が現れた」が別々の回に届くこともある。
+    // 組めなかった片割れは覚え書きに残し、次の回の相手と突き合わせる。
+    const memo = newRenameMemo();
     const scheduleTreeRefresh = () => {
       window.clearTimeout(treeTimer);
       treeTimer = window.setTimeout(() => {
@@ -29,11 +58,13 @@ export function useWatcher() {
         void refreshTreeStructure().then(() => {
           if (disposed) return;
           const after = new Set(store.get(A.filesAtom).map((f) => f.path));
-          const missing = before.filter((p) => !after.has(p));
-          const born = [...after].filter((p) => !before.includes(p));
-          for (const [from, to] of pairRenames(missing, born)) {
-            void adoptRename(from, to);
-          }
+          const pairs = matchRenames(memo, {
+            missing: before.filter((p) => !after.has(p)),
+            born: [...after].filter((p) => !before.includes(p)),
+            present: after,
+            now: Date.now(),
+          });
+          for (const [from, to] of pairs) void adoptRename(from, to);
         });
       }, 400);
     };
@@ -42,8 +73,16 @@ export function useWatcher() {
       root,
       (event) => {
         if (disposed) return;
+        // 名前の変更として届いたなら、当てずっぽうに頼らずそのまま組める。
+        const both = renamedPair(event, root);
+        if (both) {
+          void adoptRename(both[0], both[1]);
+          scheduleTreeRefresh();
+          return;
+        }
         const known = new Set(store.get(A.filesAtom).map((f) => f.path));
         const touched = new Map(store.get(A.touchedAtom));
+        const gone = vanished(event);
         let structural = false;
         let imageChanged = false;
         for (const abs of event.paths) {
@@ -53,8 +92,10 @@ export function useWatcher() {
             // 触られた時刻を今にしておく。クイックオープンの並び順が、
             // 外から書き換わった分（エージェントの編集など）も追いかける。
             touched.set(rel, Date.now());
-            if (known.has(rel)) void reloadFile(rel);
-            else structural = true; // 新規 md
+            // 消えた合図なら読み直しても意味が無い。木を取り直して、
+            // 現れた名前と組にできるか見る。
+            if (!gone && known.has(rel)) void reloadFile(rel);
+            else structural = true;
           } else if (isImage(rel)) {
             // 画像が変わったらキャッシュを捨てて再取得させる
             invalidateImage(abs);
