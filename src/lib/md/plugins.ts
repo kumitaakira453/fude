@@ -1,4 +1,4 @@
-import { baseKeymap, chainCommands } from "prosemirror-commands";
+import { baseKeymap, chainCommands, lift } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { inputRules } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
@@ -206,15 +206,23 @@ export const dropEmptyBack: Command = (state, dispatch) => {
 //
 // 引用や callout は触らない。畳まれても失うものが無く、Markdown としても
 // 自然な畳み方になる。
-export const outdentBack: Command = (state, dispatch) => {
+export const outdentBack: Command = (state, dispatch, view) => {
   const { empty, $from } = state.selection;
   if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
   if ($from.depth < 2) return false;
   const depth = $from.depth - 1;
   const holder = $from.node(depth);
-  if (holder.type !== schema.nodes.details) return false;
+  if (!HOLDERS.has(holder.type)) return false;
   // 2 つ目以降の塊は、同じ囲みの中で手前の塊へ継ぐのが正しい。
   if ($from.index(depth) !== 0) return false;
+
+  // 引用と callout は、囲みが先頭に居るなら既定に任せる（塊が外へ出て囲みが
+  // 畳まれる、Markdown として自然な形）。手前に別の塊があるときだけ自分で
+  // 出す。既定はそのとき、囲みを丸ごと手前の項目の中へ押し込んでしまう。
+  if (holder.type !== schema.nodes.details) {
+    if ($from.index(depth - 1) === 0) return false;
+    return lift(state, dispatch, view);
+  }
 
   if (dispatch) {
     const block = $from.parent;
@@ -258,6 +266,29 @@ export const dropEmptyBefore: Command = (state, dispatch) => {
   if (dispatch) {
     const to = $from.before();
     dispatch(state.tr.delete(to - before.nodeSize, to).scrollIntoView());
+  }
+  return true;
+};
+
+// 囲みの後ろの塊の先頭で Backspace。囲みの中へ引きずり込まない。
+//
+// 既定（joinBackward）は手前が囲みだと、その最後の子として今の塊を差し込む。
+// 書いている人からは「外に置いたはずの段落がトグルの中へ吸い込まれる」ように
+// 見える。ここでは文書を変えず、直前の字の末尾へ寄せるだけにする（続けて
+// 押せば、そこから 1 字ずつ消える）。
+export const keepOutOfHolder: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
+  // 空の塊は消す番（dropEmptyBack）に譲る。
+  if ($from.parent.content.size === 0) return false;
+  if ($from.depth < 1) return false;
+  const depth = $from.depth - 1;
+  const index = $from.index(depth);
+  if (index === 0) return false;
+  if (!HOLDERS.has($from.node(depth).child(index - 1).type)) return false;
+  if (dispatch) {
+    const at = Selection.near(state.doc.resolve($from.before() - 1), -1);
+    dispatch(state.tr.setSelection(at).scrollIntoView());
   }
   return true;
 };
@@ -527,6 +558,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         dropEmptyBack,
         outdentBack,
         dropEmptyBefore,
+        keepOutOfHolder,
       ),
       Delete: toSourceForward,
       "Mod-s": () => {

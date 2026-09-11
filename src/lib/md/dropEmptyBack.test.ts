@@ -6,6 +6,7 @@ import {
   dropEmptyBack,
   dropEmptyBefore,
   editorPlugins,
+  keepOutOfHolder,
   outdentBack,
   unlistBack,
 } from "./plugins";
@@ -270,5 +271,53 @@ Regagaga
 
   it("中身のある囲みは消さない", () => {
     expect(outdent(TOGGLE_TWO, "あとの段落", dropEmptyBefore).ran).toBe(false);
+  });
+});
+
+describe("囲みの中へ引きずり込まない", () => {
+  const AFTER_TOGGLE = `<details>
+<summary>トグル</summary>
+
+中の文
+
+</details>
+
+あとの段落
+`;
+
+  it("トグルの後ろの段落は、押しても外に残る", () => {
+    const { ran, md, shape } = outdent(AFTER_TOGGLE, "あとの段落", keepOutOfHolder);
+    expect(ran).toBe(true);
+    // 文書は動かない（カーソルが直前の字の末尾へ寄るだけ）
+    expect(shape).toEqual(["details", "paragraph"]);
+    expect(md).toBe(AFTER_TOGGLE);
+  });
+
+  it("引用や callout の後ろでも同じ", () => {
+    for (const src of [
+      "> 引用の文\n\nあとの段落\n",
+      '<callout icon="💡">\n中の文\n</callout>\n\nあとの段落\n',
+    ]) {
+      const { ran, md } = outdent(src, "あとの段落", keepOutOfHolder);
+      expect(ran).toBe(true);
+      expect(md).toBe(src);
+    }
+  });
+
+  it("空の塊は消す番に譲る", () => {
+    const { ran } = dropCleared(AFTER_TOGGLE, "あとの段落", keepOutOfHolder);
+    expect(ran).toBe(false);
+  });
+
+  it("囲みが先頭に無いときは、囲みごと項目へ押し込まない", () => {
+    const src = '- 項目\n\n<callout icon="💡">\n中の文\n</callout>\n';
+    const { ran, shape } = outdent(src, "中の文");
+    expect(ran).toBe(true);
+    // callout の中身が外へ出る（一覧の項目の中へ入らない）
+    expect(shape).toEqual(["bulletList", "paragraph"]);
+  });
+
+  it("囲みが先頭に居るときは今までどおり", () => {
+    expect(outdent("> 引用の文\n", "引用の文").ran).toBe(false);
   });
 });
