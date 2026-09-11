@@ -219,3 +219,41 @@ describe("トグル", () => {
     expect(box.querySelector("input")?.value).toBe("決め方");
   });
 });
+
+// トグルの見出しは入力欄。ここから題も階層も直せる。
+describe("トグルの見出しを直す", () => {
+  const TOGGLE = "<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n";
+  const type = (el: HTMLInputElement, value: string) => {
+    el.value = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const press = (el: Element, key: string) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+
+  it("打った題が開きタグへ戻る", () => {
+    const view = editor(TOGGLE);
+    const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
+    type(title, "決め方");
+    expect(view.state.doc.child(0).attrs.head).toBe("<details>\n<summary>決め方</summary>");
+  });
+
+  it("`## ` と打つと見出しトグルになる", () => {
+    const view = editor(TOGGLE);
+    const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
+    type(title, "## 決め方");
+    expect(view.state.doc.child(0).attrs.head).toBe(
+      "<details>\n<summary><h2>決め方</h2></summary>",
+    );
+    // 包むタグも見出しに変わる
+    expect(view.dom.querySelector(".mg-details-title-box")?.tagName).toBe("H2");
+  });
+
+  it("見出しの頭で Backspace を押すと素のトグルへ戻る", () => {
+    const view = editor("<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n");
+    const title = view.dom.querySelector<HTMLInputElement>(".mg-details-title")!;
+    title.setSelectionRange(0, 0);
+    press(title, "Backspace");
+    expect(view.state.doc.child(0).attrs.head).toBe("<details>\n<summary>決め方</summary>");
+    expect(view.dom.querySelector(".mg-details-title-box")?.tagName).toBe("SPAN");
+  });
+});

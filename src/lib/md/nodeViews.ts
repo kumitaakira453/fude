@@ -12,7 +12,7 @@ import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
 import { openMath } from "./math";
 import { MERMAID, PLAIN, languages } from "./highlight";
-import { headLevelOf, schema, summaryOf, withSummary } from "./schema";
+import { headLevelOf, schema, summaryOf, withHeadLevel, withSummary } from "./schema";
 
 // 編集面の専用の描画。
 //
@@ -759,16 +759,30 @@ class DetailsView implements NodeView {
     const at = this.getPos();
     if (at === undefined) return;
     // 原文では生 HTML なので、タグを作れる字は入れさせない。
-    const text = this.title.value.replace(/[<>]/g, "");
+    let text = this.title.value.replace(/[<>]/g, "");
     const caret = this.title.selectionStart;
+
+    // "## " と打ったら見出しのトグルにする。本文の見出しと同じ打ち方。
+    const hashes = /^(#{1,6})\s/.exec(text);
+    let head = this.node.attrs.head as string;
+    if (hashes) {
+      text = text.slice(hashes[0].length);
+      head = withHeadLevel(head, hashes[1].length);
+    }
     if (text !== this.title.value) this.title.value = text;
 
     this.view.dispatch(
       this.view.state.tr.setNodeMarkup(at, undefined, {
         ...this.node.attrs,
-        head: withSummary(this.node.attrs.head as string, text),
+        head: withSummary(head, text),
       }),
     );
+    // 見出しの階層が変わると、包むタグごと作り直される（update が false を
+    // 返す）。新しい入力欄へ焦点を渡し直す。
+    if (hashes) {
+      this.keepFocus(at, Math.max(0, (caret ?? 0) - hashes[0].length));
+      return;
+    }
     // 書き換えで焦点が編集面へ戻ることがある。打っている場所へ返す。
     if (document.activeElement !== this.title) {
       this.title.focus();
@@ -776,8 +790,36 @@ class DetailsView implements NodeView {
     }
   }
 
+  // 作り直されたあとの入力欄へ焦点を戻す。
+  private keepFocus(at: number, caret: number) {
+    const dom = this.view.nodeDOM(at);
+    const title =
+      dom instanceof HTMLElement
+        ? dom.querySelector<HTMLInputElement>(".mg-details-title")
+        : null;
+    if (!title) return;
+    title.focus();
+    title.setSelectionRange(caret, caret);
+  }
+
   // Enter と下矢印で中身へ入る。Escape は編集面へ戻す。
+  // 頭で Backspace を押したら、見出しトグルを素のトグルへ戻す。
   private onKey(e: KeyboardEvent) {
+    if (e.key === "Backspace") {
+      const at = this.getPos();
+      if (at === undefined) return;
+      if (this.title.selectionStart !== 0 || this.title.selectionEnd !== 0) return;
+      if (this.level === null) return;
+      e.preventDefault();
+      this.view.dispatch(
+        this.view.state.tr.setNodeMarkup(at, undefined, {
+          ...this.node.attrs,
+          head: withHeadLevel(this.node.attrs.head as string, null),
+        }),
+      );
+      this.keepFocus(at, 0);
+      return;
+    }
     if (e.key !== "Enter" && e.key !== "ArrowDown" && e.key !== "Escape") return;
     e.preventDefault();
     const at = this.getPos();

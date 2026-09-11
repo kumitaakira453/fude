@@ -45,13 +45,19 @@ export const headingHead = (level: number, text: string): string =>
 
 // 打ち直した見出しを、開きタグの <summary> の中身へ差し戻す。開きタグの属性や
 // 前後の行は原文のまま残し、見出しトグルなら見出しのタグも残す。
-export const withSummary = (head: string, text: string): string => {
-  const level = headLevelOf(head);
+export const withSummary = (head: string, text: string): string =>
+  fillSummary(head, text, headLevelOf(head));
+
+// 見出しの階層を付け替える。null を渡すと素のトグルへ戻す。
+export const withHeadLevel = (head: string, level: number | null): string =>
+  fillSummary(head, summaryOf(head), level);
+
+function fillSummary(head: string, text: string, level: number | null): string {
   const body = level === null ? text : `<h${level}>${text}</h${level}>`;
   return SUMMARY.test(head)
     ? head.replace(SUMMARY, (_, open: string, _inner: string, close: string) => open + body + close)
     : `${head}\n<summary>${body}</summary>`;
-};
+}
 
 export const schema = new Schema({
   nodes: {

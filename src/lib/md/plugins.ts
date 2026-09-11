@@ -198,6 +198,30 @@ export const dropEmptyBack: Command = (state, dispatch) => {
   return true;
 };
 
+// 空になったトグルの中で Backspace。囲みは消さず、見出しへ移る。
+//
+// 中身が無くなってもトグルは残す（見出しの字は書いたもの）。続けて押したときの
+// 行き先は、その見出しの入力欄。ここから題を直せる。
+export const toDetailsHead: Command = (state, dispatch, view) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
+  if ($from.parent.content.size > 0 || $from.depth < 2) return false;
+  const depth = $from.depth - 1;
+  if ($from.node(depth).type !== schema.nodes.details) return false;
+  if ($from.index(depth) !== 0 || !view) return false;
+  if (dispatch) {
+    const dom = view.nodeDOM($from.before(depth));
+    const title =
+      dom instanceof HTMLElement
+        ? dom.querySelector<HTMLInputElement>(".mg-details-title")
+        : null;
+    if (!title) return false;
+    title.focus();
+    title.setSelectionRange(title.value.length, title.value.length);
+  }
+  return true;
+};
+
 // トグルの中身の先頭で Backspace。その塊を囲みの外へ出す。
 //
 // 既定（joinBackward）は囲みごと畳んでしまい、トグルでは見出し（<summary> の
@@ -247,28 +271,30 @@ export const outdentBack: Command = (state, dispatch, view) => {
   return true;
 };
 
-// 直前が「空の段落ひとつだけの囲み」なら、その囲みを消す。
+// 表のセルを 3 回押したら、そのセルの字を全部選ぶ。
 //
-// 字下げを解いた直後にもう一度 Backspace を押したとき、既定に任せると空に
-// なった囲みへ吸い戻される。1 回目で外へ出し、2 回目で空の囲みを片付ける。
-export const dropEmptyBefore: Command = (state, dispatch) => {
-  const { empty, $from } = state.selection;
-  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
-  if ($from.depth < 1) return false;
-  const depth = $from.depth - 1;
-  const index = $from.index(depth);
-  if (index === 0) return false;
-  const before = $from.node(depth).child(index - 1);
-  const only = before.childCount === 1 ? before.firstChild : null;
-  if (!HOLDERS.has(before.type) || !only?.isTextblock || only.content.size > 0) {
-    return false;
-  }
-  if (dispatch) {
-    const to = $from.before();
-    dispatch(state.tr.delete(to - before.nodeSize, to).scrollIntoView());
-  }
-  return true;
-};
+// prosemirror-tables は 3 回目でセルの塊ごと選ぶ（CellSelection）ので、
+// 字を打ち直したりコピーしたりができない。文章の上では「段落を選ぶ」のが
+// OS の作法なので、そちらへ寄せる。
+const cellTripleClick = new Plugin({
+  props: {
+    handleTripleClick(view, pos) {
+      const $at = view.state.doc.resolve(pos);
+      for (let d = $at.depth; d > 0; d--) {
+        if ($at.node(d).type !== schema.nodes.tableCell) continue;
+        const from = $at.start(d);
+        const to = $at.end(d);
+        view.dispatch(
+          view.state.tr.setSelection(
+            TextSelection.between(view.state.doc.resolve(from), view.state.doc.resolve(to)),
+          ),
+        );
+        return true;
+      }
+      return false;
+    },
+  },
+});
 
 // 囲みの後ろの塊の先頭で Backspace。囲みの中へ引きずり込まない。
 //
@@ -555,9 +581,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         toSourceBack,
         unlistBack,
         eraseInMark,
+        toDetailsHead,
         dropEmptyBack,
         outdentBack,
-        dropEmptyBefore,
         keepOutOfHolder,
       ),
       Delete: toSourceForward,
@@ -593,6 +619,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     // 打った字が継ぐ装飾の直し。入力変換より後に置き、規則が控えを触ったあとの
     // 組み合わせを見る。
     keepNesting,
+    // セルを 3 回押したら、そのセルの字を選ぶ。tableEditing より前に置く
+    // （後ろだと、セルの塊ごと選ぶ既定に取られる）。
+    cellTripleClick,
     // セルの選択と、いま触っているセルの印。
     tableEditing(),
     focusedCell,

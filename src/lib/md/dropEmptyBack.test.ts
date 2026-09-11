@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
 import {
   dropEmptyBack,
-  dropEmptyBefore,
   editorPlugins,
   keepOutOfHolder,
   outdentBack,
+  toDetailsHead,
   unlistBack,
 } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
@@ -254,26 +254,6 @@ Regagaga
   });
 });
 
-describe("空になった囲みを片付ける", () => {
-  const AFTER = `<details>
-<summary>トグル</summary>
-
-</details>
-
-Regagaga
-`;
-
-  it("直前が空の囲みなら、その囲みを消す", () => {
-    const { ran, md } = outdent(AFTER, "Regagaga", dropEmptyBefore);
-    expect(ran).toBe(true);
-    expect(md).toBe("Regagaga\n");
-  });
-
-  it("中身のある囲みは消さない", () => {
-    expect(outdent(TOGGLE_TWO, "あとの段落", dropEmptyBefore).ran).toBe(false);
-  });
-});
-
 describe("囲みの中へ引きずり込まない", () => {
   const AFTER_TOGGLE = `<details>
 <summary>トグル</summary>
@@ -319,5 +299,33 @@ describe("囲みの中へ引きずり込まない", () => {
 
   it("囲みが先頭に居るときは今までどおり", () => {
     expect(outdent("> 引用の文\n", "引用の文").ran).toBe(false);
+  });
+});
+
+// 中身が空になってもトグルは残す。続けて押したら、見出しの入力欄へ移る。
+describe("空のトグルは残す", () => {
+  const EMPTY = `<details>
+<summary>トグル</summary>
+
+</details>
+`;
+
+  it("空の中身で押しても、囲みは消えない（見出しへ移る）", () => {
+    const loaded = fromMarkdown(EMPTY);
+    const state = EditorState.create({
+      doc: loaded.doc,
+      plugins: editorPlugins({ onSave: () => {} }),
+    });
+    // 中身の空の段落へカーソルを置く
+    let at = -1;
+    state.doc.descendants((node, pos) => {
+      if (at < 0 && node.isTextblock) at = pos + 1;
+    });
+    const ready = state.apply(state.tr.setSelection(TextSelection.create(state.doc, at)));
+    // view を持たない呼び出しでは何もしない（入力欄が無いので移れない）
+    expect(toDetailsHead(ready, undefined, undefined)).toBe(false);
+    // 囲みを消す番には渡さない
+    const shape = (s: typeof ready) => s.doc.children.map((n) => n.type.name);
+    expect(shape(ready)).toEqual(["details"]);
   });
 });

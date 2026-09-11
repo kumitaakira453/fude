@@ -598,3 +598,32 @@ describe("コードの塊の中の Tab", () => {
     expect(source()).toBe("- あ\n  - い\n");
   });
 });
+
+// 表のセルを 3 回押す。OS の作法どおり、そのセルの字を選ぶ。
+// prosemirror-tables に任せるとセルの塊ごと選ぶ（CellSelection）ので、
+// 字を打ち直したりコピーしたりができない。
+describe("セルを 3 回押す", () => {
+  const TABLE = "| 見出し | 値 |\n| --- | --- |\n| 長めのセルの文章です | 42 |\n";
+
+  const tripleClick = (view: EditorView, at: number) =>
+    view.someProp("handleTripleClick", (f) =>
+      f(view, at, new MouseEvent("mousedown", { detail: 3 })),
+    ) ?? false;
+
+  it("そのセルの字を選ぶ（セルの塊ごとではない）", () => {
+    const view = editor(TABLE);
+    let at = -1;
+    view.state.doc.descendants((node, pos) => {
+      if (at < 0 && node.isText && node.text?.includes("長めの")) at = pos + 3;
+    });
+    expect(tripleClick(view, at)).toBe(true);
+    const sel = view.state.selection;
+    expect(sel instanceof TextSelection).toBe(true);
+    expect(view.state.doc.textBetween(sel.from, sel.to)).toBe("長めのセルの文章です");
+  });
+
+  it("表の外では何もしない", () => {
+    const view = editor("ただの段落\n");
+    expect(tripleClick(view, 2)).toBe(false);
+  });
+});
