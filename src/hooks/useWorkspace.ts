@@ -24,6 +24,7 @@ import {
   recordRecentFolder,
   type DropPoint,
 } from "../lib/windows";
+import { moveViewpoints } from "../lib/viewpoint";
 import {
   remapLeafPaths,
   resetLayout,
@@ -198,13 +199,22 @@ export function useWorkspace() {
   //   4) 実在ファイルに無い旧キーを掃除
   // の順で行う。
   const applyPathRemap = useCallback(
-    async (remap: (p: string | null) => string | null) => {
+    async (remap: (p: string | null) => string | null, moved?: [string, string]) => {
       const cur = new Map(store.get(A.contentCacheAtom));
       for (const [k, v] of [...cur]) {
         const nk = remap(k);
         if (nk && nk !== k) cur.set(nk, v);
       }
       store.set(A.contentCacheAtom, cur);
+      // 読み込んだ時刻と、見ていた位置も一緒に連れていく。置いていくと、
+      // 名前を変えただけで先頭に戻る。
+      const times = new Map(store.get(A.mtimeCacheAtom));
+      for (const [k, v] of [...times]) {
+        const nk = remap(k);
+        if (nk && nk !== k) times.set(nk, v);
+      }
+      store.set(A.mtimeCacheAtom, times);
+      if (moved) moveViewpoints(moved[0], moved[1]);
       remapLeafPaths(store, remap);
       await refreshTreeStructure();
       const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
@@ -456,6 +466,23 @@ export function useWorkspace() {
     [absOf, uniqueRel, refreshTreeStructure],
   );
 
+  // 名前が変わったときの写像。そのファイルと、その下に居るものを付け替える。
+  const remapper = (from: string, to: string) => (p: string | null) => {
+    if (p === from) return to;
+    if (p && p.startsWith(`${from}/`)) return to + p.slice(from.length);
+    return p;
+  };
+
+  // 外で名前が変わったとき、開いているタブをそのファイルへ付け替える。
+  // ディスクはもう変わっているので、付け替えと読み直しだけを行う。
+  const adoptRename = useCallback(
+    async (from: string, to: string) => {
+      await applyPathRemap(remapper(from, to), [from, to]);
+      await reloadFile(to);
+    },
+    [applyPathRemap, reloadFile],
+  );
+
   const renameEntry = useCallback(
     async (rel: string, newName: string, isDir: boolean) => {
       const trimmed = newName.trim();
@@ -468,12 +495,7 @@ export function useWorkspace() {
       const newAbs = absOf(newRel);
       if (!oldAbs || !newAbs) return;
       await renamePath(oldAbs, newAbs);
-      const remap = (p: string | null) => {
-        if (p === rel) return newRel;
-        if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
-        return p;
-      };
-      await applyPathRemap(remap);
+      await applyPathRemap(remapper(rel, newRel), [rel, newRel]);
     },
     [absOf, applyPathRemap],
   );
@@ -505,12 +527,7 @@ export function useWorkspace() {
       const newAbs = absOf(newRel);
       if (!oldAbs || !newAbs) return;
       await renamePath(oldAbs, newAbs);
-      const remap = (p: string | null) => {
-        if (p === rel) return newRel;
-        if (p && p.startsWith(rel + "/")) return newRel + p.slice(rel.length);
-        return p;
-      };
-      await applyPathRemap(remap);
+      await applyPathRemap(remapper(rel, newRel), [rel, newRel]);
     },
     [absOf, uniqueRel, applyPathRemap],
   );
@@ -592,6 +609,7 @@ export function useWorkspace() {
     createFile,
     createFolder,
     renameEntry,
+    adoptRename,
     deleteEntry,
     moveEntry,
     saveFile,

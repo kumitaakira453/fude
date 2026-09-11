@@ -2,6 +2,7 @@ import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
 import { invalidateImage, isImage, isMarkdown } from "../lib/fsAccess";
+import { pairRenames } from "../lib/renames";
 import * as A from "../state/atoms";
 import { useWorkspace } from "./useWorkspace";
 
@@ -9,7 +10,7 @@ import { useWorkspace } from "./useWorkspace";
 export function useWatcher() {
   const store = useStore();
   const activeFolderId = useAtomValue(A.activeFolderIdAtom);
-  const { getRootPath, reloadFile, refreshTreeStructure } = useWorkspace();
+  const { getRootPath, reloadFile, refreshTreeStructure, adoptRename } = useWorkspace();
 
   useEffect(() => {
     const root = getRootPath();
@@ -18,10 +19,22 @@ export function useWatcher() {
     let disposed = false;
     let unwatch: UnwatchFn | null = null;
     let treeTimer: number | undefined;
+    // 名前の変更は「古い名前が消えた」「新しい名前が現れた」として届く。
+    // 木を取り直す前後の顔ぶれを比べれば、届き方に関わらず組にできる。
     const scheduleTreeRefresh = () => {
       window.clearTimeout(treeTimer);
       treeTimer = window.setTimeout(() => {
-        if (!disposed) void refreshTreeStructure();
+        if (disposed) return;
+        const before = store.get(A.filesAtom).map((f) => f.path);
+        void refreshTreeStructure().then(() => {
+          if (disposed) return;
+          const after = new Set(store.get(A.filesAtom).map((f) => f.path));
+          const missing = before.filter((p) => !after.has(p));
+          const born = [...after].filter((p) => !before.includes(p));
+          for (const [from, to] of pairRenames(missing, born)) {
+            void adoptRename(from, to);
+          }
+        });
       }, 400);
     };
 

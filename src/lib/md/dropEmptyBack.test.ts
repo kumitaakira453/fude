@@ -2,7 +2,13 @@ import { chainCommands } from "prosemirror-commands";
 import { EditorState, TextSelection, type Command } from "prosemirror-state";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { dropEmptyBack, editorPlugins, unlistBack } from "./plugins";
+import {
+  dropEmptyBack,
+  dropEmptyBefore,
+  editorPlugins,
+  outdentBack,
+  unlistBack,
+} from "./plugins";
 import { toMarkdown } from "./toMarkdown";
 
 // 中身の無いブロックの先頭で Backspace。
@@ -167,5 +173,102 @@ describe("空のブロックを消す", () => {
 
   it("文書にそれしか無ければ何もしない", () => {
     expect(drop("\n").ran).toBe(false);
+  });
+});
+
+// トグルの中身の先頭で Backspace。囲みの外へ出し、見出しは残す。
+
+function outdent(body: string, text: string, cmd: Command = outdentBack) {
+  const loaded = fromMarkdown(body);
+  const opened = EditorState.create({
+    doc: loaded.doc,
+    plugins: editorPlugins({ onSave: () => {} }),
+  });
+  let at = -1;
+  opened.doc.descendants((node, pos) => {
+    if (at >= 0) return false;
+    if (!node.isTextblock) return true;
+    if (node.textContent === text) at = pos + 1;
+    return at < 0;
+  });
+  if (at < 0) throw new Error(`見つからない: ${text}`);
+  return run(opened, at, loaded, cmd);
+}
+
+const TOGGLE = `<details>
+<summary>トグル</summary>
+
+Regagaga
+
+</details>
+`;
+
+const TOGGLE_TWO = `<details>
+<summary>トグル</summary>
+
+Regagaga
+
+あとの段落
+
+</details>
+`;
+
+describe("トグルの外へ出す", () => {
+  it("中身がひとつなら、空の囲みを残して外へ出す", () => {
+    const { ran, md, shape } = outdent(TOGGLE, "Regagaga");
+    expect(ran).toBe(true);
+    // 見出しは残る
+    expect(shape).toEqual(["details", "paragraph"]);
+    expect(md).toBe(`<details>
+<summary>トグル</summary>
+
+</details>
+
+Regagaga
+`);
+  });
+
+  it("中身が残るなら、その塊だけを外へ出す", () => {
+    const { ran, md, shape } = outdent(TOGGLE_TWO, "Regagaga");
+    expect(ran).toBe(true);
+    expect(shape).toEqual(["details", "paragraph"]);
+    expect(md).toBe(`<details>
+<summary>トグル</summary>
+
+あとの段落
+
+</details>
+
+Regagaga
+`);
+  });
+
+  it("2 つ目の塊の先頭では何もしない（手前の塊へ継ぐのが正しい）", () => {
+    expect(outdent(TOGGLE_TWO, "あとの段落").ran).toBe(false);
+  });
+
+  it("引用や callout は触らない", () => {
+    expect(outdent("> Regagaga\n", "Regagaga").ran).toBe(false);
+    expect(outdent('<callout icon="💡">\nRegagaga\n</callout>\n', "Regagaga").ran).toBe(false);
+  });
+});
+
+describe("空になった囲みを片付ける", () => {
+  const AFTER = `<details>
+<summary>トグル</summary>
+
+</details>
+
+Regagaga
+`;
+
+  it("直前が空の囲みなら、その囲みを消す", () => {
+    const { ran, md } = outdent(AFTER, "Regagaga", dropEmptyBefore);
+    expect(ran).toBe(true);
+    expect(md).toBe("Regagaga\n");
+  });
+
+  it("中身のある囲みは消さない", () => {
+    expect(outdent(TOGGLE_TWO, "あとの段落", dropEmptyBefore).ran).toBe(false);
   });
 });

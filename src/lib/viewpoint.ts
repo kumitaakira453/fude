@@ -54,6 +54,23 @@ export function recallViewpoint(key: string | null): Viewpoint {
   return (key && seen.get(key)) || { at: 0, into: 0 };
 }
 
+// 名前が変わったファイルの控えを、新しいパスへ移す。鍵はペインごとなので、
+// 開いているペインの数だけ書き換える。フォルダごと動いたときのために、
+// 下に居るファイルの控えも一緒に連れていく。
+export function moveViewpoints(from: string, to: string): void {
+  if (from === to) return;
+  const under = `${from}/`;
+  for (const [key, value] of [...seen]) {
+    const at = key.indexOf(" ");
+    if (at < 0) continue;
+    const path = key.slice(at + 1);
+    if (path !== from && !path.startsWith(under)) continue;
+    seen.delete(key);
+    seen.set(`${key.slice(0, at)} ${to}${path.slice(from.length)}`, value);
+  }
+  save();
+}
+
 // ---- 控え ----
 
 function trim(): void {

@@ -72,3 +72,32 @@ describe("見ていた場所", () => {
     }
   });
 });
+
+// 名前が変わったファイルは、そのまま読み続けたい。控えも一緒に連れていく。
+describe("名前が変わったとき", () => {
+  it("開いているペインの数だけ控えを移す", async () => {
+    const vp = await fresh();
+    vp.rememberViewpoint(vp.viewKey("p1", "/docs/a.md"), 120, 8);
+    vp.rememberViewpoint(vp.viewKey("p2", "/docs/a.md"), 300, 0);
+
+    vp.moveViewpoints("/docs/a.md", "/docs/b.md");
+
+    expect(vp.recallViewpoint(vp.viewKey("p1", "/docs/b.md"))).toEqual({ at: 120, into: 8 });
+    expect(vp.recallViewpoint(vp.viewKey("p2", "/docs/b.md"))).toEqual({ at: 300, into: 0 });
+    expect(vp.recallViewpoint(vp.viewKey("p1", "/docs/a.md"))).toEqual({ at: 0, into: 0 });
+  });
+
+  it("フォルダごと動いたら、下のファイルも連れていく", async () => {
+    const vp = await fresh();
+    vp.rememberViewpoint(vp.viewKey("p1", "/docs/note.md"), 40, 2);
+    vp.moveViewpoints("/docs", "/archive");
+    expect(vp.recallViewpoint(vp.viewKey("p1", "/archive/note.md"))).toEqual({ at: 40, into: 2 });
+  });
+
+  it("関わりのない控えは触らない", async () => {
+    const vp = await fresh();
+    vp.rememberViewpoint(vp.viewKey("p1", "/docs/other.md"), 7, 1);
+    vp.moveViewpoints("/docs/a.md", "/docs/b.md");
+    expect(vp.recallViewpoint(vp.viewKey("p1", "/docs/other.md"))).toEqual({ at: 7, into: 1 });
+  });
+});

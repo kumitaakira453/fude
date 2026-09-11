@@ -259,8 +259,12 @@ function toMdast(node: PmNode): RootContent {
 
     case "details":
       // Notion が書き出す形に合わせ、開き・中身・閉じの間を 1 行空ける。
+      // 中身の無い塊は書き出さない（畳んだ直後の空のトグルで、空行だけが
+      // 積み上がる）。読み直すと空の段落へ戻るので、往復しても同じ。
       return verbatim(
-        [node.attrs.head, ...mapChildren(node, blockText), "</details>"].join("\n\n"),
+        [node.attrs.head, ...mapChildren(node, blockText).filter(Boolean), "</details>"].join(
+          "\n\n",
+        ),
       );
 
     default:

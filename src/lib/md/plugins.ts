@@ -198,6 +198,70 @@ export const dropEmptyBack: Command = (state, dispatch) => {
   return true;
 };
 
+// トグルの中身の先頭で Backspace。その塊を囲みの外へ出す。
+//
+// 既定（joinBackward）は囲みごと畳んでしまい、トグルでは見出し（<summary> の
+// 字）まで消える。中身が 2 つ以上あるときは手前の塊に継がれるだけで、字下げは
+// 解けない。どちらも「外へ出したい」という操作に応えていないので、自分で出す。
+//
+// 引用や callout は触らない。畳まれても失うものが無く、Markdown としても
+// 自然な畳み方になる。
+export const outdentBack: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
+  if ($from.depth < 2) return false;
+  const depth = $from.depth - 1;
+  const holder = $from.node(depth);
+  if (holder.type !== schema.nodes.details) return false;
+  // 2 つ目以降の塊は、同じ囲みの中で手前の塊へ継ぐのが正しい。
+  if ($from.index(depth) !== 0) return false;
+
+  if (dispatch) {
+    const block = $from.parent;
+    const start = $from.before(depth);
+    const end = $from.after(depth);
+    const tr = state.tr;
+    let at: number;
+    if (holder.childCount === 1) {
+      // 中身が空になる。空の段落を 1 つ残して、見出しごと囲みを保つ。
+      const kept = holder.type.create(holder.attrs, schema.nodes.paragraph.create());
+      tr.replaceWith(start, end, [kept, block]);
+      at = start + kept.nodeSize;
+    } else {
+      tr.delete($from.before(), $from.after());
+      at = tr.mapping.map(end);
+      tr.insert(at, block);
+    }
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
+
+// 直前が「空の段落ひとつだけの囲み」なら、その囲みを消す。
+//
+// 字下げを解いた直後にもう一度 Backspace を押したとき、既定に任せると空に
+// なった囲みへ吸い戻される。1 回目で外へ出し、2 回目で空の囲みを片付ける。
+export const dropEmptyBefore: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
+  if ($from.depth < 1) return false;
+  const depth = $from.depth - 1;
+  const index = $from.index(depth);
+  if (index === 0) return false;
+  const before = $from.node(depth).child(index - 1);
+  const only = before.childCount === 1 ? before.firstChild : null;
+  if (!HOLDERS.has(before.type) || !only?.isTextblock || only.content.size > 0) {
+    return false;
+  }
+  if (dispatch) {
+    const to = $from.before();
+    dispatch(state.tr.delete(to - before.nodeSize, to).scrollIntoView());
+  }
+  return true;
+};
+
 // 項目の先頭で Backspace。飾りを外して 1 段浅くする。いちばん外なら
 // 箇条書きを抜けて段落に戻る。
 //
@@ -461,6 +525,8 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         unlistBack,
         eraseInMark,
         dropEmptyBack,
+        outdentBack,
+        dropEmptyBefore,
       ),
       Delete: toSourceForward,
       "Mod-s": () => {
