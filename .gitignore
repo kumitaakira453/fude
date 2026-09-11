@@ -13,3 +13,6 @@ logo-icon.png
 sample/
 # 実験の生成物
 scripts/out
+
+# 設計メモ（ローカル専用）
+docs/
