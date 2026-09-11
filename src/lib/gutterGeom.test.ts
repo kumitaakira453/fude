@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { addBelow, holdAt, nearEdge, onLine, tableGeometry } from "./gutterGeom";
+import { addBelow, firstLine, holdAt, nearEdge, onLine, tableGeometry } from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -189,5 +189,24 @@ describe("nearEdge", () => {
   it("帯の広さは変えられる", () => {
     expect(nearEdge(110, 100, 5)).toBe(false);
     expect(nearEdge(104, 100, 5)).toBe(true);
+  });
+});
+
+describe("トグルの 1 行目", () => {
+  it("見出しの帯を 1 行目とする（入力欄は字を持たない）", () => {
+    const box = document.createElement("div");
+    box.className = "mg-details";
+    const head = document.createElement("div");
+    head.className = "mg-details-head";
+    head.appendChild(document.createElement("input"));
+    const body = document.createElement("div");
+    body.className = "mg-details-body";
+    body.textContent = "中の本文";
+    box.append(head, body);
+    document.body.appendChild(box);
+    rect(head, new DOMRect(0, 10, 200, 24));
+
+    expect(firstLine(box)?.top).toBe(10);
+    box.remove();
   });
 });

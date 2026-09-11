@@ -16,23 +16,42 @@ import { CALLOUT_RE } from "../callout";
 
 const id = { id: { default: null as string | null } };
 
-// <summary>…</summary> の中身。開きタグは原文のまま持っているので、
-// 見出しとして出すぶんだけ取り出す。
-export const summaryOf = (head: string): string =>
-  /<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary>/.exec(head)?.[1].trim() ?? "";
+const SUMMARY = /(<summary(?:\s[^>]*)?>)([\s\S]*?)(<\/summary>)/;
+// 見出しトグル。<summary> の中身がまるごと見出しになっている形。
+const HEADING = /^\s*<h([1-6])(?:\s[^>]*)?>([\s\S]*?)<\/h\1>\s*$/;
 
-const SUMMARY = /(<summary(?:\s[^>]*)?>)[\s\S]*?(<\/summary>)/;
+const insideSummary = (head: string): string => SUMMARY.exec(head)?.[2] ?? "";
+
+// <summary>…</summary> の中身。開きタグは原文のまま持っているので、
+// 見出しとして出すぶんだけ取り出す。見出しトグルならタグの中の字を返す。
+export const summaryOf = (head: string): string => {
+  const inner = insideSummary(head);
+  return (HEADING.exec(inner)?.[2] ?? inner).trim();
+};
+
+// 見出しトグルの階層。ただのトグルなら null。
+export const headLevelOf = (head: string): number | null => {
+  const level = HEADING.exec(insideSummary(head))?.[1];
+  return level ? Number(level) : null;
+};
 
 // 新しく作るトグルの開きタグ。書き戻しは開き・中身・閉じの間を 1 行空けるので、
 // この形のまま読み直せる。
 export const DETAILS_HEAD = "<details>\n<summary>トグル</summary>";
 
+// 見出しをトグルの頭にした形。原文は生 HTML なので、見出しもタグで書く。
+export const headingHead = (level: number, text: string): string =>
+  `<details>\n<summary><h${level}>${text}</h${level}></summary>`;
+
 // 打ち直した見出しを、開きタグの <summary> の中身へ差し戻す。開きタグの属性や
-// 前後の行は原文のまま残す。
-export const withSummary = (head: string, text: string): string =>
-  SUMMARY.test(head)
-    ? head.replace(SUMMARY, (_, open: string, close: string) => open + text + close)
-    : `${head}\n<summary>${text}</summary>`;
+// 前後の行は原文のまま残し、見出しトグルなら見出しのタグも残す。
+export const withSummary = (head: string, text: string): string => {
+  const level = headLevelOf(head);
+  const body = level === null ? text : `<h${level}>${text}</h${level}>`;
+  return SUMMARY.test(head)
+    ? head.replace(SUMMARY, (_, open: string, _inner: string, close: string) => open + body + close)
+    : `${head}\n<summary>${body}</summary>`;
+};
 
 export const schema = new Schema({
   nodes: {

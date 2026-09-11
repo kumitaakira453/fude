@@ -19,7 +19,7 @@ import type { EditorView } from "prosemirror-view";
 import { icon } from "./nodeViews";
 import { openEmojiBoard } from "./emoji";
 import { openMath } from "./math";
-import { DETAILS_HEAD, schema } from "./schema";
+import { DETAILS_HEAD, headingHead, schema } from "./schema";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
 //
@@ -108,6 +108,35 @@ function toWrapper(type: NodeType, attrs: Attrs): Command {
     return true;
   };
 }
+
+// トグル要素。見出しの上で使うと、その見出しがトグルの頭になる（見出しは
+// <summary> の中へ移り、中身は空から書き始める）。段落なら今までどおり、
+// 書きかけの文字がトグルの中身になる。
+const toToggle: Command = (state, dispatch) => {
+  const { $from, $to } = state.selection;
+  const details = schema.nodes.details;
+  if (!$from.sameParent($to) || !$from.parent.isTextblock || !fits($from, details)) {
+    return false;
+  }
+  if ($from.parent.type !== schema.nodes.heading) {
+    return toWrapper(details, { head: DETAILS_HEAD })(state, dispatch);
+  }
+  if (dispatch) {
+    // 原文では生 HTML なので、タグを作れる字は入れさせない。
+    const text = $from.parent.textContent.replace(/[<>]/g, "");
+    const head = headingHead($from.parent.attrs.level as number, text);
+    const at = $from.before();
+    const tr = state.tr.replaceRangeWith(
+      at,
+      $from.after(),
+      details.create({ head }, [schema.nodes.paragraph.create()]),
+    );
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
 
 // 表のセルは行を分けられないので、行内の改行は <br> に移す
 // （セルの中で改行を打ったときと同じ形）。
@@ -242,11 +271,11 @@ export const SLASH_ITEMS: SlashItem[] = [
   },
   {
     id: "toggle",
-    label: "トグルリスト",
+    label: "トグル要素",
     icon: "expand_more",
     hint: "",
-    aliases: ["toggle", "details", "togure", "折りたたみ"],
-    run: toWrapper(schema.nodes.details, { head: DETAILS_HEAD }),
+    aliases: ["toggle", "details", "togure", "トグル", "折りたたみ"],
+    run: toToggle,
   },
   {
     id: "quote",

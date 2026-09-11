@@ -1,7 +1,7 @@
 import type { Transaction } from "prosemirror-state";
 import { EditorState } from "prosemirror-state";
-import { describe, expect, it } from "vitest";
-import { rules } from "./inputRules";
+import { afterEach, describe, expect, it } from "vitest";
+import { rules, setNotionKeys } from "./inputRules";
 import { schema } from "./schema";
 
 // 規則そのものを呼ぶには、prosemirror-inputrules が内部に持っている 2 つが要る。
@@ -138,3 +138,27 @@ describe("行内を装飾する", () => {
   });
 });
 
+
+describe("Notion 風の打ち込み（試験中の設定）", () => {
+  afterEach(() => setNotionKeys(false));
+
+  it("入れていなければ、`>` は今までどおり引用", () => {
+    expect(first("> ").type.name).toBe("blockquote");
+  });
+
+  it("入れていなければ、`|` では何も起きない", () => {
+    expect(first("| ").type.name).toBe("paragraph");
+  });
+
+  it("入れると `>` はトグルになる", () => {
+    setNotionKeys(true);
+    const node = first("> ");
+    expect(node.type.name).toBe("details");
+    expect(node.attrs.head).toBe("<details>\n<summary>トグル</summary>");
+  });
+
+  it("入れると `|` が引用になる", () => {
+    setNotionKeys(true);
+    expect(first("| ").type.name).toBe("blockquote");
+  });
+});

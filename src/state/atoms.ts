@@ -111,6 +111,9 @@ export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
 // リアルタイム編集（ベータ）: どのファイルも、組版されたまま直接書ける編集面で
 // 開く。切っていれば読む画面だけになり、直すのは本文のダブルクリックから。
 export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
+// Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
+// （`>` は引用）から外れるので、入れた人にだけ効かせる。
+export const notionKeysAtom = atomWithStorage<boolean>("mdglow:notionkeys", false);
 // 図のソース欄の幅。図の記述は 1 行が長くなりやすいので掴んで広げられる。
 // 0 は「まだ動かしていない」で、窓の広さから決める。
 export const mermaidPaneAtom = atomWithStorage<number>("mdglow:mmdpane", 0);

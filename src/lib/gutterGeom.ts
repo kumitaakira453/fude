@@ -34,6 +34,10 @@ export const ONLY = GRIP + AWAY;
 // 囲み）では全行ぶんの箱が先に来る。それを 1 行目と取るとつまみが項目の
 // 真ん中に落ちる。字のところを直に測る。
 export function firstLine(el: Element): DOMRect | null {
+  // トグルの見出しは入力欄で、字を持たない。字を探すと中身の 1 行目に落ちて
+  // つまみが本文の行に付くので、見出しの帯があればそれを 1 行目とする。
+  const head = el.querySelector(":scope > .mg-details-head");
+  if (head) return head.getBoundingClientRect();
   const doc = el.ownerDocument;
   const walk = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   const span = doc.createRange();

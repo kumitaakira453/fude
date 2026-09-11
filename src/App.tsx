@@ -18,6 +18,7 @@ import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
+import { setNotionKeys } from "./lib/md/inputRules";
 import { useWatcher } from "./hooks/useWatcher";
 import { folderDisplayName } from "./lib/idb";
 import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
@@ -31,6 +32,7 @@ import {
   sessionLayoutsAtom,
   sidebarOpenAtom,
   sidebarWidthAtom,
+  notionKeysAtom,
   themeAtom,
 } from "./state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "./state/review";
@@ -43,6 +45,7 @@ export default function App() {
   // 掴んでいるあいだは仕切りが幅を直に書く（状態を通すと木全体が描き直される）。
   const sideRef = useRef<HTMLDivElement>(null);
   const theme = useAtomValue(themeAtom);
+  const notionKeys = useAtomValue(notionKeysAtom);
   const layout = useAtomValue(layoutAtom);
   const activePaneId = useAtomValue(activePaneIdAtom);
   const reviewOpen = useAtomValue(reviewScreenAtom);
@@ -59,6 +62,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // 打ち込みの規則は打鍵のたびに走るので、設定は編集面の外から渡しておく。
+  useEffect(() => {
+    setNotionKeys(notionKeys);
+  }, [notionKeys]);
 
   // ドラッグ&ドロップの取りこぼしで WebView が既定動作（ドロップされたパスへ
   // ナビゲーション→リロード＝画面全体が真っ白）になるのを全域で抑止する。

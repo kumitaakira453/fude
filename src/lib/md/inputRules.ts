@@ -4,7 +4,8 @@ import {
   wrappingInputRule,
 } from "prosemirror-inputrules";
 import type { MarkType } from "prosemirror-model";
-import { schema } from "./schema";
+import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
+import { DETAILS_HEAD, schema } from "./schema";
 
 // 打った記号から構造を作る。
 //
@@ -78,6 +79,42 @@ const taskRule = new InputRule(/^\[([ xX])\]\s$/, (state, match, start, end) => 
   return null;
 });
 
+// Notion 風の打ち込み（試験中の設定）。入れると `>` がトグル、`|` が引用になる。
+// 既定は Markdown のまま（`>` が引用）。規則は打鍵のたびに走るので、設定の値は
+// ここに持たせて App から入れ直す。
+let notionKeys = false;
+
+export const setNotionKeys = (on: boolean) => {
+  notionKeys = on;
+};
+
+// いまの塊をトグルの中身にする。`/トグル要素` と同じ形。
+function toToggle(state: EditorState, start: number, end: number): Transaction | null {
+  const details = schema.nodes.details;
+  const $start = state.doc.resolve(start);
+  if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), details)) {
+    return null;
+  }
+  const tr = state.tr.delete(start, end);
+  const $from = tr.selection.$from;
+  const at = $from.before();
+  const inner = schema.nodes.paragraph.create(null, $from.parent.content);
+  tr.replaceRangeWith(at, $from.after(), details.create({ head: DETAILS_HEAD }, inner));
+  return tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1));
+}
+
+// `>` の規則。設定が入っていないときは何もしないので、後ろの引用の規則が拾う。
+const toggleRule = new InputRule(/^\s*>\s$/, (state, _match, start, end) =>
+  notionKeys ? toToggle(state, start, end) : null,
+);
+
+const quoteByPipe = wrappingInputRule(/^\s*\|\s$/, schema.nodes.blockquote);
+
+// `|` で引用。設定が入っているときだけ効かせる（`|` は表の記号でもある）。
+const pipeRule = new InputRule(/^\s*\|\s$/, (state, match, start, end) =>
+  notionKeys ? quoteByPipe.handler(state, match, start, end) : null,
+);
+
 export const rules = [
   // ブロック
   textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({
@@ -88,7 +125,10 @@ export const rules = [
     fenced: true,
     fence: "```",
   })),
+  // 先に見る。設定が入っていなければ素通りして、次の引用の規則が拾う。
+  toggleRule,
   wrappingInputRule(/^\s*>\s$/, schema.nodes.blockquote),
+  pipeRule,
   wrappingInputRule(/^\s*([-*+])\s$/, schema.nodes.bulletList, (match) => ({
     marker: match[1],
   })),

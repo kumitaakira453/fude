@@ -9,6 +9,7 @@ import {
   editorialAtom,
   fontAtom,
   liveEditAtom,
+  notionKeysAtom,
   readingWidthAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
@@ -45,6 +46,7 @@ export function Settings() {
   const [widthValue, setWidthValue] = useAtom(readingWidthAtom);
   const [editorialValue, setEditorialValue] = useAtom(editorialAtom);
   const [liveValue, setLiveValue] = useAtom(liveEditAtom);
+  const [notionValue, setNotionValue] = useAtom(notionKeysAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -54,6 +56,7 @@ export function Settings() {
     setEditorialValue,
   );
   const [live, setLive] = useOptimisticSetting(liveValue, setLiveValue);
+  const [notion, setNotion] = useOptimisticSetting(notionValue, setNotionValue);
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
@@ -224,6 +227,33 @@ export function Settings() {
                       </span>
                     </span>
                     <span className={`mg-switch${live ? " is-on" : ""}`}>
+                      <i />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNotion(!notion)}
+                    className="mg-set-row"
+                  >
+                    <Icon
+                      name="keyboard"
+                      size={18}
+                      fill={notion}
+                      className={
+                        notion ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                      }
+                    />
+                    <span className="mg-set-row-main">
+                      <span className="mg-set-row-name">
+                        Notion 風の打ち込み
+                        <span className="mg-set-beta">Beta</span>
+                      </span>
+                      <span className="mg-set-note">
+                        {"`>` でトグル、`|` で引用を作る。切ると Markdown どおり `>` が引用"}
+                      </span>
+                    </span>
+                    <span className={`mg-switch${notion ? " is-on" : ""}`}>
                       <i />
                     </span>
                   </button>

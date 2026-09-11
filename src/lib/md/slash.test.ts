@@ -5,7 +5,7 @@ import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it } from "vitest";
 import { fromMarkdown, type Loaded } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
-import { DETAILS_HEAD, summaryOf, withSummary } from "./schema";
+import { DETAILS_HEAD, headLevelOf, headingHead, summaryOf, withSummary } from "./schema";
 import { mathKey } from "./math";
 import { SLASH_ITEMS, slashItems, slashKey } from "./slash";
 import { toMarkdown } from "./toMarkdown";
@@ -62,6 +62,18 @@ function caretAtEndOf(view: EditorView, nth: number) {
   view.state.doc.descendants((node, pos) => {
     if (!node.isTextblock) return;
     if (seen++ === nth) at = pos + 1 + node.content.size;
+  });
+  if (at < 0) throw new Error("文字塊が足りない");
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+}
+
+// 小窓は塊の先頭でしか出ない（canOpen）。字のある塊で試すときはここから。
+function caretAtStartOf(view: EditorView, nth: number) {
+  let seen = 0;
+  let at = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (!node.isTextblock) return;
+    if (seen++ === nth) at = pos + 1;
   });
   if (at < 0) throw new Error("文字塊が足りない");
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
@@ -381,6 +393,55 @@ describe("トグルの見出し", () => {
 
   it("$ を含む見出しでも置き換えが壊れない", () => {
     expect(summaryOf(withSummary(DETAILS_HEAD, "$& と $1"))).toBe("$& と $1");
+  });
+
+  it("見出しトグルは、見出しのタグごと持って打ち直せる", () => {
+    const head = headingHead(2, "決め方");
+    expect(head).toBe("<details>\n<summary><h2>決め方</h2></summary>");
+    expect(summaryOf(head)).toBe("決め方");
+    expect(headLevelOf(head)).toBe(2);
+    // 打ち直しても見出しのままでいる
+    expect(withSummary(head, "決め直し")).toBe(
+      "<details>\n<summary><h2>決め直し</h2></summary>",
+    );
+  });
+
+  it("ただのトグルは見出しにならない", () => {
+    expect(headLevelOf(DETAILS_HEAD)).toBeNull();
+  });
+});
+
+describe("トグル要素", () => {
+  it("段落の上で使うと、書きかけの字がトグルの中身になる", () => {
+    const view = editor("Regagaga\n");
+    caretAtStartOf(view, 0);
+    type(view, "/トグル");
+    press(view, "Enter");
+    const node = view.state.doc.child(0);
+    expect(node.type.name).toBe("details");
+    expect(node.textContent).toBe("Regagaga");
+    expect(source()).toBe("<details>\n<summary>トグル</summary>\n\nRegagaga\n\n</details>\n");
+  });
+
+  it("見出しの上で使うと、その見出しがトグルの頭になる", () => {
+    const view = editor("## 決め方\n");
+    caretAtStartOf(view, 0);
+    type(view, "/トグル");
+    press(view, "Enter");
+    const node = view.state.doc.child(0);
+    expect(node.type.name).toBe("details");
+    expect(node.attrs.head).toBe("<details>\n<summary><h2>決め方</h2></summary>");
+    // 中身は空から書き始める
+    expect(node.textContent).toBe("");
+  });
+
+  it("見出しトグルは読み書きしても動かない", () => {
+    const src = "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n";
+    const loaded = fromMarkdown(src);
+    expect(toMarkdown(loaded.doc, loaded)).toBe(src);
+    expect(loaded.doc.child(0).attrs.head).toBe(
+      "<details>\n<summary><h2>決め方</h2></summary>",
+    );
   });
 });
 

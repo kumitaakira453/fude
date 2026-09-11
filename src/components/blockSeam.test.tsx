@@ -107,6 +107,14 @@ describe("ブロックごとに描いたときの囲み", () => {
     expect(host.querySelector("details .mg-callout-body p")?.textContent).toBe("中の文");
   });
 
+  it("見出しトグルは、見出しのまま summary に入る", () => {
+    const host = show(
+      lines("<details>", "<summary><h2>決め方</h2></summary>", "", "中の本文", "", "</details>", ""),
+    );
+    expect(host.querySelector("summary h2")?.textContent).toBe("決め方");
+    expect(host.querySelector("details p")?.textContent).toBe("中の本文");
+  });
+
   it("親の項目を失ったタブ字下げの一覧は、コードではなく一覧で描かれる", () => {
     const host = show(
       lines("| a | b |", "| --- | --- |", "| 1 | 2 |", "\t\t- 続きの項目", "\t\t\t- その子"),

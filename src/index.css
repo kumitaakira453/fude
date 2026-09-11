@@ -1931,51 +1931,76 @@ body.mg-dragging .mg-sel-menu {
   text-transform: uppercase;
   margin-bottom: 0.3rem;
 }
-/* トグル。開閉はブラウザの details にそのまま任せ、飾りだけ callout に
-   揃える。閉じているときは見出しだけの帯に見える。 */
-.mg-prose details {
-  border: 1px solid var(--mg-border);
-  border-radius: 0.75rem;
-  padding: 0.3rem 1rem;
-  margin: 1.4rem 0;
-  background: var(--mg-panel);
+/* トグル。枠は付けず、三角と見出しを 1 行に並べ、中身をその下に字下げする。
+   読む面はブラウザの details にそのまま開閉させ、編集面（.mg-details）は
+   同じ形を組み立てる。印は 2 面で 1 か所に持つ。 */
+.mg-prose details,
+.mg-pm .mg-details {
+  margin: 0.6em 0;
 }
-.mg-prose details[open] {
-  padding-bottom: 0.85rem;
-}
-.mg-prose summary {
+.mg-prose summary,
+.mg-pm .mg-details-head {
   display: flex;
-  gap: 0.55rem;
+  gap: 0.4rem;
   align-items: baseline;
-  padding: 0.5rem 0;
   cursor: pointer;
-  font-weight: 600;
   list-style: none;
 }
 .mg-prose summary::-webkit-details-marker {
   display: none;
 }
-.mg-prose summary::before {
+.mg-prose summary::before,
+.mg-pm .mg-details-mark {
   content: "";
   flex: none;
   width: 0;
   height: 0;
+  padding: 0;
+  border: 0;
   border-left: 0.36rem solid currentColor;
   border-top: 0.28rem solid transparent;
   border-bottom: 0.28rem solid transparent;
-  opacity: 0.5;
+  background: none;
+  opacity: 0.45;
+  transform: translateY(-0.1em);
   transition: transform 120ms ease;
 }
-.mg-prose details[open] > summary::before {
-  transform: rotate(90deg);
+.mg-pm .mg-details-mark {
+  cursor: pointer;
+  color: inherit;
+}
+.mg-pm .mg-details-mark:hover {
+  opacity: 0.8;
+}
+.mg-prose details[open] > summary::before,
+.mg-pm .mg-details:not(.is-closed) > .mg-details-head > .mg-details-mark {
+  transform: translateY(-0.1em) rotate(90deg);
 }
 @media (prefers-reduced-motion: reduce) {
-  .mg-prose summary::before {
+  .mg-prose summary::before,
+  .mg-pm .mg-details-mark {
     transition: none;
   }
 }
+/* 中身は見出しの下に 1 段字下げして並べる。 */
+.mg-prose details > :not(summary),
+.mg-pm .mg-details-body {
+  margin-left: 1.5rem;
+}
 .mg-prose details > :not(summary):last-child {
   margin-bottom: 0;
+}
+/* 畳んでいる間は中身を隠す。doc からは消さないので、開けばそのまま戻る。 */
+.mg-pm .mg-details.is-closed > .mg-details-body {
+  display: none;
+}
+/* 見出しトグル。頭は本物の見出しのタグなので、大きさ・太さ・罫は見出しの
+   指定がそのまま効く。帯の中では余白だけ落とす。 */
+.mg-prose summary > :is(h1, h2, h3, h4, h5, h6),
+.mg-pm .mg-details-title-box {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
 }
 /* 種別の配色（accent とは別のセマンティックカラー） */
 .mg-callout.note {
@@ -4290,9 +4315,6 @@ body.mg-carrying {
   padding: 0.6rem 0.75rem;
   color: var(--mg-muted);
   font-size: 0.9em;
-}
-.mg-pm .mg-details-head {
-  font-weight: 600;
 }
 /* トグルの見出し。原文では開きタグの中なので、本文とは別に入力欄で打つ。
    見た目は帯のままにして、欄であることを見せない。 */

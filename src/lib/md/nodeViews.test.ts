@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { EditorState } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it } from "vitest";
 import { calloutIcoAt, setCalloutIcon } from "./calloutIcon";
@@ -170,5 +170,52 @@ describe("囲みのアイコン", () => {
     const view = editor("ただの段落\n");
     expect(calloutIcoAt(view, view.dom.querySelector("p"))).toBeNull();
     expect(calloutIcoAt(view, null)).toBeNull();
+  });
+});
+
+describe("トグル", () => {
+  const TOGGLE = "<details>\n<summary>ひらく</summary>\n\n中の本文\n\n</details>\n";
+  const press = (el: Element) =>
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+  it("三角を押すと中身を畳み、もう一度押すと戻る", () => {
+    const view = editor(TOGGLE);
+    const box = view.dom.querySelector(".mg-details")!;
+    const mark = box.querySelector(".mg-details-mark")!;
+    expect(box.classList.contains("is-closed")).toBe(false);
+    press(mark);
+    expect(box.classList.contains("is-closed")).toBe(true);
+    press(mark);
+    expect(box.classList.contains("is-closed")).toBe(false);
+    // 畳んでも中身は doc に残る（原文も動かない）
+    expect(source()).toBe(TOGGLE);
+  });
+
+  it("畳むとき、カーソルが中に居たら手前へ出す", () => {
+    const view = editor("前の段落\n\n" + TOGGLE);
+    // トグルの中身（段落）の中へカーソルを置く
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(9), 1)),
+    );
+    const was = view.state.selection.from;
+    press(view.dom.querySelector(".mg-details-mark")!);
+    expect(view.state.selection.from).toBeLessThan(was);
+    expect(view.state.doc.resolve(view.state.selection.from).parent.textContent).toBe(
+      "前の段落",
+    );
+  });
+
+  it("手前に置くところが無ければ、見出しの入力欄へ移す", () => {
+    const view = editor(TOGGLE);
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(3), 1)));
+    press(view.dom.querySelector(".mg-details-mark")!);
+    expect(document.activeElement).toBe(view.dom.querySelector(".mg-details-title"));
+  });
+
+  it("見出しトグルは見出しのタグで包む", () => {
+    const view = editor("<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n");
+    const box = view.dom.querySelector(".mg-details-title-box")!;
+    expect(box.tagName).toBe("H2");
+    expect(box.querySelector("input")?.value).toBe("決め方");
   });
 });

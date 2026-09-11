@@ -12,7 +12,7 @@ import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
 import { openMath } from "./math";
 import { MERMAID, PLAIN, languages } from "./highlight";
-import { schema, summaryOf, withSummary } from "./schema";
+import { headLevelOf, schema, summaryOf, withSummary } from "./schema";
 
 // 編集面の専用の描画。
 //
@@ -678,6 +678,9 @@ class DetailsView implements NodeView {
   private getPos: () => number | undefined;
   private head: HTMLElement;
   private title: HTMLInputElement;
+  private mark: HTMLButtonElement;
+  private open = true;
+  private level: number | null = null;
 
   constructor(node: PmNode, view: EditorView, getPos: () => number | undefined) {
     this.node = node;
@@ -699,6 +702,18 @@ class DetailsView implements NodeView {
       }
     });
     this.head = head;
+    // 書いている最中でも畳める。閉じるのは見た目だけで、中身は doc に残る。
+    this.mark = document.createElement("button");
+    this.mark.type = "button";
+    this.mark.className = "mg-details-mark";
+    this.mark.title = "折りたたむ";
+    this.mark.setAttribute("aria-label", "折りたたむ");
+    this.mark.setAttribute("aria-expanded", "true");
+    this.mark.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      this.fold(!this.open);
+    });
+    head.appendChild(this.mark);
     this.title = document.createElement("input");
     this.title.type = "text";
     this.title.className = "mg-details-title";
@@ -706,12 +721,38 @@ class DetailsView implements NodeView {
     this.title.value = summaryOf(node.attrs.head as string);
     this.title.addEventListener("input", () => this.push());
     this.title.addEventListener("keydown", (e) => this.onKey(e));
-    head.appendChild(this.title);
+    // 見出しトグルは、読む面と同じ見出しのタグで包む。組み方（大きさ・太さ・
+    // 罫）はそちらに揃うので、こちらで大きさを決め直さない。
+    this.level = headLevelOf(node.attrs.head as string);
+    const box = document.createElement(this.level ? `h${this.level}` : "span");
+    box.className = "mg-details-title-box";
+    box.appendChild(this.title);
+    head.appendChild(box);
     this.dom.appendChild(head);
 
     this.contentDOM = document.createElement("div");
     this.contentDOM.className = "mg-details-body";
     this.dom.appendChild(this.contentDOM);
+  }
+
+  private fold(open: boolean) {
+    this.open = open;
+    this.dom.classList.toggle("is-closed", !open);
+    this.mark.setAttribute("aria-expanded", String(open));
+    if (open) return;
+    // 畳んだ中にカーソルを置き去りにしない。囲みの手前へ出し、手前に置ける
+    // ところが無ければ見出しの入力欄へ移す。
+    const at = this.getPos();
+    if (at === undefined) return;
+    const { state } = this.view;
+    const { from } = state.selection;
+    if (from <= at || from >= at + this.node.nodeSize) return;
+    const out = TextSelection.near(state.doc.resolve(at), -1);
+    if (out.from > at) {
+      this.title.focus();
+      return;
+    }
+    this.view.dispatch(state.tr.setSelection(out));
   }
 
   private push() {
@@ -750,6 +791,8 @@ class DetailsView implements NodeView {
 
   update(node: PmNode): boolean {
     if (node.type !== this.node.type) return false;
+    // 見出しの階層が変わったら、包むタグごと作り直す。
+    if (headLevelOf(node.attrs.head as string) !== this.level) return false;
     this.node = node;
     const text = summaryOf(node.attrs.head as string);
     // 打っている最中に入れ直すと、カーソルが頭へ戻る。
