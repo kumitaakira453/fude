@@ -5413,47 +5413,38 @@ body.mg-carrying {
   background: var(--mg-hover);
 }
 
-/* 欄を足す。行並びの末尾に薄く置く。 */
-.mg-fm-plus {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 0.3rem;
-  color: var(--mg-muted);
-  opacity: 0.5;
-  transition:
-    opacity 0.12s,
-    background 0.12s,
-    color 0.12s;
-}
-.mg-fm-plus:hover {
-  color: var(--mg-accent);
-  background: var(--mg-hover);
-  opacity: 1;
-}
-
-/* 何も無いファイルに情報を付ける入口。 */
+/* 足す口。行並びの末尾（欄を足す）と、何も無いファイルの先頭（情報を足す）。
+   破線の囲みにして、休んでいるときも「ここに足せる」と分かるようにする。
+   常に出しておくものなので、地色は指したときだけ付ける。 */
+.mg-fm-plus,
 .mg-fm-add {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.5rem 0.15rem 0.35rem;
-  border-radius: 0.4rem;
-  font-size: 12.5px;
+  gap: 0.2rem;
+  padding: 0.1rem 0.55rem 0.1rem 0.35rem;
+  border: 1px dashed var(--mg-border);
+  border-radius: 999px;
   color: var(--mg-muted);
-  opacity: 0.6;
   transition:
-    opacity 0.12s,
+    border-color 0.12s,
     background 0.12s,
     color 0.12s;
 }
-.mg-fm-add:hover {
+.mg-fm-plus {
+  font-size: 12px;
+}
+.mg-fm-add {
+  padding: 0.2rem 0.7rem 0.2rem 0.5rem;
+  font-size: 13px;
+}
+.mg-fm-plus:hover,
+.mg-fm-add:hover,
+.mg-fm-plus:focus-visible,
+.mg-fm-add:focus-visible {
+  border-color: var(--mg-accent);
+  background: var(--mg-accent-soft);
   color: var(--mg-accent);
-  background: var(--mg-hover);
-  opacity: 1;
 }
 
 /* 読めないフロントマターの断り書きと、その生の字。 */

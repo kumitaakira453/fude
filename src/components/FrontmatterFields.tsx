@@ -477,8 +477,9 @@ export function FrontmatterFields({
             {gone(f)}
           </span>
         ))}
-        <button type="button" title="欄を足す" className="mg-fm-plus" onClick={addRow}>
-          <Icon name="add" size={13} />
+        <button type="button" className="mg-fm-plus" onClick={addRow}>
+          <Icon name="add" size={14} />
+          欄を足す
         </button>
       </div>
 
