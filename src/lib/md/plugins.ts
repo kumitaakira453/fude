@@ -20,7 +20,7 @@ import { anchors } from "./anchors";
 import { emojiMenu } from "./emoji";
 import { editingMark } from "./editing";
 import { mathEditing } from "./math";
-import { inCell, toggleInline } from "./marks";
+import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { insideBlock } from "./nodeViews";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
@@ -697,11 +697,36 @@ export function markdownSlice(text: string): Slice | null {
   return new Slice(Fragment.from(blocks), 0, 0);
 }
 
+// 貼り付けた字が URL 1 本ならその行き先。そうでなければ null。
+//
+// 選んだ字の上に URL を貼るのは「ここをここへ繋ぎたい」という操作なので、
+// 字を URL で置き換えるのではなくリンクにする。
+const LINK = /^(https?:\/\/|mailto:)\S+$/;
+
+export function pastedLink(text: string): string | null {
+  const one = text.trim();
+  return LINK.test(one) ? one : null;
+}
+
+// 選んだ字の上に URL を貼ったとき、その字をリンクにする。
+export const linkOnPaste =
+  (text: string): Command =>
+  (state, dispatch) => {
+    if (state.selection.empty) return false;
+    // コードの中は文字のまま入れる。
+    if (state.selection.$from.parent.type.spec.code) return false;
+    const href = pastedLink(text);
+    return href ? setLink(href)(state, dispatch) : false;
+  };
+
 const pasteMarkdown = new Plugin({
   props: {
     handlePaste(view, event) {
       const data = event.clipboardData;
       if (!data) return false;
+      // 書式の有無より先に見る。ブラウザから複写した URL は書式も一緒に
+      // 載ってくるので、後ろに置くと素通りしてしまう。
+      if (linkOnPaste(data.getData("text/plain"))(view.state, view.dispatch)) return true;
       // 書式付き（このアプリの中での複写を含む）は、そちらの読み取りに任せる。
       if (data.getData("text/html")) return false;
       const text = data.getData("text/plain");

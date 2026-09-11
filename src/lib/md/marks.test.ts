@@ -13,7 +13,7 @@ import {
   setMath,
   toggleInline,
 } from "./marks";
-import { editorPlugins } from "./plugins";
+import { editorPlugins, linkOnPaste, pastedLink } from "./plugins";
 import { schema } from "./schema";
 import { toMarkdown } from "./toMarkdown";
 
@@ -116,6 +116,32 @@ describe("リンク", () => {
     const off = run(on, clearLink);
     expect(toMarkdown(off.doc, loaded)).toBe("ここを見る\n");
     expect(linkAt(off)).toBe(null);
+  });
+
+  it("選んだ字の上に URL を貼ると、その字がリンクになる", () => {
+    const { loaded, state } = opened("ここを見る\n");
+    const picked = select(state, 0, 0, 2);
+    const on = run(picked, linkOnPaste("https://example.com"));
+    expect(toMarkdown(on.doc, loaded)).toBe("[ここ](https://example.com)を見る\n");
+  });
+
+  it("URL でなければ貼り付けのまま（リンクにしない）", () => {
+    const { state } = opened("ここを見る\n");
+    const picked = select(state, 0, 0, 2);
+    expect(linkOnPaste("ただの字")(picked, undefined)).toBe(false);
+    expect(linkOnPaste("https://example.com と補足")(picked, undefined)).toBe(false);
+  });
+
+  it("何も選んでいなければ、いままでどおり貼り付ける", () => {
+    const { state } = opened("ここを見る\n");
+    expect(linkOnPaste("https://example.com")(state, undefined)).toBe(false);
+  });
+
+  it("URL の見分け", () => {
+    expect(pastedLink(" https://example.com/a?b=1 ")).toBe("https://example.com/a?b=1");
+    expect(pastedLink("mailto:a@example.com")).toBe("mailto:a@example.com");
+    expect(pastedLink("example.com")).toBe(null);
+    expect(pastedLink("https://example.com\nhttps://example.org")).toBe(null);
   });
 
   it("張る先の文字が無ければ張らない", () => {
