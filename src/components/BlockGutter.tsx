@@ -18,7 +18,7 @@ import {
   tableBands,
   tableGeometry,
   type Box,
-  addBelow,
+  addAway,
   HOLD,
   nearEdge,
   NUB,
@@ -998,7 +998,7 @@ export function BlockGutter({
                   className="mg-grip mg-grip-bar mg-grip-add"
                   style={{
                     top: view.table.top,
-                    left: view.table.left + view.table.width + ADD_AWAY,
+                    left: view.table.left + view.table.width + addAway(view.below, ADD_AWAY),
                     width: ADD,
                     height: view.table.height,
                   }}
@@ -1012,7 +1012,7 @@ export function BlockGutter({
                 title="行を追加"
                 className="mg-grip mg-grip-bar mg-grip-add"
                 style={{
-                  top: addBelow(view.bottom, view.below, ADD_AWAY),
+                  top: view.bottom + addAway(view.below, ADD_AWAY),
                   left: view.table.left,
                   width: view.table.width,
                   height: ADD,

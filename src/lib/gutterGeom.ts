@@ -245,8 +245,14 @@ export function tableGeometry(
 // 寄せ、それでも足りなければ表の下端をまたぐ（次のブロックへは入れない）。
 //
 // room は表の下端から次のブロックの上端までの画素。
+export function addAway(room: number, gap: number): number {
+  return Math.max(-ADD / 2, Math.min(gap, (room - ADD) / 2));
+}
+
+// 行と列で同じ値を使う。列の右には余地があるので決め打ちでも収まるが、
+// 別の値にすると下と右で空きが食い違って見える。
 export function addBelow(bottom: number, room: number, gap: number): number {
-  return bottom + Math.max(-ADD / 2, Math.min(gap, (room - ADD) / 2));
+  return bottom + addAway(room, gap);
 }
 
 // 表の下端から次のブロックの上端までの空き。読むとき側は目印で引ける。

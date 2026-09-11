@@ -30,6 +30,7 @@ import {
 } from "../lib/md/tableActs";
 import {
   ADD,
+  addAway,
   addBelow,
   HOLD,
   nearEdge,
@@ -219,7 +220,7 @@ function onAddBand(
   ) {
     return "row";
   }
-  const colLeft = t.left + t.width + ADD_GAP;
+  const colLeft = t.left + t.width + addAway(below, ADD_GAP);
   if (
     geo.atRight &&
     x >= colLeft - slack &&
@@ -1031,7 +1032,7 @@ export function EditorGutter({
                   }`}
                   style={{
                     top: geo.table.top,
-                    left: geo.table.left + geo.table.width + ADD_GAP,
+                    left: geo.table.left + geo.table.width + addAway(spot.table.below, ADD_GAP),
                     width: ADD,
                     height: geo.table.height,
                   }}
