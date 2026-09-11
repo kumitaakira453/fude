@@ -60,8 +60,8 @@ const KEY_ICON: Record<string, string> = {
   aliases: "alternate_email",
 };
 
-const norm = (k: string) => k.toLowerCase().replace(/[_-]/g, "");
-const iconFor = (k: string) => KEY_ICON[norm(k)];
+export const norm = (k: string) => k.toLowerCase().replace(/[_-]/g, "");
+export const iconFor = (k: string) => KEY_ICON[norm(k)];
 
 function fmt(v: unknown): string {
   if (v instanceof Date) return isNaN(v.getTime()) ? String(v) : v.toISOString().slice(0, 10);
@@ -71,7 +71,7 @@ function fmt(v: unknown): string {
   return String(v);
 }
 
-const isLede = (k: string) => ["description", "summary", "excerpt", "subtitle"].includes(norm(k));
+export const isLede = (k: string) => ["description", "summary", "excerpt", "subtitle"].includes(norm(k));
 
 export function Frontmatter({ data }: { data: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(false);

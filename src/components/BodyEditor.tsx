@@ -483,6 +483,7 @@ export function BodyEditor({
   onSave,
   flushRef,
   adoptRef,
+  onTop,
 }: {
   body: string;
   // フロントマター。本文の前にそのまま戻す。
@@ -515,14 +516,22 @@ export function BodyEditor({
   flushRef?: { current: (() => void) | null };
   // 外で書き換わった本文を入れる口。
   adoptRef?: { current: ((text: string) => void) | null };
+  // 本文の先頭からさらに上へ出ようとしたとき。受け取る先が無ければ偽を返す。
+  onTop?: () => boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
   const saved = useRef(onSave);
   const moved = useRef(onViewpoint);
+  // フロントマターは書いている最中にも差し替わる。組み立ての閉包に捕まえると
+  // 次の保存で古いものを書き戻すので、毎描画で写して ref から読む。
+  const fmText = useRef(prefix);
+  const topped = useRef(onTop);
   changed.current = onChange;
   saved.current = onSave;
   moved.current = onViewpoint;
+  fmText.current = prefix;
+  topped.current = onTop;
 
   // 組み上がった編集面。表のつまみのように、編集面の外側に重ねる React の
   // 部品へ渡す（層を編集面の中に置くと、ProseMirror が本文の書き換えと
@@ -684,7 +693,7 @@ export function BodyEditor({
       // 外で書き換わったら差し替えるので、土台は入れ替わる。
       let loaded = parsed;
       const blocks = blocksOf(loaded);
-      const want = Math.max(0, (viewpoint?.at ?? 0) - prefix.length);
+      const want = Math.max(0, (viewpoint?.at ?? 0) - fmText.current.length);
       const target = want > 0 ? (blocks.find((b) => b.end > want) ?? null) : null;
 
       // 編集面は段階的に組む。
@@ -740,7 +749,10 @@ export function BodyEditor({
               first.resolve(Math.min(target.pos + 1, first.content.size)),
             )
           : undefined,
-        plugins: editorPlugins({ onSave: () => saved.current() }),
+        plugins: editorPlugins({
+          onSave: () => saved.current(),
+          onTop: () => topped.current?.() ?? false,
+        }),
       });
 
       const view = new EditorView(at, {
@@ -936,7 +948,7 @@ export function BodyEditor({
           // 途中の doc を渡すとファイルが切り詰められる。ここ 1 か所で止めれば
           // 打鍵・⌘S・窓を離れたとき・後片付けの全部が塞がる。
           if (growing) return;
-          changed.current(prefix + toMarkdown(view.state.doc, loaded));
+          changed.current(fmText.current + toMarkdown(view.state.doc, loaded));
         },
         WAIT,
         CAP,
@@ -1156,7 +1168,7 @@ export function BodyEditor({
           const dom = view.nodeDOM(seen.pos);
           const el = dom instanceof HTMLElement ? dom : null;
           const into = el ? Math.max(0, box.top - el.getBoundingClientRect().top) : 0;
-          moved.current?.(prefix.length + seen.at, into);
+          moved.current?.(fmText.current.length + seen.at, into);
         });
       };
       scroller?.addEventListener("scroll", onScroll, { passive: true });

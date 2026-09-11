@@ -46,6 +46,7 @@ import { BlockSourceEditor } from "./BlockSourceEditor";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
 import { Frontmatter } from "./Frontmatter";
+import { FrontmatterFields } from "./FrontmatterFields";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
@@ -64,6 +65,7 @@ import {
   type Marked,
 } from "../lib/reviewMarks";
 import { anchorsKey } from "../lib/md/anchors";
+import { Selection } from "prosemirror-state";
 import { editorMarks, editorPending } from "../lib/md/editorMarks";
 import {
   anchorThreads,
@@ -329,7 +331,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if (draft !== base.current) return;
       base.current = raw;
       setDraft(raw);
-      adoptRef.current?.(raw);
+      // 編集面が持っているのは本文だけ（Loaded.source はフロントマターを
+      // 除いたもの）。全文を渡すとフロントマターが本文の節点として入る。
+      adoptRef.current?.(parseFrontmatter(raw).body);
     }, ADOPT_WAIT);
     return () => window.clearTimeout(t);
   }, [editing, raw, draft]);
@@ -994,9 +998,33 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 読めていないうちに出すと、前のファイルの中身が消えたところへ空の紙が
   // 立ち、切り替わったのか読み込み中なのか分からない。
   const writing = editing && !!path && loaded && !opening;
+
+  // フロントマターの差し替え。本文は編集面の書きかけを先に流してから取る
+  // （流さないと、打った直後の一手を巻き戻す）。書いた全文は控えにも入れて、
+  // 自分の書き込みを外からの変更として取り込み直さないようにする。
   const saveFm = (newFm: string) => {
     if (!path || newFm === fmPrefix) return;
-    write(path, newFm + body);
+    const now = settled();
+    const full = newFm + (now === null ? body : parseFrontmatter(now).body);
+    base.current = full;
+    setDraft(full);
+    write(path, full);
+  };
+
+  // フロントマターの欄と本文のあいだの行き来。
+  const intoFm = useRef<(() => void) | null>(null);
+  const intoBody = () => {
+    const view = pm?.view;
+    if (!view) return;
+    view.focus();
+    view.dispatch(
+      view.state.tr.setSelection(Selection.atStart(view.state.doc)).scrollIntoView(),
+    );
+  };
+  const upToFm = () => {
+    if (!intoFm.current) return false;
+    intoFm.current();
+    return true;
   };
 
   // path はあるが未読込なら読み込む。
@@ -1255,10 +1283,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 </div>
               </div>
             )}
+            {data && (
+              <div className={`mg-prose prose ${WIDTH_CLASS[width]} mx-auto`}>
+                <FrontmatterFields
+                  key={path}
+                  fm={fmPrefix}
+                  onChange={saveFm}
+                  onOut={intoBody}
+                  enterRef={intoFm}
+                />
+              </div>
+            )}
             <BodyEditor
               key={path}
               body={body}
               prefix={fmPrefix}
+              onTop={upToFm}
               path={path}
               viewpoint={recallViewpoint(viewKey(pane.id, absPath))}
               onViewpoint={(at, into) => {

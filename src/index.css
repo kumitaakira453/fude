@@ -5355,3 +5355,31 @@ body.mg-carrying {
 .mg-src-row.is-void {
   background: color-mix(in srgb, var(--mg-border) 25%, transparent);
 }
+
+/* 書くときのフロントマターの欄。読むときと字面を揃えたいので、
+   下地は指したときと打っているときだけ出す。 */
+.mg-fm-cell {
+  outline: none;
+  cursor: text;
+  white-space: pre-wrap;
+  min-width: 1ch;
+  border-radius: 4px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  caret-color: var(--mg-accent);
+  transition: background-color 120ms ease;
+}
+.mg-fm-cell:hover {
+  background: var(--mg-hover);
+}
+.mg-fm-cell:focus {
+  background: var(--mg-accent-soft);
+}
+/* 空の欄は掴みどころが無くなるので、印だけ置く。打っている間は消す。 */
+.mg-fm-cell:empty::before {
+  content: "—";
+  color: var(--mg-muted);
+}
+.mg-fm-cell:focus:empty::before {
+  content: "";
+}

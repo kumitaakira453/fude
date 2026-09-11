@@ -9,7 +9,13 @@ import {
   type Node as PmNode,
 } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
-import { Plugin, Selection, TextSelection, type Command } from "prosemirror-state";
+import {
+  Plugin,
+  Selection,
+  TextSelection,
+  type Command,
+  type EditorState,
+} from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 import type { Transform } from "prosemirror-transform";
@@ -748,10 +754,48 @@ const pasteMarkdown = new Plugin({
   },
 });
 
-export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
+// 本文の先頭から、その上（フロントマターの欄）へ抜ける。
+//
+// 上端かどうかは 2 通りで見る。↑ は endOfTextblock("up") で「いま画面の上端の
+// 行にいるか」を見るので、折り返した段落の 2 行目からは抜けない。← と
+// Backspace は本文のいちばん先頭の位置でだけ抜ける。
+const atTop = (state: EditorState): boolean =>
+  state.selection.empty &&
+  state.selection.$from.depth > 0 &&
+  state.selection.$from.before(1) === 0;
+
+export const outTopUp =
+  (leave: () => boolean): Command =>
+  (state, _dispatch, view) => {
+    if (!atTop(state)) return false;
+    if (view && !view.endOfTextblock("up")) return false;
+    return leave();
+  };
+
+export const outTopBack =
+  (leave: () => boolean): Command =>
+  (state) => {
+    if (!atTop(state)) return false;
+    if (state.selection.from !== Selection.atStart(state.doc).from) return false;
+    return leave();
+  };
+
+const stay: Command = () => false;
+
+export function editorPlugins({
+  onSave,
+  onTop,
+}: {
+  onSave: () => void;
+  // 本文の先頭からさらに上へ出ようとしたとき。受け取る先（フロントマターの
+  // 欄）が無ければ偽を返し、矢印は本文の中の移動に戻る。
+  onTop?: () => boolean;
+}): Plugin[] {
   const item = schema.nodes.listItem;
   const typed = inputRules({ rules });
   const kept = rememberRule(typed);
+  const up = onTop ? outTopUp(onTop) : stay;
+  const back = onTop ? outTopBack(onTop) : stay;
 
   return [
     history(),
@@ -780,6 +824,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         dropEmptyBack,
         outdentBack,
         keepOutOfHolder,
+        back,
       ),
       Delete: toSourceForward,
       "Mod-s": () => {
@@ -791,9 +836,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       "Shift-Mod-z": redo,
       "Mod-y": redo,
       Enter: chainCommands(cellEnter, outOfDetailsHead, fenceOnEnter, outEnter, splitItem),
-      ArrowUp: cellUp,
+      ArrowUp: chainCommands(cellUp, up),
       ArrowDown: cellDown,
-      ArrowLeft: cellLeft,
+      ArrowLeft: chainCommands(cellLeft, back),
       ArrowRight: cellRight,
       "Mod-ArrowLeft": cellStart,
       "Mod-ArrowRight": cellEnd,
