@@ -24,11 +24,12 @@ import { Icon } from "./Icon";
 // はみ出すので、左の見出しで切り替えて高さを固定する。
 // テーマと書体は言葉より見た目で選ぶものなので、名前の横に実物を出す。
 
-type Tab = "look" | "text" | "app";
+type Tab = "look" | "text" | "beta" | "app";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "look", label: "テーマ", icon: "palette" },
   { id: "text", label: "本文", icon: "text_fields" },
+  { id: "beta", label: "試験中", icon: "science" },
   { id: "app", label: "このアプリ", icon: "info" },
 ];
 
@@ -201,93 +202,95 @@ export function Settings() {
                     ))}
                   </div>
                 </section>
-
-                <section className="mg-set-sec">
-                  <h3>表示</h3>
-                  <button
-                    type="button"
-                    onClick={() => setLive(!live)}
-                    className="mg-set-row"
-                  >
-                    <Icon
-                      name="edit_note"
-                      size={18}
-                      fill={live}
-                      className={
-                        live ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
-                      }
-                    />
-                    <span className="mg-set-row-main">
-                      <span className="mg-set-row-name">
-                        リアルタイム編集機能
-                        <span className="mg-set-beta">Beta</span>
-                      </span>
-                      <span className="mg-set-note">
-                        組版されたまま直接書ける編集面でファイルを開く。切ると読む画面になり、直すのは本文のダブルクリックから
-                      </span>
-                    </span>
-                    <span className={`mg-switch${live ? " is-on" : ""}`}>
-                      <i />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setNotion(!notion)}
-                    className="mg-set-row"
-                  >
-                    <Icon
-                      name="keyboard"
-                      size={18}
-                      fill={notion}
-                      className={
-                        notion ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
-                      }
-                    />
-                    <span className="mg-set-row-main">
-                      <span className="mg-set-row-name">
-                        Notion 風の打ち込み
-                        <span className="mg-set-beta">Beta</span>
-                      </span>
-                      <span className="mg-set-note">
-                        {"`>` でトグル、`|` で引用を作る。切ると Markdown どおり `>` が引用"}
-                      </span>
-                    </span>
-                    <span className={`mg-switch${notion ? " is-on" : ""}`}>
-                      <i />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditorial(!editorial)}
-                    className="mg-set-row"
-                  >
-                    <Icon
-                      name="auto_awesome"
-                      size={18}
-                      fill={editorial}
-                      className={
-                        editorial
-                          ? "text-[var(--mg-accent)]"
-                          : "text-[var(--mg-muted)]"
-                      }
-                    />
-                    <span className="mg-set-row-main">
-                      <span className="mg-set-row-name">
-                        メイクアップ版
-                        <span className="mg-set-beta">Beta</span>
-                      </span>
-                      <span className="mg-set-note">
-                        字間・行間から見出し・箇条書き・引用の組み方まで作り込んで描く
-                      </span>
-                    </span>
-                    <span className={`mg-switch${editorial ? " is-on" : ""}`}>
-                      <i />
-                    </span>
-                  </button>
-                </section>
               </>
+            )}
+
+            {tab === "beta" && (
+              <section className="mg-set-sec">
+                <h3>試験中の機能</h3>
+                <button
+                  type="button"
+                  onClick={() => setLive(!live)}
+                  className="mg-set-row"
+                >
+                  <Icon
+                    name="edit_note"
+                    size={18}
+                    fill={live}
+                    className={
+                      live ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                    }
+                  />
+                  <span className="mg-set-row-main">
+                    <span className="mg-set-row-name">
+                      リアルタイム編集機能
+                      <span className="mg-set-beta">Beta</span>
+                    </span>
+                    <span className="mg-set-note">
+                      組版されたまま直接書ける編集面でファイルを開く。切ると読む画面になり、直すのは本文のダブルクリックから
+                    </span>
+                  </span>
+                  <span className={`mg-switch${live ? " is-on" : ""}`}>
+                    <i />
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNotion(!notion)}
+                  className="mg-set-row"
+                >
+                  <Icon
+                    name="keyboard"
+                    size={18}
+                    fill={notion}
+                    className={
+                      notion ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                    }
+                  />
+                  <span className="mg-set-row-main">
+                    <span className="mg-set-row-name">
+                      Notion 風の打ち込み
+                      <span className="mg-set-beta">Beta</span>
+                    </span>
+                    <span className="mg-set-note">
+                      {"`>` でトグル、`|` で引用を作る。切ると Markdown どおり `>` が引用"}
+                    </span>
+                  </span>
+                  <span className={`mg-switch${notion ? " is-on" : ""}`}>
+                    <i />
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditorial(!editorial)}
+                  className="mg-set-row"
+                >
+                  <Icon
+                    name="auto_awesome"
+                    size={18}
+                    fill={editorial}
+                    className={
+                      editorial
+                        ? "text-[var(--mg-accent)]"
+                        : "text-[var(--mg-muted)]"
+                    }
+                  />
+                  <span className="mg-set-row-main">
+                    <span className="mg-set-row-name">
+                      メイクアップ版
+                      <span className="mg-set-beta">Beta</span>
+                    </span>
+                    <span className="mg-set-note">
+                      字間・行間から見出し・箇条書き・引用の組み方まで作り込んで描く
+                    </span>
+                  </span>
+                  <span className={`mg-switch${editorial ? " is-on" : ""}`}>
+                    <i />
+                  </span>
+                </button>
+              </section>
             )}
 
             {tab === "app" && (
