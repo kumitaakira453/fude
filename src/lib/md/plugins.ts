@@ -208,10 +208,14 @@ export const dropEmptyBack: Command = (state, dispatch) => {
 //
 //   畳んだ題で Enter       … 次のトグルを作り、その題へ
 //   開いた題で Enter       … 中身の先頭に行を足して、そこへ
-//   題の頭で Backspace     … 見出しトグルなら素のトグルへ戻す
+//   題の頭で Backspace     … 見出しトグルなら素のトグルへ。素なら囲みを解く
 //   中身の先頭で Backspace … その塊を囲みの外（直後）へ出す。囲みは残る
+//   空の行で Backspace     … その行を囲みの外（直後）へ出す。囲みは残る
 //   空の中身で Backspace   … 題へ（頭に置く。題を後ろから食べない）
 //   空の中身で Enter       … 囲みの外（直後）の行へ出る。囲みは残る
+//
+// 外へ出る道は Backspace で一本に通してある。空の行で押せば外の行へ出て、
+// 中身が空になれば題へ、題でもう一度押せば囲みが解ける。
 //
 // 「囲みは残る」を通している。題の字は書いたものなので、中身が空になった
 // くらいで消さない。畳んだまま中身へ入れないのも同じ考えで、見えない場所へ
@@ -237,6 +241,36 @@ export const outEnter: Command = (state, dispatch) => {
         : state.tr.insert(after, schema.nodes.paragraph.create());
     dispatch(
       tr.setSelection(TextSelection.near(tr.doc.resolve(after + 1), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
+
+// トグルの中の空の行で Backspace。その行を囲みの外（直後）へ出す。
+//
+// 既定（と dropEmptyBack）は空の行を消して前の行の末尾へ戻すので、何度押しても
+// 中に留まったままになる。空の行は「ここから書き続けたい」の印なので、字下げを
+// 一段解く方に寄せる。
+//
+// 題のすぐ下 1 つだけのときは譲る。そちらは題へ移る番で、トグルは残す。
+export const outOfDetailsBack: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock) return false;
+  if ($from.parentOffset !== 0 || $from.parent.content.size > 0) return false;
+  if ($from.depth < 2) return false;
+  const depth = $from.depth - 1;
+  const box = $from.node(depth);
+  if (box.type !== schema.nodes.details || box.childCount <= 2) return false;
+  // 題そのものは対象外（題は空でも消さない）。
+  if ($from.index(depth) < 1) return false;
+
+  if (dispatch) {
+    const end = $from.after(depth);
+    const tr = state.tr.delete($from.before(), $from.after());
+    const at = tr.mapping.map(end);
+    tr.insert(at, schema.nodes.paragraph.create());
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1)).scrollIntoView(),
     );
   }
   return true;
@@ -316,14 +350,40 @@ function closedAt(view: EditorView | undefined, at: number): boolean {
   return dom instanceof HTMLElement && dom.classList.contains("is-closed");
 }
 
-// 見出しトグルの題の頭で Backspace。見出しを外して素のトグルへ戻す。
+// トグルの題の頭で Backspace。見出しトグルなら段を外し、素のトグルなら囲みを
+// 解く。題は段落として残し、中身はその後ろへ並べる（書いた字を失わない）。
 export const plainDetailsHead: Command = (state, dispatch) => {
   const { empty, $from } = state.selection;
   if (!empty || $from.parentOffset !== 0) return false;
-  if ($from.parent.type !== schema.nodes.detailsSummary) return false;
-  if ($from.parent.attrs.level === null) return false;
+  const title = $from.parent;
+  if (title.type !== schema.nodes.detailsSummary) return false;
+
+  if (title.attrs.level !== null) {
+    if (dispatch) {
+      dispatch(state.tr.setNodeMarkup($from.before(), undefined, { level: null }));
+    }
+    return true;
+  }
+
   if (dispatch) {
-    dispatch(state.tr.setNodeMarkup($from.before(), undefined, { level: null }));
+    const depth = $from.depth - 1;
+    const box = $from.node(depth);
+    const start = $from.before(depth);
+    const body: PmNode[] = [];
+    box.forEach((child, _offset, index) => {
+      if (index > 0) body.push(child);
+    });
+    // 中身が空の段落 1 つだけなら、題だけを残す（空の行を積み増さない）。
+    const kept = body.filter(
+      (node) => !(node.isTextblock && node.content.size === 0) || body.length > 1,
+    );
+    const tr = state.tr.replaceWith(start, $from.after(depth), [
+      schema.nodes.paragraph.create(null, title.content),
+      ...kept,
+    ]);
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(start + 1), 1)).scrollIntoView(),
+    );
   }
   return true;
 };
@@ -691,6 +751,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         eraseInMark,
         plainDetailsHead,
         toDetailsHead,
+        outOfDetailsBack,
         dropEmptyBack,
         outdentBack,
         keepOutOfHolder,

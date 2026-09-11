@@ -7,7 +7,9 @@ import {
   editorPlugins,
   keepOutOfHolder,
   outEnter,
+  outOfDetailsBack,
   outdentBack,
+  plainDetailsHead,
   toDetailsHead,
   unlistBack,
 } from "./plugins";
@@ -380,5 +382,90 @@ describe("空のトグルから下へ抜ける", () => {
 `;
     // 空の塊が無いので、この道には来ない
     expect(() => drop(src, 0, outEnter)).toThrow();
+  });
+});
+
+// トグルの中から外へ出る道。空の行で押せば外の行へ、中身が空になれば題へ、
+// 題でもう一度押せば囲みが解ける。
+describe("トグルから抜ける", () => {
+  const TWO = `<details>
+<summary>トグル</summary>
+
+中の本文
+
+</details>
+`;
+
+  // 題の頭にカーソルを置いて押す。
+  const atHead = (body: string) => {
+    const loaded = fromMarkdown(body);
+    const opened = EditorState.create({
+      doc: loaded.doc,
+      plugins: editorPlugins({ onSave: () => {} }),
+    });
+    let at = -1;
+    opened.doc.descendants((node, pos) => {
+      if (at < 0 && node.type.name === "detailsSummary") at = pos + 1;
+    });
+    return run(opened, at, loaded, plainDetailsHead);
+  };
+
+  it("中身の空の行で押すと、その行がトグルの外へ出る", () => {
+    // 2 行目を空にしてから押す（⌘⌫ で行を空にした直後の状態）
+    const src = `<details>
+<summary>トグル</summary>
+
+中の本文
+
+二行目
+
+</details>
+`;
+    const { ran, shape, md } = dropCleared(src, "二行目", outOfDetailsBack);
+    expect(ran).toBe(true);
+    expect(shape).toEqual(["details", "paragraph"]);
+    // トグルは残り、中身の本文もそのまま
+    expect(md).toContain("<summary>トグル</summary>");
+    expect(md).toContain("中の本文");
+  });
+
+  it("中身が空 1 つのときは譲る（題へ移る番）", () => {
+    const src = `<details>
+<summary>トグル</summary>
+
+</details>
+`;
+    expect(drop(src, 0, outOfDetailsBack).ran).toBe(false);
+  });
+
+  it("素のトグルの題の頭で押すと、囲みが解ける", () => {
+    const { ran, shape, head, md } = atHead(TWO);
+    expect(ran).toBe(true);
+    expect(shape).toEqual(["paragraph", "paragraph"]);
+    // 題の字は段落として残り、カーソルもそこに居る
+    expect(head).toBe("トグル");
+    expect(md).toBe("トグル\n\n中の本文\n");
+  });
+
+  it("中身が空 1 つなら、囲みを解いても空の行は積み増さない", () => {
+    const src = `<details>
+<summary>トグル</summary>
+
+</details>
+`;
+    expect(atHead(src).shape).toEqual(["paragraph"]);
+  });
+
+  it("見出しトグルの題の頭では、段を外すだけで囲みは残る", () => {
+    const src = `<details>
+<summary><h2>トグル</h2></summary>
+
+中の本文
+
+</details>
+`;
+    const { ran, shape } = atHead(src);
+    expect(ran).toBe(true);
+    expect(shape).toEqual(["details"]);
   });
 });

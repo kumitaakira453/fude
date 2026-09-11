@@ -4018,10 +4018,9 @@ svg[id^="mmd-"] foreignObject p {
 /* ============================================================
    スクロールバー
    ============================================================ */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--mg-border) transparent;
-}
+/* 標準の scrollbar-width / scrollbar-color は指定しない。指定すると WebKit は
+   下の ::-webkit-scrollbar を捨て、OS の細いバー（縁の内側に描かれる）になる。
+   つまみを縁に付けたいので、こちらの指定に任せる。 */
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
