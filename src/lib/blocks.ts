@@ -2,6 +2,13 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import {
+  commonIndent,
+  containerSpans,
+  lostList,
+  unpadLines,
+  type ContainerKind,
+} from "./htmlSpans";
+import {
   buildProjection,
   findPlain,
   findPlainLoose,
@@ -32,22 +39,80 @@ interface MdastNode {
   };
 }
 
+// 囲みの範囲を先に行で決めてから、囲みでない区間だけを parse する。
+//
+// 囲みを CommonMark に任せると、`</details>` の後ろの本文が同じ塊に飲み込まれ
+// たり（空行が無い書き方）、囲みの途中で割れて開きだけ・中身だけ・閉じだけに
+// 散ったりする。読む側はブロックごとに描くので、割れると折りたためない。
 export function splitBlocks(body: string): Block[] {
-  const tree = processor.parse(body) as { children: MdastNode[] };
-  const blocks: Block[] = [];
-  tree.children.forEach((node, index) => {
-    const start = node.position?.start.offset ?? 0;
-    const end = node.position?.end.offset ?? body.length;
-    blocks.push({
-      index,
-      src: body.slice(start, end),
-      start,
-      end,
-      type: node.type ?? "",
-      depth: node.type === "heading" ? node.depth : undefined,
-    });
+  // 位置は常に本文の上の位置で持つ。字下げを落として読み直した区間も、
+  // 戻した位置で持つ（生ソースの編集と指摘の居場所がここに乗る）。
+  const at = (start: number, end: number, type: string, depth?: number): Part => ({
+    src: body.slice(start, end),
+    start,
+    end,
+    type,
+    depth,
   });
-  return blocks;
+
+  // 字下げを落として読み直した区間では、落とした分だけ頭が内側にずれる。
+  // ブロックの頭は行の頭に戻し、原文の字下げごと持たせる。
+  const lineStart = (o: number) => body.lastIndexOf("\n", o - 1) + 1;
+
+  const parts = (text: string, map: (o: number) => number, snap = false): Part[] => {
+    const head = (o: number) => (snap ? lineStart(map(o)) : map(o));
+    const out: Part[] = [];
+    for (const piece of pieces(text)) {
+      if (piece.kind) {
+        out.push(at(head(piece.start), map(piece.end), "html"));
+        continue;
+      }
+      const slice = text.slice(piece.start, piece.end);
+      const tree = processor.parse(slice) as { children: MdastNode[] };
+      for (const node of tree.children) {
+        const from = piece.start + (node.position?.start.offset ?? 0);
+        const to = piece.start + (node.position?.end.offset ?? slice.length);
+        const src = text.slice(from, to);
+        // 親の項目を失った一覧は、字下げを落として読み直す。
+        const cut =
+          node.type === "code" && lostList(src)
+            ? unpadLines(src, commonIndent(src.split("\n")))
+            : null;
+        if (cut) {
+          out.push(...parts(cut.text, (o) => map(from + cut.back(o)), true));
+          continue;
+        }
+        out.push(
+          at(
+            head(from),
+            map(to),
+            node.type ?? "",
+            node.type === "heading" ? node.depth : undefined,
+          ),
+        );
+      }
+    }
+    return out;
+  };
+
+  return parts(body, (o) => o).map((part, index) => ({ ...part, index }));
+}
+
+type Part = Omit<Block, "index">;
+
+// 囲みの範囲とその隙間に切り分ける。
+function pieces(
+  text: string,
+): { start: number; end: number; kind: ContainerKind | null }[] {
+  const out: { start: number; end: number; kind: ContainerKind | null }[] = [];
+  let at = 0;
+  for (const span of containerSpans(text)) {
+    if (span.start > at) out.push({ start: at, end: span.start, kind: null });
+    out.push({ start: span.start, end: span.end, kind: span.kind });
+    at = span.end;
+  }
+  if (at < text.length) out.push({ start: at, end: text.length, kind: null });
+  return out;
 }
 
 // ---- 書き換わった周りだけ parse し直す ----

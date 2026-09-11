@@ -227,10 +227,10 @@ interface HastChild {
 // 決めるので、ここでは「どの項目か」を特定できる位置だけを返す。
 // rehype-raw / rehype-katex を通すと子ノードの position が落ちることがあるため、
 // li 自身の position を基点にする。
-function itemAnchor(node: unknown): number | null {
+function itemAnchor(node: unknown, back: (at: number) => number): number | null {
   const n = node as HastChild | null | undefined;
   const s = n?.position?.start?.offset;
-  return typeof s === "number" ? s : null;
+  return typeof s === "number" ? back(s) : null;
 }
 
 export const Markdown = memo(function Markdown({
@@ -268,10 +268,10 @@ export const Markdown = memo(function Markdown({
 
   // 行だけのタグで囲まれた塊は、そのままでは中の markdown が読まれない。
   // 描画にはほどいた文字列を渡す。
-  const source = useMemo(() => openHtmlContainers(body), [body]);
-  // ほどくと文字数が動く。ソース上の位置を頼りにする目印（セル・項目）は
-  // 付けない。位置がずれた目印で編集すると、別の場所を書き換えてしまう。
-  const shifted = source !== body;
+  const opened = useMemo(() => openHtmlContainers(body), [body]);
+  // ほどくと文字数が動く。位置を頼りにする目印（セル・項目）は、原文の位置へ
+  // 戻してから持たせる。ずれた目印で編集すると、別の場所を書き換えてしまう。
+  const back = opened.back;
 
   // td/th 共通のレンダリング。編集対象セルはインラインエディタに差し替える。
   const renderCell = (
@@ -281,14 +281,10 @@ export const Markdown = memo(function Markdown({
     rest: Record<string, unknown>,
   ) => {
     const Tag = tag;
-    const start = (node as { position?: { start?: { offset?: number } } })
+    const at = (node as { position?: { start?: { offset?: number } } })
       ?.position?.start?.offset;
-    if (
-      !shifted &&
-      editCell &&
-      start !== undefined &&
-      editCell.cellStart === start
-    ) {
+    const start = at === undefined ? undefined : back(at);
+    if (editCell && start !== undefined && editCell.cellStart === start) {
       return (
         <Tag {...rest}>
           <div className="mg-cell mg-cell-editing">
@@ -304,7 +300,7 @@ export const Markdown = memo(function Markdown({
     return (
       // 選択からこのセルを特定するための目印。値は描画側が持っている
       // 正確なソースオフセットで、セル編集の照合にそのまま使える。
-      <Tag {...rest} data-mg-cell={shifted ? undefined : start}>
+      <Tag {...rest} data-mg-cell={start}>
         <div className="mg-cell">{children}</div>
       </Tag>
     );
@@ -371,7 +367,7 @@ export const Markdown = memo(function Markdown({
         },
         // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
         li({ node, children, ...rest }) {
-          const anchor = shifted ? null : itemAnchor(node);
+          const anchor = itemAnchor(node, back);
           if (editItem && anchor !== null && editItem.anchor === anchor) {
             // チェックは編集の対象ではないが、消さずに残す。消えると、
             // どの項目を直しているのか分からなくなる。押せる状態のまま
@@ -493,7 +489,7 @@ export const Markdown = memo(function Markdown({
         },
       }}
     >
-      {source}
+      {opened.text}
     </ReactMarkdown>
   );
 });

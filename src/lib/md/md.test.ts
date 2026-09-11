@@ -255,3 +255,66 @@ describe("項目の中の囲み", () => {
     expect(top.child(0).type.name).toBe("codeBlock");
   });
 });
+
+describe("囲みの範囲は行で決める", () => {
+  // Notion の書き出しは `</details>` の後に空行を置かない。CommonMark の HTML
+  // ブロックは次の空行まで続くので、後ろの本文まで同じ塊に飲まれる。
+  const SWALLOW = "<details>\n<summary>Figma</summary>\n<!-- x -->\n</details>\n- 変更点\n\t- こまかい話\n";
+
+  it("閉じタグの後ろの本文が doc に入る", () => {
+    const doc = fromMarkdown(SWALLOW).doc;
+    expect(doc.children.map((n) => n.type.name)).toEqual(["details", "bulletList"]);
+    expect(doc.textContent).toContain("変更点");
+  });
+
+  it("飲み込まれていた本文があっても、読み書きで動かない", () => {
+    expect(round(SWALLOW)).toBe(SWALLOW);
+  });
+
+  it("中に空行のあるトグルは、中身ごと 1 つの囲みになる", () => {
+    const src = "<details>\n<summary>ひらく</summary>\n\n中の本文\n\n</details>\n";
+    const doc = fromMarkdown(src).doc;
+    expect(doc.childCount).toBe(1);
+    expect(doc.child(0).type.name).toBe("details");
+    expect(doc.child(0).textContent).toBe("中の本文");
+  });
+
+  it("タブ字下げの中身も、コードではなく中身として読む", () => {
+    const src = "<details>\n<summary>ひらく</summary>\n\t- 中の項目\n</details>\n";
+    const inner = fromMarkdown(src).doc.child(0).child(0);
+    expect(inner.type.name).toBe("bulletList");
+    expect(round(src)).toBe(src);
+  });
+});
+
+describe("親の項目を失った一覧", () => {
+  const LOST = "| a | b |\n| --- | --- |\n| 1 | 2 |\n\t\t- 続きの項目\n\t\t\t- その子\n";
+
+  it("字下げコードではなく一覧として読む", () => {
+    const doc = fromMarkdown(LOST).doc;
+    expect(doc.children.map((n) => n.type.name)).toEqual(["table", "bulletList"]);
+    expect(doc.child(1).textContent).toContain("続きの項目");
+  });
+
+  it("読み書きしても原文のまま（タブも動かない）", () => {
+    expect(round(LOST)).toBe(LOST);
+  });
+
+  it("1 文字打っても、その 1 文字だけが動く", () => {
+    const loaded = fromMarkdown(LOST);
+    // 最初の文字列に 1 文字足す（打った直後の形）。
+    const mark = (node: PmNode): PmNode => {
+      if (node.isText) return schema.text(`${node.text}Ω`, node.marks);
+      const kids: PmNode[] = [];
+      node.forEach((child, _offset, index) => kids.push(index === 0 ? mark(child) : child));
+      return node.copy(Fragment.fromArray(kids));
+    };
+    const doc = schema.nodes.doc.create(null, [loaded.doc.child(0), mark(loaded.doc.child(1))]);
+    expect(toMarkdown(doc, loaded)).toBe(LOST.replace("続きの項目", "続きの項目Ω"));
+  });
+
+  it("空白字下げの本物のコードは触らない", () => {
+    const src = "段落\n\n    objects: Permission[] = [\n      1,\n    ];\n";
+    expect(fromMarkdown(src).doc.child(1).type.name).toBe("codeBlock");
+  });
+});

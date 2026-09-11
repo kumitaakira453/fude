@@ -7,6 +7,15 @@ import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { schema } from "./schema";
 import { splitRow } from "../blocks";
+import {
+  CONTAINERS,
+  commonIndent,
+  containerSpans,
+  innerPad,
+  lostList,
+  unpadLines,
+  type ContainerSpan,
+} from "../htmlSpans";
 
 // Markdown を編集モデルへ写す。
 //
@@ -49,10 +58,7 @@ interface Built {
 
 // ---- 囲み（callout / details）----
 
-const KINDS = {
-  callout: { open: /^<callout(\s[^>]*)?>$/, close: "</callout>" },
-  details: { open: /^<details(\s[^>]*)?>$/, close: "</details>" },
-} as const;
+const KINDS = CONTAINERS;
 
 type Kind = keyof typeof KINDS;
 
@@ -62,7 +68,7 @@ const attrOf = (attrs: string, name: string): string =>
   new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1] ?? "";
 
 interface Group {
-  kind: Kind | "plain";
+  kind: Kind | "plain" | "lost";
   node?: RootContent;
   start: number;
   end: number;
@@ -70,6 +76,9 @@ interface Group {
   head?: string;
   innerStart?: number;
   innerEnd?: number;
+  // 字下げを落として読み直す区間（親の項目を失った一覧）。
+  text?: string;
+  back?: (at: number) => number;
 }
 
 const lineEnd = (text: string, from: number): number => {
@@ -117,6 +126,72 @@ function group(children: RootContent[], source: string): Group[] {
   }
 
   return out;
+}
+
+// トップレベルの囲みは、mdast に渡す前に行で範囲を決める。CommonMark に任せると
+// `</details>` の後ろに空行が無い書き方で、後ろの本文まで同じ html の塊に飲まれ、
+// 塊の対を取り直したときにその分が doc から落ちる。
+function groupsOf(source: string): Group[] {
+  const out: Group[] = [];
+  let at = 0;
+  for (const span of containerSpans(source)) {
+    out.push(...plainGroups(source, at, span.start));
+    out.push(containerGroup(span, source));
+    at = span.end;
+  }
+  out.push(...plainGroups(source, at, source.length));
+  return out;
+}
+
+// 囲みでない区間。mdast へ渡し、位置は原文のものに直す。
+function plainGroups(source: string, from: number, to: number): Group[] {
+  if (from >= to) return [];
+  const children = parseTree(source.slice(from, to)).children;
+  for (const node of children) shiftBy(node, from);
+
+  return group(children, source).map((g) => {
+    if (g.kind !== "plain" || g.node?.type !== "code") return g;
+    const src = source.slice(g.start, g.end);
+    if (!lostList(src)) return g;
+    const cut = unpadLines(src, commonIndent(src.split("\n")));
+    return cut
+      ? { kind: "lost" as const, start: g.start, end: g.end, text: cut.text, back: cut.back }
+      : g;
+  });
+}
+
+function containerGroup(at: ContainerSpan, source: string): Group {
+  const { open, close } = KINDS[at.kind];
+  const first = source.slice(at.start, lineEnd(source, at.start));
+  // details は開きから </summary> までを原文のまま持つ。実データの summary は
+  // 複数行に割れていることが多く、組み直すと崩れる。
+  let head = first;
+  if (at.kind === "details") {
+    const to = source.slice(at.start, at.end).indexOf(SUMMARY_CLOSE);
+    if (to >= 0) head = source.slice(at.start, at.start + to + SUMMARY_CLOSE.length);
+  }
+  const line = source.lastIndexOf("\n", at.end - 1) + 1;
+  const closeStart = source.indexOf(close, line);
+  const innerEnd = closeStart < 0 ? at.end : closeStart;
+  return {
+    kind: at.kind,
+    start: at.start,
+    end: at.end,
+    attrs: open.exec(first.trim())?.[1]?.trim() ?? "",
+    head,
+    innerStart: Math.min(at.start + head.length + 1, innerEnd),
+    innerEnd,
+  };
+}
+
+// 区間ごとに読んだ mdast の位置を、原文の位置へ寄せる。
+function shiftBy(node: RootContent, by: number): void {
+  const at = node.position;
+  if (at) {
+    if (at.start.offset !== undefined) at.start.offset += by;
+    if (at.end.offset !== undefined) at.end.offset += by;
+  }
+  for (const kid of (node as { children?: RootContent[] }).children ?? []) shiftBy(kid, by);
 }
 
 // 釣り合う閉じ行を探す。入れ子の開きは数える。
@@ -182,14 +257,15 @@ export function fromMarkdown(source: string): Loaded {
   const blocks: PmNode[] = [];
   let seq = 0;
 
-  for (const g of group(parseTree(source).children, source)) {
-    const id = `b${seq++}`;
-    const built = nodeOf(g, source, 0, id);
-    if (!built) continue;
-    ranges.set(id, [built.span.start, built.span.end]);
-    originals.set(id, built.node);
-    spans.set(id, built.span);
-    blocks.push(built.node);
+  for (const g of groupsOf(source)) {
+    for (const built of builtOf(g, source, 0, () => `b${seq++}`)) {
+      const id = built.node.attrs.id as string | null;
+      blocks.push(built.node);
+      if (!id) continue;
+      ranges.set(id, [built.span.start, built.span.end]);
+      originals.set(id, built.node);
+      spans.set(id, built.span);
+    }
   }
 
   const doc = schema.nodes.doc.create(null, blocks.length ? blocks : [empty().node]);
@@ -219,14 +295,46 @@ const span = (start: number, end: number, children: Span[] = []): Span => ({
 
 const empty = (at = 0): Built => ({ node: schema.nodes.paragraph.create(), span: span(at, at) });
 
+// 1 つの塊から生まれるブロック。字下げを落として読み直した区間だけ複数になる。
+function builtOf(
+  g: Group,
+  source: string,
+  base: number,
+  nextId: () => string | null,
+): Built[] {
+  if (g.kind !== "lost") {
+    const one = nodeOf(g, source, base, nextId());
+    return one ? [one] : [];
+  }
+  const inner = blocksOfText(g.text!, 0);
+  // 落とした後の位置 → この文字列の中の位置 → base を足して本文の位置。
+  const local = (o: number) => g.start + g.back!(o);
+  // ブロックの範囲は行の頭から。原文の字下げごと持たせないと、触っていない
+  // ブロックを原文から出すときに行頭が欠ける。
+  const lineHead = (o: number) => base + source.lastIndexOf("\n", local(o) - 1) + 1;
+  return inner.nodes.map((node, i) => {
+    const at = moveSpan(inner.spans[i], (o) => base + local(o));
+    return {
+      node: withId(node, nextId()),
+      span: { ...at, start: lineHead(inner.spans[i].start) },
+    };
+  });
+}
+
+const withId = (node: PmNode, id: string | null): PmNode =>
+  id && node.type.spec.attrs && "id" in node.type.spec.attrs
+    ? node.type.create({ ...node.attrs, id }, node.content, node.marks)
+    : node;
+
 function nodeOf(g: Group, source: string, base: number, id: string | null): Built | null {
   const attrs = id ? { id } : {};
   if (g.kind === "plain") return blockOf(g.node!, source, base, id);
 
+  const body = source.slice(g.innerStart!, g.innerEnd!);
   const inner = innerBlocks(
-    source.slice(g.innerStart!, g.innerEnd!),
+    body,
     base + g.innerStart!,
-    padOf(source, g.start),
+    innerPad(body.split("\n"), padOf(source, g.start)),
   );
   const at = span(base + g.start, base + g.end, inner.spans);
   if (g.kind === "details") {
@@ -252,49 +360,19 @@ interface Blocks {
 
 // 囲みの中身は文字列から読み直す。入れ子も同じ道を通る。
 function blocksOfText(text: string, base: number): Blocks {
-  return collect(group(parseTree(text).children, text), text, base);
+  return collect(groupsOf(text), text, base);
 }
 
 // 箇条書きの項目の中に書かれた囲みは、中身の行も項目の分だけ字下げされている。
 // そのまま読み直すと字下げ 4 で字下げのコードになるので、囲みが立っている桁だけ
 // 落として読む。落とした分は位置に足し戻す（指摘の居場所は原文の位置で持つ）。
 function innerBlocks(text: string, base: number, pad: string): Blocks {
-  const cut = unpad(text, pad);
+  const cut = unpadLines(text, pad);
   if (!cut) return blocksOfText(text, base);
   const inner = blocksOfText(cut.text, 0);
   return {
     nodes: inner.nodes,
     spans: inner.spans.map((s) => moveSpan(s, (at) => base + cut.back(at))),
-  };
-}
-
-// 各行の頭から pad を落とし、落とした後の位置から元の位置を引ける表を作る。
-function unpad(
-  text: string,
-  pad: string,
-): { text: string; back: (at: number) => number } | null {
-  if (!pad) return null;
-  const out: string[] = [];
-  const map: number[] = [];
-  let at = 0;
-  text.split("\n").forEach((line, i) => {
-    if (i > 0) {
-      map.push(at);
-      at += 1;
-    }
-    // 字下げが揃っていない行は、空白のあるところまでしか落とさない。
-    const room = line.startsWith(pad) ? pad.length : indentOf(line).length;
-    const drop = Math.min(pad.length, room);
-    at += drop;
-    const rest = line.slice(drop);
-    for (let j = 0; j < rest.length; j++) map.push(at + j);
-    at += rest.length;
-    out.push(rest);
-  });
-  map.push(at);
-  return {
-    text: out.join("\n"),
-    back: (i) => map[Math.min(Math.max(i, 0), map.length - 1)],
   };
 }
 
@@ -304,8 +382,6 @@ const moveSpan = (s: Span, f: (at: number) => number): Span => ({
   children: s.children.map((k) => moveSpan(k, f)),
 });
 
-const indentOf = (line: string): string =>
-  line.slice(0, line.length - line.trimStart().length);
 
 // 囲みが立っている桁。開きタグより前が空白だけのときに限る。
 function padOf(source: string, at: number): string {
@@ -320,10 +396,10 @@ function blocksOf(nodes: RootContent[], source: string, base: number): Blocks {
 function collect(groups: Group[], source: string, base: number): Blocks {
   const out: Blocks = { nodes: [], spans: [] };
   for (const g of groups) {
-    const built = nodeOf(g, source, base, null);
-    if (!built) continue;
-    out.nodes.push(built.node);
-    out.spans.push(built.span);
+    for (const built of builtOf(g, source, base, () => null)) {
+      out.nodes.push(built.node);
+      out.spans.push(built.span);
+    }
   }
   if (out.nodes.length) return out;
   const blank = empty(base);

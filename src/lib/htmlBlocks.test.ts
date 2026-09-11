@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { openHtmlContainers, setCalloutIcon } from "./htmlBlocks";
 
+// 組み替えた文字列だけを見る試験。位置の戻しは htmlSpans の試験で見る。
+const opened = (src: string) => openHtmlContainers(src).text;
+
 describe("openHtmlContainers", () => {
   it("callout の中身の前後に空行を入れ、装飾の付く形に組み替える", () => {
     const src = [
@@ -8,7 +11,7 @@ describe("openHtmlContainers", () => {
       "このリリースでは `X` を削除しない。",
       "</callout>",
     ].join("\n");
-    expect(openHtmlContainers(src)).toBe(
+    expect(opened(src)).toBe(
       [
         '<div class="mg-callout notion" data-color="gray_bg"><span class="mg-callout-ico" data-mg-callout-ico="1">ℹ️</span><div class="mg-callout-body">',
         "",
@@ -21,18 +24,18 @@ describe("openHtmlContainers", () => {
 
   it("色の指定は Notion の名前をそのまま渡す", () => {
     const src = ['<callout color="blue_bg">', "本文", "</callout>"].join("\n");
-    expect(openHtmlContainers(src)).toContain('data-color="blue_bg"');
+    expect(opened(src)).toContain('data-color="blue_bg"');
   });
 
   it("色の名前として読めない値は渡さない", () => {
     const src = ['<callout color="\" onx=1">', "本文", "</callout>"].join("\n");
-    expect(openHtmlContainers(src)).not.toContain("data-color");
+    expect(opened(src)).not.toContain("data-color");
   });
 
   it("アイコンが無くても組み替える", () => {
     const src = ["<callout>", "本文", "</callout>"].join("\n");
-    expect(openHtmlContainers(src)).toContain('<span class="mg-callout-ico" data-mg-callout-ico="1">');
-    expect(openHtmlContainers(src).split("\n")[1]).toBe("");
+    expect(opened(src)).toContain('<span class="mg-callout-ico" data-mg-callout-ico="1">');
+    expect(opened(src).split("\n")[1]).toBe("");
   });
 
   it("複数行の中身をそのまま保つ", () => {
@@ -42,13 +45,13 @@ describe("openHtmlContainers", () => {
       "- 二つ目",
       "</callout>",
     ].join("\n");
-    const got = openHtmlContainers(src).split("\n");
+    const got = opened(src).split("\n");
     expect(got.slice(2, 4)).toEqual(["- 一つ目", "- 二つ目"]);
   });
 
   it("アイコンに記号を書かれても文字として埋める", () => {
     const src = ['<callout icon="<b & i">', "本文", "</callout>"].join("\n");
-    expect(openHtmlContainers(src)).toContain(
+    expect(opened(src)).toContain(
       '<span class="mg-callout-ico" data-mg-callout-ico="1">&lt;b &amp; i</span>',
     );
   });
@@ -63,7 +66,7 @@ describe("openHtmlContainers", () => {
       "二つ目",
       "</callout>",
     ].join("\n");
-    const got = openHtmlContainers(src);
+    const got = opened(src);
     expect(got.match(/mg-callout-body/g)?.length).toBe(2);
   });
 
@@ -74,7 +77,7 @@ describe("openHtmlContainers", () => {
       "`code` を含む本文",
       "</details>",
     ].join("\n");
-    expect(openHtmlContainers(src)).toBe(
+    expect(opened(src)).toBe(
       [
         "<details>",
         "<summary>詳細</summary>",
@@ -88,29 +91,29 @@ describe("openHtmlContainers", () => {
 
   it("summary が無い details でも本文を挟む", () => {
     const src = ["<details>", "本文", "</details>"].join("\n");
-    expect(openHtmlContainers(src)).toBe(
+    expect(opened(src)).toBe(
       ["<details>", "", "本文", "", "</details>"].join("\n"),
     );
   });
 
   it("対象のタグが無ければ同じ文字列を返す", () => {
     const src = "# 見出し\n\n本文に `code` がある。";
-    expect(openHtmlContainers(src)).toBe(src);
+    expect(opened(src)).toBe(src);
   });
 
   it("閉じタグが無ければ触らない", () => {
     const src = ["<callout>", "閉じ忘れ"].join("\n");
-    expect(openHtmlContainers(src)).toBe(src);
+    expect(opened(src)).toBe(src);
   });
 
   it("開きタグと同じ行に中身があるものは触らない", () => {
     const src = "<callout>本文</callout>";
-    expect(openHtmlContainers(src)).toBe(src);
+    expect(opened(src)).toBe(src);
   });
 
   it("インラインの details 記述は触らない", () => {
     const src = "文中に <details> と書いただけ。";
-    expect(openHtmlContainers(src)).toBe(src);
+    expect(opened(src)).toBe(src);
   });
 
   // 字下げを落とすと div が最上位の HTML ブロックになり、囲みが項目の外へ出て
@@ -124,7 +127,7 @@ describe("openHtmlContainers", () => {
       "  </callout>",
       "- つぎの項目",
     ].join("\n");
-    expect(openHtmlContainers(src).split("\n")).toEqual([
+    expect(opened(src).split("\n")).toEqual([
       "- 項目のあたま",
       "",
       '  <div class="mg-callout notion"><span class="mg-callout-ico" data-mg-callout-ico="1">💡</span><div class="mg-callout-body">',

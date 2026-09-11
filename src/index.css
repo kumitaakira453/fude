@@ -1931,6 +1931,52 @@ body.mg-dragging .mg-sel-menu {
   text-transform: uppercase;
   margin-bottom: 0.3rem;
 }
+/* トグル。開閉はブラウザの details にそのまま任せ、飾りだけ callout に
+   揃える。閉じているときは見出しだけの帯に見える。 */
+.mg-prose details {
+  border: 1px solid var(--mg-border);
+  border-radius: 0.75rem;
+  padding: 0.3rem 1rem;
+  margin: 1.4rem 0;
+  background: var(--mg-panel);
+}
+.mg-prose details[open] {
+  padding-bottom: 0.85rem;
+}
+.mg-prose summary {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+.mg-prose summary::-webkit-details-marker {
+  display: none;
+}
+.mg-prose summary::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 0.36rem solid currentColor;
+  border-top: 0.28rem solid transparent;
+  border-bottom: 0.28rem solid transparent;
+  opacity: 0.5;
+  transition: transform 120ms ease;
+}
+.mg-prose details[open] > summary::before {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-prose summary::before {
+    transition: none;
+  }
+}
+.mg-prose details > :not(summary):last-child {
+  margin-bottom: 0;
+}
 /* 種別の配色（accent とは別のセマンティックカラー） */
 .mg-callout.note {
   border-color: color-mix(in srgb, var(--mg-accent) 30%, var(--mg-border));
