@@ -11,6 +11,7 @@ import {
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import { Plugin, Selection, TextSelection, type Command } from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
+import type { EditorView } from "prosemirror-view";
 import type { Transform } from "prosemirror-transform";
 import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
@@ -22,7 +23,7 @@ import { mathEditing } from "./math";
 import { inCell, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { insideBlock } from "./nodeViews";
-import { nestOf, schema } from "./schema";
+import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
 import {
   cellDown,
@@ -202,18 +203,19 @@ export const dropEmptyBack: Command = (state, dispatch) => {
 
 // ---- トグルの中の行き来 ----
 //
-// トグルは「見出し（入力欄）」と「中身（ブロック）」の 2 段でできている。
-// 見出しは本文の木に居ないので、既定の鍵だけでは行き来できない。行き先を
-// 1 か所に決めておく。
+// トグルは「題」と「中身」の 2 段でできている。どちらも本文の節点なので、
+// 押す・矢印・選ぶは既定のまま動く。決めておくのは次の行き先だけ。
 //
-//   見出しで Enter / ↓     … 中身の先頭へ
-//   見出しの頭で Backspace … 見出しトグルなら素のトグルへ戻す
+//   畳んだ題で Enter       … 次のトグルを作り、その題へ
+//   開いた題で Enter       … 中身の先頭に行を足して、そこへ
+//   題の頭で Backspace     … 見出しトグルなら素のトグルへ戻す
 //   中身の先頭で Backspace … その塊を囲みの外（直後）へ出す。囲みは残る
-//   空の中身で Backspace   … 見出しへ（頭に置く。題を後ろから食べない）
+//   空の中身で Backspace   … 題へ（頭に置く。題を後ろから食べない）
 //   空の中身で Enter       … 囲みの外（直後）の行へ出る。囲みは残る
 //
-// 「囲みは残る」を通している。見出しの字は書いたものなので、中身が空になった
-// くらいで消さない。
+// 「囲みは残る」を通している。題の字は書いたものなので、中身が空になった
+// くらいで消さない。畳んだまま中身へ入れないのも同じ考えで、見えない場所へ
+// カーソルを置かない。
 
 // 空になったトグルの中で Enter。囲みは残し、その下の行へ出る。
 export const outEnter: Command = (state, dispatch) => {
@@ -263,19 +265,56 @@ export const toDetailsHead: Command = (state, dispatch) => {
   return true;
 };
 
-// トグルの題で Enter。題を割らず、中身の先頭へ移る。
-export const outOfDetailsHead: Command = (state, dispatch) => {
+// トグルの題で Enter。題は割らない。行き先は畳み方で分ける。
+//
+// 畳んでいるときに中身へ入れると、中身は隠れているのでカーソルが消えたように
+// 見える。畳んだまま続けて書きたいのは「次のトグル」なので、そちらを作る。
+export const outOfDetailsHead: Command = (state, dispatch, view) => {
   const { $from } = state.selection;
   if ($from.parent.type !== schema.nodes.detailsSummary) return false;
+  const depth = $from.depth - 1;
+  const box = $from.node(depth);
+  if (box.type !== schema.nodes.details) return false;
+
+  if (closedAt(view, $from.before(depth))) {
+    if (dispatch) {
+      const after = $from.after(depth);
+      const tr = state.tr.insert(after, newDetails());
+      dispatch(
+        tr.setSelection(TextSelection.near(tr.doc.resolve(after + 2), 1)).scrollIntoView(),
+      );
+    }
+    return true;
+  }
+
   if (dispatch) {
+    const head = $from.after();
+    const first = state.doc.resolve(head).nodeAfter;
+    // 先頭が既に空の行なら、足さずにそこへ入る（空行を積み増さない）。
+    const tr =
+      first?.isTextblock && first.content.size === 0
+        ? state.tr
+        : state.tr.insert(head, schema.nodes.paragraph.create());
     dispatch(
-      state.tr
-        .setSelection(TextSelection.near(state.doc.resolve($from.after() + 1), 1))
-        .scrollIntoView(),
+      tr.setSelection(TextSelection.near(tr.doc.resolve(head + 1), 1)).scrollIntoView(),
     );
   }
   return true;
 };
+
+// 題と空の中身だけの新しいトグル。
+const newDetails = () =>
+  schema.nodes.details.create({ head: DETAILS_HEAD }, [
+    schema.nodes.detailsSummary.create(),
+    schema.nodes.paragraph.create(),
+  ]);
+
+// そのトグルが畳まれているか。開閉は描いている側（nodeView）が持っているので、
+// 出ている結果をそのまま読む。
+function closedAt(view: EditorView | undefined, at: number): boolean {
+  const dom = view?.nodeDOM(at);
+  return dom instanceof HTMLElement && dom.classList.contains("is-closed");
+}
 
 // 見出しトグルの題の頭で Backspace。見出しを外して素のトグルへ戻す。
 export const plainDetailsHead: Command = (state, dispatch) => {

@@ -66,6 +66,18 @@ describe("ブロックごとに描いたときの囲み", () => {
     expect(host.querySelector("details")?.open).toBe(true);
   });
 
+  it("中身の無いトグルには薄く描く印が付く", () => {
+    const host = show(lines("<details>", "<summary>ひらく</summary>", "", "</details>", ""));
+    expect(host.querySelector("details")?.classList.contains("is-empty")).toBe(true);
+  });
+
+  it("中身のあるトグルには印が付かない", () => {
+    const host = show(
+      lines("<details>", "<summary>ひらく</summary>", "", "中の本文", "", "</details>", ""),
+    );
+    expect(host.querySelector("details")?.classList.contains("is-empty")).toBe(false);
+  });
+
   it("題の行内の印は印として描かれる", () => {
     const host = show(
       lines("<details>", "<summary>**太字**の題</summary>", "", "中の本文", "", "</details>", ""),

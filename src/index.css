@@ -1980,43 +1980,61 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details-mark {
   content: "";
   position: absolute;
-  left: 4px;
-  top: calc(8px - var(--mg-mark-lift));
-  width: 0;
-  height: 0;
+  left: 0;
+  top: calc(3px - var(--mg-mark-lift));
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
-  border-left: 8px solid currentColor;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
+  border-radius: 6px;
   background: none;
+}
+/* 三角は箱の中央に切り出す（8 × 12）。読む面は題の行ごと押せるので、印だけ
+   置く。編集面は釦そのものを押せる的にして、三角は中の層で描く。 */
+.mg-prose summary::before,
+.mg-pm .mg-details-mark::before {
+  background: currentColor;
+  clip-path: polygon(7px 5px, 15px 11px, 7px 17px);
   transition: transform 120ms ease;
 }
 .mg-pm .mg-details-mark {
   cursor: pointer;
   color: inherit;
 }
+.mg-pm .mg-details-mark:hover {
+  background: var(--mg-hover);
+}
+.mg-pm .mg-details-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+/* 中身の無いトグルは薄く。開けるものが無いことを、押す前に見せる。 */
+.mg-prose details.is-empty > summary::before,
+.mg-pm .mg-details.is-empty > .mg-details-mark::before {
+  background: var(--mg-muted);
+}
 /* 題の 1 行目の中央に合わせる。行の高さは見出しの段で変わる。 */
 .mg-prose summary:has(> h1)::before,
 .mg-pm .mg-details[data-level="1"] > .mg-details-mark {
-  top: calc(14px - var(--mg-mark-lift));
+  top: calc(9px - var(--mg-mark-lift));
 }
 .mg-prose summary:has(> :is(h2, h3))::before,
 .mg-pm .mg-details[data-level="2"] > .mg-details-mark,
 .mg-pm .mg-details[data-level="3"] > .mg-details-mark {
-  top: calc(10px - var(--mg-mark-lift));
+  top: calc(5px - var(--mg-mark-lift));
 }
 .mg-prose summary:has(> h4)::before,
 .mg-pm .mg-details[data-level="4"] > .mg-details-mark {
-  top: calc(6px - var(--mg-mark-lift));
+  top: calc(1px - var(--mg-mark-lift));
 }
 .mg-prose details[open] > summary::before,
-.mg-pm .mg-details:not(.is-closed) > .mg-details-mark {
+.mg-pm .mg-details:not(.is-closed) > .mg-details-mark::before {
   transform: rotate(90deg);
 }
 @media (prefers-reduced-motion: reduce) {
   .mg-prose summary::before,
-  .mg-pm .mg-details-mark {
+  .mg-pm .mg-details-mark::before {
     transition: none;
   }
 }

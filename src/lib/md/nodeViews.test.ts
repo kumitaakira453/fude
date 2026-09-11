@@ -177,6 +177,17 @@ describe("トグル", () => {
   const TOGGLE = "<details>\n<summary>ひらく</summary>\n\n中の本文\n\n</details>\n";
   const press = (el: Element) =>
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  const key = (view: EditorView, name: string) =>
+    view.someProp("handleKeyDown", (f) =>
+      f(view, new KeyboardEvent("keydown", { key: name, bubbles: true })),
+    );
+  // 題の末尾へカーソルを置く。
+  const caretAtEndOfHead = (view: EditorView) => {
+    const title = view.state.doc.child(0).child(0);
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, 1 + title.content.size + 1)),
+    );
+  };
 
   it("三角を押すと中身が出て、もう一度押すと畳む", () => {
     const view = editor(TOGGLE);
@@ -254,6 +265,41 @@ describe("トグル", () => {
     const head = view.dom.querySelector(".mg-details-head")!;
     expect(head.querySelector("h2")?.textContent).toBe("決め方");
     expect(view.state.doc.child(0).child(0).attrs.level).toBe(2);
+  });
+
+  it("畳んだ題で Enter を押すと、次のトグルができてその題へ入る", () => {
+    const view = editor(TOGGLE);
+    // 原文が <details> なので畳んで始まる
+    caretAtEndOfHead(view);
+    expect(key(view, "Enter")).toBe(true);
+    expect(view.state.doc.childCount).toBe(2);
+    expect(view.state.doc.child(1).type.name).toBe("details");
+    expect(view.state.doc.child(1).child(0).type.name).toBe("detailsSummary");
+    // カーソルは新しい題の中
+    expect(view.state.selection.$from.parent.type.name).toBe("detailsSummary");
+    expect(view.state.selection.$from.parent.textContent).toBe("");
+  });
+
+  it("開いた題で Enter を押すと、中身の先頭に行ができてそこへ入る", () => {
+    const view = editor(TOGGLE);
+    press(view.dom.querySelector(".mg-details-mark")!);
+    caretAtEndOfHead(view);
+    expect(key(view, "Enter")).toBe(true);
+    expect(view.state.doc.childCount).toBe(1);
+    expect(view.state.doc.child(0).childCount).toBe(3);
+    expect(view.state.selection.$from.parent.textContent).toBe("");
+  });
+
+  it("中身の無いトグルは薄く描く印を持つ", () => {
+    const view = editor("<details>\n<summary>ひらく</summary>\n\n</details>\n");
+    const box = view.dom.querySelector(".mg-details")!;
+    expect(box.classList.contains("is-empty")).toBe(true);
+    // 中身を書くと外れる
+    const at = view.state.doc.child(0).child(0);
+    view.dispatch(view.state.tr.insertText("中身", 1 + at.content.size + 2));
+    expect(view.dom.querySelector(".mg-details")!.classList.contains("is-empty")).toBe(
+      false,
+    );
   });
 
   it("見出しの段を印として出す（三角の置き場所に使う）", () => {

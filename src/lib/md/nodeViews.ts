@@ -732,10 +732,19 @@ class DetailsView implements NodeView {
   }
 
   // 三角は題の 1 行目の中央に置く。行の高さは見出しの段で変わるので、段を
-  // 印として出し、置き場所は CSS 側で決める。
+  // 印として出し、置き場所は CSS 側で決める。中身の有無も印として出す
+  // （開けるものが無いトグルは薄く描く）。
   private markLevel() {
     const level = this.node.firstChild?.attrs.level ?? 0;
     this.dom.dataset.level = String(level);
+    this.dom.classList.toggle("is-empty", this.hollow());
+  }
+
+  // 題のほかに中身が無いか。空の段落 1 つだけなら、まだ何も入っていない。
+  private hollow(): boolean {
+    if (this.node.childCount > 2) return false;
+    const body = this.node.childCount === 2 ? this.node.child(1) : null;
+    return !body || (body.isTextblock && body.content.size === 0);
   }
 
   private fold(open: boolean) {

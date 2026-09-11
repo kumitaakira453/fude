@@ -74,6 +74,7 @@ function Toggle({
   const [shown, setShown] = useState(() => recallFold(key, open === true));
   return (
     <details
+      className={hollow(node) ? "is-empty" : undefined}
       open={shown}
       onToggle={(e) => {
         const next = e.currentTarget.open;
@@ -84,6 +85,12 @@ function Toggle({
       {children}
     </details>
   );
+}
+
+// 題のほかに中身が無いか。開けるものが無いトグルは薄く描く。
+function hollow(node: unknown): boolean {
+  const kids = (node as { children?: HastChild[] } | undefined)?.children ?? [];
+  return kids.every((c) => c.tagName === "summary" || !textOf(c).trim());
 }
 
 // トグルの題の字。鍵に使うので、印の中の字も拾って繋げる。

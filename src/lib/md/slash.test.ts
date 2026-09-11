@@ -465,12 +465,23 @@ describe("トグル要素", () => {
     );
   });
 
-  it("題で Enter を押すと中身へ移る（題は割れない）", () => {
+  it("開いた題で Enter を押すと、中身の先頭に行ができてそこへ入る", () => {
     const view = editor("<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
     caretAtEndOf(view, 0);
     press(view, "Enter");
-    expect(view.state.selection.$from.parent.textContent).toBe("中の本文");
+    expect(view.state.selection.$from.parent.textContent).toBe("");
+    expect(view.state.doc.child(0).childCount).toBe(3);
+    // 題は割れない
+    expect(view.state.doc.child(0).child(0).textContent).toBe("トグル");
+    expect(view.state.doc.child(0).child(2).textContent).toBe("中の本文");
+  });
+
+  it("中身の先頭が空の行なら、足さずにそこへ入る", () => {
+    const view = editor("<details>\n<summary>トグル</summary>\n\n\n</details>\n");
+    caretAtEndOf(view, 0);
+    press(view, "Enter");
     expect(view.state.doc.child(0).childCount).toBe(2);
+    expect(view.state.selection.$from.parent.textContent).toBe("");
   });
 
   it("見出しトグルの題の頭で Backspace を押すと素のトグルへ戻る", () => {
