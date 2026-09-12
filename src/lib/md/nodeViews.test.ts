@@ -341,6 +341,20 @@ describe("図の見せ方", () => {
     expect(box.dataset.mode).toBe("diagram");
   });
 
+  it("カーソルが中に居るあいだは、隠さずソースを出す", () => {
+    const view = editor(SRC);
+    const box = () => view.dom.querySelector(".mg-pm-code") as HTMLElement;
+    // 既定は図だけ。
+    expect(box().dataset.mode).toBe("diagram");
+
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)),
+    );
+    // 隠したままだと打っている場所が見えない。印を付けて出す側へ回す
+    // （そのあいだ選び手の印も分割へ移る。見え方は index.css が持つ）。
+    expect(box().classList.contains("is-inside")).toBe(true);
+  });
+
   it("外に居るときは動かさない", () => {
     const view = editor(SRC);
     const end = view.state.doc.content.size - 1;

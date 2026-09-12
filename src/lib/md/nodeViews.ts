@@ -24,6 +24,10 @@ import { schema } from "./schema";
 // 図の見せ方。読むときと同じ「図だけ」を既定にする。
 export type MermaidMode = "code" | "split" | "diagram";
 
+// 見せ方の三択。**並びは index.css が nth-child で参照している**（カーソルが
+// 中に居るあいだ、印を分割へ移すため）。順を変えるときはそちらも直す。
+// 見せ方の三択。**並びは index.css が nth-child で参照している**（カーソルが
+// 中に居るあいだ、印を分割へ移すため）。順を変えるときはそちらも直す。
 const MODES: { mode: MermaidMode; icon: string; label: string }[] = [
   { mode: "code", icon: "code", label: "ソース" },
   { mode: "split", icon: "horizontal_split", label: "分割" },
@@ -325,13 +329,13 @@ class CodeBlockView implements NodeView {
   }
 
   private setMode(mode: MermaidMode) {
+    // 図だけにするなら、カーソルを塊の外へ出す。中に居るあいだはソースを
+    // 出す作りなので、出さないと押しても見た目が変わらない。
+    if (mode === "diagram") this.leave();
     const id = this.id();
     if (id) this.deps.modes.set(id, mode);
     this.dom.dataset.mode = mode;
     for (const [m, b] of this.picks) b.classList.toggle("is-on", m === mode);
-    // 図だけにするなら、カーソルを塊の外へ出す。中に居るあいだはソースを
-    // 出したままにする作りなので、出さないと押しても何も変わらない。
-    if (mode === "diagram") this.leave();
     this.view.focus();
   }
 
@@ -436,6 +440,7 @@ class CodeBlockView implements NodeView {
     this.node = node;
     if (node.attrs.lang !== wasLang) this.paint();
     else if (node.attrs.lang === MERMAID && node.textContent !== wasText) this.draw();
+
     return true;
   }
 
@@ -830,6 +835,7 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
     const to = at + $head.node(d).nodeSize;
     if (covers(prev, at, to)) return prev;
     return DecorationSet.create(state.doc, [
+      // spec の印は、塊の描画側が「中に居る」を読み取るために置く。
       Decoration.node(at, to, { class: "is-inside" }),
     ]);
   }

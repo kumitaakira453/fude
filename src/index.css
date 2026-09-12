@@ -4688,9 +4688,7 @@ body.mg-carrying {
 .mg-mermaid-err:empty {
   display: none;
 }
-/* ソースだけ / 分割 / 図だけ。図はソースの下に置く。
-   図だけのときも、カーソルが中に入っていればソースを出す（隠したままだと
-   カーソルが見えなくなる）。 */
+/* ソースだけ / 分割 / 図だけ。図はソースの下に置く。 */
 .mg-pm-code.is-mermaid[data-mode="code"] .mg-mermaid {
   display: none;
 }
@@ -4705,6 +4703,21 @@ body.mg-carrying {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
+}
+
+/* 図だけを選んでいても、カーソルが中に居るあいだはソースを出す（隠すと
+   打っている場所が見えない）。そのあいだは**選び手の印も分割へ移す**。
+   図だけと言いながらソースが出ている、という食い違いを作らない。
+   並びは nodeViews.ts の MODES（ソース / 分割 / 図）に対応する。 */
+.mg-pm-code.is-mermaid[data-mode="diagram"].is-inside .mg-code-modes button.is-on {
+  background: transparent;
+  color: var(--mg-muted);
+}
+.mg-pm-code.is-mermaid[data-mode="diagram"].is-inside
+  .mg-code-modes
+  button:nth-child(2) {
+  background: color-mix(in srgb, var(--mg-accent) 18%, transparent);
+  color: var(--mg-accent);
 }
 
 /* 言語を選ぶ小窓。塊は角丸のために overflow を切っているので、body に置く。 */
