@@ -1,5 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useWorkspace } from "../hooks/useWorkspace";
 import { splitInto } from "../lib/ui";
 import {
   activeFolderIdAtom,
@@ -66,6 +67,12 @@ export function Toolbar() {
   const canBack = useAtomValue(canBackAtom);
   const canForward = useAtomValue(canForwardAtom);
   const isSplit = panes.length > 1;
+  const { holdDraft } = useWorkspace();
+
+  const goHome = () => {
+    setSole(null);
+    setActiveFolderId(null);
+  };
   const isLg = useMediaQuery("(min-width: 1024px)");
   // 目次は lg 以上かつ単一ペインのときのみ表示可能
   const canToc = isLg && !isSplit;
@@ -80,8 +87,8 @@ export function Toolbar() {
       />
       <button
         onClick={() => {
-          setSole(null);
-          setActiveFolderId(null);
+          // 下書きのままなら、行き先を決めてから戻る。
+          if (!holdDraft(goHome)) goHome();
         }}
         title="スタート画面へ"
         className="mx-1 flex select-none items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:bg-[var(--mg-hover)]"

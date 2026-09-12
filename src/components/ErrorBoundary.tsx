@@ -3,20 +3,23 @@ import { Component, type ReactNode } from "react";
 // レンダー中の例外で「画面全体が真っ白」になるのを防ぎ、原因を可視化する。
 export class ErrorBoundary extends Component<
   { children: ReactNode },
-  { error: Error | null }
+  { error: Error | null; where: string }
 > {
-  state: { error: Error | null } = { error: null };
+  state: { error: Error | null; where: string } = { error: null, where: "" };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: unknown) {
+  // どの部品で起きたかを画面にも出す。WebKit の stack には React の部品名が
+  // 入らないので、stack だけでは当たりが付かない。
+  componentDidCatch(error: Error, info: { componentStack?: string }) {
     console.error("[fude error]", error, info);
+    this.setState({ where: info?.componentStack ?? "" });
   }
 
   render() {
-    const { error } = this.state;
+    const { error, where } = this.state;
     if (!error) return this.props.children;
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[var(--mg-bg)] p-8 text-[var(--mg-fg)]">
@@ -30,6 +33,7 @@ export class ErrorBoundary extends Component<
             {[
               `${error.name ?? "Error"}: ${error.message || String(error)}`,
               error.stack,
+              where && `どの部品で起きたか:${where}`,
             ]
               .filter(Boolean)
               .join("\n\n")}
