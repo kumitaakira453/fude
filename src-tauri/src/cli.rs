@@ -46,6 +46,15 @@ enum ReviewAction {
         /// 該当が 0 件のとき終了コード 2 で終わる
         #[arg(long)]
         exit_code: bool,
+        /// どの段で位置が決まったか、何回働いたかを標準エラーへ出す
+        #[arg(long, hide = true)]
+        timing: bool,
+    },
+    /// 既にある指摘へ、位置の手掛かりを遡って埋める
+    Backfill {
+        /// 何件埋まるかだけを出す
+        #[arg(long)]
+        dry_run: bool,
     },
     /// 指摘に返信する
     Reply {
@@ -165,6 +174,7 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
             format,
             brief,
             exit_code,
+            timing,
         } => {
             // 対象の見出しは絞り込んだものをそのまま出す。何を数えたのかが
             // 分からないと、0 件の意味を読み手が取り違える。
@@ -178,7 +188,9 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
                 status: status.into(),
                 author,
             };
-            let views = review::list(&filter)?;
+            let start = std::time::Instant::now();
+            let (views, effort) = review::list_with(&filter)?;
+            let took = start.elapsed();
 
             if matches!(format, OutputFormat::Json) {
                 let out = serde_json::to_string_pretty(&views).map_err(|e| e.to_string())?;
@@ -210,6 +222,10 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
                 } else {
                     print!("{}", review::format::threads_markdown(&views));
                 }
+            }
+
+            if timing {
+                eprintln!("{}", review::format::timing_line(&views, effort, took));
             }
 
             if exit_code && views.is_empty() {
@@ -253,6 +269,14 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
             } else {
                 println!("同じ内容のバージョンが既にあります: {short} \"{name}\"");
             }
+        }
+        ReviewAction::Backfill { dry_run } => {
+            let out = review::backfill(dry_run)?;
+            let head = if dry_run { "埋まります" } else { "埋めました" };
+            println!(
+                "{head}: {} 件（版が残っておらず埋められない {} / 全 {} 件）",
+                out.filled, out.skipped, out.total
+            );
         }
         ReviewAction::Gc { dry_run } => {
             let out = review::sweep(dry_run)?;

@@ -53,6 +53,14 @@ pub struct Thread {
     pub selection_offset: usize, // ブロック内のプレーンテキスト上の位置
     #[serde(default)]
     pub section_path: Vec<String>,
+    // 引用の直前・直後の字。同じ文が複数あるとき、どれを指していたかを決める。
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+    // 基準版の本文の中での、引用のバイト位置。行差分で移すときの起点になる。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_offset: Option<usize>,
     pub base_version: String, // 版 ID（本文の内容ハッシュ）
     pub status: Status,
     #[serde(default)]
@@ -95,6 +103,25 @@ pub struct Resolved {
     #[serde(default)]
     pub head_quote: String,
     pub at: i64,
+    // 前に解いたときのファイル内の位置。次に読むときの出発点になり、
+    // 当たっていれば探索も差分も走らせずに済む。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<ByteRange>,
+    // どの段で解いたか（cache / exact / context / ported / fuzzy）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    // 近似で解いたときの一致の度合い。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub score: Option<f32>,
+}
+
+// 指摘の居場所。バイト範囲が正準で、行番号は読む人のために添える。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ByteRange {
+    pub start: usize,
+    pub end: usize,
+    pub line_start: usize,
+    pub line_end: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -388,6 +415,9 @@ mod tests {
             selection: "費用構造が異なる".into(),
             selection_offset: 12,
             section_path: vec!["背景".into(), "費用構造".into()],
+            prefix: String::new(),
+            suffix: String::new(),
+            base_offset: None,
             base_version: "cafe".into(),
             status: Status::Open,
             comments: vec![Comment {

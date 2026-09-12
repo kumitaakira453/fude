@@ -25,6 +25,11 @@ export interface ReviewThread {
   selection: string;
   selection_offset: number;
   section_path: string[];
+  // 引用の直前・直後の字。同じ文が複数あるとき、どれを指していたかを決める。
+  prefix?: string;
+  suffix?: string;
+  // 基準版の本文の中での、引用のバイト位置。
+  base_offset?: number | null;
   base_version: string;
   status: ThreadStatus;
   comments: ReviewComment[];
@@ -47,6 +52,17 @@ export interface ResolvedCache {
   state: ResolvedState;
   head_quote: string;
   at: number;
+  // CLI が解いた居場所。バイト範囲が正準で、行番号は読む人のために添える。
+  range?: ByteRange | null;
+  method?: string | null;
+  score?: number | null;
+}
+
+export interface ByteRange {
+  start: number;
+  end: number;
+  line_start: number;
+  line_end: number;
 }
 
 // 版を残した主体。origin（何をした時点か）とは別の軸。手で打った版と

@@ -1,5 +1,8 @@
+use std::time::Duration;
+
+use super::locate::Method;
 use super::store::{format_iso_utc, humanize_since, now_millis, Status, Version};
-use super::{AnchorState, Counts, Handled, StatusFilter, ThreadView};
+use super::{AnchorState, Counts, Effort, Handled, StatusFilter, ThreadView};
 
 // CLI の既定出力。読み手は AI なので、JSON より読みやすく字数も少ない Markdown にする。
 //
@@ -40,6 +43,7 @@ fn thread_section(view: &ThreadView) -> String {
     s.push('\n');
 
     s.push_str(&format!("場所: {}\n", section_label(&t.section_path)));
+    s.push_str(&format!("位置: {}\n", where_label(view)));
     s.push_str(&format!(
         "版: 指摘時 {} / 現在 {}\n",
         version_label(view.base.as_ref(), &t.base_version),
@@ -181,6 +185,7 @@ fn agent_section(view: &ThreadView, now: i64) -> String {
         anchor_short(view.anchor)
     );
     s.push_str(&format!("場所: {}\n", section_label(&t.section_path)));
+    s.push_str(&format!("位置: {}\n", where_label(view)));
     if !t.selection.is_empty() && t.selection != t.quote {
         s.push_str(&format!("選択: {}\n", one_line(&t.selection)));
     }
@@ -224,16 +229,96 @@ pub fn threads_brief(views: &[ThreadView]) -> String {
         } else {
             &t.selection
         };
+        // 対象が書き換わったかどうかは agent 形式に残し、ここは行を出す。
+        // 節のパンくずでは絞り切れないところを、行番号が引き受ける。
+        let (lines, sure) = match &view.located {
+            Some(found) => (found.lines(), found.label()),
+            None => ("位置不明".to_string(), String::new()),
+        };
         out.push_str(&format!(
-            "#{}  {}  {}  {}  {}\n",
+            "#{}  {}  {}  {}  {}  {}\n",
             t.id,
             handled_label(view.handled),
-            anchor_short(view.anchor),
-            section_label(&t.section_path),
+            pad(&lines, 10),
+            pad(&sure, 8),
+            pad(&section_label(&t.section_path), 30),
             truncate(&one_line(excerpt), 40),
         ));
     }
     out
+}
+
+// どの段で位置が決まったか、何回働いたか。段の並びが費用の順に効いているかを
+// 外から見るための行。設計書のいう回帰の測り口をここに置く。
+pub fn timing_line(views: &[ThreadView], effort: Effort, took: Duration) -> String {
+    let mut tally: Vec<(&str, usize)> = vec![
+        ("控え", 0),
+        ("逐語", 0),
+        ("文脈", 0),
+        ("移送", 0),
+        ("近似", 0),
+        ("不明", 0),
+    ];
+    for view in views {
+        let at = match view.located.as_ref().map(|l| l.method) {
+            Some(Method::Cache) => 0,
+            Some(Method::Exact) => 1,
+            Some(Method::Context) => 2,
+            Some(Method::Ported) => 3,
+            Some(Method::Fuzzy) => 4,
+            None => 5,
+        };
+        tally[at].1 += 1;
+    }
+    let stages = tally
+        .iter()
+        .map(|(name, count)| format!("{name} {count}"))
+        .collect::<Vec<_>>()
+        .join("  ");
+    format!(
+        "{} 件 / {:.1}ms  読んだファイル {}  組んだ行差分 {}\n段: {stages}",
+        views.len(),
+        took.as_secs_f64() * 1000.0,
+        effort.reads,
+        effort.diffs,
+    )
+}
+
+// 位置の言い方。推測と確定を取り違えられない札を必ず添える。
+fn where_label(view: &ThreadView) -> String {
+    match &view.located {
+        Some(found) => format!("{}（{}）", found.lines(), found.label()),
+        None => "不明".to_string(),
+    }
+}
+
+// 端末に出したときの桁数。日本語の字は 2 桁として数える。
+fn width(text: &str) -> usize {
+    text.chars()
+        .map(|c| if wide(c) { 2 } else { 1 })
+        .sum()
+}
+
+fn wide(c: char) -> bool {
+    matches!(c as u32,
+        0x1100..=0x115F
+            | 0x2E80..=0x303E
+            | 0x3041..=0x33FF
+            | 0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF
+            | 0xA000..=0xA4CF
+            | 0xAC00..=0xD7A3
+            | 0xF900..=0xFAFF
+            | 0xFE30..=0xFE6F
+            | 0xFF00..=0xFF60
+            | 0xFFE0..=0xFFE6
+            | 0x1F000..=0x1FAFF
+            | 0x20000..=0x3FFFD)
+}
+
+fn pad(text: &str, to: usize) -> String {
+    let blank = " ".repeat(to.saturating_sub(width(text)));
+    format!("{text}{blank}")
 }
 
 fn handled_label(handled: Handled) -> &'static str {
@@ -259,12 +344,19 @@ fn next_step(view: &ThreadView) -> &'static str {
     if view.handled == Handled::Resolved {
         return "対応不要（人間が解決済みにしている）";
     }
-    match view.anchor {
-        AnchorState::Unchanged => "そのまま修正する",
-        AnchorState::Rewritten => "現在: を読み、指摘が今も当てはまるか判断してから直す",
-        AnchorState::Removed => "すでに解消されていないか確かめる。解消済みなら修正せず返信だけ",
-        AnchorState::Unknown => "本文: を手掛かりに自分で探す。見つからなければ推測で直さず、その旨を返信する",
-        AnchorState::NoFile => "修正せず、ファイルの行方をユーザーに確認する",
+    if view.anchor == AnchorState::NoFile {
+        return "修正せず、ファイルの行方をユーザーに確認する";
+    }
+    match &view.located {
+        None => "位置が出せなかった。本文: を手掛かりに自分で探す。見つからなければ推測で直さず、その旨を返信する",
+        // 同じ字が複数ある。位置: は先頭の候補でしかない。
+        Some(found) if found.undecided() => "位置: は候補の 1 つめ。本文: と照らして、どれを指しているか確かめてから直す",
+        Some(found) if found.score.is_some() => "位置: は近いものを当てた推定。その行を読み、指摘の対象かを確かめてから直す",
+        Some(_) => match view.anchor {
+            AnchorState::Removed => "すでに解消されていないか確かめる。解消済みなら修正せず返信だけ",
+            AnchorState::Rewritten => "位置: の行を読み、指摘が今も当てはまるか判断してから直す",
+            _ => "位置: の行をそのまま修正する",
+        },
     }
 }
 
@@ -286,8 +378,26 @@ fn truncate(text: &str, chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::locate::{Located, Method};
     use super::super::store::{Comment, Origin, Thread};
     use super::*;
+
+    // 位置が出せなかった見本。
+    fn lost(anchor: AnchorState) -> ThreadView {
+        ThreadView {
+            located: None,
+            ..view(anchor)
+        }
+    }
+
+    // 同じ字が複数あって決まっていない見本。
+    fn many(anchor: AnchorState) -> ThreadView {
+        let mut v = view(anchor);
+        if let Some(found) = v.located.as_mut() {
+            found.candidates = 3;
+        }
+        v
+    }
 
     const QUOTE: &str = "生成AIの利用料金は、従来のSaaSと費用構造が異なる。";
     const HEAD: &str = "生成AIの利用料金は、従来のSaaSと費用構造が根本的に異なり、従量課金である。";
@@ -303,6 +413,9 @@ mod tests {
                 selection: "費用構造が異なる".into(),
                 selection_offset: 12,
                 section_path: vec!["背景".into(), "費用構造".into()],
+                prefix: String::new(),
+                suffix: String::new(),
+                base_offset: None,
                 base_version: "aaaaaaaabbbb".into(),
                 status: Status::Open,
                 comments: vec![Comment {
@@ -318,6 +431,15 @@ mod tests {
             anchor,
             head_quote: Some(HEAD.into()),
             cache_fresh: true,
+            located: Some(Located {
+                start: 0,
+                end: 10,
+                line_start: 124,
+                line_end: 128,
+                method: Method::Exact,
+                score: None,
+                candidates: 1,
+            }),
             base: Some(Version {
                 id: "aaaaaaaabbbb".into(),
                 file: "/docs/05_要件定義書.md".into(),
@@ -447,8 +569,9 @@ mod tests {
         let out = threads_agent(&[view(AnchorState::Unchanged)]);
         assert!(out.contains("#a3f10000  未対応  対象は書き換わっていない"));
         assert!(out.contains("場所: 背景 › 費用構造"));
+        assert!(out.contains("位置: L124-128（確実）"));
         assert!(out.contains(&format!("> {QUOTE}")));
-        assert!(out.contains("次: そのまま修正する"));
+        assert!(out.contains("次: 位置: の行をそのまま修正する"));
         // 行動が変わらない情報は出さない
         assert!(!out.contains("版:"), "版の行が残っている");
         assert!(!out.contains("aaaaaaaa"), "版のハッシュが残っている");
@@ -468,11 +591,59 @@ mod tests {
 
     #[test]
     fn agent_next_step_follows_the_state() {
-        assert!(threads_agent(&[view(AnchorState::Unknown)]).contains("推測で直さず"));
-        assert!(threads_agent(&[view(AnchorState::NoFile)]).contains("ファイルの行方"));
+        // 位置が出せなかったときだけ「自分で探す」と言う。
+        assert!(threads_agent(&[lost(AnchorState::Unknown)]).contains("推測で直さず"));
+        assert!(threads_agent(&[lost(AnchorState::NoFile)]).contains("ファイルの行方"));
+        assert!(threads_agent(&[view(AnchorState::Rewritten)]).contains("次: 位置: の行を読み"));
         let mut resolved = view(AnchorState::Unchanged);
         resolved.handled = Handled::Resolved;
         assert!(threads_agent(&[resolved]).contains("次: 対応不要"));
+    }
+
+    #[test]
+    fn a_position_that_is_not_decided_says_so() {
+        let out = threads_agent(&[many(AnchorState::Unchanged)]);
+        assert!(out.contains("位置: L124-128（候補3）"), "{out}");
+        assert!(out.contains("次: 位置: は候補の 1 つめ"), "{out}");
+    }
+
+    #[test]
+    fn an_estimated_position_carries_its_score() {
+        let mut v = view(AnchorState::Rewritten);
+        if let Some(found) = v.located.as_mut() {
+            found.method = Method::Fuzzy;
+            found.score = Some(0.78);
+        }
+        let out = threads_agent(&[v]);
+        assert!(out.contains("位置: L124-128（推定 0.78）"), "{out}");
+        assert!(out.contains("次: 位置: は近いものを当てた推定"), "{out}");
+    }
+
+    #[test]
+    fn a_lost_position_is_said_plainly() {
+        assert!(threads_agent(&[lost(AnchorState::Unknown)]).contains("位置: 不明"));
+        assert!(threads_markdown(&[lost(AnchorState::Unknown)]).contains("位置: 不明"));
+        assert!(threads_brief(&[lost(AnchorState::Unknown)]).contains("位置不明"));
+    }
+
+    #[test]
+    fn brief_carries_the_line_range_instead_of_the_state() {
+        let out = threads_brief(&[view(AnchorState::Unchanged)]);
+        assert!(out.contains("#a3f10000  未対応  L124-128"), "{out}");
+        assert!(out.contains("確実"), "{out}");
+        // 状態の言い回しは agent 形式に残す。
+        assert!(!out.contains("対象は書き換わっていない"), "{out}");
+    }
+
+    #[test]
+    fn columns_line_up_with_japanese() {
+        // 日本語は 2 桁として数える。
+        assert_eq!(width("確実"), 4);
+        assert_eq!(width("L124-128"), 8);
+        assert_eq!(pad("確実", 8), "確実    ");
+        assert_eq!(pad("はみ出すほど長い札", 4), "はみ出すほど長い札");
+        // 絵文字も 2 桁。見出しに混ざっても列がずれない。
+        assert_eq!(width("水平線😀"), 8);
     }
 
     #[test]

@@ -1,4 +1,5 @@
 pub mod format;
+pub mod locate;
 pub mod snapshot;
 pub mod store;
 
@@ -6,11 +7,13 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use store::{Actor, Comment, Ledger, Origin, Status, Thread, Unit, Version};
+use locate::{Clues, LineMap, Located, Method};
+use store::{Actor, ByteRange, Comment, Ledger, Origin, Status, Thread, Unit, Version};
 
 // GUI（Tauri コマンド）と CLI が共通で呼ぶ操作層。
-// Markdown の解析は一切しない。指摘が今の版でどこに対応するかは GUI が
-// 基準版との対応付けで求めて台帳に控えるので、ここでは控えを読むだけで済む。
+// Markdown の解析は一切しない。指摘を作るのは GUI だけで、ブロックの境界も
+// 見出しの道筋も作成時に確定して台帳へ入っている。ここは記録された文字列が
+// 今どこにあるかを locate に解かせ、結果を控え直すだけ。
 
 // 指摘そのものの状態。人間が解決したかどうかだけを表す。
 // 対象が書き換わったかどうかとは独立。
@@ -36,6 +39,8 @@ pub struct ThreadView {
     pub anchor: AnchorState,
     pub head_quote: Option<String>, // 現在のブロック本文（控えから）
     pub cache_fresh: bool,          // 控えが今のファイルと合っているか
+    // 今のファイルの中でどこか。解けなければ None（位置不明）。
+    pub located: Option<locate::Located>,
     pub base: Option<Version>,      // 指摘した時点の版
     pub latest: Option<Version>,    // そのファイルの最新の版
 }
@@ -163,10 +168,24 @@ pub fn counts(filter: &Filter) -> Result<Counts, String> {
     Ok(counts)
 }
 
+// 一覧を出すのに何回働いたか。段ごとの費用が効いているかを外から見る。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Effort {
+    // 対象ファイルを読んだ回数。指摘の数ではなくファイルの数に収まっているか。
+    pub reads: usize,
+    // 行差分を組んだ回数。書き換えられたファイルの数に収まっているか。
+    pub diffs: usize,
+}
+
 pub fn list(filter: &Filter) -> Result<Vec<ThreadView>, String> {
+    Ok(list_with(filter)?.0)
+}
+
+pub fn list_with(filter: &Filter) -> Result<(Vec<ThreadView>, Effort), String> {
     let ledger = store::load()?;
     let (project, file) = scope(filter)?;
 
+    let mut desk = Desk::default();
     let mut views = Vec::new();
     for thread in &ledger.threads {
         let keep = match filter.status {
@@ -182,12 +201,13 @@ pub fn list(filter: &Filter) -> Result<Vec<ThreadView>, String> {
         if !in_scope(thread, &project, &file) {
             continue;
         }
-        let (anchor, head_quote, cache_fresh) = resolve_view(thread);
+        let (anchor, head_quote, cache_fresh, located) = resolve_view(thread, &mut desk);
         views.push(ThreadView {
             handled: handled_state(thread, &filter.author),
             anchor,
             head_quote,
             cache_fresh,
+            located,
             base: ledger
                 .versions
                 .iter()
@@ -203,7 +223,72 @@ pub fn list(filter: &Filter) -> Result<Vec<ThreadView>, String> {
             .cmp(&b.thread.file)
             .then(a.thread.created_at.cmp(&b.thread.created_at))
     });
-    Ok(views)
+
+    // 解いた結果を控え直す。基準が直近に寄るので、次の実行は L0 か L1 で止まる。
+    // 台帳のロックは 1 回だけ取る。
+    remember(&views)?;
+    Ok((
+        views,
+        Effort {
+            reads: desk.reads,
+            diffs: desk.diffs,
+        },
+    ))
+}
+
+// 既に台帳にある指摘へ、位置の手掛かりを遡って埋める。
+//
+// 指摘した時点の本文は版として残っているので、そこから同じ手順で作れる。
+// 版が残っていないものは空のままにして、前後の文脈による絞り込みだけを飛ばす。
+#[derive(Debug, Default, Clone, Copy, serde::Serialize)]
+pub struct Filled {
+    pub filled: usize,
+    pub skipped: usize,
+    pub total: usize,
+}
+
+pub fn backfill(dry: bool) -> Result<Filled, String> {
+    let ledger = store::load()?;
+    let mut bases: HashMap<String, Option<String>> = HashMap::new();
+    let mut want: Vec<(String, String, String, usize)> = Vec::new();
+    let mut out = Filled {
+        total: ledger.threads.len(),
+        ..Default::default()
+    };
+    for thread in &ledger.threads {
+        if thread.base_offset.is_some() {
+            continue;
+        }
+        let base = bases
+            .entry(thread.base_version.clone())
+            .or_insert_with(|| snapshot::get(&thread.base_version).ok());
+        let Some(base) = base.as_deref() else {
+            out.skipped += 1;
+            continue;
+        };
+        let Some(at) = locate::offset_of(base, &thread.quote) else {
+            out.skipped += 1;
+            continue;
+        };
+        let (prefix, suffix) = locate::context_of(base, at, thread.quote.len());
+        want.push((thread.id.clone(), prefix, suffix, at));
+    }
+    out.filled = want.len();
+    if dry || want.is_empty() {
+        return Ok(out);
+    }
+    store::update(|ledger: &mut Ledger| {
+        for (id, prefix, suffix, at) in &want {
+            let Some(thread) = ledger.thread_mut(id) else {
+                continue;
+            };
+            thread.prefix = prefix.clone();
+            thread.suffix = suffix.clone();
+            thread.base_offset = Some(*at);
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }
 
 pub fn versions(file: &Path) -> Result<Vec<Version>, String> {
@@ -216,40 +301,235 @@ pub fn versions(file: &Path) -> Result<Vec<Version>, String> {
         .collect::<Vec<_>>())
 }
 
-// 指摘が今どうなっているかを求める。位置の対応付けは GUI が済ませて台帳に
-// 控えているので、ここでは控えを読むだけ。Markdown の解析はしない。
+// 解くのに要るものを、ファイルごと・版ごとに 1 回だけ用意する台。
 //
-// 控えの「現在のブロック本文」がまだファイルに含まれていれば控えは最新。
-// 含まれていなければ、GUI が最後に見たあとで本文が変わっている。
-fn resolve_view(thread: &Thread) -> (AnchorState, Option<String>, bool) {
-    let text = match fs::read_to_string(&thread.file) {
-        Ok(text) => text,
-        Err(_) => return (AnchorState::NoFile, None, false),
+// 1 ファイルに指摘が 49 件付くことがある。件ごとに読み直すと同じ費用を
+// 49 回払うことになる。
+#[derive(Default)]
+pub struct Desk {
+    texts: HashMap<String, Option<String>>,
+    bases: HashMap<String, Option<String>>,
+    maps: HashMap<(String, String), Option<LineMap>>,
+    // 実際に何回働いたか。試験で数えるために持つ。
+    pub reads: usize,
+    pub diffs: usize,
+}
+
+impl Desk {
+    fn text(&mut self, file: &str) -> Option<&str> {
+        if !self.texts.contains_key(file) {
+            self.reads += 1;
+            self.texts
+                .insert(file.to_string(), fs::read_to_string(file).ok());
+        }
+        self.texts.get(file).and_then(|t| t.as_deref())
+    }
+
+    fn base(&mut self, version: &str) -> Option<&str> {
+        if version.is_empty() {
+            return None;
+        }
+        if !self.bases.contains_key(version) {
+            self.bases
+                .insert(version.to_string(), snapshot::get(version).ok());
+        }
+        self.bases.get(version).and_then(|t| t.as_deref())
+    }
+
+    // 版の控えは台帳の置き場から読む。試験では差し込む。
+    #[cfg(test)]
+    pub fn seed(&mut self, version: &str, text: &str) {
+        self.bases.insert(version.to_string(), Some(text.to_string()));
+    }
+
+    // 基準版から今の本文への行の対応。同じ組は 1 回しか組まない。
+    fn map(&mut self, version: &str, file: &str) -> Option<&LineMap> {
+        let key = (version.to_string(), file.to_string());
+        if !self.maps.contains_key(&key) {
+            self.text(file);
+            self.base(version);
+            let made = match (
+                self.bases.get(version).and_then(|t| t.as_deref()),
+                self.texts.get(file).and_then(|t| t.as_deref()),
+            ) {
+                (Some(base), Some(text)) => Some(LineMap::build(base, text)),
+                _ => None,
+            };
+            if made.is_some() {
+                self.diffs += 1;
+            }
+            self.maps.insert(key.clone(), made);
+        }
+        self.maps.get(&key).and_then(|m| m.as_ref())
+    }
+}
+
+// 指摘が今どうなっているかと、今どこにあるかを求める。
+//
+// 位置は locate が費用の安い順に解く。控えが当たればそこで止まり、探索も
+// 差分も走らない。
+fn resolve_view(
+    thread: &Thread,
+    desk: &mut Desk,
+) -> (AnchorState, Option<String>, bool, Option<Located>) {
+    desk.text(&thread.file);
+    if desk
+        .texts
+        .get(&thread.file)
+        .and_then(|t| t.as_ref())
+        .is_none()
+    {
+        return (AnchorState::NoFile, None, false, None);
+    }
+
+    let head_quote = thread
+        .resolved
+        .as_ref()
+        .map(|r| r.head_quote.as_str())
+        .unwrap_or("");
+    let cached = thread
+        .resolved
+        .as_ref()
+        .and_then(|r| r.range)
+        .map(|r| (r.start, r.end));
+    let clues = |base, map| Clues {
+        quote: &thread.quote,
+        head_quote,
+        prefix: &thread.prefix,
+        suffix: &thread.suffix,
+        base_offset: thread.base_offset,
+        cached,
+        base,
+        map,
     };
 
-    match &thread.resolved {
-        Some(resolved) => {
-            let state = match resolved.state.as_str() {
-                "unchanged" => AnchorState::Unchanged,
-                "rewritten" => AnchorState::Rewritten,
-                "removed" => AnchorState::Removed,
-                _ => AnchorState::Unknown,
-            };
-            if resolved.head_quote.is_empty() {
-                return (state, None, true);
-            }
-            let fresh = text.contains(&resolved.head_quote);
-            (state, Some(resolved.head_quote.clone()), fresh)
-        }
+    // まず安い段だけで試す。ここで決まれば、基準版を展開して行差分を組む
+    // 費用を払わない。借用を切るために、本文を見るところを囲っておく。
+    let quick = {
+        let text = desk.texts[&thread.file].as_deref().unwrap();
+        locate::cheap(text, &clues(None, None))
+    };
+
+    let located = match quick {
+        Some(found) => Some(found),
         None => {
-            // GUI が一度も対応付けていない。引用がまだ残っているかだけ分かる。
-            if text.contains(&thread.quote) {
-                (AnchorState::Unchanged, Some(thread.quote.clone()), true)
-            } else {
-                (AnchorState::Unknown, None, false)
-            }
+            desk.map(&thread.base_version, &thread.file);
+            let text = desk.texts[&thread.file].as_deref().unwrap();
+            let base = desk
+                .bases
+                .get(&thread.base_version)
+                .and_then(|t| t.as_deref());
+            let map = desk
+                .maps
+                .get(&(thread.base_version.clone(), thread.file.clone()))
+                .and_then(|m| m.as_ref());
+            locate::locate(text, &clues(base, map))
         }
+    };
+
+    let text = desk.texts[&thread.file].as_deref().unwrap();
+    // 控えの本文がそのまま見つかったなら、控えは今のファイルと合っている。
+    let fresh = matches!(
+        located.as_ref().map(|l| l.method),
+        Some(Method::Cache) | Some(Method::Exact) | Some(Method::Context)
+    );
+    let now = located
+        .as_ref()
+        .map(|l| text[l.start..l.end].to_string())
+        .or_else(|| (!head_quote.is_empty()).then(|| head_quote.to_string()));
+
+    // 状態は GUI が控えたものを優先する。GUI はブロックの対応付けで
+    // 「消された」まで見分けられるが、こちらは字を探しているだけなので
+    // 見分けられない。
+    let state = match &thread.resolved {
+        Some(resolved) => match resolved.state.as_str() {
+            "unchanged" => AnchorState::Unchanged,
+            "rewritten" => AnchorState::Rewritten,
+            "removed" => AnchorState::Removed,
+            _ => from_method(&located),
+        },
+        None => from_method(&located),
+    };
+    (state, now, fresh, located)
+}
+
+fn from_method(located: &Option<Located>) -> AnchorState {
+    match located.as_ref().map(|l| l.method) {
+        Some(Method::Cache) | Some(Method::Exact) | Some(Method::Context) => {
+            AnchorState::Unchanged
+        }
+        Some(Method::Ported) | Some(Method::Fuzzy) => AnchorState::Rewritten,
+        None => AnchorState::Unknown,
     }
+}
+
+// 解けた位置が控えと違っていれば書き戻す。次に読むときの出発点になる。
+//
+// 控える本文が長くなりすぎるときは範囲だけ残す。台帳は指摘が 9 割を占めるので、
+// 移送が大きな区間を覆ったときにそこまで抱え込まない。
+const KEEP_QUOTE: usize = 4096;
+
+fn remember(views: &[ThreadView]) -> Result<(), String> {
+    let mut ids: Vec<String> = Vec::new();
+    let mut wanted: Vec<store::Resolved> = Vec::new();
+    for view in views {
+        let Some(found) = &view.located else { continue };
+        // 1 つに決まっていないものは控えない。次も同じ迷い方をするのが正しい。
+        if found.undecided() {
+            continue;
+        }
+        let range = ByteRange {
+            start: found.start,
+            end: found.end,
+            line_start: found.line_start,
+            line_end: found.line_end,
+        };
+        let quote = view
+            .head_quote
+            .as_deref()
+            .filter(|q| q.len() <= KEEP_QUOTE)
+            .unwrap_or("")
+            .to_string();
+        let same = view.thread.resolved.as_ref().is_some_and(|r| {
+            r.range == Some(range)
+                && r.head_quote == quote
+                && r.method.as_deref() == Some(found.method.tag())
+        });
+        if same {
+            continue;
+        }
+        let state = match view.anchor {
+            AnchorState::Unchanged => "unchanged",
+            AnchorState::Rewritten => "rewritten",
+            AnchorState::Removed => "removed",
+            _ => "unknown",
+        };
+        wanted.push(store::Resolved {
+            state: state.to_string(),
+            head_quote: quote,
+            at: 0,
+            range: Some(range),
+            method: Some(found.method.tag().to_string()),
+            score: found.score,
+        });
+        ids.push(view.thread.id.clone());
+    }
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let now = store::now_millis();
+    store::update(|ledger: &mut Ledger| {
+        for (id, resolved) in ids.iter().zip(wanted.iter()) {
+            let Some(thread) = ledger.thread_mut(id) else {
+                continue;
+            };
+            thread.resolved = Some(store::Resolved {
+                at: now,
+                ..resolved.clone()
+            });
+        }
+        Ok(())
+    })
 }
 
 pub const RESOLVED_STATES: [&str; 4] = ["unchanged", "rewritten", "removed", "unknown"];
@@ -264,10 +544,15 @@ pub fn set_resolved(thread_id: &str, state: &str, head_quote: &str) -> Result<()
         let thread = ledger
             .thread_mut(thread_id)
             .ok_or_else(|| format!("指摘 {thread_id} が見つかりません"))?;
+        // 範囲は控え直す。GUI が見ている本文とディスクの中身は別物なので、
+        // ここでは位置を決めず、次に読むときに解き直させる。
         thread.resolved = Some(store::Resolved {
             state: state.to_string(),
             head_quote: head_quote.to_string(),
             at: now,
+            range: None,
+            method: None,
+            score: None,
         });
         Ok(())
     })
@@ -327,6 +612,13 @@ pub fn create_thread(input: NewThread) -> Result<String, String> {
             now,
         );
         let id = ledger.fresh_thread_id();
+        // 位置の手掛かりは、指摘した時点の本文から作る。ここで作っておけば、
+        // あとから同じ文が増えても「どれを指していたか」が決まる。
+        let at = locate::offset_of(&input.source, &input.quote);
+        let (prefix, suffix) = match at {
+            Some(at) => locate::context_of(&input.source, at, input.quote.len()),
+            None => (String::new(), String::new()),
+        };
         ledger.threads.push(Thread {
             id: id.clone(),
             file: key.clone(),
@@ -335,6 +627,9 @@ pub fn create_thread(input: NewThread) -> Result<String, String> {
             selection: input.selection.clone(),
             selection_offset: input.selection_offset,
             section_path: input.section_path.clone(),
+            prefix,
+            suffix,
+            base_offset: at,
             base_version: base_version.clone(),
             status: Status::Open,
             comments: vec![Comment {
@@ -827,6 +1122,9 @@ mod tests {
             selection: String::new(),
             selection_offset: 0,
             section_path: Vec::new(),
+            prefix: String::new(),
+            suffix: String::new(),
+            base_offset: None,
             base_version: "v".into(),
             status: Status::Open,
             comments: comments
@@ -907,6 +1205,9 @@ mod tests {
             selection: String::new(),
             selection_offset: 0,
             section_path: vec![],
+            prefix: String::new(),
+            suffix: String::new(),
+            base_offset: None,
             base_version: "v".into(),
             status: Status::Open,
             comments: vec![],
@@ -914,7 +1215,70 @@ mod tests {
             resolved: None,
             unit: None,
         };
-        assert_eq!(resolve_view(&thread).0, AnchorState::NoFile);
+        let mut desk = Desk::default();
+        assert_eq!(resolve_view(&thread, &mut desk).0, AnchorState::NoFile);
+    }
+
+    fn thread_at(file: &str, quote: &str, base: &str) -> Thread {
+        Thread {
+            id: "t".into(),
+            file: file.into(),
+            quote: quote.into(),
+            block_hash: "h".into(),
+            selection: String::new(),
+            selection_offset: 0,
+            section_path: vec![],
+            prefix: String::new(),
+            suffix: String::new(),
+            base_offset: None,
+            base_version: base.into(),
+            status: Status::Open,
+            comments: vec![],
+            created_at: 0,
+            resolved: None,
+            unit: None,
+        }
+    }
+
+    #[test]
+    fn one_file_is_read_once_however_many_threads_point_at_it() {
+        let dir = std::env::temp_dir().join("fude-desk-read");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.md");
+        fs::write(&file, "見出し\n\n対象の段落\n").unwrap();
+        let path = file.to_string_lossy().into_owned();
+
+        let mut desk = Desk::default();
+        for _ in 0..49 {
+            let thread = thread_at(&path, "対象の段落", "");
+            let (_, _, _, found) = resolve_view(&thread, &mut desk);
+            assert!(found.is_some());
+        }
+        // 指摘の数ではなくファイルの数だけ読む。
+        assert_eq!(desk.reads, 1);
+        fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn one_pair_is_diffed_once_however_many_threads_need_it() {
+        let dir = std::env::temp_dir().join("fude-desk-diff");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("b.md");
+        fs::write(&file, "見出し\n\n直された段落\n").unwrap();
+        let path = file.to_string_lossy().into_owned();
+
+        let mut desk = Desk::default();
+        desk.seed("v1", "見出し\n\n元の段落\n");
+        for _ in 0..49 {
+            let thread = thread_at(&path, "元の段落", "v1");
+            let (state, _, _, found) = resolve_view(&thread, &mut desk);
+            assert_eq!(state, AnchorState::Rewritten);
+            assert_eq!(found.unwrap().line_start, 3);
+        }
+        assert_eq!(desk.reads, 1);
+        // 行差分は（基準版, ファイル）の組ごとに 1 回だけ。
+        assert_eq!(desk.diffs, 1);
+        fs::remove_file(&file).ok();
     }
 
     #[test]
@@ -1035,6 +1399,9 @@ mod tests {
             selection: String::new(),
             selection_offset: 0,
             section_path: vec![],
+            prefix: String::new(),
+            suffix: String::new(),
+            base_offset: None,
             base_version: "v".into(),
             status: Status::Open,
             comments: vec![],
