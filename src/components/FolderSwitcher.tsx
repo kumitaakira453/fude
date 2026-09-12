@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { activeFolderIdAtom, foldersAtom, soleAtom } from "../state/atoms";
 import { draftNameAtom } from "../state/drafts";
-import { displayName, pickDirectory, pickMarkdownFile } from "../lib/fsAccess";
+import { displayName, pickDirectory } from "../lib/fsAccess";
+import { pickDocFile } from "../lib/kind";
 import { folderDisplayName, removeFolder, renameFolder } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
@@ -57,7 +58,7 @@ export function FolderSwitcher() {
   const addDoc = async () => {
     setOpen(false);
     if (holdDraft(() => void addDoc())) return;
-    const path = await pickMarkdownFile();
+    const path = await pickDocFile();
     if (path) await openDoc(path);
   };
 

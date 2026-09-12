@@ -21,6 +21,7 @@ import { useReviewLedger } from "./hooks/useReviewLedger";
 import { setNotionKeys } from "./lib/md/inputRules";
 import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
+import { useWorkspace } from "./hooks/useWorkspace";
 import { folderDisplayName } from "./lib/idb";
 import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
 import { setWindowTitle } from "./lib/windows";
@@ -30,6 +31,7 @@ import {
   sidebarOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
+  showOtherFilesAtom,
   fontAtom,
   themeAtom,
 } from "./state/atoms";
@@ -45,6 +47,8 @@ export default function App() {
   const theme = useAtomValue(themeAtom);
   const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
+  const showOther = useAtomValue(showOtherFilesAtom);
+  const { refreshTreeStructure } = useWorkspace();
   const reviewOpen = useAtomValue(reviewScreenAtom);
   const versionFile = useAtomValue(versionScreenAtom);
 
@@ -69,6 +73,14 @@ export default function App() {
   useEffect(() => {
     setNotionKeys(notionKeys);
   }, [notionKeys]);
+
+  // 出すものを切り替えたら木を並べ直す。開いた直後は既に並んでいるので走らせない。
+  const filterWas = useRef(showOther);
+  useEffect(() => {
+    if (filterWas.current === showOther) return;
+    filterWas.current = showOther;
+    void refreshTreeStructure();
+  }, [showOther, refreshTreeStructure]);
 
   // ドラッグ&ドロップの取りこぼしで WebView が既定動作（ドロップされたパスへ
   // ナビゲーション→リロード＝画面全体が真っ白）になるのを全域で抑止する。

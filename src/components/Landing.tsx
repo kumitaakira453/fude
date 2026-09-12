@@ -1,7 +1,8 @@
 import { useAtomValue } from "jotai";
 import { useMemo } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { displayName, pickDirectory, pickMarkdownFile } from "../lib/fsAccess";
+import { displayName, pickDirectory } from "../lib/fsAccess";
+import { pickDocFile } from "../lib/kind";
 import { folderDisplayName } from "../lib/idb";
 import { isOpen } from "../lib/review";
 import { foldersAtom, recentDocsAtom } from "../state/atoms";
@@ -76,7 +77,7 @@ export function Landing() {
   };
 
   const pickFile = async () => {
-    const path = await pickMarkdownFile();
+    const path = await pickDocFile();
     if (path) openDoc(path);
   };
 

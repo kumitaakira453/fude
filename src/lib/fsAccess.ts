@@ -80,7 +80,10 @@ export function crumbsOf(path: string, keep = Infinity): Crumb[] {
 
 // 1 階層だけ読む。木を持っていないとき（1 枚だけ開いているとき）に、
 // 道筋のプルダウンでその場の中身を出すために使う。道筋は絶対パスで持つ。
-export async function readLevel(dirAbs: string): Promise<TreeNode[]> {
+export async function readLevel(
+  dirAbs: string,
+  show: (name: string) => boolean = isMarkdown,
+): Promise<TreeNode[]> {
   let entries: Awaited<ReturnType<typeof readDir>>;
   try {
     entries = await readDir(dirAbs);
@@ -94,7 +97,7 @@ export async function readLevel(dirAbs: string): Promise<TreeNode[]> {
     if (e.isDirectory) {
       if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
       out.push({ name: e.name, path: abs, abs, kind: "dir", children: [] });
-    } else if (e.isFile && isMarkdown(e.name)) {
+    } else if (e.isFile && show(e.name)) {
       out.push({ name: e.name, path: abs, abs, kind: "file" });
     }
   }
@@ -128,6 +131,7 @@ const SKIP_DIRS = new Set([
 // ディレクトリを再帰走査して md ファイルのツリーを構築する。
 export async function buildTree(
   rootAbs: string,
+  show: (name: string) => boolean = isMarkdown,
   parentRel = "",
 ): Promise<TreeNode[]> {
   const dirAbs = parentRel ? `${rootAbs}/${parentRel}` : rootAbs;
@@ -145,7 +149,7 @@ export async function buildTree(
     if (e.isDirectory) {
       if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
       dirs.push(e);
-    } else if (e.isFile && isMarkdown(e.name)) {
+    } else if (e.isFile && show(e.name)) {
       nodes.push({ name: e.name, path: rel, abs, kind: "file" });
     }
   }
@@ -160,7 +164,7 @@ export async function buildTree(
         path: rel,
         abs: `${rootAbs}/${rel}`,
         kind: "dir" as const,
-        children: await buildTree(rootAbs, rel),
+        children: await buildTree(rootAbs, show, rel),
       };
     }),
   );
@@ -301,6 +305,7 @@ export async function readFile(abs: string): Promise<FileData> {
 // asset:// プロトコルはスコープの都合で先頭ドットのパスを弾くため、fs 読みに統一。
 const IMG_MIME: Record<string, string> = {
   png: "image/png",
+  apng: "image/apng",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   gif: "image/gif",
@@ -309,17 +314,24 @@ const IMG_MIME: Record<string, string> = {
   bmp: "image/bmp",
   avif: "image/avif",
   ico: "image/x-icon",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
 };
+
+// 画像の拡張子（点なし）。ダイアログの絞り込みに使う。
+export const IMAGE_EXTENSIONS = Object.keys(IMG_MIME);
 const imgCache = new Map<string, string>();
 
 export function peekImageUrl(abs: string): string | null {
   return imgCache.get(abs) ?? null;
 }
 
-// 拡張子が画像かどうか
+// 拡張子が画像かどうか。点から始まる形で見る（"png" という名前は画像ではない）。
 export function isImage(path: string): boolean {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return ext in IMG_MIME;
+  const lower = path.toLowerCase();
+  return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(`.${ext}`));
 }
 
 // ファイルが変わった時にキャッシュを破棄し、次回 imageUrl で再読込させる。

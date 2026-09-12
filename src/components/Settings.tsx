@@ -12,6 +12,7 @@ import {
   notionKeysAtom,
   readingWidthAtom,
   settingsOpenAtom,
+  showOtherFilesAtom,
   shortcutsOpenAtom,
   themeAtom,
   updateCheckNonceAtom,
@@ -49,6 +50,7 @@ export function Settings() {
   const [editorialValue, setEditorialValue] = useAtom(editorialAtom);
   const [liveValue, setLiveValue] = useAtom(liveEditAtom);
   const [notionValue, setNotionValue] = useAtom(notionKeysAtom);
+  const [showOtherValue, setShowOtherValue] = useAtom(showOtherFilesAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -59,6 +61,10 @@ export function Settings() {
   );
   const [live, setLive] = useOptimisticSetting(liveValue, setLiveValue);
   const [notion, setNotion] = useOptimisticSetting(notionValue, setNotionValue);
+  const [showOther, setShowOther] = useOptimisticSetting(
+    showOtherValue,
+    setShowOtherValue,
+  );
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
@@ -202,6 +208,34 @@ export function Settings() {
                       </button>
                     ))}
                   </div>
+                </section>
+
+                <section className="mg-set-sec">
+                  <h3>ファイル一覧</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowOther(!showOther)}
+                    className="mg-set-row"
+                  >
+                    <Icon
+                      name="image"
+                      size={18}
+                      fill={showOther}
+                      className={
+                        showOther ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"
+                      }
+                    />
+                    <span className="mg-set-row-main">
+                      <span className="mg-set-row-name">Markdown 以外も並べる</span>
+                      <span className="mg-set-note">
+                        画像・HTML・PDF をツリーに出す。切ると読み物だけの一覧になる（1
+                        枚だけ開く経路はどちらでも通る）
+                      </span>
+                    </span>
+                    <span className={`mg-switch${showOther ? " is-on" : ""}`}>
+                      <i />
+                    </span>
+                  </button>
                 </section>
               </>
             )}

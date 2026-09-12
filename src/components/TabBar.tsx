@@ -1,5 +1,5 @@
 import { useAtomValue, useStore } from "jotai";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDragReset } from "../hooks/useDragReset";
 import { useWorkspace } from "../hooks/useWorkspace";
 import {
@@ -32,6 +32,14 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   const tree = useAtomValue(treeAtom);
   const draftRel = useAtomValue(draftRelAtom);
   const draftName = useAtomValue(draftNameAtom);
+
+  // 開いているタブを見える位置へ寄せる。数が増えると端から溢れるので、
+  // 切り替えた先が隠れていると、どれを見ているのか分からなくなる。
+  const here = useRef<HTMLDivElement>(null);
+  const active = pane.tabs[pane.active];
+  useEffect(() => {
+    here.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active, pane.tabs.length]);
 
   // タブに出す名前。下書きは置き場で採った機械的な名前を持っているので、
   // 書いた中身から採り直す。
@@ -105,6 +113,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
           return (
             <div
               key={path}
+              ref={selected ? here : undefined}
               data-mg-tab
               draggable
               onDragStart={(e) => {

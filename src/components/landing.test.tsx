@@ -36,8 +36,12 @@ vi.mock("../lib/fsAccess", async (real) => {
   return {
     ...mod,
     pickDirectory: async () => null,
-    pickMarkdownFile: async () => picked,
   };
+});
+
+vi.mock("../lib/kind", async (real) => {
+  const mod = await real<typeof import("../lib/kind")>();
+  return { ...mod, pickDocFile: async () => picked };
 });
 
 beforeAll(() => {

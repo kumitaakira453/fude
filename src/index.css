@@ -1085,6 +1085,103 @@ button.mg-task-check:hover {
   color: var(--mg-danger);
 }
 
+/* いま効いている状態の小さな釦。 */
+.mg-small.is-on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+
+/* ============================================================
+   画像を 1 枚で開く
+   ============================================================ */
+/* 透けているところが地と見分けられるよう、薄い市松を敷く。 */
+.mg-imgdoc {
+  background-color: var(--mg-bg);
+  background-image:
+    linear-gradient(45deg, var(--mg-hover) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--mg-hover) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--mg-hover) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--mg-hover) 75%);
+  background-size: 18px 18px;
+  background-position:
+    0 0,
+    0 9px,
+    9px -9px,
+    -9px 0;
+}
+.mg-imgdoc-bar {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.3rem 0.6rem;
+  border-top: 1px solid var(--mg-border);
+  background: var(--mg-bg);
+}
+/* 大きさは左、倍率は釦の間。倍率は数字が変わっても釦が動かないよう幅を取る。 */
+.mg-imgdoc-size {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: var(--mg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mg-imgdoc-scale {
+  min-width: 3.4rem;
+  font-size: 11.5px;
+  color: var(--mg-fg-dim);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   原文を一面で見る
+   ============================================================ */
+.mg-source {
+  min-height: 100%;
+  padding: 0.6rem 0;
+  background: var(--mg-code-bg);
+  font-family: var(--mg-font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--mg-code-fg);
+  /* 折り返さない。折ると行番号と中身がずれて、原文の形が読めなくなる。 */
+  white-space: pre;
+  tab-size: 2;
+}
+.mg-source-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  /* 空の行にも高さを持たせる（原文の見え方をそのまま保つ）。 */
+  min-height: 1.7em;
+  width: max-content;
+  min-width: 100%;
+}
+.mg-source-line:hover {
+  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
+}
+/* 番号は横に流しても左に残す。行を数えながら横へ辿れる。 */
+.mg-source-no {
+  position: sticky;
+  left: 0;
+  flex: none;
+  width: 3.2rem;
+  padding-right: 0.9rem;
+  background: var(--mg-code-bg);
+  color: var(--mg-muted);
+  text-align: right;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.mg-source-line:hover > .mg-source-no {
+  color: var(--mg-fg-dim);
+}
+.mg-source code {
+  padding-right: 1.5rem;
+  background: none;
+  font: inherit;
+}
+
 /* 一覧で AI の返信が来ていることを示す印。 */
 .mg-thread-answered {
   display: inline-flex;

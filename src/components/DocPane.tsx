@@ -56,7 +56,11 @@ import { MetaModal } from "./meta/MetaModal";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
+import { kindOf } from "../lib/kind";
 import { BodyEditor, type Editing } from "./BodyEditor";
+import { HtmlDoc } from "./HtmlDoc";
+import { ImageDoc } from "./ImageDoc";
+import { PdfDoc } from "./PdfDoc";
 import { SelectionBar } from "./SelectionBar";
 import { SaveVersion } from "./version/SaveVersion";
 import {
@@ -297,6 +301,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // ---- 下書き（保存先の決まっていないメモ） ----
   const draftsDir = useAtomValue(draftsDirAtom);
   const isDraft = inDrafts(sole, draftsDir);
+  // 何で見せるか。Markdown 以外は読むだけなので、編集・版・指摘は出さない。
+  const kind = path ? kindOf(path) : "markdown";
+  const isDoc = kind === "markdown";
   const [ask, setAsk] = useAtom(draftAskAtom);
 
   // 保存先を決めて、そこへ移す。指摘と版も付いていく。
@@ -1228,7 +1235,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>
         )}
-        {path && (
+        {path && isDoc && (
           <>
             {isDraft ? (
               // 下書きは版を持てない。同じ場所に、行き先を決める釦を置く。
@@ -1365,7 +1372,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
-        {writing && path ? (
+        {path && !isDoc ? (
+          kind === "image" ? (
+            <ImageDoc abs={absPath ?? path} />
+          ) : kind === "html" ? (
+            <HtmlDoc abs={absPath ?? path} />
+          ) : kind === "pdf" ? (
+            <PdfDoc abs={absPath ?? path} />
+          ) : null
+        ) : writing && path ? (
           <div
             ref={setEditScroller}
             className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
@@ -1477,7 +1492,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
         {/* 目次は編集中も出す。見出しの増減は MutationObserver が拾うので、
             打つそばから追従する。 */}
-        {!isSplit && tocOpen && path && (
+        {!isSplit && tocOpen && path && isDoc && (
           <Toc
             content={editing ? editContent : content}
             scroller={editing ? editScroller : scroller}
@@ -1485,7 +1500,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           />
         )}
 
-        {!editing && path && (
+        {!editing && path && isDoc && (
           <AnchorOverlay
             content={content}
             contentKey={path + (raw?.length ?? 0)}
@@ -1512,7 +1527,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           />
         )}
 
-        {!editing && review.selection && !review.draft && (
+        {!editing && isDoc && review.selection && !review.draft && (
           <SelectionMenu at={review.selection.rect} onComment={review.startDraft}>
             {review.selection.cellStart !== undefined && (
               <SelectionAct icon="table" label="セルにコメント" onPick={commentOnCell} />

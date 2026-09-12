@@ -2,6 +2,7 @@ import { watch, type UnwatchFn, type WatchEvent } from "@tauri-apps/plugin-fs";
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
 import { invalidateImage, isImage, isMarkdown } from "../lib/fsAccess";
+import { kindOf } from "../lib/kind";
 import { matchRenames, newRenameMemo } from "../lib/renames";
 import * as A from "../state/atoms";
 import { useWorkspace } from "./useWorkspace";
@@ -86,10 +87,11 @@ export function useWatcher() {
         const sole = store.get(A.soleAtom);
         if (sole && !event.paths.includes(sole)) return;
         const known = new Set(store.get(A.filesAtom).map((f) => f.path));
+        const shown = store.get(A.showOtherFilesAtom);
         const touched = new Map(store.get(A.touchedAtom));
         const gone = vanished(event);
         let structural = false;
-        let imageChanged = false;
+        let assetChanged = false;
         for (const abs of event.paths) {
           if (!abs.startsWith(root)) continue;
           const rel = abs.slice(root.length + 1);
@@ -101,16 +103,19 @@ export function useWatcher() {
             // 現れた名前と組にできるか見る。
             if (!gone && known.has(rel)) void reloadFile(rel);
             else structural = true;
-          } else if (isImage(rel)) {
-            // 画像が変わったらキャッシュを捨てて再取得させる
-            invalidateImage(abs);
-            imageChanged = true;
+          } else if (kindOf(rel) !== "other") {
+            // 画像はキャッシュを捨てて取り直させる。HTML と PDF は描いている
+            // 器が中身を抱えているので、版を上げて貼り直す。
+            if (isImage(rel)) invalidateImage(abs);
+            assetChanged = true;
+            // 一覧に並べているのに木がまだ知らない名前なら、並べ直す。
+            if (shown && (gone || !known.has(rel))) structural = true;
           } else {
             structural = true; // ディレクトリ変化など
           }
         }
         store.set(A.touchedAtom, touched);
-        if (imageChanged) {
+        if (assetChanged) {
           store.set(A.assetVersionAtom, store.get(A.assetVersionAtom) + 1);
         }
         if (structural) scheduleTreeRefresh();

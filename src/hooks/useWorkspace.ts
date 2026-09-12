@@ -1,6 +1,7 @@
 import { message } from "@tauri-apps/plugin-dialog";
-import { useStore } from "jotai";
+import { useStore, type getDefaultStore } from "jotai";
 import { useCallback, useRef } from "react";
+import { isViewable, kindOf } from "../lib/kind";
 import {
   buildTree,
   createDir,
@@ -101,6 +102,13 @@ function whenIdle(run: () => void) {
   }
 }
 
+
+type Store = ReturnType<typeof getDefaultStore>;
+
+// ツリーに出すもの。設定が切られていれば Markdown だけ並べる。
+const shownFiles = (store: Store) =>
+  store.get(A.showOtherFilesAtom) ? isViewable : isMarkdown;
+
 export function useWorkspace() {
   const store = useStore();
 
@@ -186,7 +194,7 @@ export function useWorkspace() {
       done: 0,
       total: 0,
     });
-    const tree = await buildTree(root);
+    const tree = await buildTree(root, shownFiles(store));
     const files = flattenFiles(tree);
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, files);
@@ -200,7 +208,10 @@ export function useWorkspace() {
     // インデックスは全ファイルを読むので、最初の描画と取り合いにならないよう
     // 手が空いてから始める（await もしない）
     const gen = ++indexGen;
-    whenIdle(() => void indexContents(files, gen));
+    // 索引に入れるのは Markdown だけ。画像や PDF を文字として読んでも中身は
+    // 引けないし、大きいものを丸ごと抱えることになる。
+    const docs = files.filter((f) => kindOf(f.name) === "markdown");
+    whenIdle(() => void indexContents(docs, gen));
   }, [store, getRootPath, indexContents]);
 
   // ツリー構造だけ更新（全文再インデックスしない）。ファイル操作用。
@@ -215,7 +226,7 @@ export function useWorkspace() {
       store.set(A.filesAtom, [node]);
       return;
     }
-    const tree = await buildTree(root);
+    const tree = await buildTree(root, shownFiles(store));
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, flattenFiles(tree));
   }, [store, getRootPath]);
@@ -296,6 +307,9 @@ export function useWorkspace() {
 
   const reloadFile = useCallback(
     async (path: string) => {
+      // Markdown 以外は本文を読まない。見せ方は種類ごとの画面が持っていて、
+      // 本文は要らない（画像やＰＤＦを文字として読むと化けるだけ）。
+      if (kindOf(path) !== "markdown") return;
       // ツリーがまだ無くても読めるようにする。ウィンドウを開いた直後は
       // フォルダ全体の走査が終わっておらず、待つと本文が出るのが遅れる。
       const root = getRootPath();

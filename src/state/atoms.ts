@@ -115,6 +115,9 @@ export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
 // リアルタイム編集（ベータ）: どのファイルも、組版されたまま直接書ける編集面で
 // 開く。切っていれば読む画面だけになり、直すのは本文のダブルクリックから。
 export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
+// Markdown 以外もツリーに出すか。画像・HTML・PDF が並ぶ。切ると読み物だけの
+// 見え方になる（開ける・開けないは変わらない。1 枚だけ開く経路は常に通る）。
+export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
 // （`>` は引用）から外れるので、入れた人にだけ効かせる。
 export const notionKeysAtom = atomWithStorage<boolean>("mdglow:notionkeys", false);

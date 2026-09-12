@@ -12,6 +12,7 @@ import {
   setDragPayload,
 } from "../lib/dnd";
 import { setDragChip } from "../lib/dragImage";
+import { iconOf } from "../lib/kind";
 import {
   ancestorPaths,
   displayName,
@@ -29,6 +30,7 @@ import {
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
+
 
 interface Creating {
   parentPath: string;
@@ -298,7 +300,12 @@ const TreeItem = memo(function TreeItem({
     >
       {active && <span className="mg-tree-rail" />}
       <span className="w-[18px] shrink-0" />
-      <Icon name="markdown" size={16} fill={active} className="mg-tree-ico shrink-0" />
+      <Icon
+        name={iconOf(node.name)}
+        size={16}
+        fill={active}
+        className="mg-tree-ico shrink-0"
+      />
       <span className="truncate">
         {node.path === draftRel ? draftName : displayName(node.name)}
       </span>
