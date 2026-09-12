@@ -1,7 +1,7 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { readText } from "../lib/fsAccess";
+import { assetSrc } from "../lib/asset";
 import { assetVersionAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 import { SourceView } from "./SourceView";
@@ -22,9 +22,7 @@ export function HtmlDoc({ abs }: { abs: string }) {
   const [source, setSource] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [zoom, setZoom] = useState(1);
-  // 版を付けて、外で書き換わったときに WebView の控えを跨がせる。asset の
-  // 受け口は道筋しか見ないので、問い合わせは中身に響かない。
-  const src = useMemo(() => `${convertFileSrc(abs)}?v=${version}`, [abs, version]);
+  const src = useMemo(() => assetSrc(abs, version), [abs, version]);
 
   useEffect(() => {
     setReading(false);
@@ -81,9 +79,7 @@ export function HtmlDoc({ abs }: { abs: string }) {
       )}
 
       <div className="mg-imgdoc-bar">
-        <span className="mg-imgdoc-size">
-          {reading ? "ソース" : "スクリプトは動くが、外には出られない"}
-        </span>
+        <span className="mg-imgdoc-size">{reading ? "ソース" : ""}</span>
         {!reading && (
           <>
             <button type="button" className="mg-small" onClick={() => step(1 / STEP)}>

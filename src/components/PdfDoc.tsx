@@ -1,6 +1,6 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useAtomValue } from "jotai";
 import { useMemo } from "react";
+import { assetSrc } from "../lib/asset";
 import { assetVersionAtom } from "../state/atoms";
 
 // PDF を 1 枚の書き物として開く。
@@ -10,8 +10,7 @@ import { assetVersionAtom } from "../state/atoms";
 
 export function PdfDoc({ abs }: { abs: string }) {
   const version = useAtomValue(assetVersionAtom);
-  // 版を付けて、外で書き換わったときに WebView の控えを跨がせる。
-  const src = useMemo(() => `${convertFileSrc(abs)}?v=${version}`, [abs, version]);
+  const src = useMemo(() => assetSrc(abs, version), [abs, version]);
   return (
     <iframe
       key={src}
