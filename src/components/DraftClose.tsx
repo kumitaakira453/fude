@@ -8,12 +8,10 @@ import { Icon } from "./Icon";
 // 行き場の無い書きかけが溜まり、黙って消すと書いたものが消える。
 
 export function DraftClose({
-  title,
   onSave,
   onDrop,
   onClose,
 }: {
-  title: string;
   onSave: () => void;
   onDrop: () => void;
   onClose: () => void;
@@ -37,7 +35,7 @@ export function DraftClose({
           このメモの保存先
         </div>
         <p className="mg-ver-save-note">
-          「{title}」はまだどこにも保存していません。捨てると戻せません。
+          このメモはまだどこにも保存していません。捨てると戻せません。
         </p>
         <div className="mg-ver-save-foot">
           <button type="button" className="mg-small" onClick={onClose}>

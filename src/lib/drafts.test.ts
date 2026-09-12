@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { draftTitle, inDrafts } from "./drafts";
+import { inDrafts } from "./drafts";
 
 // 保存先の決まっていないメモ。置き場の判定と、本文から採る名前。
 // ファイルを触る部分はダイアログと権限が要るので、純関数だけを見る。
@@ -29,35 +29,5 @@ describe("置き場の判定", () => {
   it("置き場が分かる前は判定しない", () => {
     expect(inDrafts(`${DIR}/a.md`, null)).toBe(false);
     expect(inDrafts(null, DIR)).toBe(false);
-  });
-});
-
-describe("保存するときの既定の名前", () => {
-  it("最初の見出しを使う", () => {
-    expect(draftTitle("# 会議のめも\n\n本文\n")).toBe("会議のめも");
-    expect(draftTitle("### 小さな見出し\n")).toBe("小さな見出し");
-  });
-
-  it("見出しが無ければ最初の字のある行", () => {
-    expect(draftTitle("\n\n買うもの\n- 牛乳\n")).toBe("買うもの");
-  });
-
-  it("ファイル名に使えない字は落とす", () => {
-    expect(draftTitle("# 2026/09/12 の記録")).toBe("20260912 の記録");
-    expect(draftTitle("# a:b*c?d")).toBe("abcd");
-  });
-
-  it("長い見出しは切り詰める", () => {
-    expect(draftTitle(`# ${"あ".repeat(80)}`)).toHaveLength(40);
-  });
-
-  it("何も書いていなければ無題", () => {
-    expect(draftTitle("")).toBe("無題");
-    expect(draftTitle("\n \n\t\n")).toBe("無題");
-  });
-
-  it("記号だけの行は名前にしない", () => {
-    expect(draftTitle("---\n\n本文がここ\n")).toBe("本文がここ");
-    expect(draftTitle("## ***\n\n次の行\n")).toBe("次の行");
   });
 });

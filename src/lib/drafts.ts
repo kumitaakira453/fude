@@ -14,6 +14,12 @@ import { createDir, MD_EXTENSIONS, readLevel, removePath, writeFile } from "./fs
 
 const DIR = "drafts";
 
+// 画面に出す呼び名。置き場で付けた機械的な名前を人に見せない。
+export const DRAFT = "下書き";
+
+// 保存するときの既定の名前。
+export const UNTITLED = "無題";
+
 let root: string | null = null;
 
 // 置き場。無ければ作る。
@@ -55,10 +61,14 @@ export async function leftoverDrafts(): Promise<string[]> {
 }
 
 // 保存先を尋ねる。決めなければ null。
-export async function askWhereToSave(title: string): Promise<string | null> {
+//
+// 既定の名前は「無題」。文頭を名前に採らない。見出しを書く前かもしれないし、
+// 書いていても題のつもりとは限らない（記号や書きかけの語が入る）。名前は
+// このダイアログで人が決める。
+export async function askWhereToSave(): Promise<string | null> {
   const at = await save({
     title: "名前を付けて保存",
-    defaultPath: `${title}.md`,
+    defaultPath: `${UNTITLED}.md`,
     filters: [
       { name: "Markdown", extensions: MD_EXTENSIONS.map((e) => e.slice(1)) },
     ],
@@ -66,31 +76,6 @@ export async function askWhereToSave(title: string): Promise<string | null> {
   if (!at) return null;
   // 拡張子を省いて決められたときは補う。1 枚だけ開く経路は Markdown しか通さない。
   return /\.[a-z0-9]+$/i.test(at) ? at : `${at}.md`;
-}
-
-// 本文から採った名前。見出し → 素の字のある行 → 無題 の順に落ちる。
-// 保存するときの既定の名前になるので、ファイル名に使えない字は落とす。
-export function draftTitle(text: string): string {
-  for (const line of text.split("\n")) {
-    const one = line.trim();
-    if (!one) continue;
-    const head = one.replace(/^#{1,6}\s+/, "").trim();
-    const name = clean(head);
-    if (name) return name.slice(0, 40);
-  }
-  return "無題";
-}
-
-// 画面に出す呼び名。置き場で付けた機械的な名前を人に見せない。
-export const DRAFT = "下書き";
-
-// ファイル名に使えない字を落とす。記号だけになったら空を返す。
-function clean(text: string): string {
-  const out = text
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return /[\p{L}\p{N}]/u.test(out) ? out : "";
 }
 
 // 置き場の中での名前。並べ替えたときに新しいものが後ろへ来るようにする。

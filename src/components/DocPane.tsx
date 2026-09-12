@@ -19,7 +19,7 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
-import { askWhereToSave, DRAFT, draftTitle, dropDraft, inDrafts } from "../lib/drafts";
+import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { displayName, writeFile } from "../lib/fsAccess";
 import { createCheckpoint, moveReviewFile } from "../lib/review";
@@ -306,7 +306,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const saveDraft = useCallback(async (): Promise<boolean> => {
     if (!sole) return false;
     const text = settled() ?? "";
-    const dest = await askWhereToSave(draftTitle(text));
+    const dest = await askWhereToSave();
     if (!dest) return false;
     await writeFile(dest, text);
     await moveReviewFile(sole, dest);
@@ -1321,7 +1321,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
       {ask !== null && ask.path === sole && (
         <DraftClose
-          title={draftTitle(draft)}
           onSave={() => {
             const go = ask.go;
             setAsk(null);
