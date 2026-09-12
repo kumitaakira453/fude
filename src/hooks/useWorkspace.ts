@@ -376,7 +376,7 @@ export function useWorkspace() {
         void dropDraft(sole);
         return false;
       }
-      store.set(A.draftAskAtom, { path: sole, then: go });
+      store.set(A.draftAskAtom, { path: sole, go });
       return true;
     },
     [store],

@@ -192,10 +192,14 @@ export const metaOpenAtom = atom<string | null>(null);
 // 置き場。起動時に 1 度だけ求める。分かるまでは下書きかどうかを判定しない。
 export const draftsDirAtom = atom<string | null>(null);
 // 下書きから離れようとしている。保存先を決めるか捨てるかを選ばせる小窓を出す。
-// then は、どちらかを選んだあとに続ける行き先（閉じるだけなら無い）。
+// go は、どちらかを選んだあとに続ける行き先（閉じるだけなら無い）。
+//
+// **この欄を then という名前にしてはいけない。** jotai は atom の値に then が
+// 生えていると promise と見なし、読んだ部品を Suspense で止める。止まる先が
+// 無いので画面ごと消え、押しても何も起きなくなる。
 export interface DraftAsk {
   path: string;
-  then: (() => void) | null;
+  go: (() => void) | null;
 }
 export const draftAskAtom = atom<DraftAsk | null>(null);
 

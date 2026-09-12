@@ -83,7 +83,19 @@ describe("下書きから離れるとき", () => {
     await act(async () => {
       await r.ws().openFolder("/どこか");
     });
-    expect(typeof r.store.get(A.draftAskAtom)?.then).toBe("function");
+    expect(typeof r.store.get(A.draftAskAtom)?.go).toBe("function");
+  });
+
+  it("問いの値を promise と見間違えさせない", async () => {
+    // jotai は atom の値に then が生えていると promise と見なし、読んだ部品を
+    // Suspense で止める。止まる先が無いので画面ごと消え、押しても何も起きなく
+    // なる。実際にこれで DocPane が止まった。
+    const r = rig(new Map([[REL, "書いた本文\n"]]));
+    await act(async () => {
+      await r.ws().openFolder("/どこか");
+    });
+    const ask = r.store.get(A.draftAskAtom) as unknown as Record<string, unknown>;
+    expect(typeof ask.then).not.toBe("function");
   });
 
   it("空だと分かっているものは問わずに捨てて通す", async () => {

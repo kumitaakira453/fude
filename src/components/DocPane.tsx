@@ -1323,7 +1323,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         <DraftClose
           title={draftTitle(draft)}
           onSave={() => {
-            const go = ask.then;
+            const go = ask.go;
             setAsk(null);
             void saveDraft().then((done) => {
               // 決めなかったら引き止めたまま。行き先へは進めない。
@@ -1331,7 +1331,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             });
           }}
           onDrop={() => {
-            const go = ask.then;
+            const go = ask.go;
             const at = ask.path;
             setAsk(null);
             void dropDraft(at);
