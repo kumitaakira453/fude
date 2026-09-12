@@ -55,6 +55,13 @@ body,
   height: 100%;
   margin: 0;
 }
+/* 端を越えて引いたときに出るのは文書の地。指定が無いと既定の白が覗くので、
+   テーマの地を持たせ、あわせて弾みを止める。 */
+html,
+body {
+  background: var(--mg-bg);
+  overscroll-behavior: none;
+}
 
 /* Material Symbols: 揃えとレンダリング */
 .material-symbols-rounded {
