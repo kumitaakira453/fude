@@ -9,10 +9,16 @@ import {
   type Node as PmNode,
 } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
-import { Plugin, Selection, TextSelection, type Command } from "prosemirror-state";
+import {
+  Plugin,
+  Selection,
+  TextSelection,
+  type Command,
+  type Transaction,
+} from "prosemirror-state";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
-import type { Transform } from "prosemirror-transform";
+import { canJoin, type Transform } from "prosemirror-transform";
 import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
@@ -175,6 +181,25 @@ const HOLDERS = new Set([
   schema.nodes.blockquote,
 ]);
 
+// 空の行を消して並びどうしが隣り合ったら、一つに繋ぐ。
+//
+// 項目から飾りを外すと（unlistBack）、その行を境に箇条書きが二つに割れる。
+// 行を消せば隣り合うが、節点は二つのままで、原文では間に空行が入る。
+// CommonMark はそこに空行があっても一つの並びとして読み直すので、開き直すと
+// 繋がっている——書いている間だけ区切られて見える、という食い違いになる。
+//
+// 繋ぐのは並びどうしだけ。段落まで繋ぐと、別々だった文が一続きになる。
+const LISTS = new Set([schema.nodes.bulletList, schema.nodes.orderedList]);
+
+function joinLists(tr: Transaction, at: number): void {
+  const $at = tr.doc.resolve(at);
+  const before = $at.nodeBefore;
+  const after = $at.nodeAfter;
+  if (!before || !after || before.type !== after.type) return;
+  if (!LISTS.has(before.type) || !canJoin(tr.doc, at)) return;
+  tr.join(at);
+}
+
 export const dropEmptyBack: Command = (state, dispatch) => {
   const { empty, $from } = state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
@@ -195,6 +220,7 @@ export const dropEmptyBack: Command = (state, dispatch) => {
 
   if (dispatch) {
     const tr = state.tr.delete(from, to);
+    joinLists(tr, from);
     // 直前のブロックの末尾へ。前に何も無ければ後ろへ送る（near が向きを見る）。
     const at = Selection.near(tr.doc.resolve(Math.max(0, from - 1)), -1);
     dispatch(tr.setSelection(at).scrollIntoView());
