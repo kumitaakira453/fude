@@ -329,7 +329,26 @@ class CodeBlockView implements NodeView {
     if (id) this.deps.modes.set(id, mode);
     this.dom.dataset.mode = mode;
     for (const [m, b] of this.picks) b.classList.toggle("is-on", m === mode);
+    // 図だけにするなら、カーソルを塊の外へ出す。中に居るあいだはソースを
+    // 出したままにする作りなので、出さないと押しても何も変わらない。
+    if (mode === "diagram") this.leave();
     this.view.focus();
+  }
+
+  // カーソルが塊の中に居たら、すぐ後ろへ出す。外に居るなら動かさない。
+  private leave() {
+    const at = this.getPos();
+    if (at === undefined) return;
+    const { state } = this.view;
+    const end = at + this.node.nodeSize;
+    if (state.selection.$head.pos < at || state.selection.$head.pos > end) return;
+    const sel = TextSelection.near(
+      state.doc.resolve(Math.min(end, state.doc.content.size)),
+      1,
+    );
+    // 後ろに行き先が無ければ（塊が本文の末尾）動かさない。戻ってきてしまう。
+    if (sel.$head.pos >= at && sel.$head.pos <= end) return;
+    this.view.dispatch(state.tr.setSelection(sel));
   }
 
   // 言語を選び直す。図を選んだときは、書いた本人がまだ触っている最中なので

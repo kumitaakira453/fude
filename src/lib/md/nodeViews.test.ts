@@ -314,3 +314,40 @@ describe("トグル", () => {
     expect((view.dom.querySelector(".mg-details") as HTMLElement).dataset.level).toBe("0");
   });
 });
+
+describe("図の見せ方", () => {
+  const SRC = "```mermaid\nflowchart TB\n  A --> B\n```\n\nあとの段落\n";
+
+  // 「図だけ」を押す。塊の頭にある選び手の 3 つめ。
+  const pressDiagram = (view: EditorView) => {
+    const picks = view.dom.querySelectorAll<HTMLElement>(".mg-code-modes button");
+    picks[2].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    picks[2].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  };
+
+  it("図だけにすると、カーソルが塊の外へ出る", () => {
+    const view = editor(SRC);
+    // 塊の中にカーソルを置く
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)),
+    );
+    expect(view.state.selection.$head.parent.type.name).toBe("codeBlock");
+
+    pressDiagram(view);
+
+    // 中に居ると、図だけにしてもソースが出たままになる。
+    expect(view.state.selection.$head.parent.type.name).not.toBe("codeBlock");
+    const box = view.dom.querySelector(".mg-pm-code") as HTMLElement;
+    expect(box.dataset.mode).toBe("diagram");
+  });
+
+  it("外に居るときは動かさない", () => {
+    const view = editor(SRC);
+    const end = view.state.doc.content.size - 1;
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, end)),
+    );
+    pressDiagram(view);
+    expect(view.state.selection.$head.pos).toBe(end);
+  });
+});
