@@ -694,7 +694,10 @@ function inlineOf(nodes: PhrasingContent[], source: string, base: number): Inlin
     };
     switch (node.type) {
       case "text":
-        if (node.value !== "") add(schema.text(node.value, marks));
+        // 段落の途中の改行は空白 1 つ。編集面は pre-wrap なので、\n のままだと
+        // 原文に無い改行として描かれる。字数は変わらないので原文との対応は
+        // ずれない。行末の空白 2 つや \ で終わる行は break 節点になる（下）。
+        if (node.value !== "") add(schema.text(node.value.replace(/\n/g, " "), marks));
         return;
       case "strong":
         node.children.forEach((c) => push(c, [...marks, schema.marks.strong.create()]));

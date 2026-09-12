@@ -129,6 +129,17 @@ function byChar(value: string, raw: string): number[] | null {
       r++;
       continue;
     }
+    // 折り返し。原文では改行でも、段落の中では空白 1 つとして持っている。
+    if (value[v] === " ") {
+      const next = afterFold(raw, r);
+      if (next >= 0) {
+        map[v] = r;
+        r = next;
+        v++;
+        skipAfterBreak();
+        continue;
+      }
+    }
     if (raw[r] === "\\" && raw[r + 1] === value[v]) {
       map[v] = r;
       r += 2;
@@ -161,6 +172,14 @@ function byChar(value: string, raw: string): number[] | null {
   if (r !== raw.length) return null;
   map[value.length] = r;
   return map;
+}
+
+// 原文のその位置から始まる折り返し（行末の空白と改行）の、次の字の位置。
+// 折り返しでなければ -1。塊が大きいので、切り出さずに添字で見る。
+function afterFold(raw: string, at: number): number {
+  let i = at;
+  while (i < raw.length && (raw[i] === " " || raw[i] === "\t" || raw[i] === "\r")) i++;
+  return raw[i] === "\n" ? i + 1 : -1;
 }
 
 // 原文のその位置から始まる実体参照。読めない書き方なら null。
