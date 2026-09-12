@@ -85,7 +85,7 @@ export function Toolbar() {
         className="mx-1 flex select-none items-center gap-1.5 rounded-lg px-1.5 py-1 transition hover:bg-[var(--mg-hover)]"
       >
         <AppIcon size={19} className="text-[var(--mg-accent)]" />
-        <span className="text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">
+        <span className="mg-wordmark text-[15px] font-bold tracking-tight text-[var(--mg-fg)]">
           fude
         </span>
       </button>

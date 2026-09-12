@@ -93,7 +93,7 @@ export function Landing() {
         <div className="mg-mark mb-12 flex shrink-0 items-center gap-4">
           <AppIcon size={58} className="mg-mark-icon text-[var(--mg-accent)]" />
           <div>
-            <h1 className="text-[2.3rem] font-semibold leading-none tracking-[-0.035em] text-[var(--mg-fg)]">
+            <h1 className="mg-wordmark text-[2.3rem] font-semibold leading-none tracking-[-0.035em] text-[var(--mg-fg)]">
               fude
             </h1>
             {/* 筆で引いた墨の線。開いたときに左から伸びる。 */}

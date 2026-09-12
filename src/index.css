@@ -4153,6 +4153,10 @@ body.mg-carrying {
 /* ============================================================
    ランディング
    ============================================================ */
+/* 名前だけに当てる書体。本文の書体設定とは別に持つ。 */
+.mg-wordmark {
+  font-family: "Lobster", sans-serif;
+}
 .mg-landing {
   background:
     radial-gradient(70rem 34rem at 50% -10%, var(--mg-accent-soft), transparent 60%),
