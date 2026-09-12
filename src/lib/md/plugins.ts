@@ -22,6 +22,7 @@ import { editingMark } from "./editing";
 import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
+import { composingKeys } from "./ime";
 import { insideBlock } from "./nodeViews";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
@@ -827,5 +828,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     lifted,
     // 指摘の居場所。打っても付いてくるように、位置を写していく。
     anchors,
+    // 変換を確定した直後の打鍵を、編集面へ渡す。
+    composingKeys(),
   ];
 }
