@@ -15,7 +15,8 @@ export function FolderSwitcher() {
   const sole = useAtomValue(soleAtom);
   // 下書きは置き場も名前も人に見せるものではない。中身から採った名前を出す。
   const draftName = useAtomValue(draftNameAtom);
-  const { openFolder, openDoc, openFolderInNewWindow, refreshFolders } = useWorkspace();
+  const { openFolder, openDoc, openFolderInNewWindow, refreshFolders, holdDraft } =
+    useWorkspace();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -44,14 +45,18 @@ export function FolderSwitcher() {
     await openFolder(entry.path);
   };
 
+  // 下書きのままなら、選ぶ前に行き先を決めさせる。OS のダイアログを開いてから
+  // 引き止めると、選んだのに何も起きなかったように見える。
   const addFolder = async () => {
     setOpen(false);
+    if (holdDraft(() => void addFolder())) return;
     const path = await pickDirectory();
     if (path) await openFolder(path);
   };
 
   const addDoc = async () => {
     setOpen(false);
+    if (holdDraft(() => void addDoc())) return;
     const path = await pickMarkdownFile();
     if (path) await openDoc(path);
   };

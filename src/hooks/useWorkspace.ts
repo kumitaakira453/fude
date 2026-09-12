@@ -499,6 +499,8 @@ export function useWorkspace() {
   // Dock メニューのウィンドウ一覧でどのフォルダか分かるようにする。
   const openInNewWindow = useCallback(
     async (path: string | null, at?: DropPoint): Promise<boolean> => {
+      // 下書きは置き場ごと別の窓へ持ち出せない。行き先を決めてから。
+      if (holdDraft(() => {})) return false;
       const folderId = store.get(A.activeFolderIdAtom);
       if (!folderId) return false;
       const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
