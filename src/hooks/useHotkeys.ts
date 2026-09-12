@@ -86,6 +86,11 @@ export function useHotkeys() {
       } else if (mod && e.shiftKey && (e.key === "t" || e.key === "T")) {
         e.preventDefault();
         reopenTab(store);
+      } else if (mod && e.shiftKey && (e.key === "m" || e.key === "M")) {
+        // ⌘⇧M: メタ情報の小窓。活きているペインの分だけ開け閉めする。
+        e.preventDefault();
+        const id = store.get(A.activePaneIdAtom);
+        store.set(A.metaOpenAtom, store.get(A.metaOpenAtom) === id ? null : id);
       } else if (mod && (e.key === "w" || e.key === "W")) {
         e.preventDefault();
         const paneId = store.get(A.activePaneIdAtom);

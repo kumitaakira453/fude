@@ -34,6 +34,7 @@ import {
   editorialAtom,
   fontAtom,
   liveEditAtom,
+  metaOpenAtom,
   paletteOpenAtom,
   readingWidthAtom,
   settingsOpenAtom,
@@ -239,8 +240,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const openVersions = useSetAtom(versionScreenAtom);
   // バージョンの名前を決める小窓。開くたびに日時を入れ直す。
   const [naming, setNaming] = useState<string | null>(null);
-  // メタ情報の小窓。ペインごとに開く。
-  const [metaOpen, setMetaOpen] = useState(false);
+  // メタ情報の小窓。開いているペインの id を持つので、⌘⇧M からも開ける。
+  const [metaPane, setMetaPane] = useAtom(metaOpenAtom);
+  const metaOpen = metaPane === pane.id;
+  // 閉じるのは自分の分だけ。隣のペインで開いている小窓を巻き込まない。
+  const closeMeta = useCallback(
+    () => setMetaPane((id) => (id === pane.id ? null : id)),
+    [setMetaPane, pane.id],
+  );
   const stamping = useRef(false);
 
   // 書きかけを先に流し、そのうえで今の本文を読む。
@@ -347,7 +354,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // fromMarkdown 130ms → 組み立て 28ms → 焦点 375ms が**2 度**走っていた。
   useEffect(() => {
     marked.current = false;
-    setMetaOpen(false);
+    closeMeta();
     // 本文は控えから読む。raw を依存に入れると、自分の保存が返ってきた
     // だけでもここが走り、書きかけを取り込みの手順より先に踏んでしまう。
     const text = rawRef.current;
@@ -364,7 +371,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // リアルタイム編集が入っていてまだ読めていないときは、読み込みの印を
     // 出しておく。読めた時点で下の手順が編集面へ移す。
     setOpening(liveRef.current);
-  }, [path]);
+  }, [path, closeMeta]);
 
   // 読む / 書くは設定だけで決まる。本文が読めた時点で編集面へ移し、設定を
   // 切ったらその場で読む画面へ降りる。
@@ -1189,15 +1196,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               <Icon name="history" size={16} />
             </button>
             <button
-              onClick={() => setMetaOpen(true)}
-              title="メタ情報"
+              onClick={() => setMetaPane(pane.id)}
+              title="メタ情報 (⌘⇧M)"
               className={`grid h-6 w-6 place-items-center rounded transition ${
                 data || broken
                   ? "text-[var(--mg-accent)] hover:bg-[var(--mg-hover)]"
                   : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
               }`}
             >
-              <Icon name="label" size={16} fill={!!data || broken} />
+              <Icon name="list_alt" size={16} fill={!!data || broken} />
             </button>
           </>
         )}
@@ -1244,7 +1251,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           fm={fmPrefix}
           broken={broken}
           onChange={saveFm}
-          onClose={() => setMetaOpen(false)}
+          onClose={closeMeta}
         />
       )}
 

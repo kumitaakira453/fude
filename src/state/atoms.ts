@@ -185,6 +185,8 @@ export const paletteOpenAtom = atom<boolean>(false);
 export const shortcutsOpenAtom = atom<boolean>(false);
 // ⌘, で開く表示設定
 export const settingsOpenAtom = atom<boolean>(false);
+// ⌘⇧M で開くメタ情報の小窓。開いているペインの id を持つ。
+export const metaOpenAtom = atom<string | null>(null);
 
 // ---- 監視状態 ----
 export const watchModeAtom = atom<"observer" | "polling" | "off">("off");
