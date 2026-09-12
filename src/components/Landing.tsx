@@ -81,17 +81,16 @@ export function Landing() {
   };
 
   return (
-    <div className="mg-landing relative h-full overflow-y-auto">
+    <div className="mg-landing relative h-full overflow-hidden">
       {/* 地の色をゆっくり動かす。読むものが無い画面なので、ここだけ息をさせる。
-          画面の外へはみ出す円なので、切り取る層に入れる。入れないと
-          スクロールできる範囲が広がって、下に空白ができる。 */}
+          画面の外へはみ出す円なので、切り取る層に入れる。 */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div className="mg-blob mg-blob-a" />
         <div className="mg-blob mg-blob-b" />
       </div>
 
-      <div className="relative mx-auto flex min-h-full max-w-2xl flex-col justify-center px-8 py-16">
-        <div className="mg-mark mb-12 flex items-center gap-4">
+      <div className="relative mx-auto flex h-full max-w-2xl flex-col justify-center px-8 py-16">
+        <div className="mg-mark mb-12 flex shrink-0 items-center gap-4">
           <AppIcon size={58} className="mg-mark-icon text-[var(--mg-accent)]" />
           <div>
             <h1 className="text-[2.3rem] font-semibold leading-none tracking-[-0.035em] text-[var(--mg-fg)]">
@@ -105,7 +104,7 @@ export function Landing() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid shrink-0 gap-3 sm:grid-cols-2">
           <StartCard
             icon="folder_open"
             title="フォルダを開く"
@@ -121,11 +120,11 @@ export function Landing() {
         </div>
 
         {recent.length > 0 && (
-          <>
-            <h2 className="mb-1 mt-11 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--mg-muted)]">
+          <div className="mt-11 flex min-h-0 flex-col">
+            <h2 className="mb-1 shrink-0 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--mg-muted)]">
               最近
             </h2>
-            <div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {recent.map((r) => (
                 <button
                   key={`${r.kind}:${r.id}`}
@@ -163,7 +162,7 @@ export function Landing() {
                 </button>
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
