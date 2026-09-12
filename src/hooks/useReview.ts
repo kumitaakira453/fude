@@ -44,6 +44,7 @@ import {
   reviewScreenAtom,
   reviewThreadAtom,
 } from "../state/review";
+import { draftRelAtom } from "../state/drafts";
 
 // 読書ビューのレビュー機能。選択した箇所に指摘を書くところまでを持つ。
 // 付いている指摘を読む・返信する・解決するのはレビュー画面が受け持つ。
@@ -89,6 +90,9 @@ export function useReview({
 }) {
   const store = useStore();
   const ledger = useAtomValue(ledgerAtom);
+  // 下書きには指摘を付けない。行き先が決まっていないものに紐づけると、
+  // 保存したあとまで台帳が置き場の道筋を指したままになる。
+  const isDraft = useAtomValue(draftRelAtom) !== null;
   const setScreen = useSetAtom(reviewScreenAtom);
   const setSelectedThread = useSetAtom(reviewThreadAtom);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -167,7 +171,7 @@ export function useReview({
   }, [resolutions, threads]);
 
   useEffect(() => {
-    if (!content || !isActive) {
+    if (!content || !isActive || isDraft) {
       setSelection(null);
       return;
     }
@@ -203,7 +207,7 @@ export function useReview({
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [content, isActive]);
+  }, [content, isActive, isDraft]);
 
   useEffect(() => {
     setDraft(null);

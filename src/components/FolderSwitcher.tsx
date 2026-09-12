@@ -90,8 +90,10 @@ export function FolderSwitcher() {
         <Icon
           name={draftName ? "edit_note" : sole ? "description" : "folder"}
           size={18}
-          fill={!draftName}
-          className="text-[var(--mg-accent2)]"
+          fill
+          className={
+            draftName ? "text-[var(--mg-accent)]" : "text-[var(--mg-accent2)]"
+          }
         />
         <span
           className="truncate text-[13px] font-semibold text-[var(--mg-fg)]"
@@ -107,7 +109,11 @@ export function FolderSwitcher() {
           {draftName ? (
             // 下書きの置き場はアプリの持ち物なので、フォルダとして開かせない。
             <div className="mb-1 flex items-center gap-1.5 rounded-lg bg-[var(--mg-accent-soft)] px-2 py-1.5 text-[12px] text-[var(--mg-muted)]">
-              <Icon name="edit_note" size={15} className="shrink-0" />
+              <Icon
+                name="edit_note"
+                size={15}
+                className="shrink-0 text-[var(--mg-accent)]"
+              />
               <span className="truncate">保存先はまだ決まっていません</span>
             </div>
           ) : (

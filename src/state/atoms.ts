@@ -191,8 +191,13 @@ export const metaOpenAtom = atom<string | null>(null);
 // ---- 下書き（保存先の決まっていないメモ） ----
 // 置き場。起動時に 1 度だけ求める。分かるまでは下書きかどうかを判定しない。
 export const draftsDirAtom = atom<string | null>(null);
-// 閉じようとしている下書き。保存先を決めるか捨てるかを選ばせる小窓を出す。
-export const draftAskAtom = atom<string | null>(null);
+// 下書きから離れようとしている。保存先を決めるか捨てるかを選ばせる小窓を出す。
+// then は、どちらかを選んだあとに続ける行き先（閉じるだけなら無い）。
+export interface DraftAsk {
+  path: string;
+  then: (() => void) | null;
+}
+export const draftAskAtom = atom<DraftAsk | null>(null);
 
 // ---- 監視状態 ----
 export const watchModeAtom = atom<"observer" | "polling" | "off">("off");

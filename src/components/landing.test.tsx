@@ -31,12 +31,6 @@ vi.mock("../hooks/useWorkspace", () => ({
   }),
 }));
 
-// 置き場の走査はアプリの持ち物を触るので、試験では何も無いことにする。
-vi.mock("../lib/drafts", async (real) => {
-  const mod = await real<typeof import("../lib/drafts")>();
-  return { ...mod, leftoverDrafts: async () => [] };
-});
-
 vi.mock("../lib/fsAccess", async (real) => {
   const mod = await real<typeof import("../lib/fsAccess")>();
   return {

@@ -19,13 +19,7 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
-import {
-  askWhereToSave,
-  draftLabel,
-  draftTitle,
-  dropDraft,
-  inDrafts,
-} from "../lib/drafts";
+import { askWhereToSave, DRAFT, draftTitle, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { displayName, writeFile } from "../lib/fsAccess";
 import { createCheckpoint, moveReviewFile } from "../lib/review";
@@ -1258,9 +1252,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               <Icon name="save_as" size={16} />
             </button>
             )}
-            <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
-              <Icon name="history" size={16} />
-            </button>
+            {/* 下書きは版も指摘も持たない。行き先が決まってからのものなので、
+                履歴の口は出さない。 */}
+            {!isDraft && (
+              <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
+                <Icon name="history" size={16} />
+              </button>
+            )}
             <button
               onClick={() => setMetaPane(pane.id)}
               title="メタ情報 (⌘⇧M)"
@@ -1313,7 +1311,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {metaOpen && path && (
         <MetaModal
           key={path}
-          name={isDraft ? draftLabel(settled() ?? "") : displayName(path)}
+          name={isDraft ? DRAFT : displayName(path)}
           fm={fmPrefix}
           broken={broken}
           onChange={saveFm}
@@ -1321,19 +1319,29 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         />
       )}
 
-      {ask !== null && ask === sole && (
+      {ask !== null && ask.path === sole && (
         <DraftClose
-          title={draftTitle(settled() ?? "")}
+          title={draftTitle(draft)}
           onSave={() => {
+            const go = ask.then;
             setAsk(null);
-            void saveDraft();
+            void saveDraft().then((done) => {
+              // 決めなかったら引き止めたまま。行き先へは進めない。
+              if (done && go) go();
+            });
           }}
           onDrop={() => {
+            const go = ask.then;
+            const at = ask.path;
             setAsk(null);
-            const at = sole;
+            void dropDraft(at);
+            if (go) {
+              go();
+              return;
+            }
+            // 行き先が無ければ起動画面へ戻る。
             store.set(soleAtom, null);
             store.set(activeFolderIdAtom, null);
-            if (at) void dropDraft(at);
           }}
           onClose={() => setAsk(null)}
         />

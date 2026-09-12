@@ -316,6 +316,8 @@ const TreeItem = memo(function TreeItem({
 
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
+  // 下書きを開いているか。置き場はアプリの持ち物なので、作る・消すの口を出さない。
+  const draftRoot = useAtomValue(draftRelAtom) !== null;
   const filter = useAtomValue(treeFilterAtom);
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
@@ -498,20 +500,25 @@ export function FileTree() {
         <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
           エクスプローラー
         </span>
-        <button
-          onClick={() => startCreate("", "file")}
-          title="ルートに新規ファイル"
-          className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-        >
-          <Icon name="note_add" size={16} />
-        </button>
-        <button
-          onClick={() => startCreate("", "dir")}
-          title="ルートに新規フォルダ"
-          className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-        >
-          <Icon name="create_new_folder" size={16} />
-        </button>
+        {/* 下書きの置き場はアプリの持ち物。そこへ作らせない。 */}
+        {!draftRoot && (
+          <>
+            <button
+              onClick={() => startCreate("", "file")}
+              title="ルートに新規ファイル"
+              className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+            >
+              <Icon name="note_add" size={16} />
+            </button>
+            <button
+              onClick={() => startCreate("", "dir")}
+              title="ルートに新規フォルダ"
+              className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+            >
+              <Icon name="create_new_folder" size={16} />
+            </button>
+          </>
+        )}
       </div>
 
       <div

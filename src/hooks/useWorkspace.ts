@@ -1,6 +1,6 @@
 import { message } from "@tauri-apps/plugin-dialog";
 import { useStore } from "jotai";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import {
   buildTree,
   createDir,
@@ -33,7 +33,13 @@ import {
   type DropPoint,
 } from "../lib/windows";
 import { moveReviewFile } from "../lib/review";
-import { draftsDir, inDrafts, newDraft as makeDraft } from "../lib/drafts";
+import {
+  draftsDir,
+  dropDraft,
+  inDrafts,
+  leftoverDrafts,
+  newDraft as makeDraft,
+} from "../lib/drafts";
 import { notify } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
@@ -344,8 +350,40 @@ export function useWorkspace() {
   // 走査は数百〜千のファイルを辿るので、待つと本文が出るまでが目に見えて遅い。
   //
   // only を渡すと「そのファイルだけの窓」として開く。控えのレイアウトは使わない。
+  // 下書きを開いたまま別の画面へ移らない。行き先を決めるまで引き止める。
+  //
+  // 書きかけを 2 つ以上持たせないための関所。何も書いていなければ問わずに
+  // 捨てて通す（押すたびに問われるほうが煩わしい）。
+  const holdDraft = useCallback(
+    (go: () => void): boolean => {
+      const sole = store.get(A.soleAtom);
+      if (!sole || !inDrafts(sole, store.get(A.draftsDirAtom))) return false;
+      const rel = sole.split("/").pop() ?? "";
+      if ((store.get(A.contentCacheAtom).get(rel) ?? "").trim() === "") {
+        void dropDraft(sole);
+        return false;
+      }
+      store.set(A.draftAskAtom, { path: sole, then: go });
+      return true;
+    },
+    [store],
+  );
+
+  const openFolderRef = useRef<
+    ((path: string, opts?: { file?: string; only?: boolean; force?: boolean }) => void) | null
+  >(null);
+
   const openFolder = useCallback(
-    async (path: string, opts: { file?: string; only?: boolean } = {}) => {
+    async (
+      path: string,
+      opts: { file?: string; only?: boolean; force?: boolean } = {},
+    ) => {
+      if (
+        !opts.force &&
+        holdDraft(() => openFolderRef.current?.(path, { ...opts, force: true }))
+      ) {
+        return;
+      }
       const now = Math.floor(performance.timeOrigin + performance.now());
       store.set(A.soleAtom, null);
       const activeId = path;
@@ -391,8 +429,20 @@ export function useWorkspace() {
   // 相対リンク・相対画像・レビュー・版がフォルダを開いたときと同じ道を通る。
   // 親フォルダは最近のフォルダに登録しない（開いたのはファイルであって
   // フォルダではない）。
+  openFolderRef.current = (path, opts) => void openFolder(path, opts);
+
+  const openDocRef = useRef<((abs: string, opts?: { force?: boolean }) => void) | null>(
+    null,
+  );
+
   const openDoc = useCallback(
-    (abs: string) => {
+    (abs: string, opts: { force?: boolean } = {}) => {
+      if (
+        !opts.force &&
+        holdDraft(() => openDocRef.current?.(abs, { force: true }))
+      ) {
+        return;
+      }
       const { root, node } = soleTree(abs);
       // 画面を先に進める。ここに await を挟むと、押してから何も変わらない間が
       // できて、反応していないように見える。
@@ -423,18 +473,24 @@ export function useWorkspace() {
         void registerDoc(abs, now).then((list) => store.set(A.recentDocsAtom, list));
       });
     },
-    [store, openFile],
+    [store, openFile, holdDraft],
   );
+  openDocRef.current = openDoc;
 
   // 保存先の決まっていないメモを作って開く。
   //
   // 置き場が違うだけで、作ったあとは 1 枚だけ開いたファイルと同じ道を通る。
   // 自動保存・レビュー・版はそのまま効く。
   const newDraft = useCallback(async () => {
-    const abs = await makeDraft(Date.now());
+    // 書きかけは 1 つまで。既に開いていればそのまま、前回の残りがあれば
+    // それを開き直す。作るのは、どこにも無いときだけ。
+    const sole = store.get(A.soleAtom);
+    if (sole && inDrafts(sole, store.get(A.draftsDirAtom))) return sole;
+    const left = await leftoverDrafts().catch(() => []);
+    const abs = left[0] ?? (await makeDraft(Date.now()));
     openDoc(abs);
     return abs;
-  }, [openDoc]);
+  }, [store, openDoc]);
 
   // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
   // Dock メニューのウィンドウ一覧でどのフォルダか分かるようにする。

@@ -32,7 +32,7 @@ describe("置き場の判定", () => {
   });
 });
 
-describe("本文から採る名前", () => {
+describe("保存するときの既定の名前", () => {
   it("最初の見出しを使う", () => {
     expect(draftTitle("# 会議のめも\n\n本文\n")).toBe("会議のめも");
     expect(draftTitle("### 小さな見出し\n")).toBe("小さな見出し");

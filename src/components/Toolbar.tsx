@@ -16,6 +16,7 @@ import { openTotalAtom, reviewScreenAtom } from "../state/review";
 import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
 import { SettingsButton } from "./SettingsButton";
+import { draftRelAtom } from "../state/drafts";
 
 function IconButton({
   onClick,
@@ -53,6 +54,7 @@ function IconButton({
 export function Toolbar() {
   const store = useStore();
   const openTotal = useAtomValue(openTotalAtom);
+  const isDraft = useAtomValue(draftRelAtom) !== null;
   const setReviewOpen = useSetAtom(reviewScreenAtom);
   const setActiveFolderId = useSetAtom(activeFolderIdAtom);
   const setSole = useSetAtom(soleAtom);
@@ -137,14 +139,19 @@ export function Toolbar() {
           icon="toc"
         />
         <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
+        {/* 下書きには指摘を付けない。行き先が決まってからのものなので、
+            一覧の口も閉じておく。 */}
         <button
           onClick={() => setReviewOpen(true)}
+          disabled={isDraft}
           title={
-            openTotal > 0
-              ? `コメント — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
-              : "コメント (⌘⇧R)"
+            isDraft
+              ? "コメントは保存先を決めてから"
+              : openTotal > 0
+                ? `コメント — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
+                : "コメント (⌘⇧R)"
           }
-          className="relative flex h-8 items-center gap-1 rounded-lg px-2 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+          className="relative flex h-8 items-center gap-1 rounded-lg px-2 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--mg-muted)]"
         >
           <Icon name="rate_review" size={18} />
           {openTotal > 0 && (

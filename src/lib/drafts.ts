@@ -81,12 +81,8 @@ export function draftTitle(text: string): string {
   return "無題";
 }
 
-// 画面に出す名前。まだ何も書いていなければ、置き場で付けた機械的な名前では
-// なく「下書き」と呼ぶ。
-export function draftLabel(text: string): string {
-  const name = draftTitle(text);
-  return name === "無題" ? "下書き" : name;
-}
+// 画面に出す呼び名。置き場で付けた機械的な名前を人に見せない。
+export const DRAFT = "下書き";
 
 // ファイル名に使えない字を落とす。記号だけになったら空を返す。
 function clean(text: string): string {

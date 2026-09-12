@@ -200,7 +200,7 @@ export function closeTab(
       void dropDraft(sole);
       return;
     }
-    store.set(A.draftAskAtom, sole);
+    store.set(A.draftAskAtom, { path: sole, then: null });
     return;
   }
   if (path && opts.remember !== false) remember(store, { path, paneId, index });

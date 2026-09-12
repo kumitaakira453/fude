@@ -1,6 +1,7 @@
 import { useStore } from "jotai";
 import { useEffect, useRef } from "react";
 import { closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
+import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "../state/review";
@@ -84,6 +85,8 @@ export function useHotkeys() {
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {
         e.preventDefault();
+        // 下書きには指摘が付かないので、一覧も開かない。
+        if (inDrafts(store.get(A.soleAtom), store.get(A.draftsDirAtom))) return;
         // 版の履歴を開いていたら閉じる。どちらも本文の代わりに出す画面なので、
         // 重ねると片方が後ろで開いたままになる。
         store.set(versionScreenAtom, null);
