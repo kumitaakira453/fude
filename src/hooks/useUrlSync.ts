@@ -10,7 +10,10 @@ import { useWorkspace } from "./useWorkspace";
 // - popstate: URL を解釈して状態へ反映（権限が無ければスタート画面へ）
 export function useUrlSync() {
   const store = useStore();
-  const { refreshFolders, openFolder, openDoc, openFile } = useWorkspace();
+  const { refreshFolders, openFolder, openDoc, openFile, holdDraft } = useWorkspace();
+  // 引き止める道具。効果の中から呼ぶので控えで持つ。
+  const hold = useRef(holdDraft);
+  hold.current = holdDraft;
   const activeFolderId = useAtomValue(A.activeFolderIdAtom);
   const sole = useAtomValue(A.soleAtom);
   const activePane = useAtomValue(A.activePaneAtom);
@@ -40,6 +43,8 @@ export function useUrlSync() {
           return;
         }
         if (!folderId) {
+          // 下書きを開いたまま起動画面へ戻らない。行き先を決めてから。
+          if (hold.current(() => applyUrl.current(state, opts))) return;
           store.set(A.activeFolderIdAtom, null);
           store.set(A.soleAtom, null);
           return;

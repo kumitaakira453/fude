@@ -358,8 +358,11 @@ export function useWorkspace() {
     (go: () => void): boolean => {
       const sole = store.get(A.soleAtom);
       if (!sole || !inDrafts(sole, store.get(A.draftsDirAtom))) return false;
+      // 控えが「空だと分かっている」ときだけ黙って捨てる。まだ読めていない
+      // （鍵が無い）ときは分からないので問う。打った字を黙って消さない。
       const rel = sole.split("/").pop() ?? "";
-      if ((store.get(A.contentCacheAtom).get(rel) ?? "").trim() === "") {
+      const cache = store.get(A.contentCacheAtom);
+      if (cache.has(rel) && cache.get(rel)!.trim() === "") {
         void dropDraft(sole);
         return false;
       }
@@ -757,6 +760,7 @@ export function useWorkspace() {
     openFolder,
     openDoc,
     newDraft,
+    holdDraft,
     refreshTree,
     refreshTreeStructure,
     reloadFile,

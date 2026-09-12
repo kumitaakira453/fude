@@ -193,8 +193,9 @@ export function closeTab(
   // 行き場の無い書きかけが溜まり、黙って消すと書いたものが消える。
   const sole = store.get(A.soleAtom);
   if (path && sole && inDrafts(sole, store.get(A.draftsDirAtom))) {
-    // 何も書いていないものは黙って捨てる。押すたびに問われるほうが煩わしい。
-    if ((store.get(A.contentCacheAtom).get(path) ?? "").trim() === "") {
+    // 空だと分かっているものだけ黙って捨てる。まだ読めていないときは問う。
+    const cache = store.get(A.contentCacheAtom);
+    if (cache.has(path) && cache.get(path)!.trim() === "") {
       store.set(A.soleAtom, null);
       store.set(A.activeFolderIdAtom, null);
       void dropDraft(sole);
