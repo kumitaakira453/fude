@@ -1,7 +1,8 @@
 import { useAtomValue } from "jotai";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { displayName, pickDirectory, pickMarkdownFile } from "../lib/fsAccess";
+import { draftTitle, leftoverDrafts } from "../lib/drafts";
+import { displayName, pickDirectory, pickMarkdownFile, readText } from "../lib/fsAccess";
 import { folderDisplayName } from "../lib/idb";
 import { isOpen } from "../lib/review";
 import { foldersAtom, recentDocsAtom } from "../state/atoms";
@@ -39,7 +40,27 @@ export function Landing() {
   const folders = useAtomValue(foldersAtom);
   const docs = useAtomValue(recentDocsAtom);
   const ledger = useAtomValue(ledgerAtom);
-  const { openFolder, openDoc } = useWorkspace();
+  const { openFolder, openDoc, newDraft } = useWorkspace();
+
+  // 前回の残り。塞いでいない経路（別のものを開く・アプリの終了）で行き場の
+  // 決まらないまま残った下書き。あるときだけ出す。
+  const [left, setLeft] = useState<{ abs: string; title: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const paths = await leftoverDrafts().catch(() => []);
+      const rows = await Promise.all(
+        paths.slice(0, 5).map(async (abs) => ({
+          abs,
+          title: draftTitle(await readText(abs).catch(() => "")),
+        })),
+      );
+      if (alive) setLeft(rows);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // フォルダと 1 枚のファイルを 1 本にまとめて、新しい順に並べる。
   // 戻るときに思い出すのは種類ではなく「最後に何を見ていたか」なので、
@@ -104,7 +125,7 @@ export function Landing() {
           </div>
         </div>
 
-        <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+        <div className="grid shrink-0 gap-3 sm:grid-cols-3">
           <StartCard
             icon="folder_open"
             title="フォルダを開く"
@@ -117,7 +138,40 @@ export function Landing() {
             lead="1 枚を、走査せずそのまま"
             onClick={pickFile}
           />
+          <StartCard
+            icon="note_add"
+            title="新しいメモ"
+            lead="保存先は書いたあとで"
+            onClick={() => void newDraft()}
+          />
         </div>
+
+        {left.length > 0 && (
+          <div className="mt-6 shrink-0">
+            <h2 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--mg-muted)]">
+              書きかけ
+            </h2>
+            {left.map((d) => (
+              <button
+                key={d.abs}
+                onClick={() => openDoc(d.abs)}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-[var(--mg-hover)]"
+              >
+                <Icon
+                  name="edit_note"
+                  size={17}
+                  className="shrink-0 text-[var(--mg-accent)]"
+                />
+                <span className="truncate text-[13.5px] font-medium text-[var(--mg-fg-dim)]">
+                  {d.title}
+                </span>
+                <span className="shrink-0 text-[11.5px] text-[var(--mg-muted)]">
+                  · 保存先はまだ
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {recent.length > 0 && (
           <div className="mt-11 flex min-h-0 flex-col">

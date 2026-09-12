@@ -1,4 +1,5 @@
 import { type getDefaultStore } from "jotai";
+import { dropDraft, inDrafts } from "./drafts";
 import * as A from "../state/atoms";
 import type { LayoutNode, LeafNode, SplitNode } from "../state/atoms";
 
@@ -188,6 +189,20 @@ export function closeTab(
   const target = findLeaf(root, paneId);
   if (!target) return;
   const path = target.tabs[index];
+  // 保存先の決まっていないメモは、行き先を決めるまで閉じない。黙って残すと
+  // 行き場の無い書きかけが溜まり、黙って消すと書いたものが消える。
+  const sole = store.get(A.soleAtom);
+  if (path && sole && inDrafts(sole, store.get(A.draftsDirAtom))) {
+    // 何も書いていないものは黙って捨てる。押すたびに問われるほうが煩わしい。
+    if ((store.get(A.contentCacheAtom).get(path) ?? "").trim() === "") {
+      store.set(A.soleAtom, null);
+      store.set(A.activeFolderIdAtom, null);
+      void dropDraft(sole);
+      return;
+    }
+    store.set(A.draftAskAtom, sole);
+    return;
+  }
   if (path && opts.remember !== false) remember(store, { path, paneId, index });
   if (target.tabs.length <= 1 && countLeaves(root) > 1) {
     closePane(store, paneId);

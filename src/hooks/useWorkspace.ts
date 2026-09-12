@@ -33,6 +33,7 @@ import {
   type DropPoint,
 } from "../lib/windows";
 import { moveReviewFile } from "../lib/review";
+import { draftsDir, inDrafts, newDraft as makeDraft } from "../lib/drafts";
 import { notify } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
@@ -281,7 +282,11 @@ export function useWorkspace() {
   const refreshFolders = useCallback(async () => {
     store.set(A.foldersAtom, await loadFolders());
     store.set(A.recentDocsAtom, await loadDocs());
+    // 下書きの置き場は、ここで 1 度だけ求めて覚える。分かるまでは
+    // 「下書きかどうか」を判定しない（道筋を人に見せてしまわないように）。
+    store.set(A.draftsDirAtom, await draftsDir());
   }, [store]);
+
 
   const reloadFile = useCallback(
     async (path: string) => {
@@ -411,12 +416,25 @@ export function useWorkspace() {
           notify(store, "そのファイルはもうありません");
           return;
         }
+        // 下書きは履歴に載せない。まだ行き場が決まっていないものを
+        // 「最近開いたもの」として並べると、保存したかどうかが分からなくなる。
+        if (inDrafts(abs, store.get(A.draftsDirAtom))) return;
         const now = Math.floor(performance.timeOrigin + performance.now());
         void registerDoc(abs, now).then((list) => store.set(A.recentDocsAtom, list));
       });
     },
     [store, openFile],
   );
+
+  // 保存先の決まっていないメモを作って開く。
+  //
+  // 置き場が違うだけで、作ったあとは 1 枚だけ開いたファイルと同じ道を通る。
+  // 自動保存・レビュー・版はそのまま効く。
+  const newDraft = useCallback(async () => {
+    const abs = await makeDraft(Date.now());
+    openDoc(abs);
+    return abs;
+  }, [openDoc]);
 
   // ファイルを別ウィンドウで開く。タイトルはフォルダ名にして、
   // Dock メニューのウィンドウ一覧でどのフォルダか分かるようにする。
@@ -682,6 +700,7 @@ export function useWorkspace() {
     refreshFolders,
     openFolder,
     openDoc,
+    newDraft,
     refreshTree,
     refreshTreeStructure,
     reloadFile,

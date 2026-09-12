@@ -188,6 +188,12 @@ export const settingsOpenAtom = atom<boolean>(false);
 // ⌘⇧M で開くメタ情報の小窓。開いているペインの id を持つ。
 export const metaOpenAtom = atom<string | null>(null);
 
+// ---- 下書き（保存先の決まっていないメモ） ----
+// 置き場。起動時に 1 度だけ求める。分かるまでは下書きかどうかを判定しない。
+export const draftsDirAtom = atom<string | null>(null);
+// 閉じようとしている下書き。保存先を決めるか捨てるかを選ばせる小窓を出す。
+export const draftAskAtom = atom<string | null>(null);
+
 // ---- 監視状態 ----
 export const watchModeAtom = atom<"observer" | "polling" | "off">("off");
 // 画像が変更されたら増える。MdImage はこれを見て再取得する。

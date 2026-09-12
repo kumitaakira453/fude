@@ -1079,6 +1079,11 @@ button.mg-task-check:hover {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
+/* 戻せない操作。押し間違えたときの損が大きいので、色で他と分ける。 */
+.mg-small.is-drop:hover {
+  background: color-mix(in srgb, var(--mg-danger) 14%, transparent);
+  color: var(--mg-danger);
+}
 
 /* 一覧で AI の返信が来ていることを示す印。 */
 .mg-thread-answered {
@@ -4973,6 +4978,13 @@ body.mg-carrying {
 .mg-ver-save-input::placeholder {
   color: var(--mg-muted);
 }
+/* 問いの本文。何が起きるかを 1 行で言う。 */
+.mg-ver-save-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--mg-muted);
+}
 .mg-ver-save-foot {
   display: flex;
   justify-content: flex-end;
@@ -5626,6 +5638,22 @@ body.mg-carrying {
   mask-size: contain;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
+}
+
+/* ---- 下書き（保存先の決まっていないメモ） ---- */
+
+/* 道筋の代わりにヘッダーへ出す札。置き場の道筋を人に見せない。 */
+.mg-draft-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--mg-accent) 40%, var(--mg-border));
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mg-accent);
 }
 
 /* ---- メタ情報の小窓 ---- */

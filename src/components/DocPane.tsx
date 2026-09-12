@@ -19,20 +19,24 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
+import { askWhereToSave, draftTitle, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
-import { displayName } from "../lib/fsAccess";
-import { createCheckpoint } from "../lib/review";
+import { displayName, writeFile } from "../lib/fsAccess";
+import { createCheckpoint, moveReviewFile } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
 import { screenOpenAtom, syncLedger, versionScreenAtom } from "../state/review";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
+  activeFolderIdAtom,
   activePath,
   activePaneIdAtom,
   contentCacheAtom,
   editorialAtom,
   fontAtom,
+  draftAskAtom,
+  draftsDirAtom,
   liveEditAtom,
   metaOpenAtom,
   paletteOpenAtom,
@@ -47,6 +51,7 @@ import {
 } from "../state/atoms";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
+import { DraftClose } from "./DraftClose";
 import { MetaModal } from "./meta/MetaModal";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
@@ -109,6 +114,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const {
     absOf,
     navigate,
+    openDoc,
     resolveAsset,
     peekAsset,
     reloadFile,
@@ -286,6 +292,30 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [absOf, path, settled, store],
   );
 
+  const sole = useAtomValue(soleAtom);
+
+  // ---- 下書き（保存先の決まっていないメモ） ----
+  const draftsDir = useAtomValue(draftsDirAtom);
+  const isDraft = inDrafts(sole, draftsDir);
+  const [ask, setAsk] = useAtom(draftAskAtom);
+
+  // 保存先を決めて、そこへ移す。指摘と版も付いていく。
+  //
+  // 名前を変えるのではなく、書いてから消す。名前を変えると、遅れて届く
+  // 自動保存が元の道筋にもう 1 つ作ってしまう。
+  const saveDraft = useCallback(async (): Promise<boolean> => {
+    if (!sole) return false;
+    const text = settled() ?? "";
+    const dest = await askWhereToSave(draftTitle(text));
+    if (!dest) return false;
+    await writeFile(dest, text);
+    await moveReviewFile(sole, dest);
+    openDoc(dest);
+    // 開き先が変わってから消す。ここまで来れば、下書きへ書く経路はもう無い。
+    requestAnimationFrame(() => void dropDraft(sole));
+    return true;
+  }, [sole, settled, openDoc]);
+
   // 名前を決める小窓を開く。既定の名前はそのときの日時。
   const startNaming = useCallback(() => {
     if (path) setNaming(defaultName());
@@ -299,6 +329,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     openVersions(path);
   }, [openVersions, path, settled]);
 
+  // ⌘S の行き先。下書きは版を持てない（置き場がまだ決まっていない）ので、
+  // 同じキーで保存先を決めるほうへ回す。釦も同じ場所で入れ替える。
+  const onCmdS = useCallback(() => {
+    if (isDraft) {
+      void saveDraft();
+      return;
+    }
+    startNaming();
+  }, [isDraft, saveDraft, startNaming]);
+
   // ⌘S でバージョンを打つ。自動保存があるので、押して書き足すものは無い。
   //
   // 編集面の中では編集面の側の割り当てが受け取る（そちらは preventDefault まで
@@ -310,11 +350,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if (e.key !== "s" && e.key !== "S") return;
       if (inEditable(e.target)) return;
       e.preventDefault();
-      startNaming();
+      onCmdS();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isActive, overlayOpen, startNaming]);
+  }, [isActive, overlayOpen, onCmdS]);
   const exitEdit = () => {
     // 書きかけを先に流す。流れた分は自動保存が書く。
     flushRef.current?.();
@@ -755,7 +795,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 消えて「読み込んでいる」ことが分からなくなっていた（実測で 900 ブロック
   // なら 432ms、2000 ブロックなら 951ms のあいだ）。捨てた編集面へ
   // transaction を流して落ちる元でもあった。
-  const sole = useAtomValue(soleAtom);
   const [built, setBuilt] = useState<{ path: string; view: Editing } | null>(
     null,
   );
@@ -1175,12 +1214,32 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     >
       {/* ヘッダー */}
       <header className="mg-pane-head flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
-        <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
-          {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
-          <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
-        </div>
+        {isDraft ? (
+          // 置き場の道筋は人に見せない。まだ保存先が無いことだけを出す。
+          <div className="flex min-w-0 flex-1 items-center">
+            <span className="mg-draft-chip">
+              <Icon name="edit_note" size={13} />
+              下書き
+            </span>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
+            {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
+            <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
+          </div>
+        )}
         {path && (
           <>
+            {isDraft ? (
+              // 下書きは版を持てない。同じ場所に、行き先を決める釦を置く。
+              <button
+                onClick={() => void saveDraft()}
+                title="名前を付けて保存 (⌘S)"
+                className="grid h-6 w-6 place-items-center rounded text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
+              >
+                <Icon name="save" size={16} />
+              </button>
+            ) : (
             <button
               onClick={() => (naming === null ? startNaming() : setNaming(null))}
               title="バージョンを保存 (⌘S)"
@@ -1192,6 +1251,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             >
               <Icon name="save_as" size={16} />
             </button>
+            )}
             <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
               <Icon name="history" size={16} />
             </button>
@@ -1255,6 +1315,24 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         />
       )}
 
+      {ask !== null && ask === sole && (
+        <DraftClose
+          title={draftTitle(settled() ?? "")}
+          onSave={() => {
+            setAsk(null);
+            void saveDraft();
+          }}
+          onDrop={() => {
+            setAsk(null);
+            const at = sole;
+            store.set(soleAtom, null);
+            store.set(activeFolderIdAtom, null);
+            if (at) void dropDraft(at);
+          }}
+          onClose={() => setAsk(null)}
+        />
+      )}
+
       {naming !== null && (
         <SaveVersion
           initial={naming}
@@ -1313,7 +1391,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 setDraft(next);
                 if (path) autoSave(path, next);
               }}
-              onSave={startNaming}
+              onSave={onCmdS}
               flushRef={flushRef}
               adoptRef={adoptRef}
               fontFamily={fontStack(font)}

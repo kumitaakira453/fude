@@ -1,6 +1,7 @@
 import { useStore } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
+import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "../state/review";
 
@@ -22,6 +23,10 @@ function selectionText(): string {
 
 export function useHotkeys() {
   const store = useStore();
+  // 新しいメモを作る口。効果の依存を増やさないよう控えから呼ぶ。
+  const { newDraft } = useWorkspace();
+  const draft = useRef(newDraft);
+  draft.current = newDraft;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -86,6 +91,10 @@ export function useHotkeys() {
       } else if (mod && e.shiftKey && (e.key === "t" || e.key === "T")) {
         e.preventDefault();
         reopenTab(store);
+      } else if (mod && !e.shiftKey && (e.key === "n" || e.key === "N")) {
+        // ⌘N: 保存先の決まっていないメモを作って開く。
+        e.preventDefault();
+        void draft.current();
       } else if (mod && e.shiftKey && (e.key === "m" || e.key === "M")) {
         // ⌘⇧M: メタ情報の小窓。活きているペインの分だけ開け閉めする。
         e.preventDefault();

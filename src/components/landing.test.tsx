@@ -11,6 +11,7 @@ import { Landing } from "./Landing";
 // 新しい順に出ること・押すと開くこと・消えたものを引きずらないことを見る。
 
 const opened: string[] = [];
+const made: string[] = [];
 const entered: string[] = [];
 let picked: string | null = null;
 
@@ -23,8 +24,18 @@ vi.mock("../hooks/useWorkspace", () => ({
     openDoc: (abs: string) => {
       opened.push(abs);
     },
+    newDraft: async () => {
+      made.push("draft");
+      return "/drafts/新しい.md";
+    },
   }),
 }));
+
+// 置き場の走査はアプリの持ち物を触るので、試験では何も無いことにする。
+vi.mock("../lib/drafts", async (real) => {
+  const mod = await real<typeof import("../lib/drafts")>();
+  return { ...mod, leftoverDrafts: async () => [] };
+});
 
 vi.mock("../lib/fsAccess", async (real) => {
   const mod = await real<typeof import("../lib/fsAccess")>();
@@ -72,6 +83,7 @@ function show(docs: DocEntry[], folders: FolderEntry[] = []) {
 beforeEach(() => {
   opened.length = 0;
   entered.length = 0;
+  made.length = 0;
   picked = null;
 });
 
@@ -149,11 +161,18 @@ describe("最近", () => {
 });
 
 describe("開く口", () => {
-  it("札は 2 枚。フォルダとファイル", () => {
+  it("札は 3 枚。フォルダとファイルと新しいメモ", () => {
     const at = show([]);
-    expect(cards(at).length).toBe(2);
+    expect(cards(at).length).toBe(3);
     expect(card(at, "フォルダを開く")).toBeTruthy();
     expect(card(at, "ファイルを開く")).toBeTruthy();
+    expect(card(at, "新しいメモ")).toBeTruthy();
+  });
+
+  it("新しいメモを押すと下書きを作る", () => {
+    const at = show([]);
+    click(card(at, "新しいメモ"));
+    expect(made).toEqual(["draft"]);
   });
 
   it("選んだ 1 枚を開く", async () => {

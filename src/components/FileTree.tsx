@@ -26,6 +26,7 @@ import {
   treeFilterAtom,
   isShownAtom,
 } from "../state/atoms";
+import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
 
@@ -128,6 +129,10 @@ const TreeItem = memo(function TreeItem({
 }) {
   // 自分が出ているかだけを購読する。ペインを購読すると全行が起きる。
   const active = useAtomValue(isShownAtom(node.path));
+  // 下書きは置き場で採った機械的な名前を持っているので、中身から採り直す。
+  // フォルダを開いているあいだは空のままなので、行が起きることはない。
+  const draftRel = useAtomValue(draftRelAtom);
+  const draftName = useAtomValue(draftNameAtom);
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
   const basePad = depth * 14 + 8;
 
@@ -294,7 +299,9 @@ const TreeItem = memo(function TreeItem({
       {active && <span className="mg-tree-rail" />}
       <span className="w-[18px] shrink-0" />
       <Icon name="markdown" size={16} fill={active} className="mg-tree-ico shrink-0" />
-      <span className="truncate">{displayName(node.name)}</span>
+      <span className="truncate">
+        {node.path === draftRel ? draftName : displayName(node.name)}
+      </span>
       {reviewCount > 0 && (
         <span
           title={`未解決のコメント ${reviewCount} 件`}

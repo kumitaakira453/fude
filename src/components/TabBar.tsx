@@ -19,6 +19,7 @@ import {
   revealInTree,
 } from "../lib/ui";
 import { type LeafNode, treeAtom } from "../state/atoms";
+import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
 
@@ -29,6 +30,13 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   const store = useStore();
   const { openInNewWindow, getRootPath } = useWorkspace();
   const tree = useAtomValue(treeAtom);
+  const draftRel = useAtomValue(draftRelAtom);
+  const draftName = useAtomValue(draftNameAtom);
+
+  // タブに出す名前。下書きは置き場で採った機械的な名前を持っているので、
+  // 書いた中身から採り直す。
+  const label = (path: string): string =>
+    path === draftRel ? draftName : displayName(path);
   // ドロップで差し込む位置。null なら受け付けていない。
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [menu, setMenu] = useState<EntryMenuState | null>(null);
@@ -102,7 +110,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               onDragStart={(e) => {
                 setDragPayload(e.dataTransfer, { path, from: { paneId: pane.id, index: i } });
                 e.dataTransfer.effectAllowed = "move";
-                setDragChip(e.dataTransfer, displayName(path));
+                setDragChip(e.dataTransfer, label(path));
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -150,7 +158,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                 }}
                 className="select-none truncate py-1.5"
               >
-                {displayName(path)}
+                {label(path)}
               </button>
               {/* 閉じるボタンは常に出す。ホバーで現れる作りだと、閉じられる
                   ことに気付けないうえ、狙って触るまで的が見えない。
