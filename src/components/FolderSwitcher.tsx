@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { activeFolderIdAtom, foldersAtom, soleAtom } from "../state/atoms";
+import { draftNameAtom } from "../state/drafts";
 import { displayName, pickDirectory, pickMarkdownFile } from "../lib/fsAccess";
 import { folderDisplayName, removeFolder, renameFolder } from "../lib/idb";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -12,6 +13,8 @@ export function FolderSwitcher() {
   const setFolders = useSetAtom(foldersAtom);
   const activeId = useAtomValue(activeFolderIdAtom);
   const sole = useAtomValue(soleAtom);
+  // 下書きは置き場も名前も人に見せるものではない。中身から採った名前を出す。
+  const draftName = useAtomValue(draftNameAtom);
   const { openFolder, openDoc, openFolderInNewWindow, refreshFolders } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -85,32 +88,41 @@ export function FolderSwitcher() {
         className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
       >
         <Icon
-          name={sole ? "description" : "folder"}
+          name={draftName ? "edit_note" : sole ? "description" : "folder"}
           size={18}
-          fill
+          fill={!draftName}
           className="text-[var(--mg-accent2)]"
         />
         <span
           className="truncate text-[13px] font-semibold text-[var(--mg-fg)]"
-          title={sole ?? undefined}
+          title={draftName ? undefined : (sole ?? undefined)}
         >
-          {sole ? displayName(sole) : active ? folderDisplayName(active) : "フォルダ"}
+          {draftName ||
+            (sole ? displayName(sole) : active ? folderDisplayName(active) : "フォルダ")}
         </span>
         <Icon name="unfold_more" size={17} className="ml-auto text-[var(--mg-muted)]" />
       </button>
       {open && (
         <div className="absolute left-0 top-full z-40 mt-1 w-72 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
-          {sole && (
+          {draftName ? (
+            // 下書きの置き場はアプリの持ち物なので、フォルダとして開かせない。
             <div className="mb-1 flex items-center gap-1.5 rounded-lg bg-[var(--mg-accent-soft)] px-2 py-1.5 text-[12px] text-[var(--mg-muted)]">
-              <Icon name="description" size={15} className="shrink-0" />
-              <span className="truncate">1 枚だけ開いています</span>
-              <button
-                onClick={openHome}
-                className="ml-auto shrink-0 font-medium text-[var(--mg-accent)] transition hover:opacity-80"
-              >
-                このフォルダを開く
-              </button>
+              <Icon name="edit_note" size={15} className="shrink-0" />
+              <span className="truncate">保存先はまだ決まっていません</span>
             </div>
+          ) : (
+            sole && (
+              <div className="mb-1 flex items-center gap-1.5 rounded-lg bg-[var(--mg-accent-soft)] px-2 py-1.5 text-[12px] text-[var(--mg-muted)]">
+                <Icon name="description" size={15} className="shrink-0" />
+                <span className="truncate">1 枚だけ開いています</span>
+                <button
+                  onClick={openHome}
+                  className="ml-auto shrink-0 font-medium text-[var(--mg-accent)] transition hover:opacity-80"
+                >
+                  このフォルダを開く
+                </button>
+              </div>
+            )
           )}
           <div className="mb-1 px-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
             登録フォルダ

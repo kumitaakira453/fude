@@ -19,7 +19,13 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
-import { askWhereToSave, draftTitle, dropDraft, inDrafts } from "../lib/drafts";
+import {
+  askWhereToSave,
+  draftLabel,
+  draftTitle,
+  dropDraft,
+  inDrafts,
+} from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { displayName, writeFile } from "../lib/fsAccess";
 import { createCheckpoint, moveReviewFile } from "../lib/review";
@@ -1307,7 +1313,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {metaOpen && path && (
         <MetaModal
           key={path}
-          name={displayName(path)}
+          name={isDraft ? draftLabel(settled() ?? "") : displayName(path)}
           fm={fmPrefix}
           broken={broken}
           onChange={saveFm}
