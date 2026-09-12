@@ -164,14 +164,24 @@ export function ReviewScreen() {
   // 本文を読めないので、どこへの指摘かを示せず、返信も解決も当て推量になる。
   // 数だけは伝える（消えたのではなく、そのフォルダを開けば出ると分かるように）。
   const all = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
-  const threads = useMemo(
+  const inFolder = useMemo(
     () =>
       root === null
         ? all
         : all.filter((t) => relativeTo(root, t.file) !== null),
     [all, root],
   );
-  const elsewhere = all.length - threads.length;
+  const elsewhere = all.length - inFolder.length;
+  // 解決にすると押した瞬間から一覧に出さない。台帳への書き込みと読み直しは
+  // 背後で進むので、それを待ってから消すと、押しても何も起きない間ができる。
+  // しくじったら戻す（台帳が変わらなければ、下げていた分がそのまま戻る）。
+  const [going, setGoing] = useState<ReadonlySet<string>>(() => new Set());
+  const goingRef = useRef(going);
+  goingRef.current = going;
+  const threads = useMemo(
+    () => (going.size === 0 ? inFolder : inFolder.filter((t) => !going.has(t.id))),
+    [inFolder, going],
+  );
   // 解決の処理の中で「次の指摘」を引くための控え。押した瞬間の並びを見る。
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -263,17 +273,17 @@ export function ReviewScreen() {
   //
   // 解決にすると一覧から消えるので、それを見ていたときだけ次の指摘へ送る
   // （一覧の別の札から解決したときは、見ているものを動かさない）。
-  const oneRunning = useRef(false);
   const resolveOne = useCallback(
     async (id: string) => {
-      if (oneRunning.current) return;
-      oneRunning.current = true;
+      if (goingRef.current.has(id)) return;
+      const list = threadsRef.current;
+      const i = list.findIndex((t) => t.id === id);
+      const next = list[i + 1]?.id ?? list[i - 1]?.id ?? null;
+      // 先に下げて、見ていた指摘なら次へ送る。ここまでは押した一枚で終わる。
+      setGoing((prev) => new Set(prev).add(id));
+      if (store.get(reviewThreadAtom) === id) setSelectedId(next);
       try {
-        const list = threadsRef.current;
-        const i = list.findIndex((t) => t.id === id);
-        const next = list[i + 1]?.id ?? list[i - 1]?.id ?? null;
         if (!(await resolveThread(id, REVIEW_AUTHOR))) return;
-        if (store.get(reviewThreadAtom) === id) setSelectedId(next);
         await syncLedger(store);
         const restore = async () => {
           setReviewUndo(null);
@@ -288,7 +298,11 @@ export function ReviewScreen() {
           run: () => void restore(),
         });
       } finally {
-        oneRunning.current = false;
+        setGoing((prev) => {
+          const rest = new Set(prev);
+          rest.delete(id);
+          return rest;
+        });
       }
     },
     [setSelectedId, store],
@@ -613,7 +627,7 @@ export function ThreadCard({
             onResolve();
           }}
         >
-          <Icon name="check" size={12} />
+          <Icon name="check" size={13} />
         </button>
       </div>
     </div>

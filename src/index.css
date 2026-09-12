@@ -3442,16 +3442,20 @@ svg[id^="mmd-"] foreignObject p {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 0.3rem;
-  color: var(--mg-muted);
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 0.35rem;
+  /* 薄い字だけだと、出ていることにも押せることにも気づけない。片付ける操作
+     なので、地を敷いてアクセントの色で置く（出るのは指した札だけ）。 */
+  color: var(--mg-accent);
+  background: var(--mg-accent-soft);
   opacity: 0;
   pointer-events: none;
   transition:
     opacity 0.12s,
     background 0.12s,
-    color 0.12s;
+    color 0.12s,
+    transform 0.08s;
 }
 .mg-thread-card:hover .mg-thread-done,
 .mg-thread-done:focus-visible {
@@ -3459,8 +3463,19 @@ svg[id^="mmd-"] foreignObject p {
   pointer-events: auto;
 }
 .mg-thread-done:hover {
-  color: var(--mg-accent);
-  background: var(--mg-hover);
+  background: color-mix(in srgb, var(--mg-accent) 24%, transparent);
+}
+/* 押した手応え。押してから一覧が動くまでの間を、指の側で埋める。 */
+.mg-thread-done:active {
+  transform: scale(0.88);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-thread-done {
+    transition: opacity 0.12s;
+  }
+  .mg-thread-done:active {
+    transform: none;
+  }
 }
 /* 選ばれている札は面を塗らない。塗ると、ファイルの見出しの面と 2 つの色面が
    同じ列に並び、どちらが何の意味なのか読めなくなる。印は左の棒と字の太さで
