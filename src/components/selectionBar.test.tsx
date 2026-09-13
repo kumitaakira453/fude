@@ -19,6 +19,14 @@ import { SelectionBar } from "./SelectionBar";
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  // jsdom には大きさの見張りが無い。帯は自分の箱を測って置き場所を決める。
+  if (!globalThis.ResizeObserver) {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
   const noRects = () => [] as unknown as DOMRectList;
   const noRect = () =>
     ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }) as DOMRect;

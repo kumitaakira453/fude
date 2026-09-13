@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { placeNear } from "../../lib/floatAt";
 import { Icon } from "../Icon";
 
 // 字を選んだときに出る操作。コメントはどの画面でも出し、その画面だけの操作は
@@ -12,13 +13,36 @@ export function SelectionMenu({
   onComment,
   children,
 }: {
-  // 選んだ範囲の矩形。メニューはこのすぐ下に出す。
-  at: { bottom: number; left: number };
+  // 選んだ範囲の矩形。メニューはこのすぐ下に出す（下に入らなければ上）。
+  at: { top?: number; bottom: number; left: number };
   onComment: () => void;
   children?: ReactNode;
 }) {
+  const panel = useRef<HTMLDivElement>(null);
+  // 測る前の 1 枚は下に置く（多くの場合そこで足りる）。
+  const [place, setPlace] = useState({ top: at.bottom + 6, left: at.left });
+  const { top = at.bottom, bottom, left } = at;
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!el) return;
+    const fit = () => {
+      const size = el.getBoundingClientRect();
+      setPlace(
+        placeNear(
+          { top, bottom, left },
+          size,
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    };
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [top, bottom, left]);
+
   return (
-    <div style={{ top: at.bottom + 6, left: at.left }} className="mg-sel-menu">
+    <div ref={panel} style={{ top: place.top, left: place.left }} className="mg-sel-menu">
       <button
         type="button"
         onMouseDown={(e) => {

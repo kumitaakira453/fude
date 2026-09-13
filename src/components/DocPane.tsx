@@ -902,6 +902,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     to: number;
     rect: { top: number; bottom: number; left: number };
   } | null>(null);
+  // 本文を送った合図。帯はこれが動いたときだけ置き場所を取り直す（装飾を
+  // 付けて字幅が変わった分では動かさない）。
+  const [scrolled, setScrolled] = useState(0);
 
   useEffect(() => {
     if (!pm) {
@@ -945,15 +948,31 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if (e.metaKey || e.ctrlKey) return;
       setEditSel(null);
     };
+    // 本文を送ったら測り直す。帯は画面の座標で置くので、送った分だけ選んだ
+    // ところと離れる。1 枚に 1 回へまとめる。
+    let soon = 0;
+    const onMove = () => {
+      if (soon) return;
+      soon = requestAnimationFrame(() => {
+        soon = 0;
+        read();
+        setScrolled((n) => n + 1);
+      });
+    };
     view.dom.addEventListener("mouseup", onUp);
     view.dom.addEventListener("keyup", onUp);
     window.addEventListener("mousedown", onDown);
     view.dom.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
     return () => {
+      cancelAnimationFrame(soon);
       view.dom.removeEventListener("mouseup", onUp);
       view.dom.removeEventListener("keyup", onUp);
       window.removeEventListener("mousedown", onDown);
       view.dom.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
     };
   }, [pm]);
 
@@ -1549,6 +1568,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             at={editSel.rect}
             span={{ from: editSel.from, to: editSel.to }}
             linkNonce={linkNonce}
+            pin={scrolled}
             onComment={commentOnSpan}
           />
         )}

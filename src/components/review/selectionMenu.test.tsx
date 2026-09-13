@@ -10,6 +10,14 @@ import { SelectionAct, SelectionMenu } from "./SelectionMenu";
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  // jsdom には大きさの見張りが無い。帯は自分の箱を測って置き場所を決める。
+  if (!globalThis.ResizeObserver) {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
 });
 
 let root: Root | null = null;
@@ -51,7 +59,7 @@ describe("選択メニュー", () => {
   it("選んだ範囲のすぐ下に出す", () => {
     const at = show(<SelectionMenu at={{ bottom: 100, left: 20 }} onComment={() => {}} />);
     const menu = at.querySelector<HTMLElement>(".mg-sel-menu")!;
-    expect(menu.style.top).toBe("106px");
+    expect(menu.style.top).toBe("108px");
     expect(menu.style.left).toBe("20px");
   });
 

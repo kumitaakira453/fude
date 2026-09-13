@@ -1,6 +1,7 @@
 import type { MarkType } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
-import { useEffect, useRef, useState } from "react";
+import { placeNear } from "../lib/floatAt";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   blockKindOf,
   clearLink,
@@ -70,6 +71,7 @@ export function SelectionBar({
   at,
   span,
   linkNonce,
+  pin = 0,
   onComment,
 }: {
   view: EditorView;
@@ -79,6 +81,8 @@ export function SelectionBar({
   span: { from: number; to: number };
   // ⌘K が押された合図。増えたらリンクの入力を開く。
   linkNonce: number;
+  // 本文を送った合図。増えたら置き場所を取り直す。
+  pin?: number;
   onComment: () => void;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -97,20 +101,44 @@ export function SelectionBar({
   // 出す場所は、選んでいるところが変わるまで動かさない。
   //
   // 装飾を付けると字幅が変わって選択の矩形も動く。そのたびに帯が跳ねると、
-  // 続けて別のボタンを押せない。
+  // 続けて別のボタンを押せない。本文を送った分（pin）は通す。送った先へ
+  // 付いていかないと、選んだところと離れて見える。
   const spot = useRef(at);
-  const held = useRef(`${span.from},${span.to}`);
-  const now = `${span.from},${span.to}`;
+  const held = useRef(`${span.from},${span.to},${pin}`);
+  const now = `${span.from},${span.to},${pin}`;
   if (held.current !== now) {
     held.current = now;
     spot.current = at;
   }
   const box = spot.current;
 
+
   // 押した分をその場で見た目へ返す。編集モデルの選択は transaction のたびに
   // 変わるので、描き直しの合図として控えを持つ。
   const [seq, setSeq] = useState(0);
   const bump = () => setSeq((n) => n + 1);
+
+  // 自分の大きさを測って、入る側へ置く。下に余地が無ければ上へ回す。
+  // 測る前の 1 枚は下に置く（多くの場合そこで足りる）。
+  const [place, setPlace] = useState<{ top: number; left: number }>({
+    top: box.bottom + 8,
+    left: box.left,
+  });
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!el) return;
+    const fit = () => {
+      const size = el.getBoundingClientRect();
+      setPlace(
+        placeNear(box, size, { width: window.innerWidth, height: window.innerHeight }),
+      );
+    };
+    fit();
+    // 中身は開閉で高さが変わる（リンクの入力・ブロックの一覧）。
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [box, seq, menu, asking]);
 
   const run =
     (
@@ -194,7 +222,7 @@ export function SelectionBar({
     <>
       <div
         ref={panel}
-        style={{ top: box.bottom + 8, left: box.left }}
+        style={{ top: place.top, left: place.left }}
         className="mg-sel-menu mg-sel-bar"
       >
         {!cell && (
