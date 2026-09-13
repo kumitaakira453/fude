@@ -822,6 +822,23 @@ const pasteMarkdown = new Plugin({
   },
 });
 
+// 変換の最中に流れてくる打鍵は、実際に押されたものではない。
+//
+// prosemirror-view は本文と DOM の差分を読んで「これは Enter を押した形だ」と
+// 見たとき、Enter の手を流し直す（readDOMChange）。WebKit は変換を確定する
+// とき、変換中の字をいったん消してから確定した字を入れ直すので、その「消す」
+// 側の差分がちょうど Enter の形に見える。流し直された Enter は項目を割り、
+// IME が抱えている変換中の字を本文から外してしまう。外れた字は確定のときに
+// もう一度入るので、同じ文が二重に残る。
+//
+// 実際の打鍵は変換中には届かない（prosemirror-view が先に捨てる）。ここで
+// 止めるのは差分から作られた分だけで、止めれば本文は差分どおりに直る。
+const awake = (cmd: Command): Command => (state, dispatch, view) =>
+  view?.composing ? false : cmd(state, dispatch, view);
+
+const awakeKeys = (map: Record<string, Command>): Record<string, Command> =>
+  Object.fromEntries(Object.entries(map).map(([key, cmd]) => [key, awake(cmd)]));
+
 export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
   const item = schema.nodes.listItem;
   const typed = inputRules({ rules });
@@ -838,7 +855,8 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     emojiMenu,
     mathEditing,
     editingMark,
-    keymap({
+    keymap(
+      awakeKeys({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
       // 項目の先頭では飾りを外し、装飾の末尾で消したときは打ち直しが同じ
@@ -884,8 +902,9 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       // コードの塊の中は字下げ。表の中では隣のセルへ。それ以外は箇条書きの字下げ。
       Tab: chainCommands(indentCode, goToNextCell(1), sinkListItem(item)),
       "Shift-Tab": chainCommands(outdentCode, goToNextCell(-1), liftListItem(item)),
-    }),
-    keymap(baseKeymap),
+      }),
+    ),
+    keymap(awakeKeys(baseKeymap)),
     // 打った字が継ぐ装飾の直し。入力変換より後に置き、規則が控えを触ったあとの
     // 組み合わせを見る。
     keepNesting,
