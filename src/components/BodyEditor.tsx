@@ -109,8 +109,9 @@ export interface Editing {
 // 標準へ戻す。
 
 // 棒をどこに置くか。"native" は棒が要るのに測れないので標準のカーソルへ
-// 戻す合図、null は棒が要らない（範囲を選んでいる・焦点が無い）。
-type Spot = { left: number; top: number; height: number } | "native" | null;
+// 戻す合図、"keep" は今のままにする合図、null は棒が要らない（範囲を選んで
+// いる・焦点が無い）。
+type Spot = { left: number; top: number; height: number } | "native" | "keep" | null;
 
 function caretBar(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
@@ -166,7 +167,11 @@ function caretBar(view: EditorView, host: HTMLElement) {
     } catch {
       at = null;
     }
-    if (!at) return "native";
+    // 変換中に測れないことがある。ここで標準のカーソルへ戻すと、継ぐ指定
+    // （caret-color）の書き換えで本文まるごとのスタイル再計算が走る（1000 塊で
+    // 実測 16.8ms）。日本語を打っているあいだ何度も走るので、変換中は直前の
+    // 場所を保つ。
+    if (!at) return view.composing ? "keep" : "native";
     const box = host.getBoundingClientRect();
     return {
       left: at.left - box.left,
@@ -176,6 +181,7 @@ function caretBar(view: EditorView, host: HTMLElement) {
   };
 
   const apply = (spot: Spot) => {
+    if (spot === "keep") return;
     if (spot === null || spot === "native") {
       hide();
       standard(spot === "native");
