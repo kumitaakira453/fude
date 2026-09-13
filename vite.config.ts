@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -6,6 +7,16 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
+  resolve: {
+    alias: {
+      // remark / micromark は devlop の「開発用」を引くと、内部の前提が崩れた
+      // ところで例外を投げる。人の書いた Markdown でも崩れることがあり
+      // （空の項目の次の行が "[ ] " で始まると、タスクの印の親が listItem に
+      // ならない）、読み手のアプリがそれで落ちるのは筋が違う。本番と同じ
+      // 「何もしない」方を dev でも引く。
+      devlop: fileURLToPath(new URL("./node_modules/devlop/lib/default.js", import.meta.url)),
+    },
+  },
   server: {
     port: 5273,
     strictPort: true,
