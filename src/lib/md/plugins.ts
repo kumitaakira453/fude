@@ -228,6 +228,53 @@ export const dropEmptyBack: Command = (state, dispatch) => {
   return true;
 };
 
+// 並びの中で、いちばん後ろにある字の塊の末尾。入れ子があればその奥まで見る。
+function lastTextEnd(list: PmNode, listStart: number): number | null {
+  let end: number | null = null;
+  list.descendants((node, pos) => {
+    if (node.isTextblock) end = listStart + 1 + pos + 1 + node.content.size;
+    return true;
+  });
+  return end;
+}
+
+// 箇条書きの直後にある、中身のある行の先頭で Backspace。前の項目の末尾へ継ぐ。
+//
+// 項目の先頭で押すと、まず飾りが外れてその場に段落が残る（unlistBack）。
+// もう一度押したときの行き先がここ。素の joinBackward は段落を項目として
+// 並びへ差し戻すだけなので、押すたびに外れる・戻るを往復して、前の行の末尾に
+// つなぐ道がどこにも無かった。
+//
+// 継いだあとは、割れていた並びを一つに戻す（joinLists）。原文に空行が残ると、
+// 開き直したときだけ一つに見えるという食い違いになる。
+export const joinItemBack: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
+  // 空の行は消す番（dropEmptyBack）に譲る。
+  if ($from.parent.content.size === 0) return false;
+  if ($from.depth < 1) return false;
+
+  const depth = $from.depth - 1;
+  const index = $from.index(depth);
+  if (index === 0) return false;
+  const before = $from.node(depth).child(index - 1);
+  if (!LISTS.has(before.type)) return false;
+
+  const from = $from.before();
+  const at = lastTextEnd(before, from - before.nodeSize);
+  if (at === null) return false;
+
+  if (dispatch) {
+    const block = $from.parent;
+    const tr = state.tr.delete(from, $from.after());
+    // 継ぎ先は消したところより前なので、位置はずれない。
+    tr.insert(at, block.content);
+    joinLists(tr, tr.mapping.map(from));
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, at)).scrollIntoView());
+  }
+  return true;
+};
+
 // ---- トグルの中の行き来 ----
 //
 // トグルは「題」と「中身」の 2 段でできている。どちらも本文の節点なので、
@@ -805,6 +852,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
         toDetailsHead,
         outOfDetailsBack,
         dropEmptyBack,
+        joinItemBack,
         outdentBack,
         keepOutOfHolder,
       ),
