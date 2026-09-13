@@ -19,7 +19,7 @@ import type { EditorView } from "prosemirror-view";
 import { icon } from "./nodeViews";
 import { openEmojiBoard } from "./emoji";
 import { openMath } from "./math";
-import { schema } from "./schema";
+import { DETAILS_HEAD, schema } from "./schema";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
 //
@@ -208,7 +208,11 @@ const toToggle: Command = (state, dispatch) => {
     );
     const body = schema.nodes.paragraph.create(null, heading ? undefined : block.content);
     const at = $from.before();
-    const tr = state.tr.replaceRangeWith(at, $from.after(), details.create(null, [title, body]));
+    const tr = state.tr.replaceRangeWith(
+      at,
+      $from.after(),
+      details.create({ head: DETAILS_HEAD }, [title, body]),
+    );
     // 字を選んで変えたときは、選んだところをそのまま選んだままにする
     // （囲みと題のぶんだけ位置が内側へずれる）。それ以外は、見出しなら中身から、
     // 素のトグルなら題から書き始める。

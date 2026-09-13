@@ -1383,7 +1383,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         ) : writing && path ? (
           <div
             ref={setEditScroller}
-            className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 py-8 sm:px-16"
+            className="mg-tail relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 pt-8 sm:px-16"
           >
             {/* 組み上がるまで骨組みを被せる。
                 編集面を組むのは React の効果の中で、それが走るのは骨組みを
@@ -1446,7 +1446,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
             >
               {path ? (
-                <div className="px-10 py-8 sm:px-16">
+                <div className="mg-tail px-10 pt-8 sm:px-16">
                   <article
                     ref={setContent}
                     style={{ fontFamily: fontStack(font) }}

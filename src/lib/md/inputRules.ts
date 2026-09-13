@@ -5,7 +5,7 @@ import {
 } from "prosemirror-inputrules";
 import type { MarkType } from "prosemirror-model";
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
-import { schema } from "./schema";
+import { DETAILS_HEAD, schema } from "./schema";
 
 // 打った記号から構造を作る。
 //
@@ -118,7 +118,7 @@ function toToggle(state: EditorState, start: number, end: number): Transaction |
   const at = $from.before();
   const title = schema.nodes.detailsSummary.create();
   const body = schema.nodes.paragraph.create(null, $from.parent.content);
-  tr.replaceRangeWith(at, $from.after(), details.create(null, [title, body]));
+  tr.replaceRangeWith(at, $from.after(), details.create({ head: DETAILS_HEAD }, [title, body]));
   // 題から書き始める。
   return tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1), 1));
 }

@@ -289,7 +289,7 @@ const CASES: { id: string; query: string; want: string }[] = [
     id: "toggle",
     query: "toggle",
     // 題から書き始める（打った字が題に入り、中身は空のまま）
-    want: "あ\n\n<details>\n<summary>い</summary>\n\n</details>\n",
+    want: "あ\n\n<details open>\n<summary>い</summary>\n\n</details>\n",
   },
   { id: "quote", query: "quote", want: "あ\n\n> い\n" },
   { id: "code", query: "codeblock", want: "あ\n\n```\nい\n```\n" },
@@ -382,7 +382,7 @@ describe("テーブル", () => {
 describe("トグルの見出し", () => {
   it("打ち直したぶんが開きタグへ戻る", () => {
     const head = withSummary(DETAILS_HEAD, "決め方");
-    expect(head).toBe("<details>\n<summary>決め方</summary>");
+    expect(head).toBe("<details open>\n<summary>決め方</summary>");
     expect(summaryOf(head)).toBe("決め方");
   });
 
@@ -398,12 +398,12 @@ describe("トグルの見出し", () => {
 
   it("見出しトグルは、見出しのタグごと持って打ち直せる", () => {
     const head = headingHead(2, "決め方");
-    expect(head).toBe("<details>\n<summary><h2>決め方</h2></summary>");
+    expect(head).toBe("<details open>\n<summary><h2>決め方</h2></summary>");
     expect(summaryOf(head)).toBe("決め方");
     expect(headLevelOf(head)).toBe(2);
     // 打ち直しても見出しのままでいる
     expect(withSummary(head, "決め直し")).toBe(
-      "<details>\n<summary><h2>決め直し</h2></summary>",
+      "<details open>\n<summary><h2>決め直し</h2></summary>",
     );
   });
 
@@ -425,7 +425,7 @@ describe("トグル要素", () => {
     // カーソルは題の中
     expect(view.state.selection.$from.parent.type.name).toBe("detailsSummary");
     type(view, "題");
-    expect(source()).toBe("<details>\n<summary>題</summary>\n\nRegagaga\n\n</details>\n");
+    expect(source()).toBe("<details open>\n<summary>題</summary>\n\nRegagaga\n\n</details>\n");
   });
 
   it("見出しの上で使うと、その見出しが題になる", () => {
@@ -440,33 +440,33 @@ describe("トグル要素", () => {
     // 中身は空から書き始める
     expect(node.child(1).textContent).toBe("");
     expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
-    expect(source()).toBe("<details>\n<summary><h2>決め方</h2></summary>\n\n</details>\n");
+    expect(source()).toBe("<details open>\n<summary><h2>決め方</h2></summary>\n\n</details>\n");
   });
 
   it("題に打った字は <summary> に入る", () => {
-    const view = editor("<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
+    const view = editor("<details open>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
     // 文字塊の 1 つ目は題
     caretAtEndOf(view, 0);
     expect(view.state.selection.$from.parent.type.name).toBe("detailsSummary");
     type(view, "！");
     expect(source()).toBe(
-      "<details>\n<summary>トグル！</summary>\n\n中の本文\n\n</details>\n",
+      "<details open>\n<summary>トグル！</summary>\n\n中の本文\n\n</details>\n",
     );
   });
 
   it("題で `## ` と打つと見出しトグルになる", () => {
-    const view = editor("<details>\n<summary></summary>\n\n中の本文\n\n</details>\n");
+    const view = editor("<details open>\n<summary></summary>\n\n中の本文\n\n</details>\n");
     caretAtEndOf(view, 0);
     type(view, "## ");
     type(view, "決め方");
     expect(view.state.doc.child(0).child(0).attrs.level).toBe(2);
     expect(source()).toBe(
-      "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n",
+      "<details open>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n",
     );
   });
 
   it("開いた題で Enter を押すと、中身の先頭に行ができてそこへ入る", () => {
-    const view = editor("<details>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
+    const view = editor("<details open>\n<summary>トグル</summary>\n\n中の本文\n\n</details>\n");
     caretAtEndOf(view, 0);
     press(view, "Enter");
     expect(view.state.selection.$from.parent.textContent).toBe("");
@@ -477,7 +477,7 @@ describe("トグル要素", () => {
   });
 
   it("中身の先頭が空の行なら、足さずにそこへ入る", () => {
-    const view = editor("<details>\n<summary>トグル</summary>\n\n\n</details>\n");
+    const view = editor("<details open>\n<summary>トグル</summary>\n\n\n</details>\n");
     caretAtEndOf(view, 0);
     press(view, "Enter");
     expect(view.state.doc.child(0).childCount).toBe(2);
@@ -486,18 +486,18 @@ describe("トグル要素", () => {
 
   it("見出しトグルの題の頭で Backspace を押すと素のトグルへ戻る", () => {
     const view = editor(
-      "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n",
+      "<details open>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n",
     );
     caretAtStartOf(view, 0);
     press(view, "Backspace");
     expect(view.state.doc.child(0).child(0).attrs.level).toBeNull();
     expect(source()).toBe(
-      "<details>\n<summary>決め方</summary>\n\n中の本文\n\n</details>\n",
+      "<details open>\n<summary>決め方</summary>\n\n中の本文\n\n</details>\n",
     );
   });
 
   it("見出しトグルは読み書きしても動かない", () => {
-    const src = "<details>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n";
+    const src = "<details open>\n<summary><h2>決め方</h2></summary>\n\n中の本文\n\n</details>\n";
     const loaded = fromMarkdown(src);
     expect(toMarkdown(loaded.doc, loaded)).toBe(src);
     expect(loaded.doc.child(0).child(0).attrs.level).toBe(2);

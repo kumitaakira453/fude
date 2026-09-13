@@ -37,11 +37,13 @@ export const headLevelOf = (head: string): number | null => {
 
 // 新しく作るトグルの開きタグ。書き戻しは開き・中身・閉じの間を 1 行空けるので、
 // この形のまま読み直せる。
-export const DETAILS_HEAD = "<details>";
+//
+// 作った直後は開いておく。畳まれた状態で出ると、これから書く中身が見えない。
+export const DETAILS_HEAD = "<details open>";
 
 // 見出しをトグルの頭にした形。原文は生 HTML なので、見出しもタグで書く。
 export const headingHead = (level: number, text: string): string =>
-  `<details>\n<summary><h${level}>${text}</h${level}></summary>`;
+  `<details open>\n<summary><h${level}>${text}</h${level}></summary>`;
 
 // 打ち直した見出しを、開きタグの <summary> の中身へ差し戻す。開きタグの属性や
 // 前後の行は原文のまま残し、見出しトグルなら見出しのタグも残す。
