@@ -678,6 +678,16 @@ button.mg-task-check {
 button.mg-task-check:hover {
   color: color-mix(in srgb, var(--mg-accent) 70%, var(--mg-fg));
 }
+/* 済みにした項目は字を薄くして線を引く。まだの分がひと目で拾える。
+   相手はその項目の字だけ。入れ子の並びは外に置く（読むときは .mg-task-line の
+   外、編集面は .mg-task-body の中の並び）。子は子で済み・未済を持つので、
+   親に引きずられると読み違える。 */
+.mg-prose li.task-list-item[data-checked="true"] > .mg-task-line,
+.mg-pm li.task-list-item[data-checked="true"] > .mg-task-body > :not(ul, ol) {
+  color: var(--mg-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: from-font;
+}
 .mg-prose img {
   margin-inline: auto;
 }
@@ -4579,6 +4589,17 @@ body.mg-carrying {
 .mg-pm .mg-task-body {
   flex: 1;
   min-width: 0;
+}
+/* 中身は flex の子なので、段落や入れ子の余白が外の項目と重ならず、そのぶん
+   行が離れる。端の余白を落として、点だけの項目と同じ刻みに揃える。
+   組版側の指定（.mg-prose.mg-editorial li > .mg-task-body > p）と競るので、
+   同じ重さで書く。 */
+.mg-prose.mg-editorial .mg-task-body > :first-child {
+  margin-block-start: 0;
+}
+.mg-prose.mg-editorial .mg-task-body > :last-child,
+.mg-prose.mg-editorial .mg-task-body :is(ul, ol) > li:last-child {
+  margin-block-end: 0;
 }
 /* タスクのある箇条書きは、読むときと同じだけ左を詰める。 */
 .mg-pm ul:has(> li.task-list-item) {

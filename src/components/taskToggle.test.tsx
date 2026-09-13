@@ -95,3 +95,28 @@ describe("読むときのタスクの入れ替え", () => {
     );
   });
 });
+
+describe("済みの項目の見た目", () => {
+  const BODY = ["- [x] 済んだ親", "  - [ ] まだの子", "- [ ] まだの親", "- ただの点"].join("\n");
+
+  it("済み・未済の札が項目に載る。点だけの項目には載らない", () => {
+    const at = render(BODY);
+    const items = [...at.querySelectorAll("li")];
+    expect(items.map((li) => li.dataset.checked)).toEqual([
+      "true",
+      "false",
+      "false",
+      undefined,
+    ]);
+  });
+
+  it("項目の字だけを包む。入れ子の並びは包みの外に出す", () => {
+    const at = render(BODY);
+    const done = at.querySelector<HTMLElement>('li[data-checked="true"]')!;
+    const line = done.querySelector<HTMLElement>(":scope > .mg-task-line")!;
+    expect(line.textContent).toContain("済んだ親");
+    expect(line.querySelector("ul")).toBeNull();
+    // 入れ子は項目の直下。飾りが子まで届かない。
+    expect(done.querySelector(":scope > ul")).not.toBeNull();
+  });
+});

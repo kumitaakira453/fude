@@ -182,6 +182,9 @@ function TaskCheck({
       aria-label={on ? "未完了に戻す" : "完了にする"}
       onClick={(e) => {
         setOptimistic(!on);
+        // 線と色は項目に付くので、そちらも押した瞬間に進める。本文を組み
+        // 直したときに同じ値が入り直る。
+        e.currentTarget.closest("li")?.setAttribute("data-checked", String(!on));
         onToggle(e.currentTarget);
       }}
     >
@@ -271,8 +274,28 @@ interface HastChild {
   type?: string;
   tagName?: string;
   value?: string;
+  properties?: { checked?: boolean };
+  children?: HastChild[];
   // 合成ノードでは position ごと、あるいは start / end が欠けることがある
   position?: { start?: { offset?: number }; end?: { offset?: number } };
+}
+
+// 項目の中に入っている並び。組んだあとの要素から見分ける。上書きを通した
+// ものには元の節点が付いてくるので、そちらも見る。
+function isNestedList(kid: ReactNode): boolean {
+  if (!isValidElement<{ node?: HastChild }>(kid)) return false;
+  if (kid.type === "ul" || kid.type === "ol") return true;
+  const tag = kid.props.node?.tagName;
+  return tag === "ul" || tag === "ol";
+}
+
+// タスクの項目か。そうならチェックの状態を返す。組んだあとの子からは
+// 見分けが付かないので、元の節点に残っている checkbox から拾う。
+function itemChecked(node: unknown): boolean | null {
+  const box = (node as HastChild | null)?.children?.find(
+    (c) => c.type === "element" && c.tagName === "input",
+  );
+  return box ? !!box.properties?.checked : null;
 }
 
 // 項目の開始オフセット。実際に編集する範囲は EditableBody 側がソースの行から
@@ -421,6 +444,9 @@ export const Markdown = memo(function Markdown({
         // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
         li({ node, children, ...rest }) {
           const anchor = itemAnchor(node, back);
+          const checked = itemChecked(node);
+          // 済みの項目は字を薄くして線を引く（index.css）。
+          const done = checked === null ? undefined : String(checked);
           if (editItem && anchor !== null && editItem.anchor === anchor) {
             // チェックは編集の対象ではないが、消さずに残す。消えると、
             // どの項目を直しているのか分からなくなる。押せる状態のまま
@@ -440,6 +466,7 @@ export const Markdown = memo(function Markdown({
               // 行はもともと記号を出さないので、付けても失うものが無い。
               <li
                 {...rest}
+                data-checked={done}
                 className={
                   [rest.className, "mg-item-editing", box ? "has-check" : null]
                     .filter(Boolean)
@@ -452,6 +479,21 @@ export const Markdown = memo(function Markdown({
                   onCommit={(v) => onItemCommit?.(v)}
                   onCancel={() => onItemCancel?.()}
                 />
+              </li>
+            );
+          }
+          if (checked !== null) {
+            // 済みの印は項目自身の字にだけ掛ける（index.css）。入れ子の並びは
+            // 包みの外に置く。中に入れると飾りがそこまで届き、子の済み・未済と
+            // 食い違って見える。
+            const kids = Children.toArray(children);
+            const cut = kids.findIndex(isNestedList);
+            return (
+              <li {...rest} data-checked={done} data-mg-item={anchor ?? undefined}>
+                <span className="mg-task-line">
+                  {cut < 0 ? kids : kids.slice(0, cut)}
+                </span>
+                {cut < 0 ? null : kids.slice(cut)}
               </li>
             );
           }

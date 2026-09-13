@@ -25,7 +25,12 @@ beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-const file = (name: string): TreeNode => ({ kind: "file", name, path: name });
+const file = (name: string): TreeNode => ({
+  kind: "file",
+  name,
+  path: name,
+  abs: `/本/${name}`,
+});
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
