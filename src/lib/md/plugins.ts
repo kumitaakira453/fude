@@ -148,6 +148,30 @@ export const splitItem: Command = (state, dispatch, view) => {
   )(state, dispatch, view);
 };
 
+// ⌘⏎。タスクの項目の中ならチェックを入れ替える。
+//
+// 手を離してチェックを押しにいかなくても、書きながら済みにできる。タスクで
+// なければ何もしない（行の中の改行に譲る）。
+export const toggleTask: Command = (state, dispatch) => {
+  const { $from } = state.selection;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type !== schema.nodes.listItem) continue;
+    const checked = node.attrs.checked as boolean | null;
+    if (checked === null) return false;
+    if (dispatch) {
+      dispatch(
+        state.tr.setNodeMarkup($from.before(d), undefined, {
+          ...node.attrs,
+          checked: !checked,
+        }),
+      );
+    }
+    return true;
+  }
+  return false;
+};
+
 // ⌘⌫。コードの塊の中では行の頭までを消す。
 //
 // 既定の動作に任せると、塊の中では DOM だけが書き換わって編集モデルとずれる。
@@ -897,7 +921,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       "Shift-Mod-x": toggleInline(schema.marks.strike),
       "Shift-Mod-c": toggleInline(schema.marks.code),
       "Shift-Enter": lineBreak,
-      "Mod-Enter": lineBreak,
+      "Mod-Enter": chainCommands(toggleTask, lineBreak),
       "Shift-Mod-Enter": lineBreak,
       // コードの塊の中は字下げ。表の中では隣のセルへ。それ以外は箇条書きの字下げ。
       Tab: chainCommands(indentCode, goToNextCell(1), sinkListItem(item)),
