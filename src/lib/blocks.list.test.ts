@@ -8,6 +8,8 @@ import {
   listItemRanges,
   dropListItem,
   itemDropRange,
+  itemOutOfList,
+  splitBlocks,
 } from "./blocks";
 
 const LIST = ["- 一つ目", "- 二つ目", "- 三つ目"].join("\n");
@@ -204,5 +206,41 @@ describe("itemTextStart", () => {
 
   it("記号が無い行では null", () => {
     expect(itemTextStart(WRAPPED, 1)).toBeNull();
+  });
+});
+
+describe("itemOutOfList", () => {
+  const DOC = ["前の段落", "", "- 一つ", "  - 中", "- 二つ", "", "後の段落"].join("\n");
+  const out = (body: string, index: number, from: number, to: number) =>
+    itemOutOfList(body, splitBlocks(body), index, from, to);
+
+  it("いちばん上へ出す。点のまま 1 つの並びになる", () => {
+    expect(out(DOC, 1, 2, 0)).toBe(
+      ["- 二つ", "", "前の段落", "", "- 一つ", "  - 中", "", "後の段落"].join("\n"),
+    );
+  });
+
+  it("いちばん下へ出す", () => {
+    expect(out(DOC, 1, 2, 3)).toBe(
+      ["前の段落", "", "- 一つ", "  - 中", "", "後の段落", "", "- 二つ"].join("\n"),
+    );
+  });
+
+  it("子は連れていく。字下げはいちばん外に寄る", () => {
+    expect(out(DOC, 1, 0, 0)).toBe(
+      ["- 一つ", "  - 中", "", "前の段落", "", "- 二つ", "", "後の段落"].join("\n"),
+    );
+  });
+
+  it("並びが空になったら、その塊ごと消える", () => {
+    const one = ["前の段落", "", "- ただ一つ", "", "後の段落"].join("\n");
+    expect(out(one, 1, 0, 0)).toBe(
+      ["- ただ一つ", "", "前の段落", "", "後の段落"].join("\n"),
+    );
+  });
+
+  it("元の場所の前後へ出すだけなら、元のまま返す", () => {
+    expect(out(DOC, 1, 2, 1)).toBe(DOC);
+    expect(out(DOC, 1, 2, 2)).toBe(DOC);
   });
 });

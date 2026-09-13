@@ -660,6 +660,45 @@ export function dropListItem(
   return rest.join("\n");
 }
 
+// 項目を並びの外へ出す。to は動かす前の並びで、何番目の塊の前に置くか。
+//
+// 出したものは点のまま、その場に 1 つの並びとして置く（隣が同じ種類の並びなら、
+// 読み直しでそのまま繋がる）。並びが空になったら、その塊ごと消す。
+export function itemOutOfList(
+  body: string,
+  blocks: Block[],
+  index: number,
+  from: number,
+  to: number,
+): string {
+  const block = blocks[index];
+  if (!block || to < 0 || to > blocks.length) return body;
+  const lines = block.src.split("\n");
+  const ranges = listItemRanges(block.src);
+  const at = ranges.findIndex((r) => r.from === from);
+  if (at < 0) return body;
+
+  const moved = ranges[at];
+  const chunk = lines
+    .slice(moved.from, moved.to)
+    .map((line) => reindent(line, -moved.indent))
+    .join("\n");
+  const rest = [...lines.slice(0, moved.from), ...lines.slice(moved.to)].join("\n");
+  const emptied = rest.trim() === "";
+  // 元の場所の前後へ出すだけなら、並びの中の動き（dropListItem）に譲る。
+  if (!emptied && (to === index || to === index + 1)) return body;
+
+  const { pieces, tail } = piecesOf(body, blocks);
+  const lead = pieces[0]?.gap ?? "";
+  const taken: Piece = { gap: "\n\n", src: chunk };
+  if (emptied) pieces.splice(index, 1);
+  else pieces[index] = { gap: pieces[index].gap, src: rest };
+  pieces.splice(emptied && to > index ? to - 1 : to, 0, taken);
+  return (
+    pieces.map((p, i) => (i === 0 ? lead : separator(p.gap)) + p.src).join("") + tail
+  );
+}
+
 export function deleteListItem(src: string, from: number): string {
   const ranges = listItemRanges(src);
   const item = ranges.find((r) => r.from === from);

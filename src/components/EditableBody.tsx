@@ -40,6 +40,7 @@ import {
   moveBlock,
   dropListItem,
   itemDropRange,
+  itemOutOfList,
   moveTableColumn,
   moveTableRow,
   remapAfterMove,
@@ -567,6 +568,16 @@ export function EditableBody({
     [editTable],
   );
 
+  // 項目を並びの外へ出す。to は「動かす前の並びで、どの塊の前に置くか」。
+  const outItem = useCallback(
+    (index: number, from: number, to: number) => {
+      setEditing(null);
+      setPending(null);
+      apply(itemOutOfList(body, blocks, index, from, to), keep);
+    },
+    [blocks, body, apply],
+  );
+
   // 落とせる深さの幅。運んでいる間の線の位置に使う。
   const itemDrop = useCallback(
     (index: number, from: number, to: number) => {
@@ -792,6 +803,7 @@ export function EditableBody({
         onTableAct={actOnTable}
         onTableAppend={appendTable}
         onItemMove={moveItem}
+        onItemOut={outItem}
         itemDrop={itemDrop}
         onItemAct={actOnItem}
         onItemEdit={editItem}

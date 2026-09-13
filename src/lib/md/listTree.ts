@@ -1,5 +1,6 @@
 import { Fragment, type Attrs, type Node as PmNode, type NodeType } from "prosemirror-model";
 import { Selection, type EditorState, type Transaction } from "prosemirror-state";
+import { canJoin } from "prosemirror-transform";
 import { schema } from "./schema";
 
 // 箇条書きを「項目の列」として扱う。
@@ -140,6 +141,77 @@ function posOfNth(list: PmNode, listPos: number, n: number): number | null {
     return true;
   });
   return found;
+}
+
+// 並びどうしが隣り合ったら一つに繋ぐ。原文では空行を挟んでも一つの並びとして
+// 読み直されるので、節点を分けたままにすると書いている間だけ割れて見える。
+function mergeAt(tr: Transaction, at: number): void {
+  const $at = tr.doc.resolve(at);
+  const before = $at.nodeBefore;
+  const after = $at.nodeAfter;
+  if (!before || !after || before.type !== after.type) return;
+  if (!isList(before) || !canJoin(tr.doc, at)) return;
+  tr.join(at);
+}
+
+// 本文の何番目の塊の前か、から位置を出す。
+function offsetOfBlock(doc: PmNode, index: number): number {
+  let at = 0;
+  for (let i = 0; i < Math.min(index, doc.childCount); i++) at += doc.child(i).nodeSize;
+  return at;
+}
+
+// 掴んだ項目を、並びの外（本文の塊の境目）へ出す。子は連れていく。
+//
+// 出したものは点のまま、その場に 1 つの並びとして置く。隣が同じ種類の並びなら
+// そこへ繋ぐ。元の並びが空になったら丸ごと消す。
+export function itemOutTr(
+  state: EditorState,
+  listPos: number,
+  from: number,
+  block: number,
+): Transaction | null {
+  const list = state.doc.nodeAt(listPos);
+  if (!list || !isList(list)) return null;
+  const flat = flatten(list);
+  if (from < 0 || from >= flat.length) return null;
+
+  const end = subtree(flat, from);
+  const run = flat.slice(from, end);
+  const rest = [...flat.slice(0, from), ...flat.slice(end)];
+  const listIndex = state.doc.resolve(listPos).index();
+  // 元の場所の前後へ出すだけなら、並びの中での動き（itemDropTr）に譲る。
+  if (rest.length > 0 && (block === listIndex || block === listIndex + 1)) return null;
+
+  const shift = -run[0].depth;
+  const moved = rebuild(run.map((one) => ({ ...one, depth: one.depth + shift })));
+  if (moved.length === 0) return null;
+  const taken = run[0].listType.create(
+    { ...run[0].listAttrs, id: null },
+    Fragment.fromArray(moved),
+  );
+
+  const tr = state.tr;
+  const kept = rest.length > 0 ? rebuild(rest) : [];
+  if (kept.length > 0) {
+    tr.replaceWith(
+      listPos,
+      listPos + list.nodeSize,
+      list.type.create({ ...list.attrs, id: null }, Fragment.fromArray(kept)),
+    );
+  } else {
+    tr.delete(listPos, listPos + list.nodeSize);
+  }
+
+  const at = offsetOfBlock(
+    tr.doc,
+    kept.length > 0 || block <= listIndex ? block : block - 1,
+  );
+  tr.insert(at, taken);
+  mergeAt(tr, at + taken.nodeSize);
+  mergeAt(tr, at);
+  const landed = tr.doc.resolve(Math.min(at + 2, tr.doc.content.size));
+  return tr.setSelection(Selection.near(landed)).scrollIntoView();
 }
 
 // 掴んだ項目を、隙間 slot の深さ depth へ落とす。子は連れていく。

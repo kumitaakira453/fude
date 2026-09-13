@@ -14,7 +14,13 @@ import {
   itemSpotAt,
   type ItemAct,
 } from "../lib/md/itemActs";
-import { depthRange, flatten, itemDropTr, itemIndexOf } from "../lib/md/listTree";
+import {
+  depthRange,
+  flatten,
+  itemDropTr,
+  itemIndexOf,
+  itemOutTr,
+} from "../lib/md/listTree";
 import { blockKindOf } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
@@ -497,10 +503,26 @@ export function EditorGutter({
       if (held.kind === "item") {
         const held_item = held.spot.item;
         const hit = blockAtY(view, y);
-        const li = hit ? itemAtY(hit.el, y, "li") : null;
+        if (!held_item || !hit) return;
+
+        // 掴んだ並びの外。塊の境目を落とし先にして、項目を並びから出す。
+        if (hit.pos !== held.spot.pos) {
+          const out = hit.el.getBoundingClientRect();
+          const below = y > out.top + out.height / 2;
+          toRef.current = below ? hit.index + 1 : hit.index;
+          dropRef.current = null;
+          setGuide({
+            kind: "item",
+            top: (below ? out.bottom : out.top) - base.top,
+            left: out.left - base.left,
+            length: out.width,
+          });
+          return;
+        }
+
+        const li = itemAtY(hit.el, y, "li");
         const over = li ? itemPosOf(view, li) : null;
-        // 掴んだ並びの塊の中だけで動かす。入れ子はこの塊の中に入っている。
-        if (!held_item || !hit || !li || !over || hit.pos !== held.spot.pos) return;
+        if (!li || !over) return;
         const list = view.state.doc.nodeAt(hit.pos);
         if (!list) return;
         const from = itemIndexOf(list, hit.pos, held_item.pos);
@@ -516,6 +538,7 @@ export function EditorGutter({
         const edge = itemEdgeOf(hit.el);
         const depth = Math.max(min, Math.min(max, Math.round((x - edge) / step)));
         dropRef.current = { slot, depth };
+        toRef.current = null;
 
         const right = hit.el.getBoundingClientRect().right;
         const left = edge + depth * step;
@@ -571,14 +594,19 @@ export function EditorGutter({
       setGuide(null);
       unliftRef.current?.();
       if (!held) return;
+      if (held.kind === "item" && !drop && to === null) return;
       const list = view.state.doc.nodeAt(held.spot.pos);
       const from =
         held.spot.item && list ? itemIndexOf(list, held.spot.pos, held.spot.item.pos) : null;
       const tr =
         held.kind === "item"
-          ? drop && from !== null
-            ? itemDropTr(view.state, held.spot.pos, from, drop.slot, drop.depth)
-            : null
+          ? from === null
+            ? null
+            : drop
+              ? itemDropTr(view.state, held.spot.pos, from, drop.slot, drop.depth)
+              : to === null
+                ? null
+                : itemOutTr(view.state, held.spot.pos, from, to)
           : to === null
             ? null
             : held.kind === "block"
