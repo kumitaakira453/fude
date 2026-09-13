@@ -38,7 +38,8 @@ import {
   itemTextStart,
   listItemAt,
   moveBlock,
-  moveListItem,
+  dropListItem,
+  itemDropRange,
   moveTableColumn,
   moveTableRow,
   remapAfterMove,
@@ -560,10 +561,19 @@ export function EditableBody({
   );
 
   const moveItem = useCallback(
-    (index: number, from: number, to: number) => {
-      editTable(index, (src) => moveListItem(src, from, to));
+    (index: number, from: number, to: number, depth: number) => {
+      editTable(index, (src) => dropListItem(src, from, to, depth));
     },
     [editTable],
+  );
+
+  // 落とせる深さの幅。運んでいる間の線の位置に使う。
+  const itemDrop = useCallback(
+    (index: number, from: number, to: number) => {
+      const block = blocks[index];
+      return block ? itemDropRange(block.src, from, to) : null;
+    },
+    [blocks],
   );
 
   // 項目の中身をその場で編集する。空の項目には選ぶ文字が無いので、
@@ -782,6 +792,7 @@ export function EditableBody({
         onTableAct={actOnTable}
         onTableAppend={appendTable}
         onItemMove={moveItem}
+        itemDrop={itemDrop}
         onItemAct={actOnItem}
         onItemEdit={editItem}
         onItemComment={commentItem}

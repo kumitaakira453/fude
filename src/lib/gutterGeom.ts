@@ -71,6 +71,28 @@ export function itemEdge(li: HTMLElement): number {
   return line.left - reserve;
 }
 
+// 字下げ 1 段の幅。入れ子が既にあればそこから測る。無ければ並びが空けている
+// 幅を使い、それも取れなければ既定の刻みにする。運ぶときに指の横位置から
+// 落とす深さを決めるのに使う。
+const INDENT = 24;
+
+export function indentStep(el: HTMLElement): number {
+  const deep = el.querySelector<HTMLElement>("li :is(ul, ol) > li");
+  const shallow = el.querySelector<HTMLElement>(":scope > li");
+  if (deep && shallow) {
+    const step = itemEdge(deep) - itemEdge(shallow);
+    if (step > 4) return step;
+  }
+  const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+  return pad > 4 ? pad : INDENT;
+}
+
+// いちばん外の項目の左端。深さ 0 の基準。
+export function itemEdgeOf(el: HTMLElement): number {
+  const first = el.querySelector<HTMLElement>(":scope > li");
+  return first ? itemEdge(first) : el.getBoundingClientRect().left;
+}
+
 // 指している高さの項目。項目の外（間の余白など）を指していても、一番近い
 // 項目に寄せる。箇条書きで掴む相手は常に項目にする（リスト全体のつまみと
 // 並べると、どちらを掴んでいるのか分からなくなる）。

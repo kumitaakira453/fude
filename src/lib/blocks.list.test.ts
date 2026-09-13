@@ -6,7 +6,8 @@ import {
   itemTextStart,
   listItemAt,
   listItemRanges,
-  moveListItem,
+  dropListItem,
+  itemDropRange,
 } from "./blocks";
 
 const LIST = ["- 一つ目", "- 二つ目", "- 三つ目"].join("\n");
@@ -66,50 +67,77 @@ describe("listItemAt", () => {
   });
 });
 
-describe("moveListItem", () => {
-  it("下へ動かす", () => {
-    expect(moveListItem(LIST, 0, 2)).toBe(
+describe("dropListItem", () => {
+  it("階層を変えずに下へ動かす", () => {
+    expect(dropListItem(LIST, 0, 2, 0)).toBe(
       ["- 二つ目", "- 一つ目", "- 三つ目"].join("\n"),
     );
   });
 
   it("上へ動かす", () => {
-    expect(moveListItem(LIST, 2, 0)).toBe(
+    expect(dropListItem(LIST, 2, 0, 0)).toBe(
       ["- 三つ目", "- 一つ目", "- 二つ目"].join("\n"),
     );
   });
 
   it("末尾へ動かす", () => {
-    expect(moveListItem(LIST, 0, 3)).toBe(
+    expect(dropListItem(LIST, 0, 3, 0)).toBe(
       ["- 二つ目", "- 三つ目", "- 一つ目"].join("\n"),
     );
   });
 
   it("子を連れて動く", () => {
-    expect(moveListItem(NESTED, 0, 4)).toBe(
+    expect(dropListItem(NESTED, 0, 4, 0)).toBe(
       ["- 親B", "- 親A", "  - 子A1", "  - 子A2", "- 親C"].join("\n"),
     );
   });
 
   it("折り返した行も連れて動く", () => {
-    // 続きの行を含めて 2 行分が 1 項目なので、末尾へは行数（3）を渡す。
-    expect(moveListItem(WRAPPED, 0, 3)).toBe(
+    expect(dropListItem(WRAPPED, 0, 3, 0)).toBe(
       ["- 二つ目", "- 一つ目", "  続きの行"].join("\n"),
     );
   });
 
-  it("自分の範囲の直後を指したら動かさない", () => {
-    expect(moveListItem(WRAPPED, 0, 2)).toBe(WRAPPED);
+  it("入れ子の中へ落とす。字下げは既にある段に合わせる", () => {
+    expect(dropListItem(NESTED, 3, 2, 1)).toBe(
+      ["- 親A", "  - 子A1", "  - 親B", "  - 子A2", "- 親C"].join("\n"),
+    );
   });
 
-  it("深さが違う相手の間には動かさない", () => {
-    // 子（深さ 2）を親の位置（深さ 0）へは動かさない
-    expect(moveListItem(NESTED, 1, 3)).toBe(NESTED);
+  it("その場で 1 段深くする", () => {
+    expect(dropListItem(NESTED, 4, 4, 1)).toBe(
+      ["- 親A", "  - 子A1", "  - 子A2", "- 親B", "  - 親C"].join("\n"),
+    );
   });
 
-  it("同じ位置なら元のまま返す", () => {
-    expect(moveListItem(LIST, 1, 1)).toBe(LIST);
-    expect(moveListItem(LIST, 1, 2)).toBe(LIST);
+  it("入れ子を外へ出す。子は付いてくる", () => {
+    expect(dropListItem(NESTED, 1, 1, 0)).toBe(
+      ["- 親A", "- 子A1", "  - 子A2", "- 親B", "- 親C"].join("\n"),
+    );
+  });
+
+  it("自分の中へは落とさない", () => {
+    expect(dropListItem(NESTED, 0, 1, 1)).toBe(NESTED);
+  });
+
+  it("動かず深さも変わらないなら元のまま返す", () => {
+    expect(dropListItem(LIST, 1, 1, 0)).toBe(LIST);
+    expect(dropListItem(LIST, 1, 2, 0)).toBe(LIST);
+    expect(dropListItem(WRAPPED, 0, 2, 0)).toBe(WRAPPED);
+  });
+});
+
+describe("itemDropRange", () => {
+  it("いちばん上の隙間は、いちばん外だけ", () => {
+    expect(itemDropRange(NESTED, 3, 0)).toEqual({ min: 0, max: 0 });
+  });
+
+  it("入れ子の項目のあいだなら、その深さまで入れる", () => {
+    expect(itemDropRange(NESTED, 3, 2)).toEqual({ min: 1, max: 2 });
+  });
+
+  it("いちばん下の隙間は、いちばん外まで浅くできる", () => {
+    expect(itemDropRange(NESTED, 3, 5)).toEqual({ min: 0, max: 1 });
   });
 });
 

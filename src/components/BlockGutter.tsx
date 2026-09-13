@@ -9,8 +9,10 @@ import {
   BOTH,
   BAR,
   GRIP,
+  indentStep,
   itemAtY,
   itemEdge,
+  itemEdgeOf,
   itemLine,
   lineHeight,
   ONLY,
@@ -182,6 +184,7 @@ export function BlockGutter({
   onCellEdit,
   onCellComment,
   itemAt,
+  itemDrop,
 }: {
   content: HTMLElement | null;
   scroller: HTMLElement | null;
@@ -200,7 +203,7 @@ export function BlockGutter({
   onTableAct: (index: number, kind: Part, at: number, act: TableAct) => void;
   onTableAppend: (index: number, kind: Part) => void;
   // 箇条書きの項目。at は記号がある行番号。
-  onItemMove: (index: number, from: number, to: number) => void;
+  onItemMove: (index: number, from: number, to: number, depth: number) => void;
   onItemAct: (index: number, at: number, act: TableAct) => void;
   // 項目の中身をその場で編集する。
   onItemEdit: (index: number, at: number) => void;
@@ -215,6 +218,12 @@ export function BlockGutter({
     index: number,
     offset: number,
   ) => { from: number; to: number } | null;
+  // その隙間に落とせる深さの幅。指の横位置をこの中に収める。
+  itemDrop: (
+    index: number,
+    from: number,
+    to: number,
+  ) => { min: number; max: number } | null;
 }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
@@ -240,6 +249,8 @@ export function BlockGutter({
     box: Box | null;
   } | null>(null);
   const toRef = useRef<number | null>(null);
+  // 項目の落とし先。行と、そこで入る深さ。
+  const dropRef = useRef<{ to: number; depth: number } | null>(null);
   // 掴んでいるあいだ薄くしている実体。離すときに元へ戻す。
   const liftedRef = useRef<Element[]>([]);
   const liftRafRef = useRef(0);
@@ -393,17 +404,25 @@ export function BlockGutter({
         const li = hit && hit.index === held.index ? itemAtY(hit.el, e.clientY, "li[data-mg-item]") : null;
         const anchorAt = numberOf(li, "mgItem");
         const found = anchorAt === null ? null : itemAt(held.index, anchorAt);
-        if (!li || !found) return;
+        if (!hit || !li || !found) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const box = li.getBoundingClientRect();
         const after = e.clientY > box.top + box.height / 2;
-        toRef.current = after ? found.to : found.from;
+        const to = after ? found.to : found.from;
+        // 指の横位置で深さを決める。置ける幅は上下の項目が決める。
+        const room = itemDrop(held.index, held.at, to);
+        const step = indentStep(hit.el as HTMLElement);
+        const edge = itemEdgeOf(hit.el as HTMLElement);
+        const want = Math.round((e.clientX - edge) / step);
+        const depth = room ? Math.max(room.min, Math.min(room.max, want)) : 0;
+        dropRef.current = { to, depth };
+        const left = edge + depth * step;
         setGuide({
           kind: "item",
           top: (after ? box.bottom : box.top) - base.top,
-          left: 0,
-          length: base.width,
+          left: left - base.left,
+          length: Math.max(GRIP, base.left + base.width - left),
         });
         return;
       }
@@ -454,14 +473,22 @@ export function BlockGutter({
     const onDrop = (e: DragEvent) => {
       const held = heldRef.current;
       const to = toRef.current;
+      const drop = dropRef.current;
       heldRef.current = null;
       toRef.current = null;
+      dropRef.current = null;
       setGuide(null);
       unlift();
-      if (!held || to === null) return;
+      if (!held) return;
+      if (held.kind === "item") {
+        if (!drop) return;
+        e.preventDefault();
+        onItemMove(held.index, held.at, drop.to, drop.depth);
+        return;
+      }
+      if (to === null) return;
       e.preventDefault();
       if (held.kind === "block") onMove(held.at, to);
-      else if (held.kind === "item") onItemMove(held.index, held.at, to);
       else onTableMove(held.index, held.kind, held.at, to);
     };
 

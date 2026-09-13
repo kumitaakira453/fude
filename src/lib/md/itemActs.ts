@@ -2,7 +2,7 @@ import type { Node as PmNode } from "prosemirror-model";
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
 import { schema } from "./schema";
 
-// 編集面の箇条書きの項目の操作。足す・複製する・消す・並べ替える。
+// 編集面の箇条書きの項目の操作。足す・複製する・消す。
 //
 // Markdown ではリスト全体が 1 つのブロックだが、書く側の感覚では項目ごとが
 // 1 つのまとまり。読むとき側（`blocks.ts` の項目の操作）と同じ単位で扱う。
@@ -11,6 +11,9 @@ import { schema } from "./schema";
 // 原文への書き戻しはリストのブロックごと `toMarkdown` が受け持つ。項目を
 // 足したり消したりすると子の数が変わるので、そのリストは組み直しになる
 // （`splice.ts` は子の並びが同じときだけ原文へ差し込む）。
+//
+// 並べ替えは `listTree.ts`。階層をまたいで動かすので、並びを列に開いてから
+// 組み直す。
 
 export type ItemAct = "insertBefore" | "insertAfter" | "duplicate" | "delete";
 
@@ -102,32 +105,4 @@ export function itemActTr(
       return caretInto(tr, listPos, Math.min(index, list.childCount - 2));
     }
   }
-}
-
-// 同じリストの中で並べ替える。`to` は「動かす前の並びで、どの項目の前に
-// 置くか」（読むとき側の `moveListItem` と同じ数え方）。
-export function itemMoveTr(
-  state: EditorState,
-  listPos: number,
-  from: number,
-  to: number,
-): Transaction | null {
-  const list = state.doc.nodeAt(listPos);
-  if (!list || !isList(list)) return null;
-  if (from < 0 || from >= list.childCount) return null;
-  if (to < 0 || to > list.childCount) return null;
-  if (to === from || to === from + 1) return null;
-
-  const items: PmNode[] = [];
-  list.forEach((item) => items.push(item));
-  const [taken] = items.splice(from, 1);
-  const landing = to > from ? to - 1 : to;
-  items.splice(landing, 0, taken);
-
-  const tr = state.tr.replaceWith(
-    listPos + 1,
-    listPos + list.nodeSize - 1,
-    items,
-  );
-  return caretInto(tr, listPos, landing);
 }

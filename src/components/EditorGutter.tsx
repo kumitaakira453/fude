@@ -11,10 +11,10 @@ import {
 } from "../lib/md/blockActs";
 import {
   itemActTr,
-  itemMoveTr,
   itemSpotAt,
   type ItemAct,
 } from "../lib/md/itemActs";
+import { depthRange, flatten, itemDropTr, itemIndexOf } from "../lib/md/listTree";
 import { blockKindOf } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
@@ -43,8 +43,10 @@ import {
   BOTH,
   firstLine,
   GRIP,
+  indentStep,
   itemAtY,
   itemEdge,
+  itemEdgeOf,
   itemLine,
   lineHeight,
   ONLY,
@@ -303,6 +305,8 @@ export function EditorGutter({
   const menuRef = useRef(false);
   const heldRef = useRef<{ kind: Kind; spot: Spot; at: number } | null>(null);
   const toRef = useRef<number | null>(null);
+  // 項目の落とし先。隙間と、そこで入る深さ。
+  const dropRef = useRef<{ slot: number; depth: number } | null>(null);
   // 最後に指していた場所。中身が動いたとき、そこで測り直す。
   const atRef = useRef<{ x: number; y: number } | null>(null);
   // 最後に指していた場所で測り直す口。行や列を足した直後にも使う。
@@ -491,19 +495,35 @@ export function EditorGutter({
       }
 
       if (held.kind === "item") {
+        const held_item = held.spot.item;
         const hit = blockAtY(view, y);
         const li = hit ? itemAtY(hit.el, y, "li") : null;
-        const spot = li ? itemPosOf(view, li) : null;
-        // 同じリストの中だけで動かす。
-        if (!li || !spot || spot.listPos !== held.spot.item?.listPos) return;
+        const over = li ? itemPosOf(view, li) : null;
+        // 掴んだ並びの塊の中だけで動かす。入れ子はこの塊の中に入っている。
+        if (!held_item || !hit || !li || !over || hit.pos !== held.spot.pos) return;
+        const list = view.state.doc.nodeAt(hit.pos);
+        if (!list) return;
+        const from = itemIndexOf(list, hit.pos, held_item.pos);
+        const under = itemIndexOf(list, hit.pos, over.pos);
+        if (from === null || under === null) return;
+
         const box = li.getBoundingClientRect();
-        const after = y > box.top + box.height / 2;
-        toRef.current = after ? spot.at + 1 : spot.at;
+        const below = y > box.top + box.height / 2;
+        const slot = below ? under + 1 : under;
+        // 指の横位置で深さを決める。置ける幅は上下の項目が決める。
+        const { min, max } = depthRange(flatten(list), from, slot);
+        const step = indentStep(hit.el);
+        const edge = itemEdgeOf(hit.el);
+        const depth = Math.max(min, Math.min(max, Math.round((x - edge) / step)));
+        dropRef.current = { slot, depth };
+
+        const right = hit.el.getBoundingClientRect().right;
+        const left = edge + depth * step;
         setGuide({
           kind: "item",
-          top: (after ? box.bottom : box.top) - base.top,
-          left: box.left - base.left,
-          length: box.width,
+          top: (below ? box.bottom : box.top) - base.top,
+          left: left - base.left,
+          length: Math.max(GRIP, right - left),
         });
         return;
       }
@@ -544,19 +564,26 @@ export function EditorGutter({
     const onLand = () => {
       const held = heldRef.current;
       const to = toRef.current;
+      const drop = dropRef.current;
       heldRef.current = null;
       toRef.current = null;
+      dropRef.current = null;
       setGuide(null);
       unliftRef.current?.();
-      if (!held || to === null) return;
+      if (!held) return;
+      const list = view.state.doc.nodeAt(held.spot.pos);
+      const from =
+        held.spot.item && list ? itemIndexOf(list, held.spot.pos, held.spot.item.pos) : null;
       const tr =
-        held.kind === "block"
-          ? blockMoveTr(view.state, held.spot.index, to)
-          : held.kind === "item"
-            ? held.spot.item
-              ? itemMoveTr(view.state, held.spot.item.listPos, held.at, to)
-              : null
-            : tableMoveTr(view.state, held.spot.pos, held.kind, held.at, to);
+        held.kind === "item"
+          ? drop && from !== null
+            ? itemDropTr(view.state, held.spot.pos, from, drop.slot, drop.depth)
+            : null
+          : to === null
+            ? null
+            : held.kind === "block"
+              ? blockMoveTr(view.state, held.spot.index, to)
+              : tableMoveTr(view.state, held.spot.pos, held.kind, held.at, to);
       if (tr) view.dispatch(tr);
       view.focus();
       requestAnimationFrame(() => againRef.current?.());
@@ -715,6 +742,7 @@ export function EditorGutter({
           unlift();
           heldRef.current = null;
           toRef.current = null;
+          dropRef.current = null;
           setGuide(null);
         },
       });

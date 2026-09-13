@@ -1,7 +1,7 @@
 import { EditorState } from "prosemirror-state";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { itemActTr, itemMoveTr, itemSpotAt, type ItemAct } from "./itemActs";
+import { itemActTr, itemSpotAt, type ItemAct } from "./itemActs";
 import { editorPlugins } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
 
@@ -50,14 +50,6 @@ function act(block: number, index: number, a: ItemAct, body = SRC) {
   if (!tr) return null;
   const next = state.apply(tr);
   return { md: toMarkdown(next.doc, loaded), state: next };
-}
-
-function move(block: number, from: number, to: number) {
-  const { loaded, state } = opened(SRC);
-  const { listPos } = itemPos(state, block, 0);
-  const tr = itemMoveTr(state, listPos, from, to);
-  if (!tr) return null;
-  return { md: toMarkdown(state.apply(tr).doc, loaded) };
 }
 
 // 箇条書きの行だけを取り出す。
@@ -152,42 +144,5 @@ describe("項目を消す", () => {
     const got = act(0, 0, "delete", "- ただ一つ\n");
     expect(got!.md).toBe("\n");
     expect(got!.state.doc.child(0).type.name).toBe("paragraph");
-  });
-});
-
-describe("項目を並べ替える", () => {
-  it("末尾へ運ぶ", () => {
-    const got = move(1, 0, 3);
-    expect(listOf(got!.md, "-").split("\n").slice(0, 4)).toEqual([
-      "- 二つ",
-      "  - 二つの中",
-      "- 三つ",
-      "- 一つ",
-    ]);
-  });
-
-  it("先頭へ運ぶ", () => {
-    const got = move(1, 2, 0);
-    expect(listOf(got!.md, "-").split("\n").slice(0, 4)).toEqual([
-      "- 三つ",
-      "- 一つ",
-      "- 二つ",
-      "  - 二つの中",
-    ]);
-  });
-
-  it("同じ場所への運びは何もしない", () => {
-    expect(move(1, 1, 1)).toBeNull();
-    expect(move(1, 1, 2)).toBeNull();
-  });
-
-  it("範囲の外へは運べない", () => {
-    expect(move(1, 0, 9)).toBeNull();
-    expect(move(1, 9, 0)).toBeNull();
-  });
-
-  it("リストでないブロックは触らない", () => {
-    const { state } = opened(SRC);
-    expect(itemMoveTr(state, 0, 0, 2)).toBeNull();
   });
 });

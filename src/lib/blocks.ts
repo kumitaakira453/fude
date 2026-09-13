@@ -573,22 +573,90 @@ export function listItemAt(src: string, offset: number): ItemRange | null {
   return hit;
 }
 
-// 項目を動かす。from / to は記号がある行番号。to は末尾なら行数。
-// 深さが違う相手の間には動かさない（構造が崩れる）。
-export function moveListItem(src: string, from: number, to: number): string {
+// 項目の深さ（字下げの段数）。空白の数はリストの記号で変わるので、増減だけを
+// たどって段を数える。
+export function listItemDepths(ranges: ItemRange[]): number[] {
+  const stack: number[] = [];
+  return ranges.map((r) => {
+    while (stack.length > 0 && r.indent < stack[stack.length - 1]) stack.pop();
+    if (stack.length === 0 || r.indent > stack[stack.length - 1]) stack.push(r.indent);
+    return stack.length - 1;
+  });
+}
+
+// 字下げ 1 段ぶんの空白の数。既にある入れ子から測り、無ければ 2 とする。
+function indentUnit(ranges: ItemRange[], depths: number[]): number {
+  for (let i = 0; i < ranges.length; i++) {
+    if (depths[i] === 0) continue;
+    for (let j = i - 1; j >= 0; j--) {
+      if (depths[j] !== depths[i] - 1) continue;
+      const step = ranges[i].indent - ranges[j].indent;
+      return step > 0 ? step : 2;
+    }
+  }
+  return 2;
+}
+
+// 掴んだ項目（と、その子）を除いた並び。
+function without(ranges: ItemRange[], depths: number[], at: number) {
+  const end = ranges.findIndex((r, k) => k > at && r.from >= ranges[at].to);
+  const last = end < 0 ? ranges.length : end;
+  return ranges
+    .map((r, k) => ({ range: r, depth: depths[k], index: k }))
+    .filter(({ index }) => index < at || index >= last);
+}
+
+// その隙間に置ける深さの幅。上の項目より 2 段以上深くはできず、下の項目より
+// 浅くすると、その項目を巻き込んで自分の子にしてしまう。
+export function itemDropRange(
+  src: string,
+  from: number,
+  to: number,
+): { min: number; max: number } {
+  const ranges = listItemRanges(src);
+  const depths = listItemDepths(ranges);
+  const at = ranges.findIndex((r) => r.from === from);
+  if (at < 0) return { min: 0, max: 0 };
+  const rest = without(ranges, depths, at);
+  const slot = rest.findIndex(({ range }) => range.from >= to);
+  const pos = slot < 0 ? rest.length : slot;
+  const above = pos > 0 ? rest[pos - 1].depth : -1;
+  const below = pos < rest.length ? rest[pos].depth : 0;
+  const max = Math.max(0, above + 1);
+  return { min: Math.max(0, Math.min(below, max)), max };
+}
+
+// 行の字下げを増やす / 減らす。
+function reindent(line: string, delta: number): string {
+  if (delta === 0 || line.trim() === "") return line;
+  if (delta > 0) return " ".repeat(delta) + line;
+  return line.slice(Math.min(-delta, line.length - line.trimStart().length));
+}
+
+// 掴んだ項目を、to の隙間の深さ depth へ落とす。子は連れていく。
+export function dropListItem(
+  src: string,
+  from: number,
+  to: number,
+  depth: number,
+): string {
   const lines = src.split("\n");
   const ranges = listItemRanges(src);
-  const moved = ranges.find((r) => r.from === from);
-  if (!moved) return src;
-  if (to === moved.from || to === moved.to) return src;
-  if (to !== lines.length) {
-    const target = ranges.find((r) => r.from === to);
-    if (!target || target.indent !== moved.indent) return src;
-  }
-  const chunk = lines.slice(moved.from, moved.to);
+  const depths = listItemDepths(ranges);
+  const at = ranges.findIndex((r) => r.from === from);
+  if (at < 0) return src;
+  const moved = ranges[at];
+  // 自分の中へは落とせない。
+  if (to > moved.from && to < moved.to) return src;
+  const delta = depth * indentUnit(ranges, depths) - moved.indent;
+  if (delta === 0 && (to === moved.from || to === moved.to)) return src;
+
+  const chunk = lines
+    .slice(moved.from, moved.to)
+    .map((line) => reindent(line, delta));
   const rest = [...lines.slice(0, moved.from), ...lines.slice(moved.to)];
-  const at = to > moved.from ? to - chunk.length : to;
-  rest.splice(at, 0, ...chunk);
+  const landing = to > moved.from ? to - chunk.length : to;
+  rest.splice(landing, 0, ...chunk);
   return rest.join("\n");
 }
 
