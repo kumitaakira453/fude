@@ -64,19 +64,37 @@ const ruleRule = new InputRule(/^(-{3,}|\*{3,}|_{3,})$/, (state, match, start, e
   ),
 );
 
-// 箇条書きの項目の頭で [ ] / [x] を打ったらタスクにする。
-// 箇条書きにする規則と重ねて使う（"- " で項目になり、続く "[ ] " でタスクになる）。
-const taskRule = new InputRule(/^\[([ xX])\]\s$/, (state, match, start, end) => {
+// 行の頭で [] / [ ] / [x] を打ったらタスクにする。中の空白は有っても無くても良い。
+//
+// 項目の中なら印を付けるだけ。素の段落なら箇条書きに包んでから印を付ける
+// （"- " を打ってから "[] " を打つ二手を、一手で通す）。
+const TASK = /^\[([ xX]?)\]\s$/;
+
+// 包むところは既製の規則に任せる。直前が箇条書きなら繋ぐところまで同じ。
+const wrapTask = wrappingInputRule(TASK, schema.nodes.bulletList, { marker: "-" });
+
+// カーソルの居る項目に印を付ける。
+function markItem(tr: Transaction, checked: boolean): void {
+  const $at = tr.selection.$from;
+  for (let d = $at.depth; d > 0; d--) {
+    if ($at.node(d).type !== schema.nodes.listItem) continue;
+    tr.setNodeMarkup($at.before(d), undefined, { checked });
+    return;
+  }
+}
+
+const taskRule = new InputRule(TASK, (state, match, start, end) => {
+  const checked = match[1].toLowerCase() === "x";
   const $start = state.doc.resolve(start);
   for (let depth = $start.depth; depth > 0; depth--) {
     if ($start.node(depth).type !== schema.nodes.listItem) continue;
     return state.tr
       .delete(start, end)
-      .setNodeMarkup($start.before(depth), undefined, {
-        checked: match[1].toLowerCase() === "x",
-      });
+      .setNodeMarkup($start.before(depth), undefined, { checked });
   }
-  return null;
+  const tr = wrapTask.handler(state, match, start, end);
+  if (tr) markItem(tr, checked);
+  return tr;
 });
 
 // Notion 風の打ち込み（試験中の設定）。入れると `>` がトグル、`|` が引用になる。

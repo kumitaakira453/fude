@@ -164,3 +164,29 @@ describe("Notion 風の打ち込み（試験中の設定）", () => {
     expect(first("| ").type.name).toBe("blockquote");
   });
 });
+
+describe("TODO の印", () => {
+  // 素の段落で打っても、箇条書きに包んでから印が付く（"- " を挟まなくてよい）。
+  const item = (text: string) => {
+    const list = first(text);
+    expect(list.type.name).toBe("bulletList");
+    return list.child(0);
+  };
+
+  it("[] とスペースでタスクになる", () => {
+    expect(item("[] ").attrs.checked).toBe(false);
+  });
+
+  it("中の空白は有っても無くても同じ", () => {
+    expect(item("[ ] ").attrs.checked).toBe(false);
+  });
+
+  it("[x] なら済みで始まる", () => {
+    expect(item("[x] ").attrs.checked).toBe(true);
+    expect(item("[X] ").attrs.checked).toBe(true);
+  });
+
+  it("行の途中では効かない", () => {
+    expect(first("文[] ").type.name).toBe("paragraph");
+  });
+});

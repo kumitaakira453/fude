@@ -62,24 +62,89 @@ const toText = chainCommands(
   lift,
 );
 
-const toBullet = wrapInList(schema.nodes.bulletList, { marker: "-", tight: true });
+const BULLET = { marker: "-", tight: true };
+const ORDERED = { marker: ".", start: 1, tight: true };
 
-// タスクの箇条書き。包んだ直後の項目に未了の印を付ける。
-const toTodo: Command = (state, dispatch, view) =>
-  toBullet(
-    state,
-    dispatch &&
-      ((tr) => {
-        const { $from } = tr.selection;
-        for (let d = $from.depth; d > 0; d--) {
-          if ($from.node(d).type !== listItem) continue;
-          tr.setNodeMarkup($from.before(d), undefined, { checked: false });
-          break;
+const wrapBullet = wrapInList(schema.nodes.bulletList, BULLET);
+
+// カーソルの居る、いちばん内側の並び。
+function listAround($from: ResolvedPos): { node: PmNode; pos: number } | null {
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type === schema.nodes.bulletList || node.type === schema.nodes.orderedList) {
+      return { node, pos: $from.before(d) };
+    }
+  }
+  return null;
+}
+
+// いま居る並びを、別の形に付け替える。種類（点／番号）と、項目の印（チェック）
+// を一度に入れ替え、並びの項目すべてに効かせる。
+//
+// wrapInList は、同じ中身を持てる並びの中では何もしない（prosemirror が false
+// を返す）。点の並びを番号や TODO に変える道がそこには無いので、ここで受ける。
+function retype(type: NodeType, attrs: Attrs, checked: boolean | null): Command {
+  return (state, dispatch) => {
+    const here = listAround(state.selection.$from);
+    if (!here) return false;
+    const { node, pos } = here;
+    const sameKind = node.type === type;
+    let sameMark = true;
+    node.forEach((item) => {
+      if ((item.attrs.checked === null) !== (checked === null)) sameMark = false;
+    });
+    if (sameKind && sameMark) return false;
+
+    if (dispatch) {
+      const tr = state.tr;
+      // 目印を落として組み直させる。原文の "- あ" をそのまま出されると、
+      // 付け替えた種類も印も書き戻りに現れない。
+      const next = sameKind
+        ? { ...node.attrs, id: null }
+        : { ...attrs, id: null, tight: node.attrs.tight };
+      tr.setNodeMarkup(pos, type, next);
+      // 種類も印も中身の大きさを変えないので、項目の位置はそのまま数えられる。
+      let at = pos + 1;
+      node.forEach((item) => {
+        const now = checked === null ? null : (item.attrs.checked ?? false);
+        if (item.attrs.checked !== now) {
+          tr.setNodeMarkup(at, undefined, { ...item.attrs, checked: now });
         }
-        dispatch(tr);
-      }),
-    view,
-  );
+        at += item.nodeSize;
+      });
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
+// 点の箇条書き。TODO や番号から戻すときは、並びごと付け替える。
+const toBullet = chainCommands(retype(schema.nodes.bulletList, BULLET, null), wrapBullet);
+
+const toOrdered = chainCommands(
+  retype(schema.nodes.orderedList, ORDERED, null),
+  wrapInList(schema.nodes.orderedList, ORDERED),
+);
+
+// タスクの箇条書き。並びの中なら項目に印を付け、外なら包んでから印を付ける。
+const toTodo = chainCommands(
+  retype(schema.nodes.bulletList, BULLET, false),
+  (state, dispatch, view) =>
+    wrapBullet(
+      state,
+      dispatch &&
+        ((tr) => {
+          const { $from } = tr.selection;
+          for (let d = $from.depth; d > 0; d--) {
+            if ($from.node(d).type !== listItem) continue;
+            tr.setNodeMarkup($from.before(d), undefined, { checked: false });
+            break;
+          }
+          dispatch(tr);
+        }),
+      view,
+    ),
+);
 
 // その塊の場所に、この種類のブロックを置けるか。
 const fits = ($from: ResolvedPos, type: NodeType): boolean =>
@@ -272,7 +337,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     icon: "format_list_numbered",
     hint: "1. ",
     aliases: ["ol", "ordered", "orderedlist", "number", "numbered", "bango", "1."],
-    run: wrapInList(schema.nodes.orderedList, { marker: ".", start: 1, tight: true }),
+    run: toOrdered,
   },
   {
     id: "todo",

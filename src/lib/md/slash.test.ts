@@ -617,3 +617,55 @@ describe("範囲を選んだままの変換", () => {
     expect(inserts).toEqual(["emoji", "table", "math", "mathBlock", "rule"]);
   });
 });
+
+describe("並びどうしの付け替え", () => {
+  const item = (id: string) => SLASH_ITEMS.find((one) => one.id === id)!;
+  // つまみのメニューと同じ当て方。塊の中へカーソルを置いてから手を走らせる。
+  const aim = (view: EditorView) => {
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(1))),
+    );
+  };
+  const change = (body: string, id: string) => {
+    const view = editor(body);
+    aim(view);
+    const can = item(id).run(view.state, undefined);
+    item(id).run(view.state, view.dispatch, view);
+    return { can, out: source() };
+  };
+
+  it("箇条書きを TODO にすると、並びの項目すべてに印が付く", () => {
+    expect(change("- あ\n- い\n", "todo")).toEqual({
+      can: true,
+      out: "- [ ] あ\n- [ ] い\n",
+    });
+  });
+
+  it("TODO を箇条書きに戻すと、済みの印ごと落ちる", () => {
+    expect(change("- [ ] あ\n- [x] い\n", "bullet")).toEqual({
+      can: true,
+      out: "- あ\n- い\n",
+    });
+  });
+
+  it("点と番号を行き来できる", () => {
+    expect(change("- あ\n- い\n", "ordered").out).toBe("1. あ\n2. い\n");
+    expect(change("1. あ\n2. い\n", "bullet").out).toBe("- あ\n- い\n");
+  });
+
+  it("TODO から番号へ移すと、印は落ちる", () => {
+    expect(change("- [ ] あ\n- [x] い\n", "ordered").out).toBe("1. あ\n2. い\n");
+  });
+
+  it("相手はカーソルの居る並びだけ。入れ子は変えない", () => {
+    expect(change("- あ\n  - こ\n  - さ\n- い\n", "todo").out).toBe(
+      "- [ ] あ\n  - こ\n  - さ\n- [ ] い\n",
+    );
+  });
+
+  it("同じ形への付け替えは効かない（押せない印になる）", () => {
+    expect(change("- あ\n- い\n", "bullet").can).toBe(false);
+    expect(change("1. あ\n", "ordered").can).toBe(false);
+    expect(change("- [ ] あ\n", "todo").can).toBe(false);
+  });
+});
