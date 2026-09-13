@@ -1021,6 +1021,7 @@ function ThreadDetail({
               ref={replyRef}
               value={reply}
               onChange={(e) => setReply(e.target.value)}
+              onKeyUp={md.onKeyUp}
               onCompositionStart={md.onCompositionStart}
               onCompositionEnd={md.onCompositionEnd}
               onKeyDown={onReplyKey}
@@ -1162,6 +1163,7 @@ function Message({
                 autoFocus
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onKeyUp={md.onKeyUp}
                 onCompositionStart={md.onCompositionStart}
                 onCompositionEnd={md.onCompositionEnd}
                 onKeyDown={onKey}

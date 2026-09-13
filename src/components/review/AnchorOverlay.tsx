@@ -439,6 +439,7 @@ export function AnchorOverlay({
                 autoFocus
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onKeyUp={md.onKeyUp}
                 onCompositionStart={md.onCompositionStart}
                 onCompositionEnd={md.onCompositionEnd}
                 onKeyDown={onEditKey}

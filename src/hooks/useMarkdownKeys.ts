@@ -69,6 +69,7 @@ export function useMarkdownKeys(
 
   return {
     onKeyDown,
+    onKeyUp: ime.onKeyUp,
     onCompositionStart: ime.onCompositionStart,
     onCompositionEnd: ime.onCompositionEnd,
   };

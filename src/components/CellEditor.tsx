@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 
 function autosize(el: HTMLTextAreaElement) {
   el.style.height = "auto";
@@ -19,6 +20,9 @@ export function CellEditor({
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const committed = useRef(false);
+  // 変換の確定に使った Enter で確定させない。確定してしまうと入力欄が消える
+  // 一方で IME は確定した字をもう一度入れにくるので、同じ文が二重に残る。
+  const ime = useImeSafeEnter();
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -49,8 +53,12 @@ export function CellEditor({
       rows={1}
       spellCheck={false}
       onInput={(e) => autosize(e.currentTarget)}
+      onKeyUp={ime.onKeyUp}
+      onCompositionStart={ime.onCompositionStart}
+      onCompositionEnd={ime.onCompositionEnd}
       onKeyDown={(e) => {
         if (e.key === "Enter" && !e.shiftKey) {
+          if (ime.isComposing(e)) return;
           e.preventDefault();
           commit();
         } else if (e.key === "Escape") {

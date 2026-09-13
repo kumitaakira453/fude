@@ -219,6 +219,7 @@ export function CommentComposer({
             ref={inputRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
+            onKeyUp={md.onKeyUp}
             onCompositionStart={md.onCompositionStart}
             onCompositionEnd={md.onCompositionEnd}
             onKeyDown={onKey}

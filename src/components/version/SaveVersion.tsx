@@ -48,6 +48,7 @@ export function SaveVersion({
           placeholder="名前なしで保存"
           onChange={(e) => setName(e.target.value)}
           onFocus={(e) => e.currentTarget.select()}
+          onKeyUp={ime.onKeyUp}
           onCompositionStart={ime.onCompositionStart}
           onCompositionEnd={ime.onCompositionEnd}
           onKeyDown={(e) => {

@@ -157,6 +157,7 @@ export function FolderSwitcher() {
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
+                      onKeyUp={ime.onKeyUp}
                       onCompositionStart={ime.onCompositionStart}
                       onCompositionEnd={ime.onCompositionEnd}
                       onKeyDown={(e) => {

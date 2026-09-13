@@ -89,6 +89,7 @@ function NameInput({
         autoFocus
         value={v}
         onChange={(e) => setV(e.target.value)}
+        onKeyUp={ime.onKeyUp}
         onCompositionStart={ime.onCompositionStart}
         onCompositionEnd={ime.onCompositionEnd}
         onKeyDown={(e) => {

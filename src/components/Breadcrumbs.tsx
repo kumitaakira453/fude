@@ -255,6 +255,7 @@ export function Breadcrumbs({
               ref={inputRef}
               autoFocus
               value={query}
+              onKeyUp={ime.onKeyUp}
               onCompositionStart={ime.onCompositionStart}
               onCompositionEnd={ime.onCompositionEnd}
               onChange={(e) => {
