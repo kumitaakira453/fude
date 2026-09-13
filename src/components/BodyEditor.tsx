@@ -971,7 +971,10 @@ export function BodyEditor({
       // 育ち中に来た外の変更。育ち切ってから当て直す。
       let waiting: string | null = null;
       const adopt = (text: string) => {
-        if (growing) {
+        // 変換中は本文に触らない。差し替えると節点が組み直され、IME が抱えて
+        // いる変換中の字が本文から外れる。外れた字は確定のときにもう一度
+        // 入るので、同じ文が二重に残る。
+        if (growing || view.composing) {
           waiting = text;
           return;
         }
@@ -1000,6 +1003,14 @@ export function BodyEditor({
         paint.now();
       };
       if (adoptRef) adoptRef.current = adopt;
+      // 変換が終わったら、待たせていた分を入れる。
+      const afterCompose = () => {
+        if (waiting === null) return;
+        const text = waiting;
+        waiting = null;
+        adopt(text);
+      };
+      view.dom.addEventListener("compositionend", afterCompose);
       // 窓を離れるときは待たずに流す。戻ってこないこともある。
       const onLeave = () => send.flush();
       window.addEventListener("blur", onLeave);
@@ -1194,6 +1205,7 @@ export function BodyEditor({
         if (adoptRef) adoptRef.current = null;
         cancelAnimationFrame(looking);
         view.dom.removeEventListener("mousemove", hover);
+        view.dom.removeEventListener("compositionend", afterCompose);
         paint.stop();
         setBuilt(null);
         onBuilt?.(null);
