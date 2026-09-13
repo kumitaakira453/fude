@@ -657,9 +657,29 @@ describe("並びどうしの付け替え", () => {
     expect(change("- [ ] あ\n- [x] い\n", "ordered").out).toBe("1. あ\n2. い\n");
   });
 
-  it("相手はカーソルの居る並びだけ。入れ子は変えない", () => {
+  it("入れ子も含めて、塊まるごと変わる", () => {
     expect(change("- あ\n  - こ\n  - さ\n- い\n", "todo").out).toBe(
-      "- [ ] あ\n  - こ\n  - さ\n- [ ] い\n",
+      "- [ ] あ\n  - [ ] こ\n  - [ ] さ\n- [ ] い\n",
+    );
+  });
+
+  it("入れ子の項目にカーソルがあっても、塊まるごと変わる", () => {
+    const view = editor("- あ\n  - こ\n- い\n");
+    // 「こ」（入れ子の項目）へカーソルを置く。
+    caretAtStartOf(view, 1);
+    expect(item("todo").run(view.state, view.dispatch, view)).toBe(true);
+    expect(source()).toBe("- [ ] あ\n  - [ ] こ\n- [ ] い\n");
+  });
+
+  it("番号への付け替えも入れ子まで届く", () => {
+    expect(change("- あ\n  - こ\n- い\n", "ordered").out).toBe(
+      "1. あ\n   1. こ\n2. い\n",
+    );
+  });
+
+  it("TODO から戻すと、入れ子の印も落ちる", () => {
+    expect(change("- [ ] あ\n  - [x] こ\n- [ ] い\n", "bullet").out).toBe(
+      "- あ\n  - こ\n- い\n",
     );
   });
 

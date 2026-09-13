@@ -67,51 +67,64 @@ const ORDERED = { marker: ".", start: 1, tight: true };
 
 const wrapBullet = wrapInList(schema.nodes.bulletList, BULLET);
 
-// カーソルの居る、いちばん内側の並び。
-function listAround($from: ResolvedPos): { node: PmNode; pos: number } | null {
-  for (let d = $from.depth; d > 0; d--) {
+const isList = (node: PmNode): boolean =>
+  node.type === schema.nodes.bulletList || node.type === schema.nodes.orderedList;
+
+// カーソルの居る、いちばん外の並び。入れ子の項目から呼んでも、塊そのものを返す。
+function outerList($from: ResolvedPos): { node: PmNode; pos: number } | null {
+  for (let d = 1; d <= $from.depth; d++) {
     const node = $from.node(d);
-    if (node.type === schema.nodes.bulletList || node.type === schema.nodes.orderedList) {
-      return { node, pos: $from.before(d) };
-    }
+    if (isList(node)) return { node, pos: $from.before(d) };
   }
   return null;
 }
 
 // いま居る並びを、別の形に付け替える。種類（点／番号）と、項目の印（チェック）
-// を一度に入れ替え、並びの項目すべてに効かせる。
+// を一度に入れ替える。相手は塊まるごとで、入れ子の項目にも効く。
 //
 // wrapInList は、同じ中身を持てる並びの中では何もしない（prosemirror が false
 // を返す）。点の並びを番号や TODO に変える道がそこには無いので、ここで受ける。
 function retype(type: NodeType, attrs: Attrs, checked: boolean | null): Command {
   return (state, dispatch) => {
-    const here = listAround(state.selection.$from);
+    const here = outerList(state.selection.$from);
     if (!here) return false;
     const { node, pos } = here;
-    const sameKind = node.type === type;
-    let sameMark = true;
-    node.forEach((item) => {
-      if ((item.attrs.checked === null) !== (checked === null)) sameMark = false;
+
+    // 種類も印も中身の大きさを変えないので、先に位置を集めておける。
+    const lists: { at: number; node: PmNode }[] = [{ at: pos, node }];
+    const items: { at: number; node: PmNode }[] = [];
+    node.descendants((child, offset) => {
+      const at = pos + 1 + offset;
+      if (child.type === listItem) items.push({ at, node: child });
+      else if (isList(child)) lists.push({ at, node: child });
+      return true;
     });
+
+    const sameKind = lists.every((one) => one.node.type === type);
+    const sameMark = items.every(
+      (one) => (one.node.attrs.checked === null) === (checked === null),
+    );
     if (sameKind && sameMark) return false;
 
     if (dispatch) {
       const tr = state.tr;
-      // 目印を落として組み直させる。原文の "- あ" をそのまま出されると、
-      // 付け替えた種類も印も書き戻りに現れない。
-      const next = sameKind
-        ? { ...node.attrs, id: null }
-        : { ...attrs, id: null, tight: node.attrs.tight };
-      tr.setNodeMarkup(pos, type, next);
-      // 種類も印も中身の大きさを変えないので、項目の位置はそのまま数えられる。
-      let at = pos + 1;
-      node.forEach((item) => {
-        const now = checked === null ? null : (item.attrs.checked ?? false);
-        if (item.attrs.checked !== now) {
-          tr.setNodeMarkup(at, undefined, { ...item.attrs, checked: now });
+      for (const one of lists) {
+        // 目印を落として組み直させる。原文の "- あ" をそのまま出されると、
+        // 付け替えた種類も印も書き戻りに現れない。
+        tr.setNodeMarkup(
+          one.at,
+          type,
+          one.node.type === type
+            ? { ...one.node.attrs, id: null }
+            : { ...attrs, id: null, tight: one.node.attrs.tight },
+        );
+      }
+      for (const one of items) {
+        const now = checked === null ? null : (one.node.attrs.checked ?? false);
+        if (one.node.attrs.checked !== now) {
+          tr.setNodeMarkup(one.at, undefined, { ...one.node.attrs, checked: now });
         }
-        at += item.nodeSize;
-      });
+      }
       dispatch(tr);
     }
     return true;
