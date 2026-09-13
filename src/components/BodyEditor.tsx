@@ -369,6 +369,13 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
   let gen = 0;
   // 直前に描いたときの手掛かり。
   let sig = "";
+  // 直前に描いたときの本文。
+  //
+  // 手掛かりの位置は、本文が変わっても同じ数字のままになることがある。項目の
+  // 字下げ（Tab / Shift+Tab）がそれで、包み直しで閉じ札が開き札に置き換わる
+  // だけなので、開き札の数＝位置が動かない。字は横へ動いているのに、位置が
+  // 同じなら測り直さない作りだと、棒も帯も元の場所に残る。
+  let drawn: PmNode | null = null;
 
   // 範囲を引いている間か。引いている間だけ DOM 側の選択から測る。
   let drawing = false;
@@ -378,8 +385,10 @@ function painter(view: EditorView, host: HTMLElement, scroller: HTMLElement | nu
     const { from, to, head } = view.state.selection;
     const span = live ?? { from, to };
     const now = `${span.from},${span.to},${head},${view.composing ? 1 : 0},${gen}`;
-    if (now === sig) return;
+    const doc = view.state.doc;
+    if (now === sig && doc === drawn) return;
     sig = now;
+    drawn = doc;
     const rects = boxes.measure(live);
     const cellsAt = cells.measure();
     // 引いている間はカーソルの棒を出さない（範囲を選んでいるので要らない）。
