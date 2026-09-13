@@ -23,6 +23,7 @@ import {
   activeFolderIdAtom,
   expandedByFolderAtom,
   revealInTreeAtom,
+  soleAtom,
   treeAtom,
   treeFilterAtom,
   isShownAtom,
@@ -323,8 +324,11 @@ const TreeItem = memo(function TreeItem({
 
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
-  // 下書きを開いているか。置き場はアプリの持ち物なので、作る・消すの口を出さない。
+  // 作る口を出さない場面。下書きの置き場はアプリの持ち物で、1 枚だけ開いて
+  // いるときの木はそのファイルしか持たない。どちらも作ったものが出てこない。
   const draftRoot = useAtomValue(draftRelAtom) !== null;
+  const sole = useAtomValue(soleAtom) !== null;
+  const noAdd = draftRoot || sole;
   const filter = useAtomValue(treeFilterAtom);
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
@@ -507,8 +511,7 @@ export function FileTree() {
         <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
           エクスプローラー
         </span>
-        {/* 下書きの置き場はアプリの持ち物。そこへ作らせない。 */}
-        {!draftRoot && (
+        {!noAdd && (
           <>
             <button
               onClick={() => startCreate("", "file")}
@@ -574,8 +577,8 @@ export function FileTree() {
         <EntryMenu
           menu={menu}
           onClose={() => setMenu(null)}
-          onNewFile={(n) => startCreate(n.path, "file")}
-          onNewFolder={(n) => startCreate(n.path, "dir")}
+          onNewFile={noAdd ? undefined : (n) => startCreate(n.path, "file")}
+          onNewFolder={noAdd ? undefined : (n) => startCreate(n.path, "dir")}
           onRename={(n) => setEditingPath(n.path)}
         />
       )}
