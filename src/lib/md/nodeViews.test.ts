@@ -60,6 +60,16 @@ describe("タスクのチェック", () => {
     expect(source()).toBe("- [ ] やる\n");
   });
 
+  it("押したら項目の印も入れ替わる。済みの見た目はこれに当たっている", () => {
+    const view = editor("- [ ] やる\n");
+    const li = () => view.dom.querySelector<HTMLElement>("li.task-list-item")!;
+    expect(li().dataset.checked).toBe("false");
+    click(view.dom.querySelector(".mg-task-check")!);
+    expect(li().dataset.checked).toBe("true");
+    click(view.dom.querySelector(".mg-task-check")!);
+    expect(li().dataset.checked).toBe("false");
+  });
+
   it("押した項目だけが入れ替わる", () => {
     // 専用の描画は自分の位置を持っているので、描かれない "- [ ] " が
     // 混ざっても隣に飛ばない。

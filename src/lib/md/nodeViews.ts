@@ -679,7 +679,11 @@ class ListItemView implements NodeView {
     // 印が付いた・外れたときは作りが変わる。組み直させる。
     if ((was === null) !== (now === null)) return false;
     this.node = node;
-    if (now !== null && now !== was) this.paint(now);
+    if (now !== null && now !== was) {
+      // 印は li に載せる。済みの項目を薄くして線を引くのがここに当たっている。
+      this.dom.dataset.checked = String(now);
+      this.paint(now);
+    }
     return true;
   }
 
