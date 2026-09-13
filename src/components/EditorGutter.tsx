@@ -634,6 +634,20 @@ export function EditorGutter({
     });
     settle.observe(view.dom);
 
+    // 字下げ（Tab / ⇧Tab）のように、大きさは変わらないのに位置だけが動くこと
+    // がある。項目が入れ子の並びへ移るだけなので、大きさの見張りでは気付けず、
+    // つまみが元の場所に取り残される。節点の入れ替わりも合図にする。
+    // 1 枚に 1 回へまとめる（打鍵のたびに測ると本文の大きさに比例して効く）。
+    let soon = 0;
+    const shifted = new MutationObserver(() => {
+      if (soon || heldRef.current) return;
+      soon = requestAnimationFrame(() => {
+        soon = 0;
+        if (!heldRef.current) again();
+      });
+    });
+    shifted.observe(view.dom, { childList: true, subtree: true });
+
     watching.addEventListener("mousemove", onMouseMove);
     watching.addEventListener("mouseleave", onMouseLeave);
     watching.addEventListener("scroll", onScroll, true);
@@ -645,6 +659,8 @@ export function EditorGutter({
       watching.removeEventListener("mouseleave", onMouseLeave);
       watching.removeEventListener("scroll", onScroll, true);
       settle.disconnect();
+      shifted.disconnect();
+      cancelAnimationFrame(soon);
     };
   }, [view, host, scroller]);
 
