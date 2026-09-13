@@ -628,11 +628,10 @@ export function useWorkspace() {
       const rel = await uniqueRel(joinRel(parentRel, fileName));
       const abs = absOf(rel);
       if (!abs) return;
-      const stem = baseOf(rel).replace(/\.[^.]+$/, "");
-      const initial = isMarkdown(rel) ? `# ${stem}\n\n` : "";
-      await writeFile(abs, initial);
+      // 中身は空で作る。名前を見出しとして入れると、要らない人は毎回消すことになる。
+      await writeFile(abs, "");
       const content = new Map(store.get(A.contentCacheAtom));
-      content.set(rel, initial);
+      content.set(rel, "");
       store.set(A.contentCacheAtom, content);
       await refreshTreeStructure();
       openFile(rel);
