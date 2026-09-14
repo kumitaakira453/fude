@@ -1573,7 +1573,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             span={{ from: editSel.from, to: editSel.to }}
             linkNonce={linkNonce}
             pin={scrolled}
-            within={scroller}
+            within={editScroller}
             onComment={commentOnSpan}
           />
         )}
