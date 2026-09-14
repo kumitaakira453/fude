@@ -20,8 +20,9 @@ export const AWAY = 10;
 export const BAR = 15;
 // 帯を出す縁の幅。表の真ん中を指している間は出さない（Notion と同じ）。
 export const EDGE = 26;
-// 行・列を足す帯。掴む帯と同じ太さに揃える。
-export const ADD = 16;
+// 行・列を足す帯。掴む帯より細くする（押す的としては足りていて、表より
+// 目立たない）。
+export const ADD = 11;
 export const ADD_AWAY = 6;
 // つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る左の余白。
 export const BOTH = GRIP * 2 + 4 + AWAY;
