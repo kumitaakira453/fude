@@ -52,7 +52,13 @@ function textStart(doc: EditorState["doc"]): number {
 }
 
 // 本文を開いて from..to（表示文字の位置）を選び、その選択に帯を出す。
-function bar(body: string, from: number, to: number) {
+// at は選んだところの矩形。within は本文が見えている枠。
+function bar(
+  body: string,
+  from: number,
+  to: number,
+  extra: { at?: { top: number; bottom: number; left: number }; within?: HTMLElement } = {},
+) {
   const loaded = fromMarkdown(body);
   const place = document.createElement("div");
   document.body.appendChild(place);
@@ -77,9 +83,10 @@ function bar(body: string, from: number, to: number) {
     root!.render(
       <SelectionBar
         view={view}
-        at={{ top: 100, bottom: 120, left: 40 }}
+        at={extra.at ?? { top: 100, bottom: 120, left: 40 }}
         span={{ from: base + from, to: base + to }}
         linkNonce={0}
+        within={extra.within}
         onComment={() => {}}
       />,
     ),
@@ -301,5 +308,38 @@ describe("装飾", () => {
     bar("**ふとい**と*ななめ*\n", 0, 7);
     pressDown(button("書式をクリア"));
     expect(source()).toBe("ふといとななめ\n");
+  });
+});
+
+describe("選んだところと一緒に流れる", () => {
+  // 本文の枠。上 100 から高さ 400（下端 500）。
+  const pane = () => {
+    const el = document.createElement("div");
+    el.getBoundingClientRect = () =>
+      ({ x: 0, y: 100, top: 100, left: 0, right: 800, bottom: 500, width: 800, height: 400 }) as DOMRect;
+    document.body.appendChild(el);
+    return el;
+  };
+
+  const shown = () => !!document.querySelector(".mg-sel-bar");
+
+  it("選んだところが枠の中なら出す", () => {
+    bar("ここを太く\n", 0, 2, { at: { top: 200, bottom: 220, left: 40 }, within: pane() });
+    expect(shown()).toBe(true);
+  });
+
+  it("枠の上へ流れたら出さない", () => {
+    bar("ここを太く\n", 0, 2, { at: { top: 40, bottom: 60, left: 40 }, within: pane() });
+    expect(shown()).toBe(false);
+  });
+
+  it("枠の下へ流れたら出さない", () => {
+    bar("ここを太く\n", 0, 2, { at: { top: 520, bottom: 540, left: 40 }, within: pane() });
+    expect(shown()).toBe(false);
+  });
+
+  it("枠を渡さなければ画面ぜんたいで見る", () => {
+    bar("ここを太く\n", 0, 2, { at: { top: 200, bottom: 220, left: 40 } });
+    expect(shown()).toBe(true);
   });
 });

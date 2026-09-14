@@ -32,18 +32,30 @@ export interface Room extends Size {
 const within = (value: number, span: number, from: number, to: number): number =>
   Math.max(from, Math.min(value, to - span));
 
-export function placeNear(at: Spot, size: Size, room: Room): { top: number; left: number } {
+// 縦を縁で止めるか。止めないものは、相手が枠の外へ流れれば一緒に出ていく
+// （選んだ字から離れて縁に残っても、もう相手が見えないので用が無い）。
+export function placeNear(
+  at: Spot,
+  size: Size,
+  room: Room,
+  hold = true,
+): { top: number; left: number } {
   const head = room.top + EDGE;
   const foot = room.top + room.height - EDGE;
   const below = at.bottom + GAP;
   const above = at.top - GAP - size.height;
-  // 下に入るなら下。入らないなら上。どちらにも入らなければ縁で止める。
+  // 下に入るなら下。入らないなら上。どちらにも入らなければ下のまま。
   const want = below + size.height <= foot ? below : above >= head ? above : below;
   return {
-    top: within(want, size.height, head, foot),
+    // 横は流れないので、止めるかどうかに関わらず枠の中に収める。
+    top: hold ? within(want, size.height, head, foot) : want,
     left: within(at.left, size.width, room.left + EDGE, room.left + room.width - EDGE),
   };
 }
+
+// その矩形が枠に掛かっているか。外れたものは出す意味がない。
+export const seenIn = (at: { top: number; bottom: number }, room: Room): boolean =>
+  at.bottom > room.top && at.top < room.top + room.height;
 
 // 収める枠。渡されなければ画面ぜんたい。
 export const roomOf = (el: HTMLElement | null | undefined): Room => {

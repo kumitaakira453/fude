@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeNear } from "./floatAt";
+import { placeNear, seenIn } from "./floatAt";
 
 // 画面に浮かせるものの置き場所。数字だけで決まるので、画面を作らずに見る。
 
@@ -88,5 +88,43 @@ describe("枠が画面ぜんたいでないとき", () => {
     // 枠の下端 620。下端 580 のすぐ下には 40 の高さが入らない。
     const spot = placeNear({ top: 560, bottom: 580, left: 400 }, SIZE, PANE);
     expect(spot.top).toBe(512);
+  });
+});
+
+describe("縦を止めないとき", () => {
+  const PANE = { top: 120, left: 300, width: 600, height: 500 };
+
+  it("枠の上へ流れた相手には、そのまま付いていく", () => {
+    const spot = placeNear({ top: -200, bottom: -180, left: 400 }, SIZE, PANE, false);
+    expect(spot.top).toBe(-172);
+  });
+
+  it("上下どちらへ出すかは枠で決まる", () => {
+    // 枠の下端 620。下端 580 のすぐ下には 40 の高さが入らないので上へ。
+    expect(placeNear({ top: 560, bottom: 580, left: 400 }, SIZE, PANE, false).top).toBe(512);
+  });
+
+  it("横は止めたままにする", () => {
+    expect(placeNear({ top: 300, bottom: 320, left: 0 }, SIZE, PANE, false).left).toBe(308);
+  });
+});
+
+describe("枠に掛かっているか", () => {
+  const PANE = { top: 120, left: 300, width: 600, height: 500 };
+
+  it("中にあれば掛かっている", () => {
+    expect(seenIn({ top: 300, bottom: 320 }, PANE)).toBe(true);
+  });
+
+  it("下の縁に半分かかっていても掛かっている", () => {
+    expect(seenIn({ top: 600, bottom: 640 }, PANE)).toBe(true);
+  });
+
+  it("上へ抜けたら外れている", () => {
+    expect(seenIn({ top: 60, bottom: 119 }, PANE)).toBe(false);
+  });
+
+  it("下へ抜けたら外れている", () => {
+    expect(seenIn({ top: 620, bottom: 660 }, PANE)).toBe(false);
   });
 });

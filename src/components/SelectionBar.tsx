@@ -1,6 +1,6 @@
 import type { MarkType } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
-import { placeNear, roomOf } from "../lib/floatAt";
+import { placeNear, roomOf, seenIn } from "../lib/floatAt";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   blockKindOf,
@@ -84,7 +84,7 @@ export function SelectionBar({
   linkNonce: number;
   // 本文を送った合図。増えたら置き場所を取り直す。
   pin?: number;
-  // 収める枠。渡されなければ画面ぜんたい。
+  // 本文が見えている枠。渡されなければ画面ぜんたい。
   within?: HTMLElement | null;
   onComment: () => void;
 }) {
@@ -132,7 +132,8 @@ export function SelectionBar({
     if (!el) return;
     const fit = () => {
       const size = el.getBoundingClientRect();
-      setPlace(placeNear(box, size, roomOf(within)));
+      // 縦は止めない。選んだところが本文の外へ流れたら、帯も一緒に出ていく。
+      setPlace(placeNear(box, size, roomOf(within), false));
     };
     fit();
     // 中身は開閉で高さが変わる（リンクの入力・ブロックの一覧）。
@@ -218,6 +219,9 @@ export function SelectionBar({
     view.focus();
     bump();
   };
+
+  // 選んだところが本文の枠から外れたら出さない。送り戻せばまた出る。
+  if (!seenIn(box, roomOf(within))) return null;
 
   return (
     <>
