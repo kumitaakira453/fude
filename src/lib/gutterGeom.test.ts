@@ -165,8 +165,8 @@ describe("addBelow", () => {
     expect(addBelow(100, 0, GAP)).toBe(100 - ADD / 2);
   });
 
-  it("下にぶつかる相手が居なければ決めた分だけ離す", () => {
-    expect(addBelow(100, Infinity, GAP)).toBe(112);
+  it("下にぶつかる相手が居なければ表の縁に寄せる", () => {
+    expect(addBelow(100, Infinity, GAP)).toBe(100);
   });
 });
 

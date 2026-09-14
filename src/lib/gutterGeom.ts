@@ -269,6 +269,9 @@ export function tableGeometry(
 //
 // room は表の下端から次のブロックの上端までの画素。
 export function addAway(room: number, gap: number): number {
+  // 下にぶつかる相手が居ないときは、表の縁に寄せる。決めた分だけ離すと、
+  // どの表のものか読みにくい。
+  if (!Number.isFinite(room)) return 0;
   return Math.max(-ADD / 2, Math.min(gap, (room - ADD) / 2));
 }
 
