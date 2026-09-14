@@ -269,10 +269,12 @@ export function tableGeometry(
 // 寄せ、それでも足りなければ表の下端をまたぐ（次のブロックへは入れない）。
 //
 // room は表の下端から次のブロックの上端までの画素。
+// 相手が居ないときに表から離す幅。縁ちょうどだと帯の辺と罫線が触れて、表の
+// 一本に見える。離しすぎるとどの表のものか読みにくい。
+const APART = 6;
+
 export function addAway(room: number, gap: number): number {
-  // 下にぶつかる相手が居ないときは、表の縁に寄せる。決めた分だけ離すと、
-  // どの表のものか読みにくい。
-  if (!Number.isFinite(room)) return 0;
+  if (!Number.isFinite(room)) return APART;
   return Math.max(-ADD / 2, Math.min(gap, (room - ADD) / 2));
 }
 
