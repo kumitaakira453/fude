@@ -604,10 +604,20 @@ export function BodyEditor({
         setOnLink(null);
       });
     };
+    // 本文が動けば、手はもうそのリンクの上に無い。手は動かないので
+    // mousemove では気付けず、札だけが元の場所に取り残される。
+    const gone = () => {
+      shownLink.current = "";
+      setOnLink(null);
+    };
     document.addEventListener("mousemove", onMove);
+    window.addEventListener("scroll", gone, true);
+    window.addEventListener("resize", gone);
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener("mousemove", onMove);
+      window.removeEventListener("scroll", gone, true);
+      window.removeEventListener("resize", gone);
     };
   }, [onLink]);
 
