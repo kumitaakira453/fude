@@ -5839,8 +5839,11 @@ body.mg-carrying {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: grid;
-  place-items: center;
+  /* 中央に置く。grid の枠は中身の背に引っ張られるので、割合での上限が
+     効かなくなる。flex なら枠は画面のままで、はみ出さずに中央へ来る。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 2rem 1rem;
   background: color-mix(in srgb, var(--mg-bg) 62%, transparent);
   backdrop-filter: blur(6px);
@@ -5850,7 +5853,8 @@ body.mg-carrying {
   display: flex;
   flex-direction: column;
   width: min(34rem, 100%);
-  max-height: min(38rem, 100%);
+  /* 背は画面で抑える。越えた分は中身（.mg-meta-body）の側でスクロールする。 */
+  max-height: min(38rem, calc(100dvh - 4rem));
   border: 1px solid var(--mg-border);
   border-radius: 1rem;
   background: var(--mg-panel);
