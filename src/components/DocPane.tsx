@@ -1547,7 +1547,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
 
         {!editing && isDoc && review.selection && !review.draft && (
-          <SelectionMenu at={review.selection.rect} onComment={review.startDraft}>
+          <SelectionMenu
+            at={review.selection.rect}
+            within={scroller}
+            onComment={review.startDraft}
+          >
             {review.selection.cellStart !== undefined && (
               <SelectionAct icon="table" label="セルにコメント" onPick={commentOnCell} />
             )}
@@ -1569,6 +1573,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             span={{ from: editSel.from, to: editSel.to }}
             linkNonce={linkNonce}
             pin={scrolled}
+            within={scroller}
             onComment={commentOnSpan}
           />
         )}

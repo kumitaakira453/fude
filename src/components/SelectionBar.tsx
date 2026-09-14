@@ -1,6 +1,6 @@
 import type { MarkType } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
-import { placeNear } from "../lib/floatAt";
+import { placeNear, roomOf } from "../lib/floatAt";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   blockKindOf,
@@ -72,6 +72,7 @@ export function SelectionBar({
   span,
   linkNonce,
   pin = 0,
+  within,
   onComment,
 }: {
   view: EditorView;
@@ -83,6 +84,8 @@ export function SelectionBar({
   linkNonce: number;
   // 本文を送った合図。増えたら置き場所を取り直す。
   pin?: number;
+  // 収める枠。渡されなければ画面ぜんたい。
+  within?: HTMLElement | null;
   onComment: () => void;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -129,16 +132,14 @@ export function SelectionBar({
     if (!el) return;
     const fit = () => {
       const size = el.getBoundingClientRect();
-      setPlace(
-        placeNear(box, size, { width: window.innerWidth, height: window.innerHeight }),
-      );
+      setPlace(placeNear(box, size, roomOf(within)));
     };
     fit();
     // 中身は開閉で高さが変わる（リンクの入力・ブロックの一覧）。
     const watch = new ResizeObserver(fit);
     watch.observe(el);
     return () => watch.disconnect();
-  }, [box, seq, menu, asking]);
+  }, [box, seq, menu, asking, within]);
 
   const run =
     (

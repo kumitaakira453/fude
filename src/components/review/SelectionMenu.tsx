@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { placeNear } from "../../lib/floatAt";
+import { placeNear, roomOf } from "../../lib/floatAt";
 import { Icon } from "../Icon";
 
 // 字を選んだときに出る操作。コメントはどの画面でも出し、その画面だけの操作は
@@ -10,11 +10,14 @@ import { Icon } from "../Icon";
 // preventDefault で選択の解除も止める。
 export function SelectionMenu({
   at,
+  within,
   onComment,
   children,
 }: {
   // 選んだ範囲の矩形。メニューはこのすぐ下に出す（下に入らなければ上）。
   at: { top?: number; bottom: number; left: number };
+  // 収める枠。渡されなければ画面ぜんたい。
+  within?: HTMLElement | null;
   onComment: () => void;
   children?: ReactNode;
 }) {
@@ -27,19 +30,13 @@ export function SelectionMenu({
     if (!el) return;
     const fit = () => {
       const size = el.getBoundingClientRect();
-      setPlace(
-        placeNear(
-          { top, bottom, left },
-          size,
-          { width: window.innerWidth, height: window.innerHeight },
-        ),
-      );
+      setPlace(placeNear({ top, bottom, left }, size, roomOf(within)));
     };
     fit();
     const watch = new ResizeObserver(fit);
     watch.observe(el);
     return () => watch.disconnect();
-  }, [top, bottom, left]);
+  }, [top, bottom, left, within]);
 
   return (
     <div ref={panel} style={{ top: place.top, left: place.left }} className="mg-sel-menu">

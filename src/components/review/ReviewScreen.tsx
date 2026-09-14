@@ -910,7 +910,11 @@ function ThreadDetail({
       {/* 読んでいる最中に気付いたことを、その場で書けるようにする。選択と
           入力の作りは本文の画面と同じ（同じ部品・同じ決まり）。 */}
       {write.selection && !write.draft && (
-        <SelectionMenu at={write.selection.rect} onComment={write.startDraft} />
+        <SelectionMenu
+          at={write.selection.rect}
+          within={paper?.parentElement}
+          onComment={write.startDraft}
+        />
       )}
       {write.draft && (
         <CommentComposer
