@@ -149,12 +149,16 @@ export const schema = new Schema({
           }),
         },
       ],
+      // 番号は CSS の counter で描くので、途中から始まる並びは変数でも渡す
+      // （counter は start 属性を見ない）。
       toDOM: (node) =>
         [
           "ol",
           {
             class: "mg-steps",
-            ...(node.attrs.start === 1 ? {} : { start: node.attrs.start }),
+            ...(node.attrs.start === 1
+              ? {}
+              : { start: node.attrs.start, style: `--mg-start:${node.attrs.start - 1}` }),
             ...(node.attrs.tight ? { "data-tight": "true" } : {}),
           },
           0,

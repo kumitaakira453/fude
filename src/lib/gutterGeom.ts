@@ -71,8 +71,8 @@ export function itemEdge(li: HTMLElement): number {
   return line.left - reserve;
 }
 
-// 字下げ 1 段の幅。入れ子が既にあればそこから測る。無ければ並びが空けている
-// 幅を使い、それも取れなければ既定の刻みにする。運ぶときに指の横位置から
+// 字下げ 1 段の幅。入れ子が既にあればそこから測る。無ければ項目が印に空けて
+// いる幅を使い、それも取れなければ既定の刻みにする。運ぶときに指の横位置から
 // 落とす深さを決めるのに使う。
 const INDENT = 24;
 
@@ -83,7 +83,8 @@ export function indentStep(el: HTMLElement): number {
     const step = itemEdge(deep) - itemEdge(shallow);
     if (step > 4) return step;
   }
-  const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+  // 入れ子がまだ無いときは、項目が行頭の印に空けている幅を 1 段とみなす。
+  const pad = shallow ? parseFloat(getComputedStyle(shallow).paddingLeft) || 0 : 0;
   return pad > 4 ? pad : INDENT;
 }
 

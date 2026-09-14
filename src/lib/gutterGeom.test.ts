@@ -4,6 +4,8 @@ import {
   addBelow,
   firstLine,
   holdAt,
+  indentStep,
+  itemEdge,
   nearEdge,
   onLine,
   roomBelow,
@@ -262,5 +264,59 @@ describe("トグルの 1 行目", () => {
 
     expect(firstLine(box)?.top).toBe(10);
     box.remove();
+  });
+});
+
+// 行頭の印は項目自身の余白の中に置く（並びは余白を持たない）。つまみはその
+// 印の左端に合わせるので、両方の余白から印の幅を割り出す。
+describe("項目の左端と字下げ", () => {
+  // jsdom は字の矩形を持たない。字のあるテキスト節点ごとに当て木を置く。
+  const said = new Map<Node, DOMRect>();
+  const only = (rect: DOMRect): DOMRectList => {
+    const list: DOMRect[] = [rect];
+    return Object.assign(list, { item: (i: number) => list[i] ?? null }) as DOMRectList;
+  };
+  Range.prototype.getClientRects = function (this: Range): DOMRectList {
+    return only(said.get(this.startContainer) ?? new DOMRect(0, 0, 0, 0));
+  };
+
+  // 字の左端は項目の左端＋余白。
+  const item = (pad: string, box: DOMRect, text: string, line: number) => {
+    const li = document.createElement("li");
+    li.style.paddingLeft = pad;
+    li.textContent = text;
+    rect(li, box);
+    said.set(li.firstChild!, new DOMRect(line, box.y, 200, 20));
+    return li;
+  };
+
+  const listOf = (li: HTMLElement, box: DOMRect) => {
+    const ul = document.createElement("ul");
+    rect(ul, box);
+    ul.appendChild(li);
+    document.body.appendChild(ul);
+    return ul;
+  };
+
+  it("印の左端を返す（項目の余白ぶん左へ戻す）", () => {
+    const li = item("24px", new DOMRect(100, 200, 300, 30), "一つ", 124);
+    listOf(li, new DOMRect(100, 200, 300, 30));
+    expect(itemEdge(li)).toBe(100);
+  });
+
+  it("入れ子が無ければ、項目の余白を 1 段とみなす", () => {
+    const li = item("24px", new DOMRect(100, 200, 300, 30), "一つ", 124);
+    expect(indentStep(listOf(li, new DOMRect(100, 200, 300, 30)))).toBe(24);
+  });
+
+  it("入れ子があれば、その差を 1 段とみなす", () => {
+    const li = item("24px", new DOMRect(100, 200, 300, 60), "親", 124);
+    const ul = listOf(li, new DOMRect(100, 200, 300, 60));
+    const kid = item("24px", new DOMRect(124, 230, 276, 30), "子", 148);
+    const nest = document.createElement("ul");
+    rect(nest, new DOMRect(124, 230, 276, 30));
+    nest.appendChild(kid);
+    li.appendChild(nest);
+    expect(indentStep(ul)).toBe(24);
   });
 });

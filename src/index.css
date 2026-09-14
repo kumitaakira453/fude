@@ -658,14 +658,56 @@ body {
 .mg-prose thead th {
   color: var(--mg-fg);
 }
-/* タスクリスト: ネイティブ checkbox をやめ Material アイコンに統一。
-   箇条書きの点は出さない（アイコンと二重にしない）。 */
-.mg-prose li.task-list-item,
-.mg-prose li:has(> .mg-task-check) {
+/* 行頭の印は、段落の左端から始める。
+   字下げの無い塊どうしで印の左端がずれていると、同じ高さのものがばらばらに
+   置かれて見える。::marker の置き場所はブラウザが決めていて記号の幅で動くので、
+   印は自前で描いて左端を決める。 */
+:is(.mg-prose, .mg-pm) :is(ul, ol) {
+  padding-left: 0;
   list-style: none;
 }
-.mg-prose ul.contains-task-list {
-  padding-left: 0.5rem;
+:is(.mg-prose, .mg-pm) :is(ul, ol) > li {
+  position: relative;
+  padding-left: 1.5em;
+}
+/* 点。字の大きさに連れて丸も変わるよう em で持つ。 */
+:is(.mg-prose, .mg-pm) ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.66em;
+  width: 0.36em;
+  height: 0.36em;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* 番号。原文が途中から始まる並びは --mg-start で受ける。値は並び自身に
+   書くので、入れ子の並びには伝わらない（ここの 0 が効く）。 */
+:is(.mg-prose, .mg-pm) ol {
+  --mg-start: 0;
+  counter-reset: mg-item var(--mg-start);
+}
+:is(.mg-prose, .mg-pm) ol > li {
+  counter-increment: mg-item;
+  /* 2 桁でも字に掛からない幅。 */
+  padding-left: 1.9em;
+}
+:is(.mg-prose, .mg-pm) ol > li::before {
+  content: counter(mg-item) ".";
+  position: absolute;
+  left: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* タスクリスト: ネイティブ checkbox をやめ Material アイコンに統一。
+   チェックが行頭の印になるので、点も番号も出さない。 */
+:is(.mg-prose, .mg-pm) li.task-list-item,
+:is(.mg-prose, .mg-pm) li:has(> .mg-task-check) {
+  list-style: none;
+  padding-left: 0;
+}
+:is(.mg-prose, .mg-pm) li.task-list-item::before,
+:is(.mg-prose, .mg-pm) li:has(> .mg-task-check)::before {
+  content: none;
 }
 .mg-prose .mg-task-check {
   display: inline-flex;
@@ -2133,7 +2175,7 @@ body.mg-dragging .mg-sel-menu {
 .mg-prose summary::before,
 .mg-pm .mg-details-mark::before {
   background: currentColor;
-  clip-path: polygon(7px 5px, 15px 11px, 7px 17px);
+  clip-path: polygon(0 5px, 8px 11px, 0 17px);
   transition: transform 120ms ease;
 }
 .mg-pm .mg-details-mark {
@@ -2299,31 +2341,18 @@ body.mg-dragging .mg-sel-menu {
   --mg-tint: #ef4444;
 }
 
-/* 番号付きリスト。丸で囲まず、数字そのものを組む。
-   桁が増えても字が動かないよう、番号は幅を決めた枠の中で右へ揃える。 */
+/* 番号付きリスト。丸で囲まず、数字そのものを組む。置き場所は行頭の印の
+   決まりに任せ、ここでは色と太さだけを足す。 */
 .mg-prose.mg-editorial ol.mg-steps {
-  list-style: none;
-  counter-reset: mgstep;
-  padding-left: 0;
   margin: 1.1rem 0;
 }
 .mg-prose.mg-editorial ol.mg-steps > li {
-  position: relative;
-  counter-increment: mgstep;
-  padding-left: 2.1rem;
   margin-block: 0.15em;
 }
 .mg-prose.mg-editorial ol.mg-steps > li::before {
-  content: counter(mgstep) ".";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1.5rem;
-  text-align: right;
   color: var(--mg-accent);
   font-size: 0.95em;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
   line-height: inherit;
 }
 
@@ -2415,9 +2444,9 @@ body.mg-dragging .mg-sel-menu {
   }
 }
 /* 区切り線: ただの罫線ではなく「· · ·」の上品なディバイダ（div で実描画） */
-/* 箇条書きのマーカーをアクセント色で少し際立たせる */
-.mg-prose.mg-editorial ul > li::marker {
-  color: var(--mg-accent);
+/* 箇条書きの点をアクセント色で少し際立たせる */
+.mg-prose.mg-editorial ul > li::before {
+  background: var(--mg-accent);
 }
 /* 項目は行送りで読ませる。項目ごとに段落と同じ余白を足すと、一覧ではなく
    短い段落の並びに見える。空行で書いた（ゆるい）箇条書きも同じ間隔に揃える。 */
@@ -4606,10 +4635,6 @@ body.mg-carrying {
 .mg-prose.mg-editorial .mg-task-body > :last-child,
 .mg-prose.mg-editorial .mg-task-body :is(ul, ol) > li:last-child {
   margin-block-end: 0;
-}
-/* タスクのある箇条書きは、読むときと同じだけ左を詰める。 */
-.mg-pm ul:has(> li.task-list-item) {
-  padding-left: 0.5rem;
 }
 /* 表のセルを選んでいる状態。塗らずに、選んだ範囲を丸ごと囲んで示す
    （囲みは編集面が重ねる .mg-cells。塗りと囲みを両方出すと二重に見える）。 */

@@ -6,6 +6,7 @@ import {
   useContext,
   useMemo,
   useState,
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -436,9 +437,18 @@ export const Markdown = memo(function Markdown({
           }
           return <blockquote>{children}</blockquote>;
         },
-        ol({ children }) {
+        ol({ children, start }) {
+          // 番号は CSS の counter で描く。counter は start 属性を見ないので、
+          // 途中から始まる並びは変数でも渡す。
+          const from = typeof start === "number" ? start : 1;
           return (
-            <ol className={editorial ? "mg-steps" : undefined}>{children}</ol>
+            <ol
+              className={editorial ? "mg-steps" : undefined}
+              start={from === 1 ? undefined : from}
+              style={from === 1 ? undefined : ({ "--mg-start": from - 1 } as CSSProperties)}
+            >
+              {children}
+            </ol>
           );
         },
         // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
