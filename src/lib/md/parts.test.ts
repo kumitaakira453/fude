@@ -82,7 +82,7 @@ describe("toMarkdownParts", () => {
 
   it("消したあとも、残った節点の Markdown は原文のまま", () => {
     const { loaded, state } = opened(SRC);
-    const next = state.apply(blockActTr(state, 1, "delete")!);
+    const next = state.apply(blockActTr(state, state.doc.child(0).nodeSize, "delete")!);
     const { text, parts } = toMarkdownParts(next.doc, loaded);
     expect(parts.map((p) => p.src)).not.toContain("はじめの段落。");
     expect(parts[0].src).toBe("# 題");

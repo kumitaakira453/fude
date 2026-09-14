@@ -67,7 +67,7 @@ describe("seenAt", () => {
 
   it("足したばかりのブロックでは手前のブロックを控える", () => {
     const { loaded, state } = opened(SRC);
-    const tr = blockActTr(state, 1, "insertAfter");
+    const tr = blockActTr(state, posOf(state, 1), "insertAfter");
     const next = state.apply(tr!);
     // 足した分は目印を持たないので、原文の範囲を引けない。
     expect(next.doc.child(2).attrs.id).toBe(null);

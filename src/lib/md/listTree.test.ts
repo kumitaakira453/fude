@@ -1,3 +1,4 @@
+import type { Node as PmNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
@@ -145,12 +146,16 @@ describe("並びの外へ出す", () => {
 
 後の段落
 `;
+  // 出す先は位置で受ける。番号のほうが読みやすいので、ここで引き直す。
+  const posOf = (doc: PmNode, index: number): number => {
+    let at = 0;
+    for (let i = 0; i < Math.min(index, doc.childCount); i++) at += doc.child(i).nodeSize;
+    return at;
+  };
   const out = (body: string, listIndex: number, from: number, block: number): string => {
     const loaded = fromMarkdown(body);
     const state = EditorState.create({ doc: loaded.doc });
-    let at = 0;
-    for (let i = 0; i < listIndex; i++) at += state.doc.child(i).nodeSize;
-    const tr = itemOutTr(state, at, from, block);
+    const tr = itemOutTr(state, posOf(state.doc, listIndex), from, posOf(state.doc, block));
     if (!tr) return "（動かない）";
     return toMarkdown(state.apply(tr).doc, loaded);
   };

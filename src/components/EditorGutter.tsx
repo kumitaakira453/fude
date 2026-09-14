@@ -17,6 +17,7 @@ import {
 import {
   depthRange,
   flatten,
+  isList,
   itemDropTr,
   itemIndexOf,
   itemOutTr,
@@ -81,9 +82,7 @@ type Kind = "block" | "item" | TablePart;
 const ADD_GAP = 12;
 
 interface Spot {
-  // トップレベルの何番目か。
-  index: number;
-  // そのブロックが始まる位置。
+  // そのブロックが始まる位置。トグルの中身でも同じ指し方になる。
   pos: number;
   // 本文の左の余白。狭い画面では出すつまみを減らす。
   room: number;
@@ -100,6 +99,8 @@ interface Spot {
     // 親のリストが始まる位置と、その中で何番目か。
     listPos: number;
     at: number;
+    // いちばん外の並びが始まる位置。掴む単位はこの並び全体になる。
+    root: number;
     // 1 行目の中心。つまみをこの高さに揃える。
     mid: number;
     // 項目の左端（記号を含む）。つまみはここから左へ置く。
@@ -136,7 +137,7 @@ const sameBox = (a: Box, b: Box) =>
 
 function same(a: Spot | null, b: Spot | null): boolean {
   if (!a || !b) return a === b;
-  if (a.index !== b.index || a.pos !== b.pos || a.line !== b.line) return false;
+  if (a.pos !== b.pos || a.line !== b.line) return false;
   if (a.room !== b.room || !sameBox(a.box, b.box)) return false;
   if (!a.item || !b.item) {
     if (a.item !== b.item) return false;
@@ -169,19 +170,16 @@ function same(a: Spot | null, b: Spot | null): boolean {
 
 interface Hit {
   el: HTMLElement;
-  index: number;
   pos: number;
 }
 
-// 指している高さにあるブロック。
+// その入れ物の中で、指している高さにある子は何番目か。
 //
 // 当たり判定では拾わない。つまみは本文の外の余白に置くので、そこへ手を伸ばして
 // いる間はブロックの上に居ない。ブロックは縦に並んで上端が昇順なので、その
 // 高さのブロックを二分探索で挟む（上から順に測ると本文の大きさに比例して
 // 遅くなる）。
-function blockAtY(view: EditorView, y: number): Hit | null {
-  const kids = view.dom.children;
-  if (!kids.length) return null;
+function childAtY(kids: HTMLCollection, y: number): number {
   let lo = 0;
   let hi = kids.length - 1;
   let at = 0;
@@ -203,11 +201,37 @@ function blockAtY(view: EditorView, y: number): Hit | null {
       if (gap > 0 && y - here.bottom > gap / 2) at += 1;
     }
   }
-  const el = kids[at];
-  if (!(el instanceof HTMLElement) || at >= view.state.doc.childCount) return null;
-  let pos = 0;
-  for (let i = 0; i < at; i++) pos += view.state.doc.child(i).nodeSize;
-  return { el, index: at, pos };
+  return at;
+}
+
+// 指している高さにある、いちばん内側のブロック。
+//
+// トグルは中身を抱えるので、そこで止めると中のものを掴めず、運んだものの
+// 落とし先にもならない。開いているトグルに当たったら中へ降りる。題は本文の
+// 一部ではないので相手にしない（掴めないし、その前にも置けない）。
+function blockAtY(view: EditorView, y: number): Hit | null {
+  let parent = view.state.doc;
+  let dom: HTMLElement = view.dom as HTMLElement;
+  let base = 0;
+  let hit: Hit | null = null;
+  for (;;) {
+    const kids = dom.children;
+    if (!kids.length) return hit;
+    const at = childAtY(kids, y);
+    const el = kids[at];
+    if (!(el instanceof HTMLElement) || at >= parent.childCount) return hit;
+    const node = parent.child(at);
+    if (node.type === schema.nodes.detailsSummary) return hit;
+    let pos = base;
+    for (let i = 0; i < at; i++) pos += parent.child(i).nodeSize;
+    hit = { el, pos };
+    if (node.type !== schema.nodes.details || el.classList.contains("is-closed")) return hit;
+    const inner = el.querySelector(":scope > .mg-details-inner");
+    if (!(inner instanceof HTMLElement)) return hit;
+    parent = node;
+    dom = inner;
+    base = pos + 1;
+  }
 }
 
 // 「足す」ボタンの帯に手が入っているか。ボタンの置き場所と同じ式で見る。
@@ -247,22 +271,25 @@ function onAddBand(
 // 上に居ない。ブロックの間の余白は近い方が選ばれるため、そのままでは次の
 // ブロックが相手になって、ボタンが出る前に消える。
 function tableBand(view: EditorView, hit: Hit, y: number): Hit | null {
-  const before = hit.index - 1;
-  if (before < 0 || view.state.doc.child(before).type !== schema.nodes.table) return null;
-  const el = view.dom.children[before];
+  const $at = view.state.doc.resolve(hit.pos);
+  const before = $at.nodeBefore;
+  if (!before || before.type !== schema.nodes.table) return null;
+  const pos = hit.pos - before.nodeSize;
+  const el = view.nodeDOM(pos);
   if (!(el instanceof HTMLElement)) return null;
   const box = el.getBoundingClientRect();
   if (y < box.bottom || y > box.bottom + ADD_GAP + ADD) return null;
-  let pos = 0;
-  for (let i = 0; i < before; i++) pos += view.state.doc.child(i).nodeSize;
-  return { el, index: before, pos };
+  return { el, pos };
 }
 
 // その li に対応する編集モデルの位置。項目そのものと、親のリストと並び。
+//
+// `root` はいちばん外の並び。入れ子の項目でも、掴む単位はこの並び全体になる
+// （並べ替えも外へ出すのも、木ごと組み直すため）。
 function itemPosOf(
   view: EditorView,
   li: HTMLElement,
-): { pos: number; listPos: number; at: number } | null {
+): { pos: number; listPos: number; at: number; root: number } | null {
   let inside: number;
   try {
     inside = view.posAtDOM(li, 0);
@@ -273,13 +300,16 @@ function itemPosOf(
   const $at = view.state.doc.resolve(
     Math.min(inside, view.state.doc.content.size),
   );
+  let root = -1;
+  let found: number | null = null;
   for (let d = $at.depth; d > 0; d--) {
-    if ($at.node(d).type !== schema.nodes.listItem) continue;
-    const pos = $at.before(d);
-    const spot = itemSpotAt(view.state.doc, pos);
-    return spot ? { pos, listPos: spot.listPos, at: spot.index } : null;
+    const node = $at.node(d);
+    if (isList(node)) root = $at.before(d);
+    if (found === null && node.type === schema.nodes.listItem) found = $at.before(d);
   }
-  return null;
+  if (found === null || root < 0) return null;
+  const spot = itemSpotAt(view.state.doc, found);
+  return spot ? { pos: found, listPos: spot.listPos, at: spot.index, root } : null;
 }
 
 export function EditorGutter({
@@ -362,7 +392,11 @@ export function EditorGutter({
         ? box.left - scroller.getBoundingClientRect().left
         : BOTH;
 
-      const node = view.state.doc.child(hit.index);
+      const node = view.state.doc.nodeAt(hit.pos);
+      if (!node) {
+        show(null);
+        return;
+      }
 
       // 箇条書きは項目ごとに掴む。指している高さの li から編集モデルの位置を引く。
       const li = itemAtY(hit.el, y, "li");
@@ -371,8 +405,9 @@ export function EditorGutter({
       const line = li && liBox ? itemLine(li, liBox) : null;
 
       // 表の下につまみを置ける高さ。次のブロックの上端までの空きで決める。
+      const $hit = view.state.doc.resolve(hit.pos);
       const after =
-        hit.index + 1 < view.state.doc.childCount
+        $hit.index() + 1 < $hit.parent.childCount
           ? view.nodeDOM(hit.pos + node.nodeSize)
           : null;
       const below = Math.max(
@@ -389,7 +424,6 @@ export function EditorGutter({
           : null;
 
       show({
-        index: hit.index,
         pos: hit.pos,
         room,
         box: relative(box, base),
@@ -399,6 +433,7 @@ export function EditorGutter({
                 pos: spot.pos,
                 listPos: spot.listPos,
                 at: spot.at,
+                root: spot.root,
                 mid: line.top - base.top + line.height / 2,
                 edge: itemEdge(li) - base.left,
                 box: relative(liBox, base),
@@ -485,10 +520,11 @@ export function EditorGutter({
 
       if (held.kind === "block") {
         const hit = blockAtY(view, y);
-        if (!hit) return;
+        const node = hit ? view.state.doc.nodeAt(hit.pos) : null;
+        if (!hit || !node) return;
         const box = hit.el.getBoundingClientRect();
         const after = y > box.top + box.height / 2;
-        toRef.current = after ? hit.index + 1 : hit.index;
+        toRef.current = after ? hit.pos + node.nodeSize : hit.pos;
         setGuide({
           kind: "block",
           top: (after ? box.bottom : box.top) - base.top,
@@ -504,12 +540,17 @@ export function EditorGutter({
         const held_item = held.spot.item;
         const hit = blockAtY(view, y);
         if (!held_item || !hit) return;
+        const li = itemAtY(hit.el, y, "li");
+        const over = li ? itemPosOf(view, li) : null;
 
         // 掴んだ並びの外。塊の境目を落とし先にして、項目を並びから出す。
-        if (hit.pos !== held.spot.pos) {
+        // トグルの中の塊も境目になるので、そのまま中へ入れられる。
+        if (!li || !over || over.root !== held_item.root) {
+          const node = view.state.doc.nodeAt(hit.pos);
+          if (!node) return;
           const out = hit.el.getBoundingClientRect();
           const below = y > out.top + out.height / 2;
-          toRef.current = below ? hit.index + 1 : hit.index;
+          toRef.current = below ? hit.pos + node.nodeSize : hit.pos;
           dropRef.current = null;
           setGuide({
             kind: "item",
@@ -520,13 +561,11 @@ export function EditorGutter({
           return;
         }
 
-        const li = itemAtY(hit.el, y, "li");
-        const over = li ? itemPosOf(view, li) : null;
-        if (!li || !over) return;
-        const list = view.state.doc.nodeAt(hit.pos);
+        const listPos = held_item.root;
+        const list = view.state.doc.nodeAt(listPos);
         if (!list) return;
-        const from = itemIndexOf(list, hit.pos, held_item.pos);
-        const under = itemIndexOf(list, hit.pos, over.pos);
+        const from = itemIndexOf(list, listPos, held_item.pos);
+        const under = itemIndexOf(list, listPos, over.pos);
         if (from === null || under === null) return;
 
         const box = li.getBoundingClientRect();
@@ -595,22 +634,25 @@ export function EditorGutter({
       unliftRef.current?.();
       if (!held) return;
       if (held.kind === "item" && !drop && to === null) return;
-      const list = view.state.doc.nodeAt(held.spot.pos);
+      const listPos = held.spot.item?.root ?? null;
+      const list = listPos === null ? null : view.state.doc.nodeAt(listPos);
       const from =
-        held.spot.item && list ? itemIndexOf(list, held.spot.pos, held.spot.item.pos) : null;
+        held.spot.item && list && listPos !== null
+          ? itemIndexOf(list, listPos, held.spot.item.pos)
+          : null;
       const tr =
         held.kind === "item"
-          ? from === null
+          ? from === null || listPos === null
             ? null
             : drop
-              ? itemDropTr(view.state, held.spot.pos, from, drop.slot, drop.depth)
+              ? itemDropTr(view.state, listPos, from, drop.slot, drop.depth)
               : to === null
                 ? null
-                : itemOutTr(view.state, held.spot.pos, from, to)
+                : itemOutTr(view.state, listPos, from, to)
           : to === null
             ? null
             : held.kind === "block"
-              ? blockMoveTr(view.state, held.spot.index, to)
+              ? blockMoveTr(view.state, held.spot.pos, to)
               : tableMoveTr(view.state, held.spot.pos, held.kind, held.at, to);
       if (tr) view.dispatch(tr);
       view.focus();
@@ -716,8 +758,8 @@ export function EditorGutter({
     });
   };
 
-  const runBlock = (index: number, act: BlockAct) =>
-    after(blockActTr(view.state, index, act));
+  const runBlock = (pos: number, act: BlockAct) =>
+    after(blockActTr(view.state, pos, act));
 
   // 行・列を足したときは、足したものが見えるところまで寄せる。端に足すと
   // 画面の外に入るので、そのままでは何が起きたのか分からない。
@@ -942,7 +984,7 @@ export function EditorGutter({
   // ブロックのメニュー。読むとき側にある「編集する」は入れない
   // （編集は編集面そのもの）。
   const blockItems = (where: Spot): MenuItem[] => {
-    const act = (a: BlockAct) => () => runBlock(where.index, a);
+    const act = (a: BlockAct) => () => runBlock(where.pos, a);
     const comment: MenuItem[] = onComment
       ? [
           {
@@ -968,7 +1010,7 @@ export function EditorGutter({
   // 箇条書きでは項目を相手にする。字下げの分だけ左に余裕があるので、
   // つまみを 2 つ並べられるかはそこも足して見る。
   const grabs: Kind = spot?.item ? "item" : "block";
-  const grabAt = spot?.item ? spot.item.at : (spot?.index ?? 0);
+  const grabAt = spot?.item ? spot.item.at : 0;
   const room = spot ? spot.room + (spot.item ? spot.item.edge : 0) : 0;
   // 使える幅。2 つ並べる余裕が無ければ掴みだけにする。
   const wide = !!spot && room >= BOTH;
@@ -1007,7 +1049,7 @@ export function EditorGutter({
                   onClick={() =>
                     spot.item
                       ? runItem(spot.item.pos, "insertAfter")
-                      : runBlock(spot.index, "insertAfter")
+                      : runBlock(spot.pos, "insertAfter")
                   }
                 >
                   <Icon name="add" size={17} />

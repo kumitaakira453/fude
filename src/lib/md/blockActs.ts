@@ -4,8 +4,9 @@ import { schema } from "./schema";
 
 // 編集面のブロックの操作。足す・複製する・消す・並べ替える。
 //
-// 相手はトップレベルの何番目か。原文の行番号ではなく編集モデルの位置で扱うので、
-// ⌘Z が普通に効き、書き戻しは `toMarkdown` がそのまま受け持つ。
+// 相手は「そのブロックが始まる位置」。本文の一番外の並びも、トグルの中身も
+// 同じ指し方になる。原文の行番号ではなく編集モデルの位置で扱うので、⌘Z が
+// 普通に効き、書き戻しは `toMarkdown` がそのまま受け持つ。
 //
 // 原文との対応で気をつけることが 2 つある。
 //
@@ -21,69 +22,58 @@ export type BlockAct = "insertBefore" | "insertAfter" | "duplicate" | "delete";
 const anonymous = (node: PmNode): PmNode =>
   node.type.create({ ...node.attrs, id: null }, node.content, node.marks);
 
-// 何番目のブロックがどこから始まるか。
-function offsetOf(doc: PmNode, index: number): number {
-  let at = 0;
-  for (let i = 0; i < index; i++) at += doc.child(i).nodeSize;
-  return at;
-}
-
-// 位置からトップレベルの何番目かを出す。
-export function blockIndexAt(doc: PmNode, pos: number): number | null {
-  let at = 0;
-  for (let i = 0; i < doc.childCount; i++) {
-    if (at === pos) return i;
-    at += doc.child(i).nodeSize;
-  }
-  return null;
+// その位置から始まるブロック。位置がブロックの頭でなければ相手にしない。
+function blockAt(doc: PmNode, pos: number): PmNode | null {
+  if (pos < 0 || pos >= doc.content.size) return null;
+  const node = doc.nodeAt(pos);
+  return node && node.isBlock ? node : null;
 }
 
 // 空の段落。足すときの中身。
 const blank = () => schema.nodes.paragraph.create();
 
 // 書いたところへカーソルを置く。中身のあるブロックなら先頭、空なら中。
-function caretInto(tr: Transaction, index: number): Transaction {
-  const doc = tr.doc;
-  if (index < 0 || index >= doc.childCount) return tr;
-  const at = offsetOf(doc, index) + 1;
-  const $at = doc.resolve(Math.min(at, doc.content.size));
+function caretInto(tr: Transaction, pos: number): Transaction {
+  if (!tr.doc.nodeAt(pos)) return tr;
+  const $at = tr.doc.resolve(Math.min(pos + 1, tr.doc.content.size));
   return tr.setSelection(TextSelection.near($at));
 }
 
 export function blockActTr(
   state: EditorState,
-  index: number,
+  pos: number,
   act: BlockAct,
 ): Transaction | null {
   const doc = state.doc;
-  if (index < 0 || index >= doc.childCount) return null;
-  const node = doc.child(index);
-  const from = offsetOf(doc, index);
+  const node = blockAt(doc, pos);
+  if (!node) return null;
+  const after = pos + node.nodeSize;
 
   switch (act) {
     case "insertBefore":
-      return caretInto(state.tr.insert(from, blank()), index);
+      return caretInto(state.tr.insert(pos, blank()), pos);
     case "insertAfter":
-      return caretInto(state.tr.insert(from + node.nodeSize, blank()), index + 1);
+      return caretInto(state.tr.insert(after, blank()), after);
     case "duplicate":
-      return caretInto(
-        state.tr.insert(from + node.nodeSize, anonymous(node)),
-        index + 1,
-      );
+      return caretInto(state.tr.insert(after, anonymous(node)), after);
     case "delete": {
-      // 最後の 1 つを消すと本文が空になる。空の段落を残して書き続けられる
-      // ようにする（ProseMirror の doc は中身を 1 つ以上要る）。
-      if (doc.childCount === 1) {
-        return caretInto(state.tr.replaceWith(0, doc.content.size, blank()), 0);
+      // 入れ物は中身を 1 つ以上要る（本文も、トグルの中も）。抜くと形が
+      // 崩れるなら、書き続けられる空の段落に置き換える。
+      const $at = doc.resolve(pos);
+      const at = $at.index();
+      if (!$at.parent.canReplace(at, at + 1)) {
+        return caretInto(state.tr.replaceWith(pos, after, blank()), pos);
       }
-      const tr = state.tr.delete(from, from + node.nodeSize);
-      return caretInto(tr, Math.min(index, tr.doc.childCount - 1));
+      const tr = state.tr.delete(pos, after);
+      // 抜けた場所に次のブロックが来ていればそこ、末尾だったなら手前へ。
+      const $to = tr.doc.resolve(Math.min(pos, tr.doc.content.size));
+      return tr.setSelection(TextSelection.near($to, tr.doc.nodeAt(pos) ? 1 : -1));
     }
   }
 }
 
-// 並べ替える。`to` は「動かす前の並びで、どのブロックの前に置くか」。
-// 読むとき側（`blocks.ts` の `moveBlock`）と同じ数え方。
+// 並べ替える。`to` は「動かす前の本文で、どの位置に置くか」。落とし先が
+// トグルの中でも同じ（位置がそのまま入れ物の中を指す）。
 //
 // 運んだブロックは目印を落とす。`toMarkdown` は原文から出すとき「本文の並びと
 // 原文の並びは同じ」を前提に、ブロックの間の空きを原文からそのまま持ってくる。
@@ -96,14 +86,19 @@ export function blockMoveTr(
   to: number,
 ): Transaction | null {
   const doc = state.doc;
-  if (from < 0 || from >= doc.childCount) return null;
-  if (to < 0 || to > doc.childCount) return null;
-  if (to === from || to === from + 1) return null;
+  const node = blockAt(doc, from);
+  if (!node) return null;
+  if (to < 0 || to > doc.content.size) return null;
+  const end = from + node.nodeSize;
+  // 動かない運びと、自分の中への運び。
+  if (to === from || to === end) return null;
+  if (to > from && to < end) return null;
 
-  const node = doc.child(from);
-  const at = offsetOf(doc, from);
-  const tr = state.tr.delete(at, at + node.nodeSize);
-  const landing = to > from ? to - 1 : to;
-  tr.insert(offsetOf(tr.doc, landing), anonymous(node));
-  return caretInto(tr, landing);
+  const tr = state.tr.delete(from, end);
+  const at = tr.mapping.map(to);
+  const $at = tr.doc.resolve(at);
+  // その入れ物が受け取れる形か（トグルの題の前などには置けない）。
+  if (!$at.parent.canReplaceWith($at.index(), $at.index(), node.type)) return null;
+  tr.insert(at, anonymous(node));
+  return caretInto(tr, at);
 }

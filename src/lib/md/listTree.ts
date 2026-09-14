@@ -19,7 +19,7 @@ export interface Flat {
   listAttrs: Attrs;
 }
 
-const isList = (node: PmNode): boolean =>
+export const isList = (node: PmNode): boolean =>
   node.type === schema.nodes.bulletList || node.type === schema.nodes.orderedList;
 
 // 並びを項目の列に開く。並ぶ順は本文に出てくる順。
@@ -154,34 +154,30 @@ function mergeAt(tr: Transaction, at: number): void {
   tr.join(at);
 }
 
-// 本文の何番目の塊の前か、から位置を出す。
-function offsetOfBlock(doc: PmNode, index: number): number {
-  let at = 0;
-  for (let i = 0; i < Math.min(index, doc.childCount); i++) at += doc.child(i).nodeSize;
-  return at;
-}
-
-// 掴んだ項目を、並びの外（本文の塊の境目）へ出す。子は連れていく。
+// 掴んだ項目を、並びの外（塊の境目）へ出す。子は連れていく。
 //
-// 出したものは点のまま、その場に 1 つの並びとして置く。隣が同じ種類の並びなら
-// そこへ繋ぐ。元の並びが空になったら丸ごと消す。
+// `at` は出す先の位置。トグルの中の境目もそのまま指せる。出したものは点のまま、
+// その場に 1 つの並びとして置く。隣が同じ種類の並びならそこへ繋ぐ。元の並びが
+// 空になったら丸ごと消す。
 export function itemOutTr(
   state: EditorState,
   listPos: number,
   from: number,
-  block: number,
+  at: number,
 ): Transaction | null {
   const list = state.doc.nodeAt(listPos);
   if (!list || !isList(list)) return null;
   const flat = flatten(list);
   if (from < 0 || from >= flat.length) return null;
+  if (at < 0 || at > state.doc.content.size) return null;
+  // 並びの中へは出さない（そこは itemDropTr の持ち場）。
+  if (at > listPos && at < listPos + list.nodeSize) return null;
 
   const end = subtree(flat, from);
   const run = flat.slice(from, end);
   const rest = [...flat.slice(0, from), ...flat.slice(end)];
-  const listIndex = state.doc.resolve(listPos).index();
   // 元の場所の前後へ出すだけなら、並びの中での動き（itemDropTr）に譲る。
-  if (rest.length > 0 && (block === listIndex || block === listIndex + 1)) return null;
+  if (rest.length > 0 && (at === listPos || at === listPos + list.nodeSize)) return null;
 
   const shift = -run[0].depth;
   const moved = rebuild(run.map((one) => ({ ...one, depth: one.depth + shift })));
@@ -203,14 +199,14 @@ export function itemOutTr(
     tr.delete(listPos, listPos + list.nodeSize);
   }
 
-  const at = offsetOfBlock(
-    tr.doc,
-    kept.length > 0 || block <= listIndex ? block : block - 1,
-  );
-  tr.insert(at, taken);
-  mergeAt(tr, at + taken.nodeSize);
-  mergeAt(tr, at);
-  const landed = tr.doc.resolve(Math.min(at + 2, tr.doc.content.size));
+  // 元の並びを抜いた分だけ、出す先の位置もずれる。
+  const dest = tr.mapping.map(at);
+  const $dest = tr.doc.resolve(dest);
+  if (!$dest.parent.canReplaceWith($dest.index(), $dest.index(), taken.type)) return null;
+  tr.insert(dest, taken);
+  mergeAt(tr, dest + taken.nodeSize);
+  mergeAt(tr, dest);
+  const landed = tr.doc.resolve(Math.min(dest + 2, tr.doc.content.size));
   return tr.setSelection(Selection.near(landed)).scrollIntoView();
 }
 

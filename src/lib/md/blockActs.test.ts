@@ -1,6 +1,7 @@
+import type { Node as PmNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import { describe, expect, it } from "vitest";
-import { blockActTr, blockIndexAt, blockMoveTr, type BlockAct } from "./blockActs";
+import { blockActTr, blockMoveTr, type BlockAct } from "./blockActs";
 import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
@@ -31,9 +32,19 @@ function opened(body: string) {
   return { loaded, state };
 }
 
+// 操作は位置で受ける。番号のほうが読みやすいので、ここで引き直す。
+// 並びの外の番号は、どこにも当たらない位置にする。
+function posOf(doc: PmNode, index: number): number {
+  if (index < 0) return -1;
+  if (index > doc.childCount) return doc.content.size + 99;
+  let at = 0;
+  for (let i = 0; i < Math.min(index, doc.childCount); i++) at += doc.child(i).nodeSize;
+  return at;
+}
+
 function act(body: string, index: number, a: BlockAct) {
   const { loaded, state } = opened(body);
-  const tr = blockActTr(state, index, a);
+  const tr = blockActTr(state, posOf(state.doc, index), a);
   if (!tr) return null;
   const next = state.apply(tr);
   return { md: toMarkdown(next.doc, loaded), state: next };
@@ -41,7 +52,7 @@ function act(body: string, index: number, a: BlockAct) {
 
 function move(body: string, from: number, to: number) {
   const { loaded, state } = opened(body);
-  const tr = blockMoveTr(state, from, to);
+  const tr = blockMoveTr(state, posOf(state.doc, from), posOf(state.doc, to));
   if (!tr) return null;
   const next = state.apply(tr);
   return { md: toMarkdown(next.doc, loaded), state: next };
@@ -67,7 +78,7 @@ describe("ブロックを足す", () => {
     const $at = got!.state.selection.$head;
     expect($at.parent.type.name).toBe("paragraph");
     expect($at.parent.textContent).toBe("");
-    expect(blockIndexAt(got!.state.doc, $at.before(1))).toBe(2);
+    expect($at.before(1)).toBe(posOf(got!.state.doc, 2));
   });
 });
 
