@@ -6,14 +6,16 @@ import { fromMarkdown, type Loaded } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
 
-// 変換の最中に流れてくる打鍵を、手に渡さない。
+// 差分から作られた打鍵を、手に渡さない。
 //
 // prosemirror-view は本文と DOM の差分が「Enter を押した形」に見えると、
 // Enter の手を流し直す。WebKit は変換を確定するとき変換中の字をいったん
-// 消すので、その差分がちょうどその形になる。流し直された Enter で項目を
-// 割ると、IME が抱えている字が本文から外れ、確定の分と合わせて二重に残る。
+// 消すので、その差分がちょうどその形になる。流し直された Enter は項目を割り、
+// 見出しの後ろに段落を作り、IME が抱えている字を本文から外す。
 //
-// 実際の打鍵は変換中には届かない（prosemirror-view が先に捨てる）。
+// 流し直された分は document.createEvent で組まれた素の Event で、本物の打鍵
+// （KeyboardEvent）ではない。確定の直後は変換が終わっている（composing は
+// false）ので、変換中かどうかでは見分けられない。
 
 const noRects = () => [] as unknown as DOMRectList;
 const noRect = () =>
@@ -73,7 +75,13 @@ const composing = (view: EditorView, on: boolean) => {
 
 const source = () => toMarkdown(open!.view.state.doc, open!.loaded);
 
-describe("変換の最中に流れてくる打鍵", () => {
+// 本物の打鍵。
+function realEnter(view: EditorView) {
+  const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+  return view.someProp("handleKeyDown", (f) => f(view, event)) ?? false;
+}
+
+describe("差分から作られた打鍵", () => {
   it("変換中の Enter は手に渡さない。本文も動かない", () => {
     const view = editor("- [ ] あ\n");
     caretAtEndOf(view, "あ");
@@ -82,15 +90,39 @@ describe("変換の最中に流れてくる打鍵", () => {
     expect(source()).toBe("- [ ] あ\n");
   });
 
-  it("変換が終わっていれば、いつもどおり項目を割る", () => {
+  it("変換が終わっていても、差分から来た分は渡さない", () => {
     const view = editor("- [ ] あ\n");
     caretAtEndOf(view, "あ");
     composing(view, false);
-    expect(fakeEnter(view)).toBe(true);
+    expect(fakeEnter(view)).toBe(false);
+    expect(source()).toBe("- [ ] あ\n");
+  });
+
+  it("タスクの項目が素の項目に割れない", () => {
+    const view = editor("- [ ] あ\n");
+    caretAtEndOf(view, "あ");
+    composing(view, false);
+    fakeEnter(view);
+    expect(source()).toBe("- [ ] あ\n");
+  });
+
+  it("見出しの後ろに段落ができない", () => {
+    const view = editor("# 題\n");
+    caretAtEndOf(view, "題");
+    composing(view, false);
+    expect(fakeEnter(view)).toBe(false);
+    expect(source()).toBe("# 題\n");
+  });
+
+  it("本物の打鍵なら、いつもどおり項目を割る", () => {
+    const view = editor("- [ ] あ\n");
+    caretAtEndOf(view, "あ");
+    composing(view, false);
+    expect(realEnter(view)).toBe(true);
     expect(source()).toBe("- [ ] あ\n- [ ]\n");
   });
 
-  it("段落でも変換中は割らない", () => {
+  it("段落でも差分から来た分は割らない", () => {
     const view = editor("あ\n");
     caretAtEndOf(view, "あ");
     composing(view, true);
@@ -98,10 +130,10 @@ describe("変換の最中に流れてくる打鍵", () => {
     expect(source()).toBe("あ\n");
   });
 
-  it("変換中は字下げも効かない（Tab も差分から流れてくる）", () => {
+  it("字下げも効かない（Tab も差分から流れてくる）", () => {
     const view = editor("- 一つ\n- 二つ\n");
     caretAtEndOf(view, "二つ");
-    composing(view, true);
+    composing(view, false);
     const event = document.createEvent("Event");
     event.initEvent("keydown", true, true);
     Object.assign(event, { keyCode: 9, key: "Tab", code: "Tab" });

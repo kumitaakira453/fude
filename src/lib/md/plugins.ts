@@ -7,6 +7,7 @@ import {
   Slice,
   type Mark,
   type Node as PmNode,
+  type ResolvedPos,
 } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import {
@@ -817,6 +818,45 @@ export const linkOnPaste =
     return href ? setLink(href)(state, dispatch) : false;
   };
 
+// 貼り付けたものを、貼り先の項目に合わせる。
+//
+// TODO の中に素の箇条書きを貼ると、チェックと点が混ざって階層が読めなくなる。
+// 貼り先がタスクなら貼る側にも印を付け、素の項目なら印を外す。階層はそのまま。
+function sameMark(node: PmNode, checked: boolean | null): PmNode {
+  const item = node.type === schema.nodes.listItem;
+  if (node.isText || !node.content.size) {
+    return item ? node.type.create({ ...node.attrs, checked }, node.content, node.marks) : node;
+  }
+  const kids: PmNode[] = [];
+  node.forEach((child) => kids.push(sameMark(child, checked)));
+  const content = Fragment.fromArray(kids);
+  return item
+    ? node.type.create({ ...node.attrs, checked }, content, node.marks)
+    : node.copy(content);
+}
+
+// カーソルの居る項目の印。項目の外なら undefined。
+function markAt($at: ResolvedPos): boolean | null | undefined {
+  for (let d = $at.depth; d > 0; d--) {
+    if ($at.node(d).type === schema.nodes.listItem) {
+      return $at.node(d).attrs.checked as boolean | null;
+    }
+  }
+  return undefined;
+}
+
+const pasteInto = new Plugin({
+  props: {
+    transformPasted(slice, view) {
+      const checked = markAt(view.state.selection.$from);
+      if (checked === undefined) return slice;
+      const kids: PmNode[] = [];
+      slice.content.forEach((child) => kids.push(sameMark(child, checked)));
+      return new Slice(Fragment.fromArray(kids), slice.openStart, slice.openEnd);
+    },
+  },
+});
+
 const pasteMarkdown = new Plugin({
   props: {
     handlePaste(view, event) {
@@ -846,22 +886,34 @@ const pasteMarkdown = new Plugin({
   },
 });
 
-// 変換の最中に流れてくる打鍵は、実際に押されたものではない。
+// 差分から作られた打鍵は、手に渡さない。
 //
 // prosemirror-view は本文と DOM の差分を読んで「これは Enter を押した形だ」と
 // 見たとき、Enter の手を流し直す（readDOMChange）。WebKit は変換を確定する
 // とき、変換中の字をいったん消してから確定した字を入れ直すので、その「消す」
-// 側の差分がちょうど Enter の形に見える。流し直された Enter は項目を割り、
-// IME が抱えている変換中の字を本文から外してしまう。外れた字は確定のときに
-// もう一度入るので、同じ文が二重に残る。
+// 側の差分がちょうど Enter の形に見える。流し直された Enter が走ると、
 //
-// 実際の打鍵は変換中には届かない（prosemirror-view が先に捨てる）。ここで
+//   - 見出しの中なら後ろに段落ができ、確定した字がそちらへ移る（見出しが
+//     素の文に戻ったように見える）
+//   - タスクの項目なら項目が割れ、新しい項目は印を持たない（TODO がただの
+//     箇条書きに戻る）
+//   - 変換中の字が本文から外れ、確定の分と合わせて同じ文が二重に残る
+//
+// 流し直された打鍵は document.createEvent で組まれた素の Event で、本物の
+// 打鍵（KeyboardEvent）ではない。そこで見分ける。変換の最中も同じく渡さない。
 // 止めるのは差分から作られた分だけで、止めれば本文は差分どおりに直る。
-const awake = (cmd: Command): Command => (state, dispatch, view) =>
-  view?.composing ? false : cmd(state, dispatch, view);
-
-const awakeKeys = (map: Record<string, Command>): Record<string, Command> =>
-  Object.fromEntries(Object.entries(map).map(([key, cmd]) => [key, awake(cmd)]));
+const realKeys = (map: Record<string, Command>): Plugin => {
+  const inner = keymap(map);
+  const handle = inner.props.handleKeyDown;
+  return new Plugin({
+    props: {
+      handleKeyDown(view, event) {
+        if (view.composing || !(event instanceof KeyboardEvent)) return false;
+        return handle?.call(inner, view, event) ?? false;
+      },
+    },
+  });
+};
 
 export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
   const item = schema.nodes.listItem;
@@ -871,6 +923,8 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
   return [
     history(),
     pasteMarkdown,
+    // 貼ったものの印を、貼り先の項目にそろえる。
+    pasteInto,
     typed,
     kept,
     // 段落の先頭の "/" から構造を選ぶ。矢印と Enter を先に取るので keymap より前。
@@ -879,8 +933,7 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
     emojiMenu,
     mathEditing,
     editingMark,
-    keymap(
-      awakeKeys({
+    realKeys({
       // 変換した直後に打ち消せないと、記号そのものを書けなくなる。
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
       // 項目の先頭では飾りを外し、装飾の末尾で消したときは打ち直しが同じ
@@ -926,9 +979,8 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       // コードの塊の中は字下げ。表の中では隣のセルへ。それ以外は箇条書きの字下げ。
       Tab: chainCommands(indentCode, goToNextCell(1), sinkListItem(item)),
       "Shift-Tab": chainCommands(outdentCode, goToNextCell(-1), liftListItem(item)),
-      }),
-    ),
-    keymap(awakeKeys(baseKeymap)),
+    }),
+    realKeys(baseKeymap),
     // 打った字が継ぐ装飾の直し。入力変換より後に置き、規則が控えを触ったあとの
     // 組み合わせを見る。
     keepNesting,

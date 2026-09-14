@@ -162,11 +162,21 @@ export const schema = new Schema({
     },
 
     // checked が null なら普通の項目、true / false ならタスク。
+    //
+    // 印は DOM からも読み返す。編集面が DOM の差分を読み直したときや、項目を
+    // コピーして貼ったときに、書いた印をそのまま拾えないと素の項目に戻る。
     listItem: {
       content: "block+",
       defining: true,
       attrs: { checked: { default: null as boolean | null } },
-      parseDOM: [{ tag: "li" }],
+      parseDOM: [
+        {
+          tag: "li",
+          getAttrs: (dom: HTMLElement) => ({
+            checked: dom.dataset.checked === undefined ? null : dom.dataset.checked === "true",
+          }),
+        },
+      ],
       toDOM: (node) =>
         [
           "li",
