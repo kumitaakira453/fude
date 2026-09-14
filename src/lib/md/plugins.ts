@@ -900,8 +900,11 @@ const pasteMarkdown = new Plugin({
 //   - 変換中の字が本文から外れ、確定の分と合わせて同じ文が二重に残る
 //
 // 流し直された打鍵は document.createEvent で組まれた素の Event で、本物の
-// 打鍵（KeyboardEvent）ではない。そこで見分ける。変換の最中も同じく渡さない。
-// 止めるのは差分から作られた分だけで、止めれば本文は差分どおりに直る。
+// 打鍵（KeyboardEvent）ではない。そこで見分ける。
+//
+// 変換の最中も同じく渡さない。止めるのは差分から作られた分だけで、止めれば
+// 本文は差分どおりに直る（その差分が壊れないよう、読み取りを束ねるのは
+// ime.ts の側でやっている）。
 const realKeys = (map: Record<string, Command>): Plugin => {
   const inner = keymap(map);
   const handle = inner.props.handleKeyDown;
