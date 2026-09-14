@@ -103,7 +103,9 @@ export function CommandPalette() {
             <button
               key={r.node.path}
               data-idx={i}
-              onMouseEnter={() => setActive(i)}
+              // 手が動いたときだけ選び直す。入った・出たで決めると、打つたびに
+              // 並びが変わったとき、動いていないマウスの下へ当たりが飛ぶ。
+              onMouseMove={() => setActive(i)}
               onClick={() => choose(i)}
               className={`flex w-full flex-col items-start px-4 py-1.5 text-left transition ${
                 i === active ? "bg-[var(--mg-accent-soft)]" : ""
