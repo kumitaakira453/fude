@@ -22,6 +22,7 @@ const CALLOUT = [
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   // jsdom は描画を持たないので、測る道具だけ足しておく。
+  Element.prototype.scrollIntoView = () => {};
   const noRects = () => [] as unknown as DOMRectList;
   const noRect = () =>
     ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }) as DOMRect;

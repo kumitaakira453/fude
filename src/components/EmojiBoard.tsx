@@ -23,6 +23,15 @@ import { Icon } from "./Icon";
 // 探しているときに出す数。多すぎると画面に収まらず、探し直しの妨げになる。
 const FOUND = 60;
 
+// 盤に出すひとかたまり。from は、盤ぜんたいを 1 本の列と見たときの通し番号。
+interface Shelf {
+  key: string;
+  label: string | null;
+  group?: number;
+  chars: string[];
+  from: number;
+}
+
 export function EmojiBoard({
   x,
   y,
@@ -46,6 +55,8 @@ export function EmojiBoard({
   const [all, setAll] = useState<Emoji[] | null>(emojiReady());
   // 盤が自分で持つ検索の文字。呼び出し側が query を渡すときは使わない。
   const [typed, setTyped] = useState("");
+  // 盤が自分で持つ選び位置。呼び出し側が active を持つときは使わない。
+  const [spot, setSpot] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -84,26 +95,82 @@ export function EmojiBoard({
   );
   const recent = useMemo(() => recentEmoji(), [all]);
 
+  // 盤に出すもの。矢印キーはこの並びを、出てくる順に動く。
+  const shelves = useMemo<Shelf[]>(() => {
+    const out: Shelf[] = [];
+    let from = 0;
+    const add = (one: Omit<Shelf, "from">) => {
+      if (one.chars.length === 0) return;
+      out.push({ ...one, from });
+      from += one.chars.length;
+    };
+    if (found) {
+      add({ key: "found", label: null, chars: found.map((one) => one.char) });
+      return out;
+    }
+    add({ key: "recent", label: "最近使った", chars: recent });
+    for (const group of GROUPS) {
+      add({
+        key: String(group.group),
+        label: group.label,
+        group: group.group,
+        chars: (all ?? []).filter((one) => one.group === group.group).map((one) => one.char),
+      });
+    }
+    return out;
+  }, [found, recent, all]);
+
+  const total = shelves.reduce((n, one) => n + one.chars.length, 0);
+  const here = active ?? spot;
+  const charAt = (at: number): string | null => {
+    for (const shelf of shelves) {
+      if (at >= shelf.from && at < shelf.from + shelf.chars.length) {
+        return shelf.chars[at - shelf.from];
+      }
+    }
+    return null;
+  };
+
+  // 探し直したら先頭へ戻す。前の位置に居ると、別のものが当たったままになる。
+  useEffect(() => setSpot(0), [want]);
+
   const choose = (char: string) => {
     rememberEmoji(char);
     onPick(char);
   };
 
-  // 選ばれているものを見えるところへ送る。呼び出し側が矢印キーを持つときだけ。
+  // 欄の中の字送りより、盤の移動を先に取る。打った流れのまま選んで決められる。
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const move = (step: number) => {
+      e.preventDefault();
+      setSpot((at) => Math.max(0, Math.min(total - 1, at + step)));
+    };
+    if (e.key === "ArrowRight") return move(1);
+    if (e.key === "ArrowLeft") return move(-1);
+    if (e.key === "ArrowDown") return move(COLS);
+    if (e.key === "ArrowUp") return move(-COLS);
+    if (e.key !== "Enter") return;
+    const char = charAt(here);
+    if (!char) return;
+    e.preventDefault();
+    choose(char);
+  };
+
+  // 選ばれているものを見えるところへ送る。
   const hot = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     hot.current?.scrollIntoView({ block: "nearest" });
-  }, [active, want]);
+  }, [here, want]);
 
   // 列の数は打鍵の上下移動と揃える。CSS に別の数を書くと食い違う。
   const grid = { gridTemplateColumns: `repeat(${COLS}, 1fr)` };
 
-  const cell = (char: string, key: string, at: number | null) => (
+  const cell = (char: string, key: string, at: number) => (
     <button
       key={key}
-      ref={at !== null && at === active ? hot : undefined}
+      ref={at === here ? hot : undefined}
       type="button"
-      className={at !== null && at === active ? "is-on" : undefined}
+      className={at === here ? "is-on" : undefined}
       // 押しても本文の選択やカーソルを動かさない。
       onMouseDown={(e) => {
         e.preventDefault();
@@ -112,6 +179,12 @@ export function EmojiBoard({
     >
       {char}
     </button>
+  );
+
+  const shelfOf = (shelf: Shelf) => (
+    <div className="mg-ico-grid" style={grid}>
+      {shelf.chars.map((char, i) => cell(char, `${shelf.key}:${char}`, shelf.from + i))}
+    </div>
   );
 
   return createPortal(
@@ -129,6 +202,7 @@ export function EmojiBoard({
             autoFocus
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={onKeyDown}
             placeholder="電球 / bulb"
             className="mg-ico-input"
           />
@@ -143,35 +217,15 @@ export function EmojiBoard({
       <div className="mg-emoji-body">
         {!all ? (
           <div className="mg-emoji-wait">読み込んでいます…</div>
-        ) : found ? (
-          found.length === 0 ? (
-            <div className="mg-emoji-wait">見つかりません</div>
-          ) : (
-            <div className="mg-ico-grid" style={grid}>
-              {found.map((one, i) => cell(one.char, one.char, i))}
-            </div>
-          )
+        ) : total === 0 ? (
+          <div className="mg-emoji-wait">見つかりません</div>
         ) : (
-          <>
-            {recent.length > 0 && (
-              <>
-                <div className="mg-ico-label">最近使った</div>
-                <div className="mg-ico-grid" style={grid}>
-                  {recent.map((char) => cell(char, `r:${char}`, null))}
-                </div>
-              </>
-            )}
-            {GROUPS.map((group) => (
-              <div key={group.group} data-mg-emoji-group={group.group}>
-                <div className="mg-ico-label">{group.label}</div>
-                <div className="mg-ico-grid" style={grid}>
-                  {all
-                    .filter((one) => one.group === group.group)
-                    .map((one) => cell(one.char, one.char, null))}
-                </div>
-              </div>
-            ))}
-          </>
+          shelves.map((shelf) => (
+            <div key={shelf.key} data-mg-emoji-group={shelf.group}>
+              {shelf.label && <div className="mg-ico-label">{shelf.label}</div>}
+              {shelfOf(shelf)}
+            </div>
+          ))
         )}
       </div>
 
