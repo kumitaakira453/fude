@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { addBelow, firstLine, holdAt, nearEdge, onLine, tableGeometry } from "./gutterGeom";
+import {
+  addBelow,
+  firstLine,
+  holdAt,
+  nearEdge,
+  onLine,
+  roomBelow,
+  tableGeometry,
+} from "./gutterGeom";
 
 // jsdom は組版を持たないので、矩形を当て木で置く。
 //
@@ -153,6 +161,52 @@ describe("addBelow", () => {
     expect(addBelow(100, 8, GAP)).toBe(96);
     // 空きが無ければ下端をまたいで半分ずつ。
     expect(addBelow(100, 0, GAP)).toBe(100 - ADD / 2);
+  });
+
+  it("下にぶつかる相手が居なければ決めた分だけ離す", () => {
+    expect(addBelow(100, Infinity, GAP)).toBe(112);
+  });
+});
+
+describe("roomBelow", () => {
+  // 入れ物は上 0 から高さ 400。ブロックは 30 ずつ空けて縦に並べる。
+  const content = () => {
+    const box = document.createElement("div");
+    rect(box, new DOMRect(0, 0, 300, 400));
+    document.body.appendChild(box);
+    return box;
+  };
+  const block = (host: HTMLElement, index: number, top: number, height: number) => {
+    const el = document.createElement("div");
+    el.dataset.mgBlock = String(index);
+    rect(el, new DOMRect(0, top, 300, height));
+    host.appendChild(el);
+    return el;
+  };
+
+  it("次のブロックの上端までを空きにする", () => {
+    const host = content();
+    const here = block(host, 0, 100, 60);
+    block(host, 1, 190, 40);
+    expect(roomBelow(host, 0, here)).toBe(30);
+  });
+
+  it("次のブロックが無ければ空きは限りない", () => {
+    const host = content();
+    // 入れ物の下端は最後のブロックの下端と同じ。そこで測ると 0 になる。
+    const here = block(host, 0, 340, 60);
+    expect(roomBelow(host, 0, here)).toBe(Infinity);
+  });
+
+  it("目印から引くこともできる", () => {
+    const host = content();
+    block(host, 0, 100, 60);
+    block(host, 1, 200, 40);
+    expect(roomBelow(host, 0, null)).toBe(40);
+  });
+
+  it("相手が見つからなければ空きは無い", () => {
+    expect(roomBelow(content(), 5, null)).toBe(0);
   });
 });
 

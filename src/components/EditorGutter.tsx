@@ -405,17 +405,16 @@ export function EditorGutter({
       const line = li && liBox ? itemLine(li, liBox) : null;
 
       // 表の下につまみを置ける高さ。次のブロックの上端までの空きで決める。
+      // 次が無ければ下にあるのは本文の末尾の余白だけなので、空きは限りない。
       const $hit = view.state.doc.resolve(hit.pos);
       const after =
         $hit.index() + 1 < $hit.parent.childCount
           ? view.nodeDOM(hit.pos + node.nodeSize)
           : null;
-      const below = Math.max(
-        0,
-        (after instanceof HTMLElement
-          ? after.getBoundingClientRect().top
-          : host.getBoundingClientRect().bottom) - box.bottom,
-      );
+      const below =
+        after instanceof HTMLElement
+          ? Math.max(0, after.getBoundingClientRect().top - box.bottom)
+          : Infinity;
 
       const el = hit.el.querySelector("table");
       const geo =

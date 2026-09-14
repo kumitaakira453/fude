@@ -278,6 +278,10 @@ export function addBelow(bottom: number, room: number, gap: number): number {
 }
 
 // 表の下端から次のブロックの上端までの空き。読むとき側は目印で引ける。
+//
+// 次のブロックが無ければ、下にあるのは本文の末尾の余白だけ。ぶつかる相手が
+// 居ないので空きは限りなく、帯を表へ寄せる理由が無い。入れ物の下端で測ると
+// 最後のブロックの下端と同じになり、空きが無いことにされてしまう。
 export function roomBelow(
   content: HTMLElement,
   index: number,
@@ -288,11 +292,8 @@ export function roomBelow(
   const next = content.querySelector<HTMLElement>(
     `[data-mg-block="${index + 1}"]`,
   );
-  const bottom = here.getBoundingClientRect().bottom;
-  const top = next
-    ? next.getBoundingClientRect().top
-    : content.getBoundingClientRect().bottom;
-  return Math.max(0, top - bottom);
+  if (!next) return Infinity;
+  return Math.max(0, next.getBoundingClientRect().top - here.getBoundingClientRect().bottom);
 }
 
 // 行・列を掴むつまみの短辺。行は高さ、列は幅がこれになる。
