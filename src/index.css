@@ -5362,7 +5362,16 @@ body.mg-carrying {
 }
 
 /* 差分。変わっていないところは弱め、変わったところは組ごとに枠で囲む。 */
+/* 差分の中では、読み幅は面が決める。prose が持つ 65ch をそのまま効かせると、
+   面は桁いっぱいに伸びるのに字だけ途中で折り返し、左は縁に密着して右だけ
+   大きく空く。 */
+.mg-ver-diff .mg-prose {
+  max-width: none;
+}
+/* 変わっていないブロック。前後の組と行頭・行末を揃える（面の左の罫 2px と
+   内側の余白のぶんだけ内へ入れる）。 */
 .mg-ver-kept {
+  padding-inline: calc(1.1rem + 2px) 1.1rem;
   opacity: 0.55;
 }
 /* 変わっていないブロックの連なり。押すと開く。 */
@@ -5406,7 +5415,7 @@ body.mg-carrying {
    本文の読み心地は残る。 */
 .mg-ver-side {
   min-width: 0;
-  padding: 0.5rem 0.85rem 0.15rem;
+  padding: 0.5rem 1.1rem 0.15rem;
   border-left: 2px solid var(--mg-border);
   border-radius: 0 0.35rem 0.35rem 0;
 }
