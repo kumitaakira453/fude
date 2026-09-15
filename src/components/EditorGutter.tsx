@@ -3,6 +3,7 @@ import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { startCarry } from "../lib/carry";
+import { useLayerHost } from "../lib/layerHost";
 import { blockCopy, tablePartCopy } from "../lib/dragImage";
 import {
   blockActTr,
@@ -323,6 +324,9 @@ export function EditorGutter({
   // 相手にするなら範囲も渡す。渡されたときだけメニューに出す。
   onComment?: (pos: number, span?: { from: number; to: number }) => void;
 }) {
+  // 層の置き場所。React が描いている入れ物へ直に差すと、ファイルを
+  // 切り替えたときに片付けの順で落ちる（useLayerHost の説明）。
+  const layerHost = useLayerHost(host);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [menu, setMenu] = useState<{
     kind: Kind;
@@ -1032,7 +1036,8 @@ export function EditorGutter({
 
   return (
     <>
-      {createPortal(
+      {layerHost &&
+        createPortal(
         <div ref={layer} className="mg-block-layer not-prose">
           {spot && anchor && (
             <div className="mg-gutter" style={{ top: anchor.top, left: anchor.left }}>
@@ -1196,7 +1201,7 @@ export function EditorGutter({
             />
           )}
         </div>,
-        host,
+        layerHost,
       )}
 
       {menu && (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLayerHost } from "../lib/layerHost";
 import { createPortal } from "react-dom";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
 import { setDragPreview, setDragTablePart } from "../lib/dragImage";
@@ -228,6 +229,9 @@ export function BlockGutter({
     to: number,
   ) => { min: number; max: number } | null;
 }) {
+  // 層の置き場所。React が描いている入れ物へ直に差すと、ファイルを
+  // 切り替えたときに片付けの順で落ちる（useLayerHost の説明）。
+  const layerHost = useLayerHost(content ?? null);
   const layerRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
   const [guide, setGuide] = useState<Guide | null>(null);
@@ -845,7 +849,8 @@ export function BlockGutter({
 
   return (
     <>
-      {createPortal(
+      {layerHost &&
+        createPortal(
         <div ref={layerRef} className="mg-block-layer not-prose">
           {view && anchor && (
             <div
@@ -1125,7 +1130,7 @@ export function BlockGutter({
             />
           )}
         </div>,
-        content,
+        layerHost,
       )}
 
       {menu && (
