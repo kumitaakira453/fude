@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "../../lib/blocks";
 import { charDiff } from "../../lib/charDiff";
-import { rangeAt, readBlockText } from "../../lib/domText";
+import { rangeAt, readBlockText, type BlockText } from "../../lib/domText";
+import { tableDiff, type CellSpan } from "../../lib/tableDiff";
 import { compare, unchanged, type DiffRow } from "../../lib/versions";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
@@ -90,6 +91,7 @@ function useInnerMarks(
       const a = pair.querySelector<HTMLElement>('[data-diff-side="base"]');
       const b = pair.querySelector<HTMLElement>('[data-diff-side="head"]');
       if (!a || !b) continue;
+      if (markTable(a, b, dels, inss)) continue;
       const left = readBlockText(a);
       const right = readBlockText(b);
       const diff = charDiff(left.plain, right.plain);
@@ -113,6 +115,40 @@ function useInnerMarks(
       registry.delete(INS);
     };
   }, [root, rows, layout, editorial, style]);
+}
+
+// 表どうしの組。行を対応付けてからセルごとに比べ、増えた行・減った行と、
+// 書き換わったセルの中の字に印を付ける。表ぜんたいを 1 本の文字列として
+// 比べると字数が多すぎて突き合わせを諦め、印が 1 つも残らない。
+//
+// 表でなければ false を返し、呼び出し側の組ぜんたいの比べ方に任せる。
+function markTable(
+  a: HTMLElement,
+  b: HTMLElement,
+  dels: Range[],
+  inss: Range[],
+): boolean {
+  const left = a.querySelector("table");
+  const right = b.querySelector("table");
+  if (!left || !right) return false;
+
+  const read = (table: HTMLTableElement) =>
+    [...table.rows].map((row) => [...row.cells].map((cell) => readBlockText(cell)));
+  const before = read(left);
+  const after = read(right);
+  const plain = (rows: BlockText[][]) => rows.map((row) => row.map((c) => c.plain));
+  const diff = tableDiff(plain(before), plain(after));
+
+  const put = (out: Range[], rows: BlockText[][], spans: CellSpan[]) => {
+    for (const span of spans) {
+      const cell = rows[span.row]?.[span.cell];
+      const range = cell && rangeAt(cell, span.from, span.to);
+      if (range) out.push(range);
+    }
+  };
+  put(dels, before, diff.del);
+  put(inss, after, diff.ins);
+  return true;
 }
 
 function Row({
