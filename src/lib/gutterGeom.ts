@@ -20,9 +20,9 @@ export const AWAY = 10;
 export const BAR = 15;
 // 帯を出す縁の幅。表の真ん中を指している間は出さない（Notion と同じ）。
 export const EDGE = 26;
-// 行・列を足す帯。掴む帯より細くする（押す的としては足りていて、表より
-// 目立たない）。
-export const ADD = 11;
+// 行・列を足す帯。掴む帯より少し細い。中の「+」はこの太さに収める
+// （はみ出すと、丸めた角で切れて寄って見える）。
+export const ADD = 14;
 export const ADD_AWAY = 6;
 // つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る左の余白。
 export const BOTH = GRIP * 2 + 4 + AWAY;
@@ -271,7 +271,7 @@ export function tableGeometry(
 // room は表の下端から次のブロックの上端までの画素。
 // 相手が居ないときに表から離す幅。縁ちょうどだと帯の辺と罫線が触れて、表の
 // 一本に見える。離しすぎるとどの表のものか読みにくい。
-const APART = 6;
+const APART = 3;
 
 export function addAway(room: number, gap: number): number {
   if (!Number.isFinite(room)) return APART;

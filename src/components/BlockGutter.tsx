@@ -1059,7 +1059,7 @@ export function BlockGutter({
                   }}
                   onClick={() => onTableAppend(view.index, "col")}
                 >
-                  <Icon name="add" size={14} />
+                  <Icon name="add" size={12} />
                 </button>
               )}
               <button
@@ -1074,7 +1074,7 @@ export function BlockGutter({
                 }}
                 onClick={() => onTableAppend(view.index, "row")}
               >
-                <Icon name="add" size={14} />
+                <Icon name="add" size={12} />
               </button>
             </>
           )}

@@ -1153,7 +1153,7 @@ export function EditorGutter({
                     runTable("col", spot.pos, spot.table!.cols - 1, "insertAfter")
                   }
                 >
-                  <Icon name="add" size={14} />
+                  <Icon name="add" size={12} />
                 </button>
               )}
               <button
@@ -1172,7 +1172,7 @@ export function EditorGutter({
                   runTable("row", spot.pos, spot.table!.rows - 1, "insertAfter")
                 }
               >
-                <Icon name="add" size={14} />
+                <Icon name="add" size={12} />
               </button>
             </>
           )}
