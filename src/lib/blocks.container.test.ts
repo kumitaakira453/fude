@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitBlocks } from "./blocks";
+import { openHtmlContainers } from "./htmlBlocks";
 
 // 囲み（callout / details）は開きから閉じまでで 1 ブロック。
 //
@@ -61,6 +62,36 @@ describe("囲みの切り出し", () => {
   it("閉じが無ければ今までどおり割れたまま", () => {
     const src = lines("<details>", "<summary>ひらく</summary>", "", "中の本文", "");
     expect(kinds(src)).toEqual(["html", "paragraph"]);
+  });
+
+  it("桁を下げて書き出された callout は、中身が段落として読まれる", () => {
+    // Notion の書き出しでは中身が開きタグより深い桁に来る。空白 4 つ以上を
+    // そのままにすると、その段落ごとコードとして読まれてしまう。
+    const src = lines(
+      '<callout icon="⚠️" color="gray_background">',
+      "     以下の設定変更は、**リリース完了後**に実施する。",
+      "</callout>",
+      "",
+    );
+    expect(kinds(src)).toEqual(["html"]);
+    const html = openHtmlContainers(src).text;
+    expect(html).toContain("以下の設定変更は、**リリース完了後**に実施する。");
+    // コードとして残っていれば、字下げが付いたままになる。
+    expect(html).not.toContain("     以下の設定変更");
+  });
+
+  it("囲みの中のフェンスは、中身がコードのまま残る", () => {
+    const src = lines(
+      '<callout icon="💡">',
+      "    ```js",
+      "    const a = 1;",
+      "    ```",
+      "</callout>",
+      "",
+    );
+    const html = openHtmlContainers(src).text;
+    expect(html).toContain("```js");
+    expect(html).toContain("const a = 1;");
   });
 
   it("項目の中の囲みは一覧ごと 1 ブロックのまま", () => {

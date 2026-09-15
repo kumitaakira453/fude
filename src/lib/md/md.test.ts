@@ -304,9 +304,20 @@ describe("項目の中の囲み", () => {
     expect(loaded.source.slice(inside.start, inside.end)).toBe("中の文");
   });
 
-  it("最上位の囲みは字下げのコードを字下げのコードとして読む", () => {
-    const top = fromMarkdown("<callout>\n    code だけ\n</callout>\n").doc.child(0);
+  // Notion は囲みの中身を開きタグより深い桁で書き出す。空白 4 つ以上を残すと
+  // その段落ごとコードとして読まれ、強調も生のまま出る。囲みの中でコードを
+  // 書くときはフェンスを使う。
+  it("最上位の囲みでも、中身の桁は落として読む", () => {
+    const top = fromMarkdown("<callout>\n     中の**文**\n</callout>\n").doc.child(0);
+    expect(top.child(0).type.name).toBe("paragraph");
+    expect(top.child(0).textContent).toBe("中の文");
+  });
+
+  it("囲みの中のフェンスはコードのまま読む", () => {
+    const src = "<callout>\n    ```js\n    const a = 1;\n    ```\n</callout>\n";
+    const top = fromMarkdown(src).doc.child(0);
     expect(top.child(0).type.name).toBe("codeBlock");
+    expect(top.child(0).textContent).toBe("const a = 1;");
   });
 });
 

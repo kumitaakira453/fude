@@ -135,12 +135,15 @@ export function unpadLines(text: string, pad: string): Unpadded | null {
 // 囲みの中身から落としてよい字下げ。
 //
 // 囲みが立っている桁の分は当然落とす（項目の中の囲みはその桁に立っている）。
-// そこから先がタブなら Notion が入れ子を写した跡なので落とす。空白ならコードの
-// つもりなので残す（`<callout>` の中に字下げのコードを書いた形）。
+// そこから先も、タブ・空白を問わず落とす。Notion は囲みの中身を開きタグより
+// 深い桁で書き出すことがあり、空白 4 つ以上で残すとその段落ごとコードとして
+// 読まれる（強調も生のまま出る）。
+//
+// 囲みの中でコードを書くときはフェンスを使う。桁を落としても開きと閉じの
+// 対応は崩れないので、中身はコードのまま残る。
 export function innerPad(lines: string[], pad: string): string {
   const common = commonIndent(lines);
-  if (!common.startsWith(pad)) return pad;
-  return /^\t*$/.test(common.slice(pad.length)) ? common : pad;
+  return common.startsWith(pad) ? common : pad;
 }
 
 const MARKER = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/;

@@ -90,8 +90,13 @@ describe("innerPad", () => {
     expect(innerPad(["\t- 項目", "\t\t- その子"], "")).toBe("\t");
   });
 
-  it("空白の字下げはコードのつもりなので残す", () => {
-    expect(innerPad(["    code だけ"], "")).toBe("");
+  it("空白の字下げも落とす（囲みの中身は桁を下げて書き出される）", () => {
+    expect(innerPad(["    中の文"], "")).toBe("    ");
+    expect(innerPad(["     中の文"], "")).toBe("     ");
+  });
+
+  it("囲みが立っている桁より浅ければ、その桁までにとどめる", () => {
+    expect(innerPad(["中の文"], "  ")).toBe("  ");
   });
 });
 
