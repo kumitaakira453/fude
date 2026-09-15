@@ -37,6 +37,7 @@ import {
   fontAtom,
   draftAskAtom,
   draftsDirAtom,
+  freshFileAtom,
   liveEditAtom,
   metaOpenAtom,
   paletteOpenAtom,
@@ -1432,7 +1433,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 rememberViewpoint(viewKey(pane.id, absPath), at, into);
               }}
               onDom={setEditContent}
-              onBuilt={(view) => setBuilt(view ? { path, view } : null)}
+              onBuilt={(view) => {
+                setBuilt(view ? { path, view } : null);
+                // 作ったばかりのファイルは、開いたらそのまま書き始められる
+                // ようにする。印は 1 度だけ使う。
+                // 作ったばかりのファイルは、開いたらそのまま書き始められる
+                // ようにする。印は 1 度だけ使う。
+                if (view && path && store.get(freshFileAtom) === path) {
+                  store.set(freshFileAtom, null);
+                  view.view.focus();
+                }
+              }}
               onComment={commentOnNode}
               onChange={(next) => {
                 setDraft(next);

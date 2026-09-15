@@ -309,6 +309,7 @@ function itemPosOf(
   return spot ? { pos: found, listPos: spot.listPos, at: spot.index, root } : null;
 }
 
+// 【一時】つまみの置き場所を追う。原因が分かったら消す。
 export function EditorGutter({
   view,
   host,
@@ -1018,7 +1019,7 @@ export function EditorGutter({
     : geo
       ? {
           top: geo.table.top,
-          left: geo.table.left - GRIP - HOLD_GAP,
+          left: geo.table.left - (wide ? BOTH : GRIP) - HOLD_GAP,
         }
       : {
           top: (spot.item ? spot.item.mid : spot.line) - GRIP / 2,
@@ -1035,8 +1036,7 @@ export function EditorGutter({
         <div ref={layer} className="mg-block-layer not-prose">
           {spot && anchor && (
             <div className="mg-gutter" style={{ top: anchor.top, left: anchor.left }}>
-              {/* 表は角に 1 つだけ置く。行と列の帯の間に 2 つ並べる余地が無い。 */}
-              {wide && !geo && (
+              {wide && (
                 <button
                   type="button"
                   title={spot.item ? "下に項目を挿入" : "下に挿入"}

@@ -21,6 +21,10 @@ export const loadingAtom = atom<{ active: boolean; message: string; done: number
   total: 0,
 });
 
+// 作ったばかりのファイル。開いた先で焦点を入れるのに 1 度だけ使う。
+// 既存のファイルを開くときは入れない（読むつもりのときに見ていた場所が動く）。
+export const freshFileAtom = atom<string | null>(null);
+
 // path -> 生テキスト。ペイン表示と全文検索で共有する。
 export const contentCacheAtom = atom<Map<string, string>>(new Map());
 // path -> lastModified（ポーリング差分検出用）

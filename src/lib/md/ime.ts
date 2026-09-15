@@ -1,5 +1,4 @@
-import type { Node as PmNode } from "prosemirror-model";
-import { Plugin, TextSelection } from "prosemirror-state";
+import { Plugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
 // 変換を確定した直後の 1 打を、編集面に届ける。
@@ -24,11 +23,12 @@ import type { EditorView } from "prosemirror-view";
 // 捨てないことにする印。prosemirror-view が「ずっと前に終わった」と見る値。
 const LONG_AGO = -2e8;
 
-// 内側の控え。窓を閉じるのと、読み取りを束ねるのに触る。名前が変わったら
+// 内側の控え。窓を閉じるのと、確定のあとの後始末に触る。名前が変わったら
 // 試験で落ちる。
 interface Inner {
   input?: { compositionEndedAt: number };
-  domObserver?: { flushSoon(): void; forceFlush(): void };
+  domObserver?: { flushSoon(): void; pendingRecords(): unknown[]; queue: unknown[] };
+  docView?: { markDirty(from: number, to: number): void };
 }
 
 const stopDropping = (view: EditorView): void => {
@@ -52,69 +52,63 @@ const holdRead = (view: EditorView): void => {
   (view as EditorView & Inner).domObserver?.flushSoon();
 };
 
-// 束ねた読み取りを、確定の字が入った直後に片付ける。待つと、作り替えられた
-// 見た目（見出しが段落に潰れた姿）がそのぶん長く画面に残る。
-const readNow = (view: EditorView): void => {
-  (view as EditorView & Inner).domObserver?.forceFlush();
+// 変換の確定で WebKit が作り替えた DOM は読まず、本文から描き直す。
+//
+// WebKit は確定のとき、中身が変換中の字だけだった器を要素ごと作り替える
+// （見出しは <p><b>…</b><br></p> になる）。prosemirror がそれを差分として読むと、
+// 本文の見出しが段落へ落ちる。
+//
+// 本文の側は、変換中の字が入った時点で確定後と同じ中身になっている。つまり
+// 読み直す理由がない。溜まっている DOM の変化を捨て、書いていた塊に印を付けて
+// 描き直せば、本文は無傷のまま画面が本文に追いつく。prosemirror は本文が
+// 変わっていなくても、印が立っていれば描き直す（updateStateInner の
+// matchesNode が dirty を見る）。
+//
+// 画面の字と本文の字が食い違うときは触らない。確定の字がまだ本文に入って
+// いないので、そのときは今までどおり prosemirror に読ませる。
+const mendAfterCompose = (view: EditorView): void => {
+  const inner = view as EditorView & Inner;
+  const watch = inner.domObserver;
+  const drawn = inner.docView;
+  if (!watch || !drawn) return;
+
+  const $at = view.state.selection.$from;
+  if ($at.depth < 1) return;
+  // 作り替えは、書いていた行とそれを抱える器（項目や升目）までしか及ばない。
+  // 並び全体まで描き直すと、項目の多い箇条書きでそのぶん時間がかかる。
+  const from = $at.before(Math.max(1, $at.depth - 1));
+  const node = view.state.doc.nodeAt(from);
+  const dom = view.nodeDOM(from);
+  if (!node || !(dom instanceof HTMLElement)) return;
+  if (dom.textContent !== node.textContent) return;
+
+  watch.pendingRecords();
+  watch.queue.length = 0;
+  drawn.markDirty(from, from + node.nodeSize);
+  view.updateState(view.state);
 };
-
-// 変換が終わってから、作り替えの差分が届くまでの猶予。実測では 8ms ほど。
-const AFTER = 200;
-
-// その塊の形。変換の前後で変わっていなければ、字の入れ替えだけと見てよい。
-const shapeOf = (node: PmNode): string => `${node.type.name}:${node.attrs.level ?? ""}`;
 
 export const composingKeys = () => {
   // 変換中か。WebKit は確定の打鍵の isComposing を false で寄こすことがあるので、
   // 知らせを自分でも数える（useImeSafeEnter と同じ見分け方）。
   let composing = false;
-  // 変換が終わった時刻。作り替えの差分は、終わった知らせの少しあとに届く。
-  let ended = -1;
 
   return new Plugin({
-    // 変換の確定で WebKit が器ごと作り替えたぶんを、本文の側で戻す。
-    //
-    // 確定のとき WebKit は見出しなどの器を <p><b>…</b><br></p> に作り替える
-    // （deleteCompositionText は cancelable: false なので止められない）。
-    // prosemirror はそれを差分として読み、見出しを段落へ落とす。
-    //
-    // 落ちる前の塊は、変換中の字が入った時点で既に確定後と同じ中身になって
-    // いる。だからその塊をそのまま置き直せば、器も飾りも元どおりになる。
-    // 差分を捨てる形にすると、画面には作り替えられた DOM が後始末まで
-    // （実測 20ms）残って、見出しが一度潰れてから戻るように見える。
-    //
-    // 見るのは変換の最中と、終わった直後だけ。その窓の中で、書いている塊の形
-    // そのものが変わったときだけ戻す。字の入れ替えには手を出さない。
-    appendTransaction(trs, old, next) {
-      if (!trs.some((tr) => tr.docChanged)) return null;
-      if (!composing && !(ended > 0 && Date.now() - ended < AFTER)) return null;
-      const was = old.selection.$from;
-      const $at = next.selection.$from;
-      if (shapeOf(was.parent) === shapeOf($at.parent)) return null;
-      const from = $at.before();
-      const tr = next.tr.replaceWith(from, $at.after(), was.parent);
-      const back = Math.min(from + 1 + was.parentOffset, tr.doc.content.size);
-      return tr.setSelection(TextSelection.create(tr.doc, back));
-    },
     props: {
       handleDOMEvents: {
         compositionstart() {
           composing = true;
           return false;
         },
-        compositionend() {
+        compositionend(view) {
           composing = false;
-          ended = Date.now();
+          mendAfterCompose(view);
           return false;
         },
         beforeinput(view, event) {
+          // 消した側だけを読ませない。待っているあいだに確定が来て、そこで
+          // まとめて捨てる。
           if (event.inputType === "deleteCompositionText") holdRead(view);
-          // beforeinput は変わる前に来るので、入った直後まで一手ずらす。
-          else if (event.inputType === "insertFromComposition") {
-            void Promise.resolve().then(() => {
-              if (!view.isDestroyed) readNow(view);
-            });
-          }
           return false;
         },
         keyup(view, event) {

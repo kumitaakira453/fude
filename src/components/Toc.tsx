@@ -114,11 +114,21 @@ export function Toc({
     };
   }, [content, scroller, contentKey]);
 
-  if (headings.length < 2) return null;
-  const minLevel = Math.min(...headings.map((h) => h.level));
+  // 見出しが 2 つに満たない間は中身を出さない。ただし場所は空けたままにする。
+  // 出入りで幅が変わると、そのぶん本文が左右に飛ぶ（中央寄せなので幅の半分
+  // だけ動く）。見出しを打った拍子に本文がずれて見えるのがこれ。
+  const bare = headings.length < 2;
+  const minLevel = bare ? 1 : Math.min(...headings.map((h) => h.level));
 
   return (
-    <nav className="mg-toc hidden min-h-0 w-56 shrink-0 self-stretch overflow-y-auto border-l border-[var(--mg-border)] py-6 pl-4 pr-3 lg:block">
+    <nav
+      className={`mg-toc hidden min-h-0 w-56 shrink-0 self-stretch overflow-y-auto py-6 pl-4 pr-3 lg:block ${
+        bare ? "" : "border-l border-[var(--mg-border)]"
+      }`}
+      aria-hidden={bare || undefined}
+    >
+      {bare ? null : (
+        <>
       <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
         目次
       </div>
@@ -144,6 +154,8 @@ export function Toc({
           </li>
         ))}
       </ul>
+        </>
+      )}
     </nav>
   );
 }

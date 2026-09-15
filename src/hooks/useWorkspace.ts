@@ -634,6 +634,7 @@ export function useWorkspace() {
       content.set(rel, "");
       store.set(A.contentCacheAtom, content);
       await refreshTreeStructure();
+      store.set(A.freshFileAtom, rel);
       openFile(rel);
     },
     [absOf, uniqueRel, refreshTreeStructure, openFile, store],

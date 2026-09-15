@@ -4,8 +4,6 @@ import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
-import { schema } from "./schema";
-import { toMarkdown } from "./toMarkdown";
 
 // prosemirror-view が「変換が終わった時刻」を控える欄。ここを戻すと、確定の
 // 直後の打鍵が捨てられなくなる。-2e8 が「ずっと前に終わった」＝捨てない印。
@@ -86,74 +84,88 @@ describe("変換を確定した直後の打鍵", () => {
 
 // 変換の確定で、WebKit は器ごと DOM を作り替える。
 //
-// 見出しの中身が変換中の字だけだと、確定のときに <h2> が
-// <p><b>…</b><br></p> に置き換わる（deleteCompositionText は
-// cancelable: false で止められない）。prosemirror はそれを差分として読み、
-// 本文の見出しを段落へ落とす。落ちる前の塊は既に確定後と同じ中身なので、
-// その塊で置き直せば器も飾りも元へ戻る。
-describe("変換の確定で器が作り替えられたとき", () => {
-  // WebKit が作り替えた DOM を読んだ結果と同じ差し替えを流す。
-  const asWebkit = (view: EditorView, text: string) => {
-    const at = view.state.selection.$from;
-    const from = at.before();
-    const fake = schema.nodes.paragraph.create(null, [
-      schema.text(text, [schema.marks.strong.create()]),
-      schema.nodes.hardBreak.create(),
-    ]);
-    view.dispatch(view.state.tr.replaceWith(from, at.after(), fake));
-  };
-
+// 中身が変換中の字だけだと、確定のときに <h2> が <p><b>…</b><br></p> に
+// 置き換わる（deleteCompositionText は cancelable: false で止められない）。
+// prosemirror がそれを差分として読むと、本文の見出しが段落へ落ちる。本文は
+// 確定の時点で既に正しいので、溜まった DOM の変化は読まずに捨て、本文から
+// 描き直す。
+describe("変換の確定のあと", () => {
   const caretEnd = (view: EditorView) => {
     const at = view.state.doc.child(0).nodeSize - 1;
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
   };
 
-  it("見出しは見出しのまま残る", () => {
+  // 溜まっている DOM の変化。jsdom の見張りは知らせが後から来るので、
+  // prosemirror と同じやり方（pendingRecords）でいま溜まっている分を数える。
+  type Watch = { domObserver?: { pendingRecords(): unknown[]; queue: unknown[] } };
+  const kept = (view: EditorView) => {
+    const watch = (view as EditorView & Watch).domObserver;
+    if (!watch) return -1;
+    watch.pendingRecords();
+    return watch.queue.length;
+  };
+
+  // WebKit が器を作り替えた形。画面だけが変わり、本文は触らない。
+  const breakDom = (view: EditorView) => {
+    const dom = view.nodeDOM(0);
+    if (!(dom instanceof HTMLElement)) throw new Error("塊の DOM が無い");
+    const fake = document.createElement("p");
+    const bold = document.createElement("b");
+    bold.textContent = dom.textContent;
+    fake.append(bold, document.createElement("br"));
+    dom.replaceWith(fake);
+  };
+
+  it("本文は作り替えに引きずられない", () => {
     const view = editor("## こんにちは\n");
     caretEnd(view);
     send(view, "compositionstart");
+    breakDom(view);
     send(view, "compositionend");
-    asWebkit(view, "こんにちは");
     const head = view.state.doc.child(0);
     expect(head.type.name).toBe("heading");
     expect(head.attrs.level).toBe(2);
     expect(head.textContent).toBe("こんにちは");
   });
 
-  it("足された飾りと改行も残らない", () => {
+  it("溜まっていた DOM の変化は捨てる", () => {
     const view = editor("## こんにちは\n");
     caretEnd(view);
     send(view, "compositionstart");
+    breakDom(view);
     send(view, "compositionend");
-    asWebkit(view, "こんにちは");
-    expect(toMarkdown(view.state.doc, fromMarkdown("## こんにちは\n"))).toBe("## こんにちは\n");
+    expect(kept(view)).toBe(0);
   });
 
-  it("項目でも器が残る", () => {
+  it("画面と本文の字が食い違うときは触らない", () => {
+    const view = editor("## こんにちは\n");
+    caretEnd(view);
+    send(view, "compositionstart");
+    const dom = view.nodeDOM(0);
+    if (dom instanceof HTMLElement) dom.textContent = "まだ入っていない";
+    send(view, "compositionend");
+    // 捨てていないので、prosemirror がいつもどおり読む。
+    expect(kept(view)).toBeGreaterThan(0);
+  });
+
+  it("項目でも本文は残る", () => {
     const view = editor("- [ ] やる\n");
     caretEnd(view);
     send(view, "compositionstart");
+    breakDom(view);
     send(view, "compositionend");
-    asWebkit(view, "やる");
     const item = view.state.doc.child(0).child(0);
     expect(item.type.name).toBe("listItem");
     expect(item.attrs.checked).toBe(false);
+    expect(item.textContent).toBe("やる");
   });
 
-  it("変換と関わりのないときは手を出さない", () => {
-    const view = editor("## こんにちは\n");
-    caretEnd(view);
-    asWebkit(view, "こんにちは");
-    expect(view.state.doc.child(0).type.name).toBe("paragraph");
-  });
-
-  it("字の入れ替えだけなら通す", () => {
+  it("変換の最中には何もしない", () => {
     const view = editor("## こんにちは\n");
     caretEnd(view);
     send(view, "compositionstart");
-    send(view, "compositionend");
-    const at = view.state.selection.from;
-    view.dispatch(view.state.tr.insertText("！", at));
-    expect(view.state.doc.child(0).textContent).toBe("こんにちは！");
+    breakDom(view);
+    // 確定の知らせがまだ来ていない。
+    expect(kept(view)).toBeGreaterThan(0);
   });
 });
