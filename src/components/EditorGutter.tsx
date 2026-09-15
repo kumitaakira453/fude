@@ -37,6 +37,7 @@ import {
 } from "../lib/md/tableActs";
 import {
   ADD,
+  ADD_AWAY,
   addAway,
   addBelow,
   HOLD,
@@ -76,10 +77,6 @@ import { Icon } from "./Icon";
 // 側に置き、編集面とは兄弟にする。
 
 type Kind = "block" | "item" | TablePart;
-
-// 追加の帯を表から離す幅。表の枠と重ならないよう、読むとき側より広く取る
-// （編集面では升目に焦点の枠が付くので、詰めると枠に重なって見える）。
-const ADD_GAP = 12;
 
 interface Spot {
   // そのブロックが始まる位置。トグルの中身でも同じ指し方になる。
@@ -243,7 +240,7 @@ function onAddBand(
 ): "row" | "col" | null {
   const slack = 2;
   const t = geo.table;
-  const rowTop = addBelow(geo.bottom, below, ADD_GAP);
+  const rowTop = addBelow(geo.bottom, below, ADD_AWAY);
   if (
     y >= rowTop - slack &&
     y <= rowTop + ADD + slack &&
@@ -252,7 +249,7 @@ function onAddBand(
   ) {
     return "row";
   }
-  const colLeft = t.left + t.width + addAway(below, ADD_GAP);
+  const colLeft = t.left + t.width + addAway(below, ADD_AWAY);
   if (
     geo.atRight &&
     x >= colLeft - slack &&
@@ -278,7 +275,7 @@ function tableBand(view: EditorView, hit: Hit, y: number): Hit | null {
   const el = view.nodeDOM(pos);
   if (!(el instanceof HTMLElement)) return null;
   const box = el.getBoundingClientRect();
-  if (y < box.bottom || y > box.bottom + ADD_GAP + ADD) return null;
+  if (y < box.bottom || y > box.bottom + ADD_AWAY + ADD) return null;
   return { el, pos };
 }
 
@@ -1145,7 +1142,7 @@ export function EditorGutter({
                   }`}
                   style={{
                     top: geo.table.top,
-                    left: geo.table.left + geo.table.width + addAway(spot.table.below, ADD_GAP),
+                    left: geo.table.left + geo.table.width + addAway(spot.table.below, ADD_AWAY),
                     width: ADD,
                     height: geo.table.height,
                   }}
@@ -1163,7 +1160,7 @@ export function EditorGutter({
                   spot.table.onAdd === "row" ? " is-on" : ""
                 }`}
                 style={{
-                  top: addBelow(geo.bottom, spot.table.below, ADD_GAP),
+                  top: addBelow(geo.bottom, spot.table.below, ADD_AWAY),
                   left: geo.table.left,
                   width: geo.table.width,
                   height: ADD,

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ADD,
+  ADD_AWAY,
   addBelow,
   firstLine,
   holdAt,
@@ -143,15 +144,15 @@ describe("表の行・列を矩形から決める", () => {
 });
 
 describe("addBelow", () => {
-  const GAP = 12;
+  const GAP = ADD_AWAY;
 
   it("空きが広ければ決めた分だけ離す", () => {
-    expect(addBelow(100, 60, GAP)).toBe(112);
+    expect(addBelow(100, 60, GAP)).toBe(104);
   });
 
   it("空きが狭ければ収まるところまで寄せる", () => {
-    // 24px の空きに 14px の帯 → 上下に 5px ずつ。
-    expect(addBelow(100, 24, GAP)).toBe(105);
+    // 18px の空きに 14px の帯 → 上下に 2px ずつ。
+    expect(addBelow(100, 18, GAP)).toBe(102);
   });
 
   it("空きがちょうどなら隙間なく収まる", () => {
@@ -165,8 +166,8 @@ describe("addBelow", () => {
     expect(addBelow(100, 0, GAP)).toBe(100 - ADD / 2);
   });
 
-  it("下にぶつかる相手が居なければ、触れない分だけ離す", () => {
-    expect(addBelow(100, Infinity, GAP)).toBe(103);
+  it("下にぶつかる相手が居なければ、決めた分だけ離す", () => {
+    expect(addBelow(100, Infinity, GAP)).toBe(104);
   });
 });
 

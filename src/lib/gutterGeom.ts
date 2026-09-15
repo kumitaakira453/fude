@@ -23,7 +23,8 @@ export const EDGE = 26;
 // 行・列を足す帯。掴む帯より少し細い。中の「+」はこの太さに収める
 // （はみ出すと、丸めた角で切れて寄って見える）。
 export const ADD = 14;
-export const ADD_AWAY = 6;
+// 帯を表から離す幅。触れると罫線と一本に見え、離すとどの表のものか読みにくい。
+export const ADD_AWAY = 4;
 // つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る左の余白。
 export const BOTH = GRIP * 2 + 4 + AWAY;
 export const ONLY = GRIP + AWAY;
@@ -269,12 +270,7 @@ export function tableGeometry(
 // 寄せ、それでも足りなければ表の下端をまたぐ（次のブロックへは入れない）。
 //
 // room は表の下端から次のブロックの上端までの画素。
-// 相手が居ないときに表から離す幅。縁ちょうどだと帯の辺と罫線が触れて、表の
-// 一本に見える。離しすぎるとどの表のものか読みにくい。
-const APART = 3;
-
 export function addAway(room: number, gap: number): number {
-  if (!Number.isFinite(room)) return APART;
   return Math.max(-ADD / 2, Math.min(gap, (room - ADD) / 2));
 }
 
