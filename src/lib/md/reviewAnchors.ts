@@ -52,9 +52,12 @@ export function anchorThreads(
     const resolution = resolutions.get(thread.id);
     if (!resolution) continue;
     const head = headOf(resolution);
-    const at = head
-      ? exact(parts, head.src, head.index)
-      : -1;
+    // 今の本文に居場所を持たない指摘（消えた・見失った）は、節点に当てない。
+    // 近そうな節点へ寄せると、関係の無い段落に指摘がぶら下がる。
+    if (!head) continue;
+    const at = exact(parts, head.src, head.index);
+    // 原文では引けないことがある（囲みの読み分けで綴りがずれる）。
+    // その救済としてだけ、似ている節点へ寄せる。
     const index = at >= 0 ? at : similar(parts, thread);
     if (index < 0) continue;
     out.push({

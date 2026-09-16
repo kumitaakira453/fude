@@ -148,6 +148,17 @@ export function useReview({
     };
   }, [threads, getBlocks]);
 
+  // 本文に居場所を持たない指摘の件数。印は出さない（近そうなブロックへ寄せると
+  // 関係の無い段落にぶら下がる）ので、数だけは見出しに出して辿れるようにする。
+  const loose = useMemo(() => {
+    let n = 0;
+    for (const thread of threads) {
+      const state = resolutions.get(thread.id)?.state;
+      if (state === "removed" || state === "unknown") n++;
+    }
+    return n;
+  }, [resolutions, threads]);
+
   // 解決結果を台帳に控える。CLI は Markdown を解析しないのでこれを読ませる。
   // 同じ内容を書き直して無駄にロックを取らないよう、送った分を覚えておく。
   const sentRef = useRef(new Map<string, string>());
@@ -438,6 +449,7 @@ export function useReview({
   return {
     threads,
     resolutions,
+    loose,
     selection,
     draft,
     busy,

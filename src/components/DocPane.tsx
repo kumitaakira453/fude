@@ -27,7 +27,12 @@ import { createCheckpoint, moveReviewFile } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
-import { screenOpenAtom, syncLedger, versionScreenAtom } from "../state/review";
+import {
+  reviewScreenAtom,
+  screenOpenAtom,
+  syncLedger,
+  versionScreenAtom,
+} from "../state/review";
 import { notify, notifyBusy, settle } from "../state/toast";
 import {
   activeFolderIdAtom,
@@ -253,6 +258,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // ---- バージョン ----
   const openVersions = useSetAtom(versionScreenAtom);
+  const openReview = useSetAtom(reviewScreenAtom);
   // バージョンの名前を決める小窓。開くたびに日時を入れ直す。
   const [naming, setNaming] = useState<string | null>(null);
   // メタ情報の小窓。開いているペインの id を持つので、⌘⇧M からも開ける。
@@ -1273,6 +1279,18 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>
+        )}
+        {/* 本文に居場所を持たない指摘。本文には印を出さないので、ここで数だけ
+            示して辿れるようにする。 */}
+        {review.loose > 0 && (
+          <button
+            onClick={() => openReview(true)}
+            title={`本文から外れたコメントが ${review.loose} 件あります`}
+            className="mg-loose-chip"
+          >
+            <Icon name="link_off" size={13} />
+            {review.loose}
+          </button>
         )}
         {canCopy && (
           <button

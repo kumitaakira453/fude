@@ -5998,6 +5998,27 @@ body.mg-carrying {
   color: var(--mg-accent);
 }
 
+/* 本文から外れたコメントの数。本文には印を出さないので、ここが唯一の
+   手掛かりになる。数だけを静かに置き、押すとレビューの画面へ行く。 */
+.mg-loose-chip {
+  display: inline-flex;
+  flex: none;
+  gap: 0.2rem;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-danger) 12%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--mg-danger);
+  transition: background 0.12s ease;
+}
+.mg-loose-chip:hover {
+  background: color-mix(in srgb, var(--mg-danger) 20%, transparent);
+}
+
 /* ---- メタ情報の小窓 ---- */
 
 .mg-meta-back {

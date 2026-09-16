@@ -156,7 +156,9 @@ describe("readingMarks", () => {
     expect(marks[0].areas.length).toBeGreaterThan(0);
   });
 
-  it("居場所が決まらなければ引用を含むブロックへ寄せる", () => {
+  it("居場所が決まらない指摘は、本文に出さない", () => {
+    // 引用を含む近そうなブロックへ寄せていた頃は、関係の無い段落に指摘が
+    // ぶら下がった。外れた指摘はレビュー画面でだけ辿らせる。
     const el = content("さきの段落。", "引用のことばが入っている段落。");
     const marks = readingMarks(
       el,
@@ -169,20 +171,16 @@ describe("readingMarks", () => {
       ],
       resolved({ state: "unknown", index: -1 }),
     );
-    expect(marks).toHaveLength(1);
-    expect(marks[0].guess).toBe(true);
-    expect(marks[0].moved).toBe(true);
-    // 2 つめのブロック（上端 100）に寄っている。
-    expect(marks[0].spots[0]?.top ?? marks[0].areas[0].top).toBeGreaterThan(50);
+    expect(marks).toHaveLength(0);
   });
 
-  it("手がかりも無ければ出さない", () => {
-    const el = content("まったく別の話。");
+  it("消えたブロックへの指摘も、本文に出さない", () => {
+    const el = content("さきの段落。");
     const marks = readingMarks(
       el,
       base,
-      [thread({ quote: "どこにも無い引用", selection: "どこにも無い" })],
-      resolved({ state: "unknown", index: -1 }),
+      [thread()],
+      resolved({ state: "removed", index: 0, base: block(0, "はじめの段落。") }),
     );
     expect(marks).toHaveLength(0);
   });

@@ -33,7 +33,9 @@ export interface Rect {
 export interface Mark {
   id: string;
   moved: boolean; // 対象が書き換わっている
-  guess: boolean; // 位置が特定できず、近いブロックに出している
+  // 原文では引けず、似ているブロックへ寄せている（編集面だけ。読む面は
+  // ブロック番号で引けるので、寄せずに出さない）。
+  guess: boolean;
   // ブロック全体の外枠。どのブロックへの指摘かを示す。またいだ指摘では
   // 覆っているブロックの数だけ並ぶ。
   areas: Rect[];
@@ -179,25 +181,6 @@ export function relTo(base: DOMRect, rc: DOMRect): Rect {
   };
 }
 
-// 位置が特定できない指摘の行き先。引用の一部を含むブロックを画面から探す。
-// 何も出さないと、本文を書き換えたとたんに指摘そのものが消えたように見える。
-const PROBE = 40;
-const PROBE_MIN = 6;
-
-function guessBlock(
-  content: HTMLElement,
-  ...needles: string[]
-): HTMLElement | null {
-  for (const needle of needles) {
-    const probe = needle.replace(/\s+/g, "").slice(0, PROBE);
-    if (probe.length < PROBE_MIN) continue;
-    for (const el of content.querySelectorAll<HTMLElement>("[data-mg-block]")) {
-      if ((el.textContent ?? "").replace(/\s+/g, "").includes(probe)) return el;
-    }
-  }
-  return null;
-}
-
 // セルや箇条書きの項目の文字を丸ごと覆っている指摘は、文字の行ではなく
 // その箱で示す。行ごとの矩形だと、`コード` の囲みやチェックの前後で切れて
 // 散らかって見える。
@@ -285,13 +268,12 @@ export function readingMarks(
     const resolution = resolutions.get(thread.id);
     if (!resolution) continue;
     const head = headOf(resolution);
-    const placed = head
-      ? content.querySelector<HTMLElement>(`[data-mg-block="${head.index}"]`)
-      : null;
-    // 特定できないものは、引用を含むブロックへ寄せて出す（点線で区別する）。
-    const el = placed ?? guessBlock(content, thread.selection, thread.quote);
-    if (!el) continue; // 漸進描画でまだ出ていない / 手がかりが無い
-    const guess = placed === null;
+    // 今の本文に居場所を持たない指摘（消えた・見失った）は、本文に印を出さない。
+    // 引用を含む近そうなブロックへ寄せていた頃は、関係の無い段落に指摘が
+    // ぶら下がって読み違えのもとになった。外れた指摘はレビュー画面で辿る。
+    if (!head) continue;
+    const el = content.querySelector<HTMLElement>(`[data-mg-block="${head.index}"]`);
+    if (!el) continue; // 漸進描画でまだ出ていない
 
     const bt = readBlockText(el);
     // またいだ指摘は引用に複数のブロックが入っている。箇所の線ではなく、
@@ -342,7 +324,7 @@ export function readingMarks(
         : [];
     // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
     // いつも二重に出すと、どこへの指摘か読み取りにくい。
-    const moved = guess || resolution.state === "rewritten";
+    const moved = resolution.state === "rewritten";
     const shown = spots.length === 0 || moved ? areas : [];
     if (shown.length === 0 && spots.length === 0) continue;
 
@@ -351,7 +333,7 @@ export function readingMarks(
     out.push({
       id: thread.id,
       moved,
-      guess,
+      guess: false,
       areas: shown.map((rc) => relTo(base, rc)),
       spots: spots.map((rc) => relTo(base, rc)),
       ...noteOf(thread),

@@ -67,6 +67,23 @@ function resolutionsOf(base: string, head: string, t: ReviewThread) {
   ]);
 }
 
+// 今の版に居場所はあるが、原文の綴りが画面側と揃っていない対応付け。
+// exact() では当たらず、similar() へ落ちる。
+function drifted(t: ReviewThread) {
+  const src = `${t.quote}<!-- 綴りがずれた -->`;
+  return new Map<string, Resolution>([
+    [
+      t.id,
+      {
+        state: "rewritten",
+        index: 0,
+        base: block(0, t.quote),
+        head: block(0, src),
+      },
+    ],
+  ]);
+}
+
 const block = (index: number, src: string): Block => ({
   index,
   src,
@@ -106,12 +123,12 @@ describe("anchorThreads", () => {
     expect(list[0].moved).toBe(true);
   });
 
-  it("居場所が決まらなければ引用を一番含む節点へ寄せる", () => {
+  it("原文では引けないときは、引用を一番含む節点へ寄せる", () => {
+    // 囲みの読み分けで綴りがずれると、原文の一致では当たらない。
+    // その救済として似ている節点へ寄せる。
     const { loaded, state } = opened(SRC);
     const t = thread();
-    const list = anchorThreads(state.doc, loaded, [t], new Map([
-      [t.id, { state: "unknown", index: -1 } as Resolution],
-    ]));
+    const list = anchorThreads(state.doc, loaded, [t], drifted(t));
     expect(list).toHaveLength(1);
     expect(list[0].pos).toBe(posOf(state.doc, 3));
     expect(list[0].guess).toBe(true);
@@ -123,9 +140,7 @@ describe("anchorThreads", () => {
     const body = `そっくりな段落のひとつ。\n\nそっくりな段落のふたつ。\n`;
     const { loaded, state } = opened(body);
     const t = thread({ quote: "そっくりな段落。", selection: "そっくりな段落" });
-    const list = anchorThreads(state.doc, loaded, [t], new Map([
-      [t.id, { state: "unknown", index: -1 } as Resolution],
-    ]));
+    const list = anchorThreads(state.doc, loaded, [t], drifted(t));
     expect(list).toHaveLength(1);
     expect(list[0].pos).toBe(0);
   });
@@ -133,10 +148,23 @@ describe("anchorThreads", () => {
   it("手がかりが無ければ当てない", () => {
     const { loaded, state } = opened(SRC);
     const t = thread({ quote: "どこにも無い文。", selection: "どこにも" });
-    const list = anchorThreads(state.doc, loaded, [t], new Map([
-      [t.id, { state: "unknown", index: -1 } as Resolution],
-    ]));
+    const list = anchorThreads(state.doc, loaded, [t], drifted(t));
     expect(list).toHaveLength(0);
+  });
+
+  it("本文から外れた指摘は、どこにも当てない", () => {
+    // 消えた・見失った指摘を近そうな節点へ寄せると、関係の無い段落に
+    // 指摘がぶら下がる。印はレビュー画面でだけ辿らせる。
+    const { loaded, state } = opened(SRC);
+    const t = thread();
+    for (const gone of [
+      { state: "unknown", index: -1 } as Resolution,
+      { state: "removed", index: 3, base: block(3, "まんなかの段落。") } as Resolution,
+    ]) {
+      expect(anchorThreads(state.doc, loaded, [t], new Map([[t.id, gone]]))).toHaveLength(
+        0,
+      );
+    }
   });
 
   it("同じ原文の節点が並ぶときは番号の近い方に当てる", () => {
