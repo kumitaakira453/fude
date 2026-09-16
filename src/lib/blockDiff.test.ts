@@ -124,9 +124,9 @@ describe("targetIndex", () => {
     expect(d[targetIndex(d, "消える段落")].kind).toBe("removed");
   });
 
-  it("書き換えられていても、いちばん似ている段落に寄せる", () => {
-    // 取り込んだ指摘は基準版が指摘当時のものとは限らず、逐語でも部分一致でも
-    // 当たらない。それでも「他と比べて明らかに似ている」段落は指せる。
+  it("似ているだけの段落には寄せない", () => {
+    // 他と比べて明らかに近くはあるが、丸ごと含んではいない。ここで寄せると
+    // 書き換えられた文書で確信をもって別の箇所を指してしまう。
     const src = [
       "生成AIの利用料金は、従来のSaaSと費用構造が根本的に異なる。",
       "",
@@ -136,7 +136,18 @@ describe("targetIndex", () => {
     ].join("\n");
     const d = diffBlocks(splitBlocks(src), splitBlocks(src));
     const i = targetIndex(d, "", "生成AIの料金は従来のSaaSとは費用の構造が異なります");
-    expect(i).toBe(0);
+    expect(i).toBe(-1);
+  });
+
+  it("引用を丸ごと含む段落が 2 つあるときは特定しない", () => {
+    // 短い引用は、同じ語を使う段落のどれにも丸ごと入る。
+    const src = [
+      "保存は自動で行われる。書き換えた分はすぐ残る。",
+      "",
+      "下書きの保存は自動で行われる。閉じても残る。",
+    ].join("\n");
+    const d = diffBlocks(splitBlocks(src), splitBlocks(src));
+    expect(targetIndex(d, "", "保存は自動で行われる")).toBe(-1);
   });
 
   it("似ている段落が競り合うときは特定しない", () => {

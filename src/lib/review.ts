@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import { ago } from "./when";
 
 // レビューの台帳へのアクセス。
 // 読み取りは Rust 側が書いた JSON を直接読む（IPC を挟まない）。書き込みだけを
@@ -322,35 +323,77 @@ const AGENTS = new Set(["AI", "ai", "assistant", "claude"]);
 
 const QUOTE_LIMIT = 120;
 
-// 指摘と指摘の境目。指摘の本文が複数行に渡ると、空行だけでは切れ目が読めない。
-const SEPARATOR = "=".repeat(56);
-
 function oneLine(text: string, limit = QUOTE_LIMIT): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
 }
 
-// 指摘をそのまま人に渡せる短い文にする。ID や版、解決の手順は載せない。
-// どのファイルのどこに何を言われたか、それだけで軽い修正は足りる。
+// 指摘 1 件に添える、画面が突き合わせて分かったこと。
+// 突き合わせが済んでいないものは持たない（その旨を写しに出す）。
+export interface ThreadFacts {
+  // 見出しを辿った道筋。
+  where: string;
+  // 箇所が今どうなっているか（そのまま / 書き換え済み など）の呼び名。
+  state: string;
+  // 今の本文での行。見失っているときは無い。
+  lines?: { from: number; to: number } | null;
+  // 今のブロックの原文。書き換わっているときだけ添える。
+  head?: string | null;
+}
+
+// 指摘を、そのままエージェントに渡せる形にする。
+//
+// CLI（fude review list --format agent）と同じ並びにする。同じ台帳を人と
+// エージェントが別の口から読むので、形が違うと指示が食い違う。
+// 版のハッシュや絶対時刻のような、読んでも行動が変わらないものは出さない。
 export function reviewPrompt(
   file: string,
   threads: ReviewThread[],
-  where: (thread: ReviewThread) => string,
+  facts: (thread: ReviewThread) => ThreadFacts | undefined,
 ): string {
-  const items = threads.map((t) => {
-    const spot = where(t).trim();
-    const target = oneLine(t.selection.trim() || t.quote);
-    const says = t.comments
-      .filter((c) => !AGENTS.has(c.author))
-      .map((c) => c.body.trim())
-      .filter(Boolean)
-      .join("\n    ");
-    const lines = [spot ? `- ${spot}` : "-"];
-    if (target) lines.push(`    該当箇所: ${target}`);
-    if (says) lines.push(`    コメント: ${says}`);
-    return lines.join("\n");
-  });
-  return `${file}\n\n${items.join(`\n\n${SEPARATOR}\n\n`)}\n`;
+  const head = `${file}\n未解決 ${threads.length} 件\n`;
+  return [head, ...threads.map((t) => section(t, facts(t)))].join("\n");
+}
+
+function section(thread: ReviewThread, facts: ThreadFacts | undefined): string {
+  const lines = [
+    `#${thread.id}  ${answeredByAgent(thread) ? "返信済み" : "未対応"}${
+      facts ? `  ${facts.state}` : ""
+    }`,
+    `場所: ${facts?.where?.trim() || sectionOf(thread)}`,
+    `位置: ${whereLine(facts)}`,
+  ];
+  // 選択がブロックぜんたいと同じときは、下の「本文」と同じ字になる。
+  if (thread.selection.trim() && thread.selection.trim() !== thread.quote.trim()) {
+    lines.push(`選択: ${oneLine(thread.selection)}`);
+  }
+  lines.push("本文:", quoted(thread.quote));
+  if (facts?.head) lines.push("現在:", quoted(facts.head));
+  if (thread.comments.length > 0) {
+    lines.push("会話:");
+    for (const c of thread.comments) {
+      lines.push(`- ${c.author} (${ago(c.created_at)}): ${c.body.trim().replace(/\n/g, "\n  ")}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function sectionOf(thread: ReviewThread): string {
+  return thread.section_path.length > 0 ? thread.section_path.join(" › ") : "(ファイル先頭)";
+}
+
+function whereLine(facts: ThreadFacts | undefined): string {
+  if (!facts) return "突き合わせ前";
+  if (!facts.lines) return "今の本文には無い";
+  const { from, to } = facts.lines;
+  return from === to ? `${from} 行` : `${from}–${to} 行`;
+}
+
+function quoted(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
 }
 
 // 値を返さないコマンド用。Rust の Ok(()) は JS では null として届くので、

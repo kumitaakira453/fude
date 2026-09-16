@@ -135,14 +135,12 @@ describe("anchorThreads", () => {
     expect(list[0].moved).toBe(true);
   });
 
-  it("引用をほぼ丸ごと含む節点が並ぶときは先頭へ寄せる", () => {
-    // 読むとき側の mostSimilar と同じ扱い。逐語で当たったときと揃える。
+  it("引用をほぼ丸ごと含む節点が並ぶときは寄せない", () => {
+    // 読むとき側の mostSimilar と同じ扱い。どちらとも決められない。
     const body = `そっくりな段落のひとつ。\n\nそっくりな段落のふたつ。\n`;
     const { loaded, state } = opened(body);
     const t = thread({ quote: "そっくりな段落。", selection: "そっくりな段落" });
-    const list = anchorThreads(state.doc, loaded, [t], drifted(t));
-    expect(list).toHaveLength(1);
-    expect(list[0].pos).toBe(0);
+    expect(anchorThreads(state.doc, loaded, [t], drifted(t))).toHaveLength(0);
   });
 
   it("手がかりが無ければ当てない", () => {

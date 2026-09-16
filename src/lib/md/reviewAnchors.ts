@@ -34,10 +34,9 @@ export interface Anchored {
   guess: boolean;
 }
 
-// 寄せるかどうかの線。読むとき側の mostSimilar と同じ考え方で、僅差では
-// 寄せない（言い回しの似た段落が並ぶ文書で、確信をもって別の箇所を指す）。
-const ENOUGH = 0.62;
-const MARGIN = 0.12;
+// 寄せるかどうかの線。読むとき側の mostSimilar と同じ。似ているだけの節点へは
+// 寄せない（書き換えられた文書で、確信をもって別の箇所を指してしまう）。
+const PRESENT = 0.9;
 
 export function anchorThreads(
   doc: PmNode,
@@ -84,7 +83,7 @@ function exact(parts: Part[], src: string, near: number): number {
   return best;
 }
 
-// 書き換わって原文では引けないとき、引用を一番含んでいる節点へ寄せる。
+// 原文では引けないとき、引用をほぼ丸ごと含んでいる節点へ寄せる。
 function similar(parts: Part[], thread: ReviewThread): number {
   const probe = probeOf(thread.quote, thread.selection);
   if (!probe) return -1;
@@ -101,8 +100,9 @@ function similar(parts: Part[], thread: ReviewThread): number {
       second = score;
     }
   }
-  if (top < ENOUGH) return -1;
-  return top >= 0.9 || top - second >= MARGIN ? best : -1;
+  if (top < PRESENT) return -1;
+  // ほぼ丸ごと含む節点が 2 つ以上あるときは決められない。
+  return second >= PRESENT ? -1 : best;
 }
 
 // 指摘に持たせる見出しの道筋。手前の見出しの節点から組む。

@@ -1,16 +1,10 @@
-import { confirm, message } from "@tauri-apps/plugin-dialog";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAfterPaint } from "../../hooks/useAfterPaint";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
-import {
-  probeOf,
-  rankByCoverage,
-  targetIndex,
-  type BlockChange,
-} from "../../lib/blockDiff";
+import { lineRange, sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
   SPOT_ICON,
   SPOT_NAME,
@@ -19,6 +13,7 @@ import {
   type SpotDiff,
   type SpotState,
 } from "../../lib/spotDiff";
+import { copyText } from "../../lib/clip";
 import { fontStack } from "../../lib/fonts";
 import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
@@ -37,10 +32,12 @@ import {
   restoreThread,
   reviewPrompt,
   REVIEW_AUTHOR,
+  type ThreadFacts,
   type ReviewComment,
   type ReviewThread,
 } from "../../lib/review";
 import { runReviewUndo, setReviewUndo } from "../../lib/reviewUndo";
+import { ago, whenText } from "../../lib/when";
 import { notify } from "../../state/toast";
 import {
   activeFolderIdAtom,
@@ -99,38 +96,48 @@ function fileLabel(root: string | null, file: string): { name: string; dir: stri
   return { name, dir: tail.length === 0 ? "" : `${cut ? "…/" : ""}${tail.join("/")}` };
 }
 
-// 「いつ言われたか」。日付だけを出すより、古い指摘が古いと一目で分かる。
-function ago(at: number): string {
-  const min = (Date.now() - at) / 60000;
-  if (min < 1) return "たった今";
-  if (min < 60) return `${Math.floor(min)} 分前`;
-  if (min < 60 * 24) return `${Math.floor(min / 60)} 時間前`;
-  if (min < 60 * 24 * 7) return `${Math.floor(min / 60 / 24)} 日前`;
-  return when.format(at);
+// 一覧と写しに添える、突き合わせて分かったこと。
+interface Facts extends ThreadFacts {
+  spot: SpotDiff;
 }
 
-function plainDiff(blocks: Block[]): BlockChange[] {
-  return blocks.map((b) => ({ kind: "same", base: b, head: b }));
+function factsOf(
+  thread: ReviewThread,
+  blocks: Block[],
+  body: string,
+  shift: number,
+  base: string | null,
+): Facts {
+  const spot = spotDiff(thread, blocks, base);
+  const block = spot.index >= 0 ? (blocks[spot.index] ?? null) : null;
+  // 消えたブロックには今の姿が無い。行も出せない。
+  const here = spot.state === "removed" ? null : block;
+  return {
+    spot,
+    where: whereAt(spot, thread, blocks),
+    state: SPOT_NAME[spot.state],
+    lines: here ? lineRange(body, here, shift) : null,
+    head: spot.state === "rewritten" || spot.state === "around" ? (here?.src ?? null) : null,
+  };
 }
 
-// 見出しを辿った道筋。取り込んだ指摘は節の情報を持たないので、本文から組み立てる。
-function whereOf(thread: ReviewThread, blocks: Block[] | undefined): string {
-  if (blocks) {
-    const diff = plainDiff(blocks);
-    let index = targetIndex(diff, thread.quote, thread.selection);
-    if (index < 0) {
-      // 箇所を確定できなくても、いちばん近い候補の節までは手掛かりになる。
-      // 節の名前が分かるだけで、指摘がどの話題のものかは掴める。
-      const best = rankByCoverage(diff, probeOf(thread.quote, thread.selection))[0];
-      if (best && best.score >= 0.3) index = best.index;
-    }
-    if (index >= 0) {
-      const path = sectionPathAt(blocks, index);
-      if (path.length > 0) return path.join(" › ");
-    }
+// 見出しを辿った道筋。箇所を確定できなくても、いちばん近い候補の節までは
+// 手掛かりになる（節の名前が分かれば、どの話題への指摘かは掴める）。
+function whereAt(spot: SpotDiff, thread: ReviewThread, blocks: Block[]): string {
+  const at = spot.index >= 0 ? spot.index : (spot.candidates[0] ?? -1);
+  if (at >= 0) {
+    const path = sectionPathAt(blocks, Math.min(at, blocks.length - 1));
+    if (path.length > 0) return path.join(" › ");
   }
   if (thread.section_path.length > 0) return thread.section_path.join(" › ");
   return "見出しの外";
+}
+
+// フロントマターの行数。本文の頭がファイルの何行目から始まるかを出す。
+function countLines(text: string): number {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") n++;
+  return n;
 }
 
 export function ReviewScreen() {
@@ -145,8 +152,8 @@ export function ReviewScreen() {
   const bulkRunning = useRef(false);
   // プロンプトを写したファイル。少しの間だけ印を出して、押せたことを示す。
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
-  // 「どこの話か」の索引は下で作る。押した瞬間に最新を読むため参照で持つ。
-  const whereRef = useRef<Map<string, string>>(new Map());
+  // 突き合わせの結果は下で作る。押した瞬間に最新を読むため参照で持つ。
+  const factsRef = useRef<Map<string, Facts>>(new Map());
   // 対象へ寄せ終わった指摘。ここが今見せている指摘と一致するまで骨組みを出す。
   const [settledId, setSettledId] = useState<string | null>(null);
   const markSettled = useCallback((id: string) => setSettledId(id), []);
@@ -327,38 +334,33 @@ export function ReviewScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, [resolveOne, store]);
 
-  // 1 ファイル分の指摘を短い文にして写す。台帳は画面が持っているので、
-  // 押した瞬間に組んでそのまま書き込む。await を挟むと WebKit が
-  // 「利用者の操作中」と見なさず、書き込みを拒否する。
+  // 1 ファイル分の指摘を、そのままエージェントへ渡せる形にして写す。
+  // 突き合わせの結果は一覧づくりで既に組んであるので、押した瞬間に組み直さない。
   const copyPrompt = useCallback(
     (file: string, list: ReviewThread[]) => {
-      const text = reviewPrompt(file, list, (t) =>
-        whereRef.current.get(t.id) ?? t.section_path.join(" › "),
+      const text = reviewPrompt(pathLabel(root, file), list, (t) =>
+        factsRef.current.get(t.id),
       );
-      navigator.clipboard.writeText(text).then(
-        () => {
-          notify(store, "コメントを写しました");
-          setCopiedFile(file);
-          window.clearTimeout(copyTimer.current);
-          copyTimer.current = window.setTimeout(() => setCopiedFile(null), 1400);
-        },
-        (e: unknown) =>
-          void message(`クリップボードに写せませんでした\n${String(e)}`, {
-            title: "fude",
-            kind: "error",
-          }),
-      );
+      void copyText(text).then((done) => {
+        if (!done) {
+          notify(store, "コメントを写せませんでした");
+          return;
+        }
+        notify(store, "コメントを写しました");
+        setCopiedFile(file);
+        window.clearTimeout(copyTimer.current);
+        copyTimer.current = window.setTimeout(() => setCopiedFile(null), 1400);
+      });
     },
-    [store],
+    [root, store],
   );
 
   // 一覧に出す「どこの話か」と「その箇所が今どうなっているか」。文書をブロックへ
   // 割り、指摘ごとに見出しを辿って版と突き合わせる重い処理なので、描画の中では
   // なくファイル 1 枚ずつフレームを分けて進める。まとめてやると数百ミリ秒画面が
   // 固まり、選択にも反応できなくなる。
-  const [whereById, setWhereById] = useState<Map<string, string>>(new Map());
-  const [stateById, setStateById] = useState<Map<string, SpotState>>(new Map());
-  whereRef.current = whereById;
+  const [factsById, setFactsById] = useState<Map<string, Facts>>(new Map());
+  factsRef.current = factsById;
   // 索引づくりの途中は本文の控えが何度も差し替わる。それに引きずられて
   // 辿り直しをやり直すと、いつまでも終わらないので参照だけ持っておく。
   const cacheRef = useRef(cache);
@@ -366,8 +368,7 @@ export function ReviewScreen() {
   useEffect(() => {
     if (!ready) return;
     let alive = true;
-    const found = new Map<string, string>();
-    const states = new Map<string, SpotState>();
+    const found = new Map<string, Facts>();
     // 次のフレームまで待つ。ここで手を離すので、一覧の操作が詰まらない。
     const yieldFrame = () =>
       new Promise<void>((done) => requestAnimationFrame(() => done()));
@@ -376,20 +377,21 @@ export function ReviewScreen() {
         const rel = relativeTo(root, file);
         const raw = rel === null ? undefined : cacheRef.current.get(rel);
         if (raw !== undefined) {
-          const blocks = splitBlocks(parseFrontmatter(raw).body);
+          const { body } = parseFrontmatter(raw);
+          // 本文がファイルの何行目から始まるか（フロントマターの行数）。
+          const shift = countLines(raw.slice(0, raw.length - body.length));
+          const blocks = splitBlocks(body);
           for (const t of list) {
-            found.set(t.id, whereOf(t, blocks));
             // 版の本文は id で覚えているので、2 度目からは取りに行かない。
             const base = await readVersion(t.base_version);
             if (!alive) return;
-            states.set(t.id, spotDiff(t, blocks, base).state);
+            found.set(t.id, factsOf(t, blocks, body, shift, base));
           }
         }
         await yieldFrame();
         if (!alive) return;
       }
-      setWhereById(found);
-      setStateById(states);
+      setFactsById(found);
     })();
     return () => {
       alive = false;
@@ -473,9 +475,10 @@ export function ReviewScreen() {
                     key={thread.id}
                     thread={thread}
                     where={
-                      whereById.get(thread.id) ?? thread.section_path.join(" › ")
+                      factsById.get(thread.id)?.where ??
+                      thread.section_path.join(" › ")
                     }
-                    state={stateById.get(thread.id)}
+                    state={factsById.get(thread.id)?.spot.state}
                     active={thread.id === selected?.id}
                     onPick={() => setSelectedId(thread.id)}
                     onResolve={() => void resolveOne(thread.id)}
@@ -630,7 +633,7 @@ export function ThreadCard({
         <span className="mg-thread-where" title={where}>
           {where.split(" › ").pop()}
         </span>
-        <span className="mg-thread-when" title={when.format(thread.created_at)}>
+        <span className="mg-thread-when" title={whenText(thread.created_at)}>
           {ago(thread.created_at)}
         </span>
         {answeredByAgent(thread) && (
@@ -661,13 +664,6 @@ export function ThreadCard({
     </div>
   );
 }
-
-const when = new Intl.DateTimeFormat("ja-JP", {
-  month: "numeric",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function ThreadDetail({
   thread,
@@ -1157,7 +1153,7 @@ function Message({
           <div className="mg-msg-meta">
             {/* 使っている本人の発言は、台帳に残る名前が何であれ「you」と呼ぶ */}
             <span className="mg-msg-name">{mine ? "you" : comment.author}</span>
-            <span>{when.format(comment.created_at)}</span>
+            <span>{whenText(comment.created_at)}</span>
           </div>
         )}
         {editing ? (

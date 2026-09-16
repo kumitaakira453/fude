@@ -251,6 +251,26 @@ export function resplitBlocks(
 const recent: { body: string; blocks: Block[] }[] = [];
 const KEEP = 4;
 
+// ブロックがファイルの何行目から何行目か（1 始まり）。指摘の居場所を人と
+// エージェントに渡すのに使う。shift はフロントマターの行数で、本文の頭が
+// ファイルの何行目から始まるかを足すためのもの。
+export function lineRange(
+  body: string,
+  block: Block,
+  shift = 0,
+): { from: number; to: number } {
+  const before = countLines(body.slice(0, block.start));
+  const inside = countLines(body.slice(block.start, block.end).replace(/\n+$/, ""));
+  const from = shift + before + 1;
+  return { from, to: from + inside };
+}
+
+function countLines(text: string): number {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") n++;
+  return n;
+}
+
 export function blocksOf(body: string): Block[] {
   const hit = recent.find((r) => r.body === body);
   if (hit) return hit.blocks;

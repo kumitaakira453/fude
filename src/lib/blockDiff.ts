@@ -155,22 +155,22 @@ function size(counts: Map<string, number>): number {
   return n;
 }
 
-// 引用をほぼ丸ごと含んでいれば、その引用はそこに在る。同じ文が複数箇所に
-// あるときは先頭を採る（逐語一致のときと同じ扱い）。
+// 引用をほぼ丸ごと含んでいれば、その引用はそこに在る。
+//
+// 「十分に似ていて、次点と差が付いていれば採る」という段は持たない。似ている
+// だけの段落へ寄せると、書き換えられた文書で確信をもって別の箇所を指してしまう。
+// 当てられないものは当てられないままにして、本文には出さない（外れた指摘として
+// 数だけ出し、近そうな箇所は「候補」と断って挙げる）。
 const PRESENT = 0.9;
-// そこまで含んでいないときは、十分に含んでいて次点と差が付いているときだけ。
-// 僅差で選ぶと、言い回しの似た段落が並ぶ文書で確信をもって別の箇所を指す。
-const ENOUGH = 0.62;
-const MARGIN = 0.12;
 
 function mostSimilar(diff: BlockChange[], probe: string): number {
   if (!probe) return -1;
   const ranked = rankByCoverage(diff, probe);
   const best = ranked[0];
-  if (!best || best.score < ENOUGH) return -1;
-  if (best.score >= PRESENT) return best.index;
-  const second = ranked[1]?.score ?? 0;
-  return best.score - second >= MARGIN ? best.index : -1;
+  if (!best || best.score < PRESENT) return -1;
+  // ほぼ丸ごと含む段落が 2 つ以上あるときは決められない。短い引用は同じ語を
+  // 使う段落のどれにも丸ごと入る。
+  return (ranked[1]?.score ?? 0) >= PRESENT ? -1 : best.index;
 }
 
 // 引用を含んでいそうな順に並べる。位置を特定できなかったときに、
