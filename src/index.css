@@ -1196,6 +1196,10 @@ button.mg-task-check:hover {
    ============================================================ */
 .mg-source {
   min-height: 100%;
+  /* 地色は中身の幅ぶん敷く。枠の見えている分しか持たないと、横に長い行を
+     右へ送ったところで地色が切れて下地が出る。 */
+  width: max-content;
+  min-width: 100%;
   padding: 0.6rem 0;
   background: var(--mg-code-bg);
   font-family: var(--mg-font-mono);
