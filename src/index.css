@@ -1206,9 +1206,6 @@ button.mg-task-check:hover {
   white-space: pre;
   tab-size: 2;
 }
-.mg-source-line:hover {
-  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
-}
 .mg-source-line {
   display: flex;
   align-items: baseline;
@@ -1230,9 +1227,6 @@ button.mg-task-check:hover {
   text-align: right;
   user-select: none;
   font-variant-numeric: tabular-nums;
-}
-.mg-source-line:hover > .mg-source-no {
-  color: var(--mg-fg-dim);
 }
 .mg-source code {
   padding-right: 1.5rem;
