@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   contentCacheAtom,
   docFindOpenAtom,
@@ -18,6 +18,7 @@ import {
 } from "../state/atoms";
 import { type ContentHit, searchContents, type SearchOptions } from "../lib/search";
 import { buildSearchTree, type SearchTreeNode } from "../lib/searchTree";
+import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { Icon } from "./Icon";
 
@@ -47,6 +48,7 @@ export function SearchPanel() {
   const focusNonce = useAtomValue(searchFocusNonceAtom);
   const [view, setView] = useAtom(searchViewAtom);
   const { openFile } = useWorkspace();
+  const store = useStore();
   const [query, setQuery] = useAtom(searchQueryAtom);
   const [opts, setOpts] = useState<SearchOptions>({
     caseSensitive: false,
@@ -146,6 +148,9 @@ export function SearchPanel() {
       if (!item) return;
       setSel(gi);
       openFile(item.path);
+      // 探して開いたファイルは、ツリーでも居場所が分かるようにする。検索の面は
+      // そのまま（一覧を消さない）で、ファイルの面へ戻したときに出る。
+      markInTree(store, item.path);
       // 本文側へ「このファイルの N 番目のヒットへ」を伝える（ハイライトは別途同期済み）
       setActiveHit({
         path: item.path,
@@ -155,7 +160,7 @@ export function SearchPanel() {
       // 以降も矢印ナビが効くよう入力欄へフォーカスを戻す
       inputRef.current?.focus();
     },
-    [flat, openFile, setActiveHit],
+    [flat, openFile, setActiveHit, store],
   );
 
   // アクティブ行の祖先フォルダを展開（ツリー表示で折り畳まれていても見えるように）

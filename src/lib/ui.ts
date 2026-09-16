@@ -128,6 +128,16 @@ export function revealInTree(
 ) {
   store.set(A.sidebarOpenAtom, true);
   store.set(A.sidebarTabAtom, "files");
+  markInTree(store, path, opts);
+}
+
+// ツリーでその行を出す合図だけを置く。いま出している面には触らない。
+//
+// 探して開いたファイルはツリーでも出したいが、本文の検索はサイドバーの検索の
+// 面に居る。そこで面を切り替えると、当たりを辿っている一覧が消えてしまう。
+// 合図だけ置けば、ファイルの面に居るならその場で、居ないなら戻ったときに出る
+// （ツリーは面を切り替えると組み直され、そのときの合図をそのまま受ける）。
+export function markInTree(store: Store, path: string, opts?: { edit?: boolean }) {
   store.set(A.revealInTreeAtom, {
     path,
     nonce: Date.now(),

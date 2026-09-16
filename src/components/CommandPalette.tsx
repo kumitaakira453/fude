@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useStore } from "jotai";
 import { filesAtom, paletteOpenAtom, touchedAtom } from "../state/atoms";
 import { quickOpen } from "../lib/search";
+import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { Icon } from "./Icon";
@@ -24,6 +25,7 @@ export function CommandPalette() {
   const files = useAtomValue(filesAtom);
   const touched = useAtomValue(touchedAtom);
   const { openFile } = useWorkspace();
+  const store = useStore();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -57,6 +59,8 @@ export function CommandPalette() {
     const r = results[i];
     if (r) {
       openFile(r.node.path);
+      // 探して開いたファイルは、ツリーでも居場所が分かるようにする。
+      markInTree(store, r.node.path);
       setOpen(false);
     }
   };

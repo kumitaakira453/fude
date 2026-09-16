@@ -7,10 +7,12 @@ import {
   closeTab,
   closeTabAt,
   dropOnPane,
+  markInTree,
   moveTab,
   openInPane,
   remapLeafPaths,
   reopenTab,
+  revealInTree,
   reviveLayout,
   splitPane,
   type StoredNode,
@@ -318,5 +320,30 @@ describe("reviveLayout", () => {
     const one = reviveLayout(stored, valid, "p1");
     const two = reviveLayout(stored, valid, "p1");
     expect(one.layout.id).not.toBe(two.layout.id);
+  });
+});
+
+describe("ツリーで出す合図", () => {
+  it("markInTree は合図だけを置き、出している面に触らない", () => {
+    store.set(A.sidebarOpenAtom, false);
+    store.set(A.sidebarTabAtom, "search");
+    markInTree(store, "a/b.md");
+    expect(store.get(A.revealInTreeAtom)?.path).toBe("a/b.md");
+    expect(store.get(A.sidebarOpenAtom)).toBe(false);
+    expect(store.get(A.sidebarTabAtom)).toBe("search");
+  });
+
+  it("revealInTree はサイドバーを開いてファイルの面にする", () => {
+    store.set(A.sidebarOpenAtom, false);
+    store.set(A.sidebarTabAtom, "search");
+    revealInTree(store, "a/b.md");
+    expect(store.get(A.revealInTreeAtom)?.path).toBe("a/b.md");
+    expect(store.get(A.sidebarOpenAtom)).toBe(true);
+    expect(store.get(A.sidebarTabAtom)).toBe("files");
+  });
+
+  it("名前の変更に入る印はそのまま渡る", () => {
+    markInTree(store, "a/b.md", { edit: true });
+    expect(store.get(A.revealInTreeAtom)?.edit).toBe(true);
   });
 });
