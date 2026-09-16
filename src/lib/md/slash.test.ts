@@ -708,4 +708,20 @@ describe("絵の直後で開く", () => {
   it("字が前にあるときは開かない（URL や道筋を邪魔しない）", () => {
     expect(state(at("http:\n", 6))).toBe(null);
   });
+
+  // 打ち込みの口が呼ばれない経路（絵の直後は字の節点が無い）でも開く。
+  // 本文へ直に差し込んで、できあがった形から拾えることを見る。
+  it("本文へ直に差し込まれた / でも開く", () => {
+    const view = editor("![](./a.png)\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
+    view.dispatch(view.state.tr.insertText("/", 2));
+    expect(state(view)).not.toBe(null);
+  });
+
+  it("字の途中へ差し込まれた / では開かない", () => {
+    const view = editor("http\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 5)));
+    view.dispatch(view.state.tr.insertText("/", 5));
+    expect(state(view)).toBe(null);
+  });
 });

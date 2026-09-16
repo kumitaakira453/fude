@@ -671,6 +671,28 @@ class SlashMenu implements PluginView {
 
 export const slashMenu = new Plugin<SlashState | null>({
   key: slashKey,
+  // 打ち込みの口（handleTextInput）で拾えなかった "/" をここで拾う。
+  //
+  // ProseMirror がその口を呼ぶのは、字の節点への素直な字入れに見えたときだけ。
+  // 絵のような行内の塊の直後には字の節点が無く、窓は新しい節点を作るので、
+  // 打ち込みではなく本文の差し替えとして読まれて口が呼ばれない。
+  // できあがった本文の側から見れば、どちらの経路でも同じ形になる。
+  appendTransaction(trs, old, next) {
+    if (slashKey.getState(next) !== null) return null;
+    if (!trs.some((tr) => tr.docChanged)) return null;
+    const { $head, empty } = next.selection;
+    if (!empty) return null;
+    const at = $head.parentOffset - 1;
+    if (at < 0 || $head.parent.textBetween(at, at + 1) !== "/") return null;
+    // "/" が最初の字であること。文の途中の "/"（URL や道筋）は邪魔しない。
+    if ($head.parent.textBetween(0, at) !== "") return null;
+    const type = $head.parent.type;
+    if (type !== schema.nodes.paragraph && type !== schema.nodes.heading) return null;
+    // 打つ前は字が 1 つも無かったこと。閉じたあとの打鍵で開き直さない。
+    const was = old.selection;
+    if (!was.empty || was.$head.parent.textBetween(0, was.$head.parentOffset) !== "") return null;
+    return next.tr.setMeta(slashKey, { type: "open", from: $head.pos - 1 } satisfies Meta);
+  },
   state: {
     init: () => null,
     apply(tr, prev, _old, next) {

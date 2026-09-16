@@ -184,44 +184,40 @@ describe("絵の上に出す帯", () => {
   });
 });
 
-describe("絵だけの塊の印", () => {
-  it("絵だけの段落に付く（背の高いカーソルを消すため）", () => {
+describe("絵の隣のカーソル", () => {
+  // 絵の隣では行箱が絵の丈になり、カーソルも絵と同じ丈で立つ。棒は消して
+  // 絵の縁で居場所を示す。
+  const put = (view: EditorView, at: number) =>
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+
+  it("絵の直後では棒を消し、絵に縁を出す", () => {
     const at = editor("![](./images/図解.png)\n");
-    expect(at.view.dom.querySelector(".mg-lone-img")).not.toBeNull();
+    put(at.view, 2);
+    expect(at.view.dom.querySelector(".mg-no-caret")).not.toBeNull();
+    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
   });
 
-  it("字と混ざっている段落には付かない", () => {
-    const at = editor("前 ![](./images/図解.png) 後\n");
-    expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
+  it("絵の直前でも同じ", () => {
+    const at = editor("![](./images/図解.png)\n");
+    put(at.view, 1);
+    expect(at.view.dom.querySelector(".mg-no-caret")).not.toBeNull();
   });
 
-  it("絵の無い段落には付かない", () => {
+  it("字と混ざっていても、絵の隣なら消す", () => {
+    const at = editor("k![](./images/図解.png)\n");
+    put(at.view, 2);
+    expect(at.view.dom.querySelector(".mg-no-caret")).not.toBeNull();
+  });
+
+  it("絵から離れていれば、棒はそのまま", () => {
+    const at = editor("k![](./images/図解.png)\n");
+    put(at.view, 1);
+    expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
+  });
+
+  it("絵の無い塊では何もしない", () => {
     const at = editor("本文\n");
-    expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
-  });
-
-  it("カーソルが居る塊には強い印を付ける（棒を消しているので）", () => {
-    const at = editor("![](./images/図解.png)\n");
-    at.view.dispatch(
-      at.view.state.tr.setSelection(TextSelection.create(at.view.state.doc, 1)),
-    );
-    expect(at.view.dom.querySelector(".mg-lone-img.is-here")).not.toBeNull();
-  });
-
-  it("別の塊に居るときは強めない", () => {
-    const at = editor("![](./images/図解.png)\n\n次\n");
-    const size = at.view.state.doc.content.size;
-    at.view.dispatch(
-      at.view.state.tr.setSelection(TextSelection.create(at.view.state.doc, size - 1)),
-    );
-    expect(at.view.dom.querySelector(".mg-lone-img")).not.toBeNull();
-    expect(at.view.dom.querySelector(".mg-lone-img.is-here")).toBeNull();
-  });
-
-  it("絵を消したら印も外れる", () => {
-    const at = editor("![](./images/図解.png)\n");
-    at.view.dispatch(at.view.state.tr.delete(0, at.view.state.doc.content.size));
-    expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
+    put(at.view, 1);
+    expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
   });
 });
-

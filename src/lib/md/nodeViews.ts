@@ -997,33 +997,40 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
 // 画像は行内の節点なので、絵だけの段落では行箱が絵の丈になり、カーソルも
 // その丈で立つ。塊そのものを block にすると Markdown の読み書きと貼り付けまで
 // 波及するので、印を付けて棒だけ消す。
-// カーソルが居る塊なら印を強める。棒を消しているので、どこに居るのかを
-// 絵そのものの縁で示さないと、次の一打で絵が消えることに気付けない。
-function loneImageDecos(state: EditorState): DecorationSet {
-  const here = state.selection.empty ? state.selection.$head.before(state.selection.$head.depth) : -1;
-  const marks: Decoration[] = [];
-  state.doc.descendants((node, pos) => {
-    if (!node.isTextblock) return true;
-    if (node.childCount === 1 && node.firstChild?.type === schema.nodes.image) {
-      const on = pos === here;
-      marks.push(
-        Decoration.node(pos, pos + node.nodeSize, {
-          class: on ? "mg-lone-img is-here" : "mg-lone-img",
-        }),
-      );
-    }
-    return false;
-  });
-  return marks.length > 0 ? DecorationSet.create(state.doc, marks) : DecorationSet.empty;
+// 絵の隣に立つカーソルを消し、代わりに絵の縁で居場所を示す。
+//
+// 画像は行内の節点だが塊のように描くので、その隣では行箱が絵の丈になり、
+// カーソルも絵と同じ丈で立つ。棒は消す。ただし何も出さないと、どこに居るのか
+// 読めず「空の行を消したつもり」で絵を消してしまう（消す前に選ばせる手当ては
+// あるが、居場所が見えること自体が要る）。
+function imageMarks(state: EditorState): DecorationSet {
+  const sel = state.selection;
+  if (!sel.empty) return DecorationSet.empty;
+  const $head = sel.$head;
+  const before = $head.nodeBefore;
+  const after = $head.nodeAfter;
+  const at =
+    before?.type === schema.nodes.image
+      ? $head.pos - before.nodeSize
+      : after?.type === schema.nodes.image
+        ? $head.pos
+        : -1;
+  if (at < 0) return DecorationSet.empty;
+
+  const block = $head.before($head.depth);
+  const node = state.doc.nodeAt(block);
+  if (!node) return DecorationSet.empty;
+  return DecorationSet.create(state.doc, [
+    Decoration.node(block, block + node.nodeSize, { class: "mg-no-caret" }),
+    Decoration.node(at, at + 1, { class: "is-here" }),
+  ]);
 }
 
 export const loneImages = new Plugin<DecorationSet>({
   state: {
-    init: (_, state) => loneImageDecos(state),
-    // 本文か選択が動いたときだけ数え直す。絵の数は多くないが、毎度歩くと
-    // 打鍵のたびに全文を舐めることになる。
+    init: (_, state) => imageMarks(state),
     apply: (tr, prev, _old, next) =>
-      tr.docChanged || tr.selectionSet ? loneImageDecos(next) : prev,
+      tr.docChanged || tr.selectionSet ? imageMarks(next) : prev,
   },
   props: {
     decorations(state) {

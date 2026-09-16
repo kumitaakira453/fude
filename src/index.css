@@ -6415,13 +6415,13 @@ body.mg-carrying {
      帯やつまみが余白のぶんだけ浮き、選ぶ枠も絵より大きく出る。 */
   margin-block: 1rem;
 }
-/* 絵だけの塊では、行箱が絵の丈になってカーソルもその丈で立つ。棒は消す。 */
-.mg-lone-img {
+/* 絵の隣では行箱が絵の丈になり、カーソルも絵と同じ丈で立つ。棒は消す。 */
+.mg-no-caret {
   caret-color: transparent;
 }
-/* 代わりに、カーソルが居るあいだは絵の縁で示す。棒を消したまま何も出さないと
+/* 代わりに、隣に居るあいだは絵の縁で示す。棒を消したまま何も出さないと
    どこに居るのか読めず、次の一打で絵が消えることに気付けない。 */
-.mg-lone-img.is-here .mg-img-hold > img {
+.mg-img.is-here .mg-img-hold > img {
   outline: 2px solid color-mix(in srgb, var(--mg-accent) 55%, transparent);
   outline-offset: 1px;
 }
