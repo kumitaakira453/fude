@@ -1238,12 +1238,19 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [path, store],
   );
 
-  // 別のファイルの節へのリンクで開かれたとき。自分のファイルの分だけ拾う。
+  // 道筋つきのリンクで開かれたとき。自分のファイルの分だけ拾う。
+  //
+  // 待つのは「今出ている面」。読む面の入れ物だけを待っていたので、編集中は
+  // いつまでも揃わず、寄せる側まで届いていなかった。
   const pending = useAtomValue(pendingAnchorAtom);
+  const landed = useRef(0);
   useEffect(() => {
-    if (!pending || !content || pending.path !== path) return;
+    if (!pending || pending.path !== path) return;
+    if (pending.nonce === landed.current) return;
+    if (editing ? !pm : !content) return;
+    landed.current = pending.nonce;
     land(pending.id);
-  }, [pending, content, path, land]);
+  }, [pending, content, pm, editing, path, land]);
 
   // 別のファイルへ移ったら、寄せている最中の印は落とす。
   useEffect(() => {
