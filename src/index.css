@@ -3987,8 +3987,8 @@ svg[id^="mmd-"] foreignObject p {
 }
 /* 指摘の箇所。地色を敷いて、どの塊のことかを示す。 */
 .mg-spot {
-  margin: 0 -1rem 0.85rem;
-  padding: 0.5rem 1rem 0.15rem;
+  margin: 0 -0.5rem 0.85rem;
+  padding: 0.5rem 0.5rem 0.15rem;
   background: var(--mg-accent-soft);
 }
 /* 中の一部まで絞れているときは、塊全体の地色を引いて印だけを立てる。 */
@@ -4026,7 +4026,7 @@ svg[id^="mmd-"] foreignObject p {
   /* 見出しは面の持ち物。離すと別々のものに見えるので、組の隙間ぶんを
      詰め返して面にくっつける。 */
   margin: 0 0 -0.3rem;
-  padding-inline: 1rem;
+  padding-inline: 0.5rem;
 }
 .mg-spot-tag.is-untouched {
   color: var(--mg-muted);
@@ -4134,13 +4134,15 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin: 1.5rem -1rem 1rem;
+  /* 面は本文の桁より少し外へ出す。出しすぎると枠の端に貼り付いて、
+     外へ溢れているように見える（枠の内側の余白は 1.5rem しかない）。 */
+  margin: 1.5rem -0.5rem 1rem;
 }
 /* 片側。その側全体に薄い面を敷く。面と、記号を添えた見出しで前後を言い分ける
    （罫を足すと、四隅の丸みが片側だけ潰れて、面の形が読みにくくなる）。 */
 .mg-spot-side {
   min-width: 0;
-  padding: 0.5rem 1rem 0.15rem;
+  padding: 0.5rem 0.5rem 0.15rem;
 }
 .mg-spot-side.is-base {
   background: var(--mg-del);
