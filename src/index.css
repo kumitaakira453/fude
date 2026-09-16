@@ -4265,21 +4265,8 @@ svg[id^="mmd-"] foreignObject p {
 .mg-md :is(p, ul, ol, blockquote, pre, table, hr) {
   margin: 0.35em 0;
 }
-.mg-md :is(ul, ol) {
-  padding-left: 1.6em;
-}
-/* 記号は自分で決める。組版の規則（typography）に任せると、地の指定が
-   効いていないところで点が消える。小さい字では既定の点が読み取れないので、
-   記号だけ一段大きく組む。 */
-.mg-md ul {
-  list-style-type: disc;
-}
-.mg-md ol {
-  list-style-type: decimal;
-}
-.mg-md ul > li::marker {
-  font-size: 1.25em;
-}
+/* 行頭の印は mg-prose の自前の点に任せる（地の色を持たない所でも消えない）。
+   ここで既定の印を呼び戻すと、自前の点と二重に並ぶ。 */
 .mg-md li {
   margin: 0.1em 0;
 }
