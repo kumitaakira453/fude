@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "../../lib/blocks";
+import { applyDiffMarks } from "../../lib/diffMarks";
 import { readBlockText, rangeAt } from "../../lib/domText";
 import { findPlain, findPlainLoose } from "../../lib/projection";
+import { SPOT_NAME, type SpotDiff } from "../../lib/spotDiff";
+import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
 // 指摘が付いた文書を、現在の姿のまま出す。
@@ -9,6 +12,9 @@ import { Markdown } from "../Markdown";
 // 版どうしの差分をまるごと並べていた頃は、指摘と関係のない書き換えが延々と
 // 続いて何を見ればいいのか分からなかった。読み手が知りたいのは「指摘の箇所が
 // 今どうなっているか」の一点なので、前後を見せるのはそこだけにする。
+//
+// 書き換わっていたら、その一点だけをコメント時点と今の 2 段で並べ、変わった字に
+// 印を付ける（applyDiffMarks）。どの語が消えてどの語が入ったかまで出せる。
 //
 // 全ブロックを 1 回のペイントで描くと大きなファイルで固まるので、
 // 本文と同じく先頭から順に足していく。
@@ -23,21 +29,9 @@ const FIRST_CHUNK = 8;
 // かえって遅い。対象へ着いたあとの穴埋めなので、大きく取る。
 const NEXT_CHUNK = 160;
 
-export type Anchor =
-  | { state: "unchanged"; index: number }
-  | { state: "rewritten"; index: number; before: string }
-  | { state: "removed"; index: number; before: string }
-  | { state: "unknown"; candidates: number[] };
-
-const SPOT_LABEL: Record<string, string> = {
-  unchanged: "コメントの箇所",
-  rewritten: "コメントの箇所（書き換え済み）",
-  removed: "ここに在った",
-};
-
 export function DocumentView({
+  spot,
   blocks,
-  anchor,
   editorial,
   style,
   focusNonce,
@@ -46,7 +40,8 @@ export function DocumentView({
   selection,
 }: {
   blocks: Block[];
-  anchor: Anchor;
+  // 指摘の箇所が今どうなっているか。版との突き合わせで出したもの。
+  spot: SpotDiff;
   editorial: boolean;
   style: React.CSSProperties;
   // 増えるたびに指摘の箇所へ戻す。読み進めて見失ったときのための合図。
@@ -60,6 +55,7 @@ export function DocumentView({
   onSettled?: () => void;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
+  const root = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
   // 選ばれていた文字列そのものに印を付けられたときの、その位置
   const markRef = useRef<HTMLElement | null>(null);
@@ -77,24 +73,27 @@ export function DocumentView({
   }, []);
 
   // 寄せ先。effect より前で決める（下の描画と、寄せ終わりの判定の両方で使う）。
-  const spot = anchor.state === "unknown" ? -1 : anchor.index;
-  const maybe = anchor.state === "unknown" ? anchor.candidates : [];
-  const scrollTo = spot >= 0 ? spot : (maybe[focusAt] ?? maybe[0] ?? -1);
+  const at = spot.state === "unknown" ? -1 : spot.index;
+  const maybe = spot.state === "unknown" ? spot.candidates : [];
+  const scrollTo = at >= 0 ? at : (maybe[focusAt] ?? maybe[0] ?? -1);
+  // コメント時点と並べて出す状態。箇所が今の本文に残っているものだけ。
+  const paired =
+    (spot.state === "rewritten" || spot.state === "around") && spot.before !== null;
 
   // 何を見ているかは中身で表す。配列やオブジェクトの同一性で見張ると、
   // 中身が同じでも作り直されるたびに先頭へ巻き戻ってしまう。
   const total = blocks.length;
-  const anchorKey =
-    anchor.state === "unknown"
-      ? `unknown:${anchor.candidates.join(",")}`
-      : `${anchor.state}:${anchor.index}`;
+  const spotKey =
+    spot.state === "unknown"
+      ? `unknown:${spot.candidates.join(",")}`
+      : `${spot.state}:${spot.index}`;
 
   // 最初の描画に対象を含める。ブロックの位置は前にあるものの高さで決まるので、
   // 対象へ寄せるには結局そこまで描くしかない。先頭から少しずつ足していくと、
   // 対象が後半にあるほど到達が遅れ、待ち時間がそのぶん伸びる。1 回で描き切る。
   const opening = Math.min(
     total,
-    Math.max(FIRST_CHUNK, (spot >= 0 ? spot : (maybe[0] ?? -1)) + 1 + FIRST_CHUNK),
+    Math.max(FIRST_CHUNK, (at >= 0 ? at : (maybe[0] ?? -1)) + 1 + FIRST_CHUNK),
   );
 
   // 残りは後から足す。始めから終わりまでを 1 つの effect が持つ。
@@ -112,7 +111,7 @@ export function DocumentView({
       if (shownCount < total) frame = requestAnimationFrame(step);
     });
     return () => cancelAnimationFrame(frame);
-  }, [total, anchorKey, opening]);
+  }, [total, spotKey, opening]);
 
   useEffect(() => {
     const mark = () => {
@@ -125,6 +124,13 @@ export function DocumentView({
       window.removeEventListener("keydown", mark);
     };
   }, []);
+
+  // コメント時点と今の組で、変わった字に印を付ける。組は 1 つしか出ないが、
+  // 中身は表にもなるので、バージョンの画面と同じ道を通す。
+  useEffect(
+    () => applyDiffMarks(paired ? root.current : null),
+    [paired, spotKey, limit, editorial, style],
+  );
 
   // 選ばれていた文字列そのものに印を付ける。表のように大きなブロックでは、
   // ブロック全体を塗っても「どのセルの話か」が分からない。
@@ -152,7 +158,7 @@ export function DocumentView({
     return () => {
       registry.delete(MARK);
     };
-  }, [selection, limit, anchorKey]);
+  }, [selection, limit, spotKey]);
 
   // 描き足すたびに位置を合わせ直す。上にある画像や数式が遅れて入ると
   // 対象が押し下げられるため、1 回きりだと狙った場所からずれる。
@@ -167,7 +173,7 @@ export function DocumentView({
       settledRef.current = true;
       onSettled?.();
     }
-  }, [limit, anchorKey, marked, focus, scrollTo, onSettled]);
+  }, [limit, spotKey, marked, focus, scrollTo, onSettled]);
 
   // 頼まれたら戻す。自分でスクロールしていても、このときだけは動かす。
   useEffect(() => {
@@ -176,7 +182,6 @@ export function DocumentView({
     focus("smooth");
   }, [focusNonce, focusAt, focus]);
 
-
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
   }
@@ -184,14 +189,53 @@ export function DocumentView({
   const shown = blocks.slice(0, limit);
 
   return (
-    <div className="mg-doc">
+    <div ref={root} className="mg-doc">
       {shown.map((block, i) => {
-        const gone = i === spot && anchor.state === "removed";
-        const isSpot = i === spot && !gone;
+        const gone = i === at && spot.state === "removed";
+        const isSpot = i === at && !gone;
         const rank = maybe.indexOf(i);
-        // 寄せる先は目印そのもの。「指摘した時点」の塊まで含めた外側に付けると、
-        // その塊が長いときに本体が画面の下へ押し出されてしまう。
+        // 寄せる先は目印そのもの。組の外側に付けると、コメント時点の段が
+        // 長いときに今の本文が画面の下へ押し出されてしまう。
         const isTarget = i === scrollTo;
+        const now = (
+          <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
+            <Markdown body={block.src} editorial={editorial} />
+          </div>
+        );
+        if (isSpot && paired && spot.before !== null) {
+          return (
+            <div
+              key={block.index}
+              className="mg-spot-pair"
+              data-label={SPOT_NAME[spot.state]}
+              data-diff-pair=""
+            >
+              <Was
+                src={spot.before}
+                removed={spot.removed}
+                editorial={editorial}
+                style={style}
+              />
+              <section className="mg-spot-side is-head">
+                <header className="mg-spot-side-head">
+                  <Icon name="add" size={13} />今
+                  {spot.added > 0 && <span className="mg-spot-n">＋{spot.added}</span>}
+                </header>
+                {/* 選んだ字がどのブロックかを引く目印。本文の画面と同じ名前で
+                    持つので、コメントを書く仕組みがそのまま乗る。コメント時点の
+                    字（上の段）には付けない。 */}
+                <div
+                  ref={isTarget ? targetRef : undefined}
+                  data-diff-side="head"
+                  data-mg-block={block.index}
+                  className={`mg-spot-now${isTarget ? " mg-anchor" : ""}`}
+                >
+                  {now}
+                </div>
+              </section>
+            </div>
+          );
+        }
         return (
           <div key={block.index}>
             {gone && (
@@ -199,26 +243,16 @@ export function DocumentView({
                 ref={isTarget ? targetRef : undefined}
                 className={isTarget ? "mg-anchor" : undefined}
               >
-                <Gone src={anchor.before} editorial={editorial} style={style} />
-              </div>
-            )}
-            {isSpot && anchor.state === "rewritten" && (
-              <div className="mg-before">
-                <div className="mg-before-label">コメントした時点</div>
-                <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-                  <Markdown body={anchor.before} editorial={editorial} />
-                </div>
+                <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
               </div>
             )}
             <div
               ref={isTarget && !gone ? targetRef : undefined}
-              // 選んだ字がどのブロックかを引く目印。本文の画面と同じ名前で
-              // 持つので、コメントを書く仕組みがそのまま乗る。「コメントした
-              // 時点」の字（上に出す古い版）には付けない。
+              // 選んだ字がどのブロックかを引く目印。
               data-mg-block={block.index}
               data-label={
                 isSpot
-                  ? SPOT_LABEL[anchor.state]
+                  ? "コメントの箇所"
                   : rank >= 0
                     ? `候補 ${rank + 1} / ${maybe.length}`
                     : undefined
@@ -230,18 +264,16 @@ export function DocumentView({
                 isSpot && marked ? " is-narrow" : ""
               }`}
             >
-              <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-                <Markdown body={block.src} editorial={editorial} />
-              </div>
+              {now}
             </div>
           </div>
         );
       })}
 
       {/* 末尾のブロックが消えていた場合は、続くブロックが無いのでここに出す */}
-      {anchor.state === "removed" && spot >= blocks.length && (
+      {spot.state === "removed" && at >= blocks.length && (
         <div ref={targetRef} className="mg-anchor">
-          <Gone src={anchor.before} editorial={editorial} style={style} />
+          <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
         </div>
       )}
 
@@ -251,6 +283,37 @@ export function DocumentView({
         </p>
       )}
     </div>
+  );
+}
+
+// コメントを付けた時点の姿。今の本文の真上に置いて、消えた字に印を付ける。
+//
+// 色だけでは前後を言い分けられない（テーマによって danger とアクセントが
+// 同系色になる）。記号と語を必ず添える。
+function Was({
+  src,
+  removed,
+  editorial,
+  style,
+}: {
+  src: string;
+  removed: number;
+  editorial: boolean;
+  style: React.CSSProperties;
+}) {
+  return (
+    <section className="mg-spot-side is-base">
+      <header className="mg-spot-side-head">
+        <Icon name="remove" size={13} />
+        コメント時点
+        {removed > 0 && <span className="mg-spot-n">−{removed}</span>}
+      </header>
+      <div data-diff-side="base">
+        <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
+          <Markdown body={src} editorial={editorial} />
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -6,14 +6,19 @@ import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
-  diffBlocks,
-  headIndexAt,
   probeOf,
   rankByCoverage,
-  resolveInDiff,
   targetIndex,
   type BlockChange,
 } from "../../lib/blockDiff";
+import {
+  SPOT_ICON,
+  SPOT_NAME,
+  spotDiff,
+  spotNote,
+  type SpotDiff,
+  type SpotState,
+} from "../../lib/spotDiff";
 import { fontStack } from "../../lib/fonts";
 import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
@@ -59,7 +64,7 @@ import { SelectionMenu } from "./SelectionMenu";
 import { CommentComposer } from "./CommentComposer";
 import { useReview } from "../../hooks/useReview";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
-import { DocumentView, type Anchor } from "./DocumentView";
+import { DocumentView } from "./DocumentView";
 import { Quote } from "./Quote";
 
 // レビュー専用の画面。読書ビューに小窓を重ねる形では、スクロールで位置が崩れ、
@@ -347,10 +352,12 @@ export function ReviewScreen() {
     [store],
   );
 
-  // 一覧に出す「どこの話か」。文書をブロックへ割り、指摘ごとに見出しを辿る
-  // 重い処理なので、描画の中ではなくファイル 1 枚ずつフレームを分けて進める。
-  // まとめてやると数百ミリ秒画面が固まり、選択にも反応できなくなる。
+  // 一覧に出す「どこの話か」と「その箇所が今どうなっているか」。文書をブロックへ
+  // 割り、指摘ごとに見出しを辿って版と突き合わせる重い処理なので、描画の中では
+  // なくファイル 1 枚ずつフレームを分けて進める。まとめてやると数百ミリ秒画面が
+  // 固まり、選択にも反応できなくなる。
   const [whereById, setWhereById] = useState<Map<string, string>>(new Map());
+  const [stateById, setStateById] = useState<Map<string, SpotState>>(new Map());
   whereRef.current = whereById;
   // 索引づくりの途中は本文の控えが何度も差し替わる。それに引きずられて
   // 辿り直しをやり直すと、いつまでも終わらないので参照だけ持っておく。
@@ -358,23 +365,35 @@ export function ReviewScreen() {
   cacheRef.current = cache;
   useEffect(() => {
     if (!ready) return;
-    const files = groups.map(([file]) => file);
+    let alive = true;
     const found = new Map<string, string>();
-    let i = 0;
-    let frame = 0;
-    const step = () => {
-      const file = files[i++];
-      const rel = relativeTo(root, file);
-      const raw = rel === null ? undefined : cacheRef.current.get(rel);
-      if (raw !== undefined) {
-        const blocks = splitBlocks(parseFrontmatter(raw).body);
-        for (const t of groups[i - 1][1]) found.set(t.id, whereOf(t, blocks));
+    const states = new Map<string, SpotState>();
+    // 次のフレームまで待つ。ここで手を離すので、一覧の操作が詰まらない。
+    const yieldFrame = () =>
+      new Promise<void>((done) => requestAnimationFrame(() => done()));
+    void (async () => {
+      for (const [file, list] of groups) {
+        const rel = relativeTo(root, file);
+        const raw = rel === null ? undefined : cacheRef.current.get(rel);
+        if (raw !== undefined) {
+          const blocks = splitBlocks(parseFrontmatter(raw).body);
+          for (const t of list) {
+            found.set(t.id, whereOf(t, blocks));
+            // 版の本文は id で覚えているので、2 度目からは取りに行かない。
+            const base = await readVersion(t.base_version);
+            if (!alive) return;
+            states.set(t.id, spotDiff(t, blocks, base).state);
+          }
+        }
+        await yieldFrame();
+        if (!alive) return;
       }
-      if (i < files.length) frame = requestAnimationFrame(step);
-      else setWhereById(found);
+      setWhereById(found);
+      setStateById(states);
+    })();
+    return () => {
+      alive = false;
     };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
   }, [ready, groups, root]);
 
   return (
@@ -456,6 +475,7 @@ export function ReviewScreen() {
                     where={
                       whereById.get(thread.id) ?? thread.section_path.join(" › ")
                     }
+                    state={stateById.get(thread.id)}
                     active={thread.id === selected?.id}
                     onPick={() => setSelectedId(thread.id)}
                     onResolve={() => void resolveOne(thread.id)}
@@ -565,12 +585,15 @@ function targetLine(thread: ReviewThread): string {
 export function ThreadCard({
   thread,
   where,
+  state,
   active,
   onPick,
   onResolve,
 }: {
   thread: ReviewThread;
   where: string;
+  // 指摘の箇所が今どうなっているか。突き合わせが済むまでは無い。
+  state?: SpotState;
   active: boolean;
   onPick: () => void;
   onResolve: () => void;
@@ -593,7 +616,12 @@ export function ThreadCard({
       <div className="mg-thread-body">
         {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
       </div>
-      <div className="mg-thread-quote">
+      <div className={`mg-thread-quote${state ? " has-state" : ""}`}>
+        {state && (
+          <span className={`mg-thread-state is-${state}`} title={SPOT_NAME[state]}>
+            <Icon name={SPOT_ICON[state]} size={11} fill />
+          </span>
+        )}
         <span>{targetLine(thread)}</span>
       </div>
       <div className="mg-thread-foot">
@@ -632,46 +660,6 @@ export function ThreadCard({
       </div>
     </div>
   );
-}
-
-// 指摘の箇所が今どこにあるか。基準版があればそこから対応付け、
-// 無ければ現在の本文から探す。どちらも駄目なら候補だけ示す。
-function locate(thread: ReviewThread, head: Block[], baseText: string | null): Anchor {
-  if (baseText !== null) {
-    const diff = diffBlocks(splitBlocks(parseFrontmatter(baseText).body), head);
-    const r = resolveInDiff(diff, thread.quote, thread.selection);
-    const index = Math.min(headIndexAt(diff, r.index), head.length);
-    if (r.state === "unchanged") return { state: "unchanged", index };
-    if (r.state === "rewritten") return { state: "rewritten", index, before: r.base.src };
-    if (r.state === "removed") return { state: "removed", index, before: r.base.src };
-  }
-
-  const plain = plainDiff(head);
-  const index = targetIndex(plain, thread.quote, thread.selection);
-  if (index >= 0) return { state: "unchanged", index };
-
-  // 特定できないときは、引用をいくらか含んでいるブロックを近い順に示す。
-  // 「分かりません」で終えると、読み手は文書全体を目で探すことになる。
-  const candidates = rankByCoverage(plain, probeOf(thread.quote, thread.selection))
-    .filter((c) => c.score >= 0.3)
-    .slice(0, 3)
-    .map((c) => c.index);
-  return { state: "unknown", candidates };
-}
-
-function stateNote(anchor: Anchor): string {
-  switch (anchor.state) {
-    case "unchanged":
-      return "コメントの箇所はまだ書き換わっていません。";
-    case "rewritten":
-      return "コメントの箇所は書き換わっています。コメントした時点の文を上に並べています。";
-    case "removed":
-      return "コメントの箇所は今の本文から削除されています。";
-    default:
-      return anchor.candidates.length === 0
-        ? "コメントの文は今の本文に見当たらず、近そうな箇所も見つかりませんでした。"
-        : `コメントの文は今の本文に見当たりません。近そうな箇所を ${anchor.candidates.length} つ挙げています。`;
-  }
 }
 
 const when = new Intl.DateTimeFormat("ja-JP", {
@@ -757,12 +745,12 @@ function ThreadDetail({
   const view = useMemo(() => {
     if (currentBody === null) return null;
     const blocks = splitBlocks(currentBody);
-    const anchor = locate(thread, blocks, baseText);
+    const spot = spotDiff(thread, blocks, baseText);
     const crumbs =
-      anchor.state === "unknown"
+      spot.state === "unknown"
         ? thread.section_path
-        : sectionPathAt(blocks, Math.min(anchor.index, blocks.length - 1));
-    return { blocks, anchor, crumbs };
+        : sectionPathAt(blocks, Math.min(spot.index, blocks.length - 1));
+    return { blocks, spot, crumbs };
   }, [baseText, currentBody, thread]);
 
   const settle = useCallback(() => onSettled(thread.id), [onSettled, thread.id]);
@@ -864,9 +852,8 @@ function ThreadDetail({
 
   const style = { fontFamily: fontStack(font) };
   // 候補が複数あるときは、今どれを見ているかを出しつつ次へ送れるようにする。
-  const candidates =
-    view?.anchor.state === "unknown" ? view.anchor.candidates.length : 0;
-  const hasTarget = view !== null && (view.anchor.state !== "unknown" || candidates > 0);
+  const candidates = view?.spot.candidates.length ?? 0;
+  const hasTarget = view !== null && (view.spot.state !== "unknown" || candidates > 0);
   const jump = () =>
     setFocus((f) => ({
       nonce: f.nonce + 1,
@@ -894,7 +881,7 @@ function ThreadDetail({
             <markdownContext.Provider value={ctx}>
               <DocumentView
                 blocks={view.blocks}
-                anchor={view.anchor}
+                spot={view.spot}
                 editorial={editorial}
                 style={style}
                 focusNonce={focus.nonce}
@@ -1006,16 +993,7 @@ function ThreadDetail({
           ))}
         </div>
 
-        {view && (
-          <p className={`mg-side-state is-${view.anchor.state}`}>
-            <Icon
-              name={view.anchor.state === "unknown" ? "help" : "my_location"}
-              size={13}
-              className="mt-px shrink-0"
-            />
-            {stateNote(view.anchor)}
-          </p>
-        )}
+        {view && <SpotCard spot={view.spot} />}
 
         <div className="mg-side-compose">
           {seeReply ? (
@@ -1088,6 +1066,30 @@ function ThreadDetail({
           </button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+// 指摘の箇所が今どうなっているか。返信を書く前にいちばん見たいものなので、
+// 会話のすぐ下、書き込む欄の手前に置く。
+//
+// 色だけでは状態を言い分けられない（テーマによって danger とアクセントが
+// 同系色になる）。記号と語を必ず添える。
+function SpotCard({ spot }: { spot: SpotDiff }) {
+  const moved = spot.added > 0 || spot.removed > 0;
+  return (
+    <div className={`mg-spot-card is-${spot.state}`}>
+      <div className="mg-spot-card-head">
+        <Icon name={SPOT_ICON[spot.state]} size={13} fill />
+        {SPOT_NAME[spot.state]}
+        {moved && (
+          <span className="mg-spot-delta">
+            {spot.added > 0 && <span className="is-add">＋{spot.added}</span>}
+            {spot.removed > 0 && <span className="is-del">−{spot.removed}</span>}
+          </span>
+        )}
+      </div>
+      <p>{spotNote(spot)}</p>
     </div>
   );
 }

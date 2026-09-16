@@ -3598,6 +3598,31 @@ svg[id^="mmd-"] foreignObject p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 箇所が今どうなっているか。引用の頭の ❝ と置き換える（2 つ並べると
+   どちらが印なのか読めない）。 */
+.mg-thread-quote.has-state::before {
+  content: none;
+}
+.mg-thread-state {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-muted) 18%, transparent);
+  color: var(--mg-muted);
+}
+.mg-thread-state.is-around,
+.mg-thread-state.is-rewritten {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-thread-state.is-removed,
+.mg-thread-state.is-unknown {
+  background: color-mix(in srgb, var(--mg-danger) 16%, transparent);
+  color: var(--mg-danger);
+}
 
 /* 札の主役。ここだけが本文の濃さで、他は手がかりとして沈める。 */
 .mg-thread-body {
@@ -3830,21 +3855,55 @@ svg[id^="mmd-"] foreignObject p {
   border-radius: 0.9rem;
 }
 
-/* 箇所の状態。特定できたときは静かに、できなかったときだけ目を引かせる。 */
-.mg-side-state {
+/* 箇所の状態。まだ書き換わっていないときは静かに、動いているときは
+   何が起きたかを言い切る。色だけで言い分けず、記号と語を必ず添える。 */
+.mg-spot-card {
   display: flex;
   flex: none;
-  gap: 0.35rem;
-  align-items: flex-start;
-  padding: 0.45rem 0.9rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.9rem 0.6rem;
   border-top: 1px solid var(--mg-border);
   font-size: 10.5px;
   line-height: 1.5;
   color: var(--mg-muted);
 }
-.mg-side-state.is-unknown {
-  background: color-mix(in srgb, var(--mg-accent) 8%, transparent);
+.mg-spot-card-head {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--mg-fg-dim);
+}
+/* 増減の字数。桁を揃えて、数として読めるようにする。 */
+.mg-spot-delta {
+  display: flex;
+  gap: 0.45rem;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.mg-spot-delta .is-add {
+  color: var(--mg-add-fg);
+}
+.mg-spot-delta .is-del {
+  color: var(--mg-del-fg);
+}
+.mg-spot-card.is-around .mg-spot-card-head,
+.mg-spot-card.is-rewritten .mg-spot-card-head {
+  color: var(--mg-accent);
+}
+.mg-spot-card.is-rewritten {
+  background: color-mix(in srgb, var(--mg-accent) 7%, transparent);
+}
+.mg-spot-card.is-removed .mg-spot-card-head,
+.mg-spot-card.is-unknown .mg-spot-card-head {
+  color: var(--mg-danger);
+}
+.mg-spot-card.is-unknown {
+  background: color-mix(in srgb, var(--mg-danger) 7%, transparent);
 }
 
 .mg-side-compose {
@@ -3995,18 +4054,73 @@ svg[id^="mmd-"] foreignObject p {
   background-color: color-mix(in srgb, var(--mg-accent) 34%, transparent);
 }
 
-/* 指摘した時点の文。今の文のすぐ上に、控えめに置く。 */
-.mg-before {
-  margin: 1.35rem -1rem -0.5rem;
-  padding: 0.5rem 1rem 0.1rem;
-  border-left: 2px dashed var(--mg-border);
-  opacity: 0.7;
+/* コメント時点と今の組。書き換わった箇所だけをここで並べる。
+   見立てはバージョンの画面と同じ校正刷りで、語彙も揃える
+   （読む人が 2 つの画面で同じものを同じ形として読めるように）。 */
+.mg-spot-pair {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* 左は罫のぶんだけ余分に出す。そうしないと本文の桁が組の中で 2px ずれて、
+     読み下ろすときに段落の頭が揃わない。 */
+  margin: 1.5rem -1rem 1rem calc(-1rem - 2px);
 }
-.mg-before-label {
+.mg-spot-pair::before {
+  content: attr(data-label);
+  position: absolute;
+  top: -0.65rem;
+  left: 0.9rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  background: var(--mg-accent);
+  color: var(--mg-bg);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--mg-muted);
+  line-height: 1.3rem;
+  white-space: nowrap;
+}
+/* 片側。その側全体に薄い面を敷く。罫だけだと、どちらが前でどちらが後かを
+   罫の色で読み分けることになり、離れた行では追えない。 */
+.mg-spot-side {
+  min-width: 0;
+  padding: 0.5rem 1rem 0.15rem;
+  border-left: 2px solid var(--mg-border);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.mg-spot-side.is-base {
+  border-left-color: var(--mg-del-fg);
+  background: var(--mg-del);
+}
+.mg-spot-side.is-head {
+  border-left-color: var(--mg-add-fg);
+  background: var(--mg-add);
+}
+.mg-spot-side-head {
+  display: flex;
+  gap: 0.15rem;
+  align-items: center;
+  margin-bottom: 0.1rem;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.mg-spot-side.is-base .mg-spot-side-head {
+  color: var(--mg-del-fg);
+}
+.mg-spot-side.is-head .mg-spot-side-head {
+  color: var(--mg-add-fg);
+}
+/* 増減の字数。側の名前のすぐ後ろに、同じ濃さで添える。 */
+.mg-spot-n {
+  margin-left: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+/* 組の中の「今」の本文。面は側が敷いているので、ここでは何も塗らない
+   （選ばれていた字の印だけを立てる）。 */
+.mg-spot-now {
+  border-radius: 0.45rem;
 }
 
 /* 送信。この帯で唯一色を置くボタンなので、大きさは控えめにする。 */
