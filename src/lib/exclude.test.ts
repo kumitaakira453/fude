@@ -17,6 +17,14 @@ describe("一覧から外す名前", () => {
     expect(drops(".DS_Store", ".DS_Store")).toBe(true);
   });
 
+  it("点で始まる書き方は、末尾として当たる", () => {
+    expect(drops(".md.json", "メモ.md.json")).toBe(true);
+    expect(drops(".md.json", "メモ.json")).toBe(false);
+    expect(drops(".md.prev", "メモ.md.prev")).toBe(true);
+    expect(drops(".notion.json", "要件.notion.json")).toBe(true);
+    expect(drops(".notion.json", "notion.json")).toBe(false);
+  });
+
   it("途中に点のある書き方は、名前そのものとして当たる", () => {
     expect(drops("package-lock.json", "package-lock.json")).toBe(true);
     expect(drops("package-lock.json", "lock.json")).toBe(false);

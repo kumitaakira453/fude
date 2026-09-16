@@ -18,11 +18,14 @@ function ruleOf(line: string): RegExp | null {
     const glob = escape(text).replace(/\*/g, ".*").replace(/\?/g, ".");
     return new RegExp(`^${glob}$`, "i");
   }
+  // 点で始まるなら末尾（.md.json → メモ.md.json）。点をいくつ重ねてもよい。
+  // 前が空でも当てるので、その名前そのもの（.DS_Store）にも効く。
+  if (text.startsWith(".")) return new RegExp(`^.*${escape(text)}$`, "i");
   // 途中に点があるなら、名前そのもの（package-lock.json）。
-  if (text.slice(1).includes(".")) return new RegExp(`^${escape(text)}$`, "i");
-  // それ以外は拡張子の書き方（log / .log）。同じ名前のファイル（Makefile）にも
+  if (text.includes(".")) return new RegExp(`^${escape(text)}$`, "i");
+  // 点が無ければ拡張子の書き方（log）。同じ名前のファイル（Makefile）にも
   // 当てたいので、点より前は無くてもよいことにする。
-  return new RegExp(`^(.*\\.)?${escape(text.replace(/^\./, ""))}$`, "i");
+  return new RegExp(`^(.*\\.)?${escape(text)}$`, "i");
 }
 
 export function excludeRules(text: string): RegExp[] {
