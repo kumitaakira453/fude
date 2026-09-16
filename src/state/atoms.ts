@@ -249,3 +249,13 @@ export interface SearchActiveHit {
   nonce: number;
 }
 export const searchActiveHitAtom = atom<SearchActiveHit | null>(null);
+
+// 別のファイルの節へのリンク（`./x.md#見出し`）で開いたときの、当てる先。
+// 開く側と描く側が別なので、置き場を挟んで渡す。描き終わったペインが
+// 自分のファイルの分だけ拾う。
+export interface PendingAnchor {
+  path: string;
+  id: string;
+  nonce: number;
+}
+export const pendingAnchorAtom = atom<PendingAnchor | null>(null);

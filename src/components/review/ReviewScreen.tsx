@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAfterPaint } from "../../hooks/useAfterPaint";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { anchorAt, landOn } from "../../lib/anchors";
 import { lineRange, sectionPathAt, splitBlocks, type Block } from "../../lib/blocks";
 import {
   SPOT_ICON,
@@ -105,6 +106,7 @@ interface Facts extends ThreadFacts {
 
 function factsOf(
   thread: ReviewThread,
+  file: string,
   blocks: Block[],
   body: string,
   shift: number,
@@ -114,12 +116,16 @@ function factsOf(
   const block = spot.index >= 0 ? (blocks[spot.index] ?? null) : null;
   // 消えたブロックには今の姿が無い。行も出せない。
   const here = spot.state === "removed" ? null : block;
+  // その箇所を指すリンク。見出しの id は描くときと同じ算法で出すので、
+  // 同じ見出しが複数ある文書でも連番まで一致する。
+  const id = spot.index >= 0 ? anchorAt(blocks, spot.index) : null;
   return {
     spot,
     where: whereAt(spot, thread, blocks),
     state: SPOT_NAME[spot.state],
     lines: here ? lineRange(body, here, shift) : null,
     head: spot.state === "rewritten" || spot.state === "around" ? (here?.src ?? null) : null,
+    anchor: id ? `${file}#${id}` : null,
   };
 }
 
@@ -386,7 +392,7 @@ export function ReviewScreen() {
             // 版の本文は id で覚えているので、2 度目からは取りに行かない。
             const base = await readVersion(t.base_version);
             if (!alive) return;
-            found.set(t.id, factsOf(t, blocks, body, shift, base));
+            found.set(t.id, factsOf(t, pathLabel(root, file), blocks, body, shift, base));
           }
         }
         await yieldFrame();
@@ -686,7 +692,7 @@ function ThreadDetail({
   const editorial = useAtomValue(editorialAtom);
   const font = useAtomValue(fontAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
-  const { openFile, resolveAsset, peekAsset } = useWorkspace();
+  const { openFile, navigate, resolveAsset, peekAsset } = useWorkspace();
   const [baseText, setBaseText] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   // 書いたものの姿を確かめている間。送ると書く側へ戻す。
@@ -793,14 +799,31 @@ function ThreadDetail({
     if (currentBody === null && !reading) settle();
   }, [currentBody, reading, settle]);
 
+  // 本文と、コメントの中に書かれたリンクの行き先。相対パスの基準は、
+  // コメントではなく指摘が付いているファイル。
+  const landRef = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => () => landRef.current?.(), []);
   const ctx = useMemo(
     () => ({
-      onNavigate: () => {},
+      // 別のファイルは読む画面で開く。レビュー画面には出ていない本文なので、
+      // ここで開いても行き先が無い。
+      onNavigate: (href: string) => {
+        if (!rel) return;
+        navigate(rel, href);
+        setScreen(false);
+      },
+      onAnchor: (id: string) => {
+        landRef.current?.();
+        if (!paper || !id) return;
+        landRef.current = landOn(paper, id, () =>
+          notify(store, "その見出しは見つかりません"),
+        );
+      },
       resolveAsset: (src: string) => resolveAsset(rel ?? "", src),
       peekAsset: (src: string) => peekAsset(rel ?? "", src),
       docPath: rel ?? "",
     }),
-    [rel, resolveAsset, peekAsset],
+    [rel, resolveAsset, peekAsset, navigate, setScreen, paper, store],
   );
 
   const send = useCallback(async () => {
@@ -1003,17 +1026,21 @@ function ThreadDetail({
           />
         </markdownContext.Provider>
 
-        <div className="mg-talk">
-          {thread.comments.map((c, i) => (
-            <Message
-              key={c.id}
-              comment={c}
-              mine={c.author === reviewer}
-              run={thread.comments[i - 1]?.author === c.author}
-              onRewrite={(body) => void rewrite(c.id, body)}
-            />
-          ))}
-        </div>
+        {/* コメントの中のリンクも、本文と同じ文脈で解く（基準は指摘の
+            付いているファイル）。 */}
+        <markdownContext.Provider value={ctx}>
+          <div className="mg-talk">
+            {thread.comments.map((c, i) => (
+              <Message
+                key={c.id}
+                comment={c}
+                mine={c.author === reviewer}
+                run={thread.comments[i - 1]?.author === c.author}
+                onRewrite={(body) => void rewrite(c.id, body)}
+              />
+            ))}
+          </div>
+        </markdownContext.Provider>
 
         {view && view.changes.length > 0 && (
           <div className="mg-side-changes">

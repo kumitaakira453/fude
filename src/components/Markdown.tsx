@@ -17,6 +17,7 @@ import { all } from "lowlight";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
+import { splitHref } from "../lib/anchors";
 import remarkCjkFriendly from "remark-cjk-friendly";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
@@ -548,8 +549,17 @@ export const Markdown = memo(function Markdown({
             );
           }
           if (h.startsWith("#")) {
+            // 素の遷移では寄らない（本文を送っているのはペインの入れ物で、
+            // 窓ではない）。行き先は描く側に任せる。
             return (
-              <a href={h} {...props}>
+              <a
+                href={h}
+                onClick={(e) => {
+                  e.preventDefault();
+                  ctx?.onAnchor?.(splitHref(h).id);
+                }}
+                {...props}
+              >
                 {children}
               </a>
             );

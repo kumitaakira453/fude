@@ -4121,6 +4121,31 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-accent);
 }
 
+/* ページ内リンクの着地。飛んだ先が画面のどこにあるかを一瞬だけ言う。
+   場所は動かさない（動かすと、着いた先を目で追い直すことになる）。 */
+.mg-landed {
+  border-radius: 0.3rem;
+  background: var(--mg-accent-soft);
+  box-shadow: 0 0 0 0.35rem var(--mg-accent-soft);
+  animation: mg-land 1.2s ease-out;
+}
+@keyframes mg-land {
+  0%,
+  60% {
+    background: var(--mg-accent-soft);
+    box-shadow: 0 0 0 0.35rem var(--mg-accent-soft);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0.35rem transparent;
+  }
+}
+/* 寄せ先は上端に貼り付けない。前の文脈が見えないと、そこが節の頭なのか
+   途中なのか読み取れない。 */
+.mg-prose :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 1.5rem;
+}
+
 /* 選ばれていた文字列そのものへの印。表のように大きなブロックでは、
    ブロック全体を塗ってもどのセルの話か分からない。 */
 ::highlight(mg-review-selection) {

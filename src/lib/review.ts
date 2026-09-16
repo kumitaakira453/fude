@@ -341,6 +341,8 @@ export interface ThreadFacts {
   lines?: { from: number; to: number } | null;
   // 今のブロックの原文。書き換わっているときだけ添える。
   head?: string | null;
+  // その箇所を指すページ内リンク。人が押して飛べる形で渡す。
+  anchor?: string | null;
 }
 
 // 指摘を、そのままエージェントに渡せる形にする。
@@ -386,6 +388,7 @@ function section(thread: ReviewThread, facts: ThreadFacts | undefined): string {
   if (thread.selection.trim() && thread.selection.trim() !== thread.quote.trim()) {
     lines.push(`選択: ${oneLine(thread.selection)}`);
   }
+  if (facts?.anchor) lines.push(`アンカー: ${facts.anchor}`);
   lines.push("本文:", quoted(thread.quote));
   if (facts?.head) lines.push("現在:", quoted(facts.head));
   if (thread.comments.length > 0) {

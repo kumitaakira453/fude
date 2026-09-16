@@ -28,6 +28,7 @@ const facts = (over: Partial<ThreadFacts> = {}): ThreadFacts => ({
   state: "書き換え済み",
   lines: { from: 42, to: 44 },
   head: "この機能は全ユーザーが使えます。",
+  anchor: "見本.md#保存",
   ...over,
 });
 
@@ -39,6 +40,7 @@ describe("reviewPrompt", () => {
     expect(text).toContain("場所: 設定 › 保存");
     expect(text).toContain("位置: 42–44 行");
     expect(text).toContain("選択: 管理者のみ");
+    expect(text).toContain("アンカー: 見本.md#保存");
     expect(text).toContain("本文:\n> この機能は管理者のみが使えます。");
     expect(text).toContain("現在:\n> この機能は全ユーザーが使えます。");
     expect(text).toContain("- you (たった今): ここ直して");
@@ -61,9 +63,11 @@ describe("reviewPrompt", () => {
 
   it("本文から外れた指摘は、行の代わりにそう言う", () => {
     const text = reviewPrompt("見本.md", [thread()], () =>
-      facts({ state: "本文から外れた", lines: null, head: null }),
+      facts({ state: "本文から外れた", lines: null, head: null, anchor: null }),
     );
     expect(text).toContain("位置: 今の本文には無い");
+    // 行き先が決まっていないので、リンクも渡さない。
+    expect(text).not.toContain("アンカー:");
   });
 
   it("突き合わせが済んでいなければ、そう言う", () => {

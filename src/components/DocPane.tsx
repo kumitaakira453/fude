@@ -47,6 +47,7 @@ import {
   liveEditAtom,
   metaOpenAtom,
   paletteOpenAtom,
+  pendingAnchorAtom,
   readingWidthAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
@@ -76,6 +77,7 @@ import {
   rememberViewpoint,
   viewKey,
 } from "../lib/viewpoint";
+import { landOn } from "../lib/anchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import {
   readingMarks,
@@ -1189,6 +1191,28 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return hit < 0 ? null : hit;
   }, [pane.id, absPath]);
 
+  // 節へ寄せる。本文は先頭から順に描かれるので、行き先が出るまで待つ
+  // （待ち方と後片付けは anchors が持つ）。
+  const landRef = useRef<(() => void) | undefined>(undefined);
+  const land = useCallback(
+    (id: string) => {
+      landRef.current?.();
+      if (!content || !id) return;
+      landRef.current = landOn(content, id, () =>
+        notify(store, "その見出しは見つかりません"),
+      );
+    },
+    [content, store],
+  );
+  useEffect(() => () => landRef.current?.(), []);
+
+  // 別のファイルの節へのリンクで開かれたとき。自分のファイルの分だけ拾う。
+  const pending = useAtomValue(pendingAnchorAtom);
+  useEffect(() => {
+    if (!pending || !content || pending.path !== path) return;
+    land(pending.id);
+  }, [pending, content, path, land]);
+
   // 漸進描画をどこまで先に出すか。プレビューに戻る時点で決める（描画より前に
   // 決まっていないと、合わせ先のブロックがまだ無い）。
   const [startAt, setStartAt] = useState(0);
@@ -1238,6 +1262,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     () => ({
       docPath: path ?? "",
       onNavigate: (href: string) => path && navigate(path, href),
+      onAnchor: (id: string) => land(id),
       resolveAsset: (src: string) => resolveAsset(path ?? "", src),
       peekAsset: (src: string) => peekAsset(path ?? "", src),
       onEditBlock: (blockIndex: number) => {
@@ -1250,7 +1275,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         }));
       },
     }),
-    [path, navigate, resolveAsset, peekAsset],
+    [path, navigate, resolveAsset, peekAsset, land],
   );
 
   const doClosePane = () => closePane(store, pane.id);

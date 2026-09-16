@@ -3,6 +3,9 @@ import { createContext } from "react";
 export interface MarkdownCtx {
   // ドキュメント内リンク（相対 .md）クリック時のナビゲーション
   onNavigate: (targetPath: string) => void;
+  // 同じ文書の中の節へ飛ぶ（`#見出し`）。本文のスクロールを持つのは描く側の
+  // 入れ物なので、寄せ方はそちらに任せる。
+  onAnchor?: (id: string) => void;
   // 相対パス画像などをローカル FS から解決して object URL を返す
   resolveAsset: (src: string) => Promise<string | null>;
   // キャッシュ済み object URL を同期取得（再マウント時のちらつき防止）

@@ -42,6 +42,7 @@ import {
   leftoverDrafts,
   newDraft as makeDraft,
 } from "../lib/drafts";
+import { splitHref } from "../lib/anchors";
 import { notify } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
@@ -567,15 +568,29 @@ export function useWorkspace() {
 
   const navigate = useCallback(
     (fromDocPath: string, href: string) => {
-      let target = resolvePath(dirOf(fromDocPath), href);
+      // 断片（#見出し）は道筋の一部ではない。付けたまま解こうとすると、
+      // どのファイルにも一致せず黙って何も起きない。
+      const { path, id } = splitHref(href);
+      let target = resolvePath(dirOf(fromDocPath), path);
       if (
         !store.get(A.filesAtom).some((f) => f.path === target) &&
         !/\.[a-z]+$/i.test(target)
       ) {
         target = `${target}.md`;
       }
-      if (store.get(A.filesAtom).some((f) => f.path === target))
-        openFile(target);
+      if (!store.get(A.filesAtom).some((f) => f.path === target)) {
+        notify(store, "そのファイルは見つかりません");
+        return;
+      }
+      openFile(target);
+      // 当てる先は、そのファイルが描き終わってから。開く側は置くだけにする。
+      if (id) {
+        store.set(A.pendingAnchorAtom, (was) => ({
+          path: target,
+          id,
+          nonce: (was?.nonce ?? 0) + 1,
+        }));
+      }
     },
     [store, openFile],
   );
