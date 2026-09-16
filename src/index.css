@@ -6537,3 +6537,56 @@ body.mg-carrying {
 .mg-img .mg-cap:focus::placeholder {
   color: var(--mg-muted);
 }
+
+/* 設定を探す欄。面をまたいで当てるので、面の切り替えより上に置く。 */
+.mg-set-find {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--mg-border);
+}
+.mg-set-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mg-fg);
+  font-family: var(--mg-font-sans);
+  font-size: 13px;
+  outline: none;
+}
+.mg-set-find input::placeholder {
+  color: var(--mg-muted);
+}
+.mg-set-find > button {
+  display: flex;
+  align-items: center;
+  padding: 0.2rem;
+  border-radius: 0.3rem;
+  color: var(--mg-muted);
+}
+.mg-set-find > button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+
+/* 当たった項目がどの面のものか。 */
+.mg-set-where {
+  display: inline-block;
+  margin: 0 0 0.35rem 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
+  background: var(--mg-hover);
+  color: var(--mg-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* 当たりが無いとき。黙って空にすると壊れたように見える。 */
+.mg-set-none {
+  padding: 2rem 1rem;
+  color: var(--mg-muted);
+  font-size: 13px;
+  text-align: center;
+}
