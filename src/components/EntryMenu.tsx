@@ -29,12 +29,15 @@ export function EntryMenu({
   onRename,
   onNewFile,
   onNewFolder,
+  onCloseOthers,
 }: {
   menu: EntryMenuState;
   onClose: () => void;
   onRename: (n: TreeNode) => void;
   onNewFile?: (n: TreeNode) => void;
   onNewFolder?: (n: TreeNode) => void;
+  // タブの並びから出したときだけ渡る。ツリーの行には閉じるものが無い。
+  onCloseOthers?: () => void;
 }) {
   const { openInNewWindow, getRootPath, deleteEntry } = useWorkspace();
   const store = useStore();
@@ -78,7 +81,13 @@ export function EntryMenu({
   };
 
   type MI =
-    | { icon: string; label: string; action: () => void; danger?: boolean }
+    | {
+        icon: string;
+        label: string;
+        action: () => void;
+        danger?: boolean;
+        keys?: string;
+      }
     | "sep";
   // Finder / 外部エディタで開く（ファイル・フォルダ共通）
   const externalItems: MI[] = [
@@ -136,6 +145,17 @@ export function EntryMenu({
             label: "新しいウィンドウで開く",
             action: () => void openInNewWindow(node.path),
           },
+          ...(onCloseOthers
+            ? [
+                "sep" as const,
+                {
+                  icon: "close",
+                  label: "他のタブを閉じる",
+                  keys: "⌘⌥W",
+                  action: onCloseOthers,
+                } satisfies MI,
+              ]
+            : []),
           ...commonItems,
         ]
       : [
@@ -190,9 +210,10 @@ export function EntryMenu({
             <Icon
               name={it.icon}
               size={16}
-              className={it.danger ? "" : "text-[var(--mg-muted)]"}
+              className={`shrink-0 ${it.danger ? "" : "text-[var(--mg-muted)]"}`}
             />
-            {it.label}
+            <span className="min-w-0 flex-1 truncate">{it.label}</span>
+            {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}
           </button>
         ),
       )}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as A from "../state/atoms";
 import {
   activateTab,
+  closeOthers,
   closePane,
   closeTab,
   closeTabAt,
@@ -106,6 +107,40 @@ describe("closeTabAt", () => {
     openInPane(store, "p1", "a.md");
     closeTabAt(store, "p1", "gone.md");
     expect(first().tabs).toEqual(["a.md"]);
+  });
+});
+
+describe("closeOthers", () => {
+  it("指した 1 枚だけを残す", () => {
+    for (const f of ["a.md", "b.md", "c.md", "d.md"]) openInPane(store, "p1", f);
+    closeOthers(store, "p1", 1);
+    expect(first().tabs).toEqual(["b.md"]);
+    expect(A.activePath(first())).toBe("b.md");
+  });
+
+  it("1 枚しか無ければ何もしない", () => {
+    openInPane(store, "p1", "a.md");
+    closeOthers(store, "p1", 0);
+    expect(first().tabs).toEqual(["a.md"]);
+  });
+
+  it("閉じたものは控えに残り、押し続けると元の並びに戻る", () => {
+    for (const f of ["a.md", "b.md", "c.md"]) openInPane(store, "p1", f);
+    closeOthers(store, "p1", 1);
+    expect(reopenTab(store)).toBe("a.md");
+    expect(reopenTab(store)).toBe("c.md");
+    expect(first().tabs).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("他のペインには手を出さない", () => {
+    for (const f of ["a.md", "b.md"]) openInPane(store, "p1", f);
+    splitPane(store, "row");
+    const side = panes()[1].id;
+    openInPane(store, side, "c.md");
+    // 分割は見ていた 1 枚を連れていくので、横のペインは 2 枚ある。
+    closeOthers(store, "p1", 0);
+    expect(pane("p1")!.tabs).toEqual(["a.md"]);
+    expect(pane(side)!.tabs).toEqual(["b.md", "c.md"]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { useStore } from "jotai";
 import { useEffect, useRef } from "react";
-import { closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
+import { closeOthers, closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
@@ -103,6 +103,12 @@ export function useHotkeys() {
         e.preventDefault();
         const id = store.get(A.activePaneIdAtom);
         store.set(A.metaOpenAtom, store.get(A.metaOpenAtom) === id ? null : id);
+      } else if (mod && e.altKey && e.code === "KeyW") {
+        // ⌘⌥W: 見ている 1 枚だけ残す。⌥ を挟むと key は記号になるので code で見る。
+        e.preventDefault();
+        const paneId = store.get(A.activePaneIdAtom);
+        const pane = store.get(A.panesAtom).find((p) => p.id === paneId);
+        if (pane) closeOthers(store, paneId, pane.active);
       } else if (mod && (e.key === "w" || e.key === "W")) {
         e.preventDefault();
         const paneId = store.get(A.activePaneIdAtom);

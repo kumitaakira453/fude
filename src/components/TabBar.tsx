@@ -12,6 +12,7 @@ import { setDragChip } from "../lib/dragImage";
 import { displayName, findNode, type TreeNode } from "../lib/fsAccess";
 import {
   activateTab,
+  closeOthers,
   closeTab,
   closeTabAt,
   moveTab,
@@ -47,7 +48,8 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
     path === draftRel ? draftName : displayName(path);
   // ドロップで差し込む位置。null なら受け付けていない。
   const [insertAt, setInsertAt] = useState<number | null>(null);
-  const [menu, setMenu] = useState<EntryMenuState | null>(null);
+  // 右押しの相手。並びの中の位置も持つ（「他のタブを閉じる」が要る）。
+  const [menu, setMenu] = useState<(EntryMenuState & { at: number }) | null>(null);
   useDragReset(() => setInsertAt(null));
 
   // 右クリックの相手。ツリーに見つからないファイルでも操作できるように組み立てる。
@@ -123,7 +125,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setMenu({ x: e.clientX, y: e.clientY, node: nodeFor(path) });
+                setMenu({ x: e.clientX, y: e.clientY, node: nodeFor(path), at: i });
               }}
               // ウィンドウの外へ引き出したら、そのファイルを別ウィンドウへ移す。
               // タブを消すのはウィンドウができてから。先に消すと、開くまでの間
@@ -191,6 +193,11 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
           menu={menu}
           onClose={() => setMenu(null)}
           onRename={(n) => revealInTree(store, n.path, { edit: true })}
+          onCloseOthers={
+            pane.tabs.length > 1
+              ? () => closeOthers(store, pane.id, menu.at)
+              : undefined
+          }
         />
       )}
     </>

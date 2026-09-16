@@ -225,6 +225,22 @@ export function closeTab(
   store.set(A.layoutAtom, updateLeaf(root, paneId, (t) => leaf(t.id, tabs, active)));
 }
 
+// 見ている 1 枚だけを残して、そのペインのタブを閉じる。
+//
+// 控えは後ろから積む。⌘⇧T を押し続けると左から順に戻り、閉じる前の並びに
+// なる（控えは新しいものから取り出されるため）。
+export function closeOthers(store: Store, paneId: string, keep: number) {
+  const root = store.get(A.layoutAtom);
+  const target = findLeaf(root, paneId);
+  if (!target || target.tabs.length <= 1) return;
+  const path = target.tabs[keep];
+  if (!path) return;
+  for (let i = target.tabs.length - 1; i >= 0; i--) {
+    if (i !== keep) remember(store, { path: target.tabs[i], paneId, index: i });
+  }
+  store.set(A.layoutAtom, updateLeaf(root, paneId, (t) => leaf(t.id, [path], 0)));
+}
+
 // ファイルを指して閉じる。閉じるまでに間が空く経路（別ウィンドウへ引き出す等）
 // では、掴んだ時点の位置が当てにならないため、その場で探し直す。
 export function closeTabAt(
