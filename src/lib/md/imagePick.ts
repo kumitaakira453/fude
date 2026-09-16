@@ -9,6 +9,10 @@ import { icon } from "./nodeViews";
 // まだ画像は選ばれていない。この時点で `![]()` を本文へ書くと、選ぶ前に保存が
 // 走ったとき壊れた記法が文書に残る。仮置きは編集面だけの状態として持ち、
 // 画像が決まってから初めて本文へ書く。
+//
+// 枠は**塊の外**へ出す。段落の中に widget を差すと、その行の高さが枠の高さに
+// なってカーソルが枠と同じ丈で立ち、本文の組版（字間・寄せ）もそのまま枠に
+// 掛かる。外へ出したうえで、空になった段落は畳んで隠す。
 
 const pickKey = new PluginKey<number | null>("imagePick");
 
@@ -29,16 +33,27 @@ function write(view: EditorView, at: number, src: string): void {
 }
 
 function frame(view: EditorView, at: number, goes: ImageGoes): HTMLElement {
+  // not-prose で本文の組版から切り離す。枠の中の字は本文ではない。
   const box = document.createElement("div");
-  box.className = "mg-imgpick";
+  box.className = "mg-imgpick not-prose";
   box.contentEditable = "false";
 
-  const head = document.createElement("div");
-  head.className = "mg-imgpick-head";
-  head.appendChild(icon("image", 17));
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "mg-imgpick-open";
+  open.appendChild(icon("image", 18));
   const name = document.createElement("span");
   name.textContent = "画像を選ぶか、ここに落とす";
-  head.appendChild(name);
+  open.appendChild(name);
+  open.addEventListener("click", () => {
+    void goes.pick().then((path) => {
+      if (!path) return;
+      void goes.take(path).then((src) => {
+        if (src && !view.isDestroyed) write(view, at, src);
+      });
+    });
+  });
+  box.appendChild(open);
 
   const shut = document.createElement("button");
   shut.type = "button";
@@ -46,43 +61,9 @@ function frame(view: EditorView, at: number, goes: ImageGoes): HTMLElement {
   shut.title = "やめる";
   shut.appendChild(icon("close", 15));
   shut.addEventListener("click", () => closePick(view));
-  head.appendChild(shut);
-  box.appendChild(head);
+  box.appendChild(shut);
 
-  const row = document.createElement("div");
-  row.className = "mg-imgpick-row";
-
-  const take = (path: string | null) => {
-    if (!path) return;
-    void goes.take(path).then((src) => {
-      if (src && !view.isDestroyed) write(view, at, src);
-    });
-  };
-
-  const choose = document.createElement("button");
-  choose.type = "button";
-  choose.className = "mg-imgpick-pick";
-  choose.textContent = "ファイルを選ぶ";
-  choose.addEventListener("click", () => void goes.pick().then(take));
-  row.appendChild(choose);
-
-  const typed = document.createElement("input");
-  typed.className = "mg-imgpick-path";
-  typed.placeholder = "道筋を打つ（/… でも ./… でも）";
-  typed.spellcheck = false;
-  typed.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      take(typed.value.trim() || null);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      closePick(view);
-    }
-  });
-  row.appendChild(typed);
-  box.appendChild(row);
-
-  // 枠の中の押下・打鍵は編集面へ渡さない（入力欄が焦点を保てない）。
+  // 枠の中の押下は編集面へ渡さない。
   box.addEventListener("mousedown", (event) => event.stopPropagation());
   return box;
 }
@@ -105,15 +86,26 @@ export const imagePicker = (goes: ImageGoes): Plugin<number | null> =>
         const at = pickKey.getState(state);
         if (at === null || at === undefined) return null;
         const here = Math.min(Math.max(at, 0), state.doc.content.size);
-        return DecorationSet.create(state.doc, [
-          Decoration.widget(here, (view) => frame(view, here, goes), {
+        const $at = state.doc.resolve(here);
+        const depth = Math.max($at.depth, 1);
+        const start = $at.before(depth);
+        const end = $at.after(depth);
+
+        const marks = [
+          Decoration.widget(start, (view) => frame(view, here, goes), {
             key: "imgpick",
-            side: 1,
+            side: -1,
             // 枠の中の出来事は編集面の仕事にしない。
             stopEvent: () => true,
             ignoreSelection: true,
           }),
-        ]);
+        ];
+        // 空の塊はしまう。枠のすぐ上に何もない行とカーソルが残ると、
+        // どちらへ書くのか読めない。
+        if ($at.parent.content.size === 0) {
+          marks.push(Decoration.node(start, end, { class: "mg-imgpick-gone" }));
+        }
+        return DecorationSet.create(state.doc, marks);
       },
     },
   });

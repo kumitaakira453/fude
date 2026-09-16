@@ -996,6 +996,17 @@ export function EditorGutter({
     if (!images || !held) return [];
     const src = held.node.attrs.src as string;
     return [
+      {
+        icon: "subtitles",
+        label: "キャプション",
+        run: () => {
+          // 欄は本文の側（NodeView）が持つ。空でも出して、そこへ手を渡す。
+          const dom = view.nodeDOM(held.at);
+          if (!(dom instanceof HTMLElement)) return;
+          dom.classList.add("has-cap");
+          dom.querySelector<HTMLInputElement>(".mg-cap")?.focus();
+        },
+      },
       { icon: "image", label: "画像をコピー", run: () => images.copy(src) },
       {
         icon: "swap_horiz",

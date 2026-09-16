@@ -6325,75 +6325,101 @@ body.mg-carrying {
   padding-bottom: var(--mg-tail);
 }
 
-/* /image で置く仮置きの枠。本文には書かず、画像が決まってから初めて書く。 */
+/* /image で置く仮置きの枠。本文には書かず、画像が決まってから初めて書く。
+   塊の外に出しているので、本文の組版は掛からない（not-prose と合わせて）。 */
 .mg-imgpick {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 0.35rem 0;
-  padding: 0.7rem 0.8rem;
+  align-items: stretch;
+  gap: 0.25rem;
+  margin: 0.4rem 0;
   border: 1px dashed var(--mg-border);
-  border-radius: 0.7rem;
-  background: var(--mg-hover);
+  border-radius: 0.6rem;
   font-family: var(--mg-font-sans);
-  user-select: none;
+  font-size: 13px;
+  letter-spacing: normal;
+  text-align: left;
+  transition: border-color 0.12s ease;
 }
-.mg-imgpick-head {
+.mg-imgpick:hover {
+  border-color: var(--mg-accent);
+}
+.mg-imgpick-open {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--mg-muted);
-  font-size: 12px;
-}
-.mg-imgpick-head > span {
   flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  color: var(--mg-muted);
+  text-align: left;
+}
+.mg-imgpick:hover .mg-imgpick-open {
+  color: var(--mg-fg-dim);
 }
 .mg-imgpick-x {
   display: flex;
   align-items: center;
-  padding: 0.15rem;
-  border-radius: 0.35rem;
+  padding: 0 0.6rem;
   color: var(--mg-muted);
 }
 .mg-imgpick-x:hover {
-  background: var(--mg-border);
   color: var(--mg-fg);
 }
-.mg-imgpick-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+
+/* 枠を出しているあいだ、空になった塊はしまう。prose の段落余白より強く
+   当てる必要があるので、入れ物と一緒に書く。 */
+.mg-prose .mg-imgpick-gone {
+  height: 0;
+  min-height: 0;
+  margin-block: 0;
+  overflow: hidden;
 }
-.mg-imgpick-pick {
-  flex: none;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  background: var(--mg-panel);
-  color: var(--mg-fg-dim);
+
+/* 画像のキャプション（代替テキスト）。書かれているときだけ出す。 */
+.mg-figure {
+  display: block;
+}
+.mg-figure > img {
+  margin-bottom: 0.5rem;
+}
+.mg-figcap {
+  display: block;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-sans);
   font-size: 12px;
-  transition: border-color 0.12s ease;
+  line-height: 1.6;
+  text-align: center;
 }
-.mg-imgpick-pick:hover {
-  border-color: var(--mg-accent);
-  color: var(--mg-fg);
+
+/* 編集面の画像とキャプション。欄は書かれているあいだ（と打っている
+   あいだ）だけ出す。 */
+.mg-img {
+  display: block;
 }
-.mg-imgpick-path {
-  flex: 1;
-  min-width: 0;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  background: var(--mg-input-bg);
-  font-family: var(--mg-font-mono);
+.mg-img-body {
+  display: block;
+}
+.mg-img .mg-cap {
+  display: none;
+  width: 100%;
+  margin: -0.25rem 0 0.75rem;
+  padding: 0.15rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-sans);
   font-size: 12px;
-  color: var(--mg-fg-dim);
+  line-height: 1.6;
+  letter-spacing: normal;
+  text-align: center;
   outline: none;
-  transition: border-color 0.12s ease;
 }
-.mg-imgpick-path:focus {
-  border-color: var(--mg-accent);
+.mg-img.has-cap .mg-cap {
+  display: block;
 }
-.mg-imgpick-path::placeholder {
+.mg-img .mg-cap::placeholder {
+  color: var(--mg-border);
+}
+.mg-img .mg-cap:focus::placeholder {
   color: var(--mg-muted);
 }

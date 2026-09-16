@@ -39,7 +39,6 @@ function editor(body: string, ways: ReturnType<typeof goes>) {
     out: () => toMarkdown(view.state.doc, loaded),
     frame: () => view.dom.querySelector(".mg-imgpick"),
     button: (sel: string) => view.dom.querySelector<HTMLElement>(sel),
-    path: () => view.dom.querySelector<HTMLInputElement>(".mg-imgpick-path"),
   };
 }
 
@@ -65,7 +64,7 @@ describe("仮置きの枠", () => {
     const ways = goes("/Users/me/写真/図解.png", "./images/図解.png");
     const at = editor("本文\n", ways);
     openImagePick(at.view);
-    at.button(".mg-imgpick-pick")?.click();
+    at.button(".mg-imgpick-open")?.click();
     await settle();
     expect(ways.take).toHaveBeenCalledWith("/Users/me/写真/図解.png");
     expect(at.out()).toContain("![](./images/図解.png)");
@@ -76,29 +75,36 @@ describe("仮置きの枠", () => {
     const ways = goes(null, "./images/図解.png");
     const at = editor("本文\n", ways);
     openImagePick(at.view);
-    at.button(".mg-imgpick-pick")?.click();
+    at.button(".mg-imgpick-open")?.click();
     await settle();
     expect(ways.take).not.toHaveBeenCalled();
     expect(at.frame()).not.toBeNull();
   });
 
-  it("道筋を打って Enter でも取り込む", async () => {
-    const ways = goes(null, "./images/図解.png");
-    const at = editor("本文\n", ways);
+  it("枠は塊の外に出す（段落の中に差すと行の丈がカーソルの丈になる）", () => {
+    const at = editor("本文\n", goes(null, null));
     openImagePick(at.view);
-    const field = at.path()!;
-    field.value = "../写真/図解.png";
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    await settle();
-    expect(ways.take).toHaveBeenCalledWith("../写真/図解.png");
-    expect(at.out()).toContain("![](./images/図解.png)");
+    const frame = at.frame()!;
+    expect(frame.closest("p")).toBeNull();
+  });
+
+  it("空になった塊はしまう", () => {
+    const at = editor("\n", goes(null, null));
+    openImagePick(at.view);
+    expect(at.view.dom.querySelector(".mg-imgpick-gone")).not.toBeNull();
+  });
+
+  it("字の残っている塊はしまわない", () => {
+    const at = editor("本文\n", goes(null, null));
+    openImagePick(at.view);
+    expect(at.view.dom.querySelector(".mg-imgpick-gone")).toBeNull();
   });
 
   it("取り込めなければ本文は変えず、枠も残す", async () => {
     const ways = goes("/Users/me/無い.png", null);
     const at = editor("本文\n", ways);
     openImagePick(at.view);
-    at.button(".mg-imgpick-pick")?.click();
+    at.button(".mg-imgpick-open")?.click();
     await settle();
     expect(at.out()).toBe("本文\n");
     expect(at.frame()).not.toBeNull();

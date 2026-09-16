@@ -462,11 +462,20 @@ class ImageView implements NodeView {
   // ProseMirror はこの要素を覚えるので、後から差し替えない。中身だけ入れ替える。
   dom: HTMLElement;
   private alive = true;
+  private shown: HTMLElement;
+  private cap: HTMLInputElement;
   private alt: string;
   private title: string | null;
+  private src: string;
 
-  constructor(node: PmNode, deps: EditorDeps) {
+  constructor(
+    node: PmNode,
+    view: EditorView,
+    getPos: () => number | undefined,
+    deps: EditorDeps,
+  ) {
     const src = node.attrs.src as string;
+    this.src = src;
     this.alt = node.attrs.alt as string;
     this.title = node.attrs.title as string | null;
     const remote = /^(https?:|data:|blob:)/.test(src);
@@ -474,7 +483,34 @@ class ImageView implements NodeView {
 
     this.dom = document.createElement("span");
     this.dom.className = "mg-img";
+    this.dom.contentEditable = "false";
+    this.shown = document.createElement("span");
+    this.shown.className = "mg-img-body";
+    this.dom.appendChild(this.shown);
+
+    // キャプション（代替テキスト）。書かれているあいだだけ出す。
+    this.cap = document.createElement("input");
+    this.cap.className = "mg-cap not-prose";
+    this.cap.placeholder = "キャプションを書く…";
+    this.cap.spellcheck = false;
+    this.cap.addEventListener("input", () => {
+      const pos = getPos();
+      if (pos === undefined) return;
+      const now = view.state.doc.nodeAt(pos);
+      if (!now) return;
+      view.dispatch(
+        view.state.tr.setNodeMarkup(pos, null, { ...now.attrs, alt: this.cap.value }),
+      );
+    });
+    // 何も書かずに離れたら、出したままにしない。
+    this.cap.addEventListener("blur", () => this.showCap(!!this.cap.value));
+    this.cap.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === "Escape") this.cap.blur();
+    });
+    this.dom.appendChild(this.cap);
+
     this.fill(at);
+    this.paintCap();
 
     if (!remote && !at && deps.resolveAsset) {
       void deps.resolveAsset(src)
@@ -491,7 +527,7 @@ class ImageView implements NodeView {
       box.className =
         "mg-img-missing inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--mg-border)] px-2 py-1 text-xs text-[var(--mg-muted)]";
       box.textContent = `🖼 ${this.alt || "画像"}`;
-      this.dom.replaceChildren(box);
+      this.shown.replaceChildren(box);
       return;
     }
     const el = document.createElement("img");
@@ -500,7 +536,54 @@ class ImageView implements NodeView {
     if (this.title) el.title = this.title;
     el.loading = "lazy";
     el.className = "mx-auto my-4 max-w-full rounded-lg shadow-md";
-    this.dom.replaceChildren(el);
+    this.shown.replaceChildren(el);
+  }
+
+  // 書かれているものを欄に写し、出す・しまうを決める。
+  private paintCap() {
+    if (this.cap.value !== this.alt) this.cap.value = this.alt;
+    this.showCap(!!this.alt);
+  }
+
+  private showCap(on: boolean) {
+    this.dom.classList.toggle("has-cap", on);
+  }
+
+  // つまみのメニューから呼ぶ。空でも欄を出して、そこへ手を渡す。
+  edit() {
+    this.showCap(true);
+    this.cap.focus();
+  }
+
+  update(node: PmNode) {
+    if (node.type !== schema.nodes.image) return false;
+    const src = node.attrs.src as string;
+    const alt = node.attrs.alt as string;
+    const title = node.attrs.title as string | null;
+    const same = src === this.src;
+    this.alt = alt;
+    this.title = title;
+    this.src = src;
+    // 道筋が変わったときだけ描き直す。キャプションを打つたびに画像を
+    // 読み直すと、打鍵ごとに絵が点滅する。
+    if (!same) return false;
+    const img = this.shown.firstElementChild;
+    if (img instanceof HTMLImageElement) {
+      img.alt = alt;
+      if (title) img.title = title;
+      else img.removeAttribute("title");
+    }
+    this.paintCap();
+    return true;
+  }
+
+  // 欄の中の出来事は編集面の仕事にしない。
+  stopEvent() {
+    return true;
+  }
+
+  ignoreMutation() {
+    return true;
   }
 
   destroy() {
@@ -812,7 +895,8 @@ export function nodeViews(deps: EditorDeps) {
       new DetailsView(node, view, getPos, deps),
     listItem: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new ListItemView(node, view, getPos),
-    image: (node: PmNode) => new ImageView(node, deps),
+    image: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
+      new ImageView(node, view, getPos, deps),
     inlineMath: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new MathView(node, view, getPos),
     mathBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>

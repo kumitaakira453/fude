@@ -49,7 +49,7 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
     );
   }
 
-  return (
+  const shown = (
     <img
       src={(isRemote ? src : resolved) ?? undefined}
       alt={alt}
@@ -58,6 +58,16 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
       onError={() => setFailed(true)}
       className="mx-auto my-4 max-w-full rounded-lg shadow-md"
     />
+  );
+
+  // キャプション（代替テキスト）は書かれているときだけ出す。
+  // figure は段落の中に置けないので、入れ物は span で組む。
+  if (!alt) return shown;
+  return (
+    <span className="mg-figure">
+      {shown}
+      <span className="mg-figcap">{alt}</span>
+    </span>
   );
 }
 
