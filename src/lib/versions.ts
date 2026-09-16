@@ -1,7 +1,7 @@
 import { diffBlocks } from "./blockDiff";
 import { splitBlocks, type Block } from "./blocks";
 import { parseFrontmatter } from "./frontmatter";
-import type { Ledger, ReviewVersion, VersionActor } from "./review";
+import type { Ledger, ReviewThread, ReviewVersion, VersionActor } from "./review";
 
 // バージョンの履歴。台帳から 1 ファイル分の版を取り出し、版と版の差分を
 // 読みやすい形に畳む。突き合わせそのものは blockDiff に任せる。
@@ -42,6 +42,20 @@ export function versionsOf(ledger: Ledger, file: string): ReviewVersion[] {
   return ledger.versions
     .filter((v) => v.file.normalize("NFC") === key)
     .sort((a, b) => b.created_at - a.created_at);
+}
+
+// その指摘への「対応の記録」。AI が直したあとに打つ版（origin が commit）で、
+// これがあると「その対応で本文のどこが動いたか」を指摘ごとに出せる。
+//
+// 紐付けを持つ記録を優先する。持たない古い記録は、指摘が付いたあとに打たれた
+// ものを新しい順に見て、いちばん近いものを採る。
+export function answerOf(ledger: Ledger, thread: ReviewThread): ReviewVersion | null {
+  const mine = versionsOf(ledger, thread.file).filter((v) => v.origin === "commit");
+  return (
+    mine.find((v) => v.threads?.includes(thread.id)) ??
+    mine.find((v) => v.created_at >= thread.created_at) ??
+    null
+  );
 }
 
 const when = new Intl.DateTimeFormat("ja-JP", {

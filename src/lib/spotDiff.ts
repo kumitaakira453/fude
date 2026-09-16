@@ -176,3 +176,39 @@ export function spotNote(spot: SpotDiff): string {
 export function loose(spot: SpotDiff): boolean {
   return spot.state === "removed" || spot.state === "unknown";
 }
+
+// 指摘の箇所の外で動いた所。
+//
+// コメントに応えるとき、指摘された段落ではなく別の場所を直すことがある（節を
+// 足す、言い回しを他の段落と揃える）。箇所だけを見せていると、その対応そのものが
+// 読めない。コメント時点の版と今を突き合わせて、動いた塊を全部拾う。
+export interface Change {
+  // 今の本文でのブロック番号。消えた塊は、それが在った場所の番号。
+  index: number;
+  kind: "changed" | "added" | "removed";
+  // コメント時点の姿。足された塊は持たない。
+  before: string | null;
+}
+
+export function changesSince(baseText: string, head: Block[]): Change[] {
+  const base = splitBlocks(parseFrontmatter(baseText).body);
+  const out: Change[] = [];
+  let at = 0;
+  for (const change of diffBlocks(base, head)) {
+    switch (change.kind) {
+      case "same":
+        at++;
+        break;
+      case "changed":
+        out.push({ index: at++, kind: "changed", before: change.base.src });
+        break;
+      case "added":
+        out.push({ index: at++, kind: "added", before: null });
+        break;
+      case "removed":
+        out.push({ index: at, kind: "removed", before: change.base.src });
+        break;
+    }
+  }
+  return out;
+}

@@ -8,6 +8,7 @@ import { lineRange, sectionPathAt, splitBlocks, type Block } from "../../lib/blo
 import {
   SPOT_ICON,
   SPOT_NAME,
+  changesSince,
   spotDiff,
   spotNote,
   type SpotDiff,
@@ -15,6 +16,7 @@ import {
 } from "../../lib/spotDiff";
 import { copyText } from "../../lib/clip";
 import { fontStack } from "../../lib/fonts";
+import { answerOf } from "../../lib/versions";
 import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
 import { inEditable } from "../../lib/ui";
@@ -679,6 +681,7 @@ function ThreadDetail({
 }) {
   const store = useStore();
   const setSelectedId = useSetAtom(reviewThreadAtom);
+  const ledger = useAtomValue(ledgerAtom);
   const root = useAtomValue(activeFolderIdAtom);
   const editorial = useAtomValue(editorialAtom);
   const font = useAtomValue(fontAtom);
@@ -741,12 +744,47 @@ function ThreadDetail({
     if (currentBody === null) return null;
     const blocks = splitBlocks(currentBody);
     const spot = spotDiff(thread, blocks, baseText);
+    // 指摘の箇所の外で動いた所。コメントへの対応は、指摘された塊の外で
+    // 行われることがある。
+    const changes =
+      baseText === null
+        ? []
+        : changesSince(baseText, blocks).filter((c) => c.index !== spot.index);
     const crumbs =
       spot.state === "unknown"
         ? thread.section_path
         : sectionPathAt(blocks, Math.min(spot.index, blocks.length - 1));
-    return { blocks, spot, crumbs };
+    return { blocks, spot, changes, crumbs };
   }, [baseText, currentBody, thread]);
+
+  // その指摘への対応の記録（AI が直したあとに打つ版）。これが今の本文と同じなら、
+  // 動いた分は「その対応そのもの」と言い切れる。違えば、そのあとの編集も
+  // 混ざっているので言い方を変える。
+  const answer = useMemo(() => answerOf(ledger, thread), [ledger, thread]);
+  const [answered, setAnswered] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setAnswered(false);
+    if (!answer || raw === undefined) return;
+    void readVersion(answer.id).then((text) => {
+      if (alive) setAnswered(text !== null && text === raw);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [answer, raw]);
+
+  // 「次の変更へ」。指摘の箇所の外で動いた所を順に送る。
+  const [goTo, setGoTo] = useState<{ at: number; nonce: number } | null>(null);
+  const nextChange = () => {
+    const list = view?.changes ?? [];
+    if (list.length === 0) return;
+    setGoTo((was) => {
+      const i = list.findIndex((c) => c.index === was?.at);
+      const next = list[(i + 1) % list.length] ?? list[0];
+      return { at: next.index, nonce: (was?.nonce ?? 0) + 1 };
+    });
+  };
 
   const settle = useCallback(() => onSettled(thread.id), [onSettled, thread.id]);
   // 本文を出せないと分かったときは、寄せる先が無いので待たせない。
@@ -871,6 +909,9 @@ function ThreadDetail({
               <DocumentView
                 blocks={view.blocks}
                 spot={view.spot}
+                changes={view.changes}
+                answered={answered}
+                goTo={goTo}
                 editorial={editorial}
                 style={style}
                 focusNonce={focus}
@@ -974,6 +1015,22 @@ function ThreadDetail({
           ))}
         </div>
 
+        {view && view.changes.length > 0 && (
+          <div className="mg-side-changes">
+            <Icon name="difference" size={13} className="mt-px shrink-0" />
+            <span className="flex-1">
+              {answered
+                ? `この対応で、他に ${view.changes.length} か所が動いています`
+                : `コメント時点から、他に ${view.changes.length} か所が動いています`}
+              {answered && answer?.label && (
+                <span className="mg-side-answer">{answer.label}</span>
+              )}
+            </span>
+            <button onClick={nextChange} className="mg-side-next">
+              次の変更へ
+            </button>
+          </div>
+        )}
         {view && <SpotCard spot={view.spot} />}
 
         <div className="mg-side-compose">

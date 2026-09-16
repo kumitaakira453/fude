@@ -4048,6 +4048,77 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-del-fg);
 }
 
+/* 指摘の箇所の外で動いた塊。本文の読み心地を壊さないよう、線 1 本と短い語だけで
+   示し、見比べたいときに開く。開くとコメント時点の面が上に出る。 */
+.mg-change-head {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin: 0.9rem 0 0.25rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--mg-muted);
+}
+.mg-change-head::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--mg-border);
+}
+.mg-change-see {
+  flex: none;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--mg-hover);
+  font-size: 10px;
+  color: var(--mg-fg-dim);
+  line-height: 1.2rem;
+  transition: background 0.12s ease;
+}
+.mg-change-see:hover {
+  background: color-mix(in srgb, var(--mg-accent) 16%, var(--mg-panel));
+  color: var(--mg-accent);
+}
+/* 動いた塊そのもの。地色は敷かず、左の縁だけで示す（指摘の箇所と紛れない）。 */
+.mg-moved {
+  margin-left: -0.75rem;
+  padding-left: 0.65rem;
+  border-left: 2px solid color-mix(in srgb, var(--mg-add-fg) 40%, transparent);
+}
+
+/* 右の欄の「他にどれだけ動いたか」。 */
+.mg-side-changes {
+  display: flex;
+  flex: none;
+  gap: 0.35rem;
+  align-items: flex-start;
+  padding: 0.45rem 0.9rem;
+  border-top: 1px solid var(--mg-border);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--mg-fg-dim);
+}
+/* 対応の記録に付いていた言葉。何をしたかが 1 行で読める。 */
+.mg-side-answer {
+  display: block;
+  color: var(--mg-muted);
+}
+.mg-side-next {
+  flex: none;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--mg-hover);
+  font-size: 10px;
+  color: var(--mg-fg-dim);
+  line-height: 1.3rem;
+  transition: background 0.12s ease;
+}
+.mg-side-next:hover {
+  background: color-mix(in srgb, var(--mg-accent) 16%, var(--mg-panel));
+  color: var(--mg-accent);
+}
+
 /* 選ばれていた文字列そのものへの印。表のように大きなブロックでは、
    ブロック全体を塗ってもどのセルの話か分からない。 */
 ::highlight(mg-review-selection) {

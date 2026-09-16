@@ -109,3 +109,13 @@ describe("reviewPrompt", () => {
     expect(text).toContain("> - ひとつ\n> - ふたつ");
   });
 });
+
+describe("直したあとの手順", () => {
+  it("返信と対応の記録の打ち方を、指摘の id 付きで添える", () => {
+    const text = reviewPrompt("見本.md", [thread()], () => undefined);
+    expect(text).toContain("直したら:");
+    expect(text).toContain("fude review reply --thread <id>");
+    expect(text).toContain('fude review commit --file "見本.md"');
+    expect(text).toContain("--thread a1b2c3d4");
+  });
+});

@@ -3,7 +3,13 @@ import type { Block } from "../../lib/blocks";
 import { applyDiffMarks } from "../../lib/diffMarks";
 import { readBlockText, rangeAt } from "../../lib/domText";
 import { findPlain, findPlainLoose } from "../../lib/projection";
-import { SPOT_ICON, SPOT_NAME, type SpotDiff, type SpotState } from "../../lib/spotDiff";
+import {
+  SPOT_ICON,
+  SPOT_NAME,
+  type Change,
+  type SpotDiff,
+  type SpotState,
+} from "../../lib/spotDiff";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
@@ -31,16 +37,26 @@ const NEXT_CHUNK = 160;
 
 export function DocumentView({
   spot,
+  changes,
+  answered,
   blocks,
   editorial,
   style,
   focusNonce,
+  goTo,
   onSettled,
   selection,
 }: {
   blocks: Block[];
   // 指摘の箇所が今どうなっているか。版との突き合わせで出したもの。
   spot: SpotDiff;
+  // 指摘の箇所の外で動いた所。コメントへの対応は、指摘された塊の外で
+  // 行われることがある（節を足す、他の段落と言い回しを揃える）。
+  changes: Change[];
+  // 動いた分が「その対応そのもの」と言い切れるか（対応の記録が今の本文と同じ）。
+  answered: boolean;
+  // 押すたびに、この番号の塊へ寄せる。
+  goTo: { at: number; nonce: number } | null;
   editorial: boolean;
   style: React.CSSProperties;
   // 増えるたびに指摘の箇所へ戻す。読み進めて見失ったときのための合図。
@@ -52,6 +68,17 @@ export function DocumentView({
   onSettled?: () => void;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
+  // 見比べるために開いている塊。番号で持つ。
+  const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set());
+  const flip = useCallback(
+    (at: number) =>
+      setOpen((was) => {
+        const next = new Set(was);
+        if (!next.delete(at)) next.add(at);
+        return next;
+      }),
+    [],
+  );
   const root = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
   // 選ばれていた文字列そのものに印を付けられたときの、その位置
@@ -115,11 +142,12 @@ export function DocumentView({
     };
   }, []);
 
-  // コメント時点と今の組で、変わった字に印を付ける。組は 1 つしか出ないが、
-  // 中身は表にもなるので、バージョンの画面と同じ道を通す。
+  // コメント時点と今の組で、変わった字に印を付ける。中身は表にもなるので、
+  // バージョンの画面と同じ道を通す。開いた組もここで見る。
+  const openKey = [...open].join(",");
   useEffect(
-    () => applyDiffMarks(paired ? root.current : null),
-    [paired, spotKey, limit, editorial, style],
+    () => applyDiffMarks(root.current),
+    [paired, spotKey, openKey, limit, editorial, style],
   );
 
   // 選ばれていた文字列そのものに印を付ける。表のように大きなブロックでは、
@@ -172,11 +200,31 @@ export function DocumentView({
     focus("smooth");
   }, [focusNonce, focus]);
 
+  // 「次の変更へ」。指摘の箇所の外で動いた所を順に見せる。
+  useEffect(() => {
+    if (!goTo) return;
+    touchedRef.current = true;
+    root.current
+      ?.querySelector(`[data-mg-at="${goTo.at}"]`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [goTo]);
+
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
   }
 
   const shown = blocks.slice(0, limit);
+  // 塊ごとの、指摘の箇所の外の動き。消えた塊は同じ番号に複数並び得る。
+  const moved = new Map<number, Change>();
+  const dropped = new Map<number, Change[]>();
+  for (const change of changes) {
+    if (change.index === at) continue; // 箇所そのものは上の組で出している
+    if (change.kind === "removed") {
+      dropped.set(change.index, [...(dropped.get(change.index) ?? []), change]);
+    } else {
+      moved.set(change.index, change);
+    }
+  }
 
   return (
     <div ref={root} className="mg-doc">
@@ -228,8 +276,14 @@ export function DocumentView({
             </div>
           );
         }
+        const change = isSpot ? undefined : moved.get(i);
+        const seeing = open.has(i);
         return (
-          <div key={block.index}>
+          <div
+            key={block.index}
+            data-mg-at={i}
+            data-diff-pair={change && seeing ? "" : undefined}
+          >
             {gone && (
               <div
                 ref={isTarget ? targetRef : undefined}
@@ -239,17 +293,51 @@ export function DocumentView({
                 <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
               </div>
             )}
+            {(dropped.get(i) ?? []).map((c, n) => (
+              <Dropped
+                key={n}
+                src={c.before ?? ""}
+                answered={answered}
+                editorial={editorial}
+                style={style}
+              />
+            ))}
             {isSpot && <Tag state={spot.state} added={0} removed={0} />}
+            {change && (
+              <ChangeHead
+                kind={change.kind}
+                answered={answered}
+                open={seeing}
+                onFlip={change.kind === "changed" ? () => flip(i) : undefined}
+              />
+            )}
+            {change && seeing && change.before !== null && (
+              <section className="mg-spot-side is-base">
+                <header className="mg-spot-side-head">
+                  <Icon name="remove" size={13} />
+                  コメント時点
+                </header>
+                <div data-diff-side="base">
+                  <div
+                    className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
+                    style={style}
+                  >
+                    <Markdown body={change.before} editorial={editorial} />
+                  </div>
+                </div>
+              </section>
+            )}
             <div
               ref={isTarget && !gone ? targetRef : undefined}
               // 選んだ字がどのブロックかを引く目印。
               data-mg-block={block.index}
+              data-diff-side={change && seeing ? "head" : undefined}
               className={`${isSpot ? "mg-spot" : "mg-plain"}${
                 isTarget && !gone ? " mg-anchor" : ""
               }${
                 // 選ばれていた文字列まで絞れたときは、ブロック全体の地色を弱める
                 isSpot && marked ? " is-narrow" : ""
-              }`}
+              }${change ? " mg-moved" : ""}`}
             >
               {now}
             </div>
@@ -299,6 +387,70 @@ function Tag({
         </span>
       )}
     </header>
+  );
+}
+
+// 指摘の箇所の外で動いた塊の見出し。本文の読み心地を壊さないよう、線 1 本と
+// 短い語だけにして、見比べたいときに開く。
+function ChangeHead({
+  kind,
+  answered,
+  open,
+  onFlip,
+}: {
+  kind: Change["kind"];
+  answered: boolean;
+  open: boolean;
+  onFlip?: () => void;
+}) {
+  const since = answered ? "この対応で" : "コメント時点から";
+  return (
+    <header className="mg-change-head">
+      <Icon name={kind === "added" ? "add" : "difference"} size={12} />
+      {since}
+      {kind === "added" ? "足された" : "変わった"}
+      {onFlip && (
+        <button type="button" className="mg-change-see" onClick={onFlip}>
+          {open ? "閉じる" : "見比べる"}
+        </button>
+      )}
+    </header>
+  );
+}
+
+// 指摘の箇所の外で消えた塊。今の本文に相手が居ないので、そこに在ったものを出す。
+function Dropped({
+  src,
+  answered,
+  editorial,
+  style,
+}: {
+  src: string;
+  answered: boolean;
+  editorial: boolean;
+  style: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <header className="mg-change-head">
+        <Icon name="remove" size={12} />
+        {answered ? "この対応で" : "コメント時点から"}消えた
+        <button type="button" className="mg-change-see" onClick={() => setOpen((v) => !v)}>
+          {open ? "閉じる" : "見る"}
+        </button>
+      </header>
+      {open && (
+        <div className="mg-spot-gone">
+          <div
+            className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
+            style={style}
+          >
+            <Markdown body={src} editorial={editorial} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

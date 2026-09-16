@@ -77,6 +77,8 @@ export interface ReviewVersion {
   origin: "comment" | "commit" | "checkpoint";
   // 主体が記録される前の台帳には無い。読む側は origin から見なす。
   actor?: VersionActor | null;
+  // この版がどの指摘への対応か（対応の記録に添える）。紐付けの無い記録は空。
+  threads?: string[];
   created_at: number;
 }
 
@@ -352,7 +354,24 @@ export function reviewPrompt(
   facts: (thread: ReviewThread) => ThreadFacts | undefined,
 ): string {
   const head = `${file}\n未解決 ${threads.length} 件\n`;
-  return [head, ...threads.map((t) => section(t, facts(t)))].join("\n");
+  return [head, ...threads.map((t) => section(t, facts(t))), after(file, threads)].join(
+    "\n",
+  );
+}
+
+// 直したあとに何を打つか。
+//
+// 対応の記録（commit）を打ってもらえると、画面は「その対応で本文のどこが動いたか」
+// を指摘の箇所の外まで含めて出せる。打たれていないと、コメント時点から今までの
+// 変更しか出せず、関係のない編集が混ざる。
+function after(file: string, threads: ReviewThread[]): string {
+  const ids = threads.map((t) => `--thread ${t.id}`).join(" ");
+  return [
+    "直したら:",
+    `  fude review reply --thread <id> --message "何をしたか"`,
+    `  fude review commit --file "${file}" --message "何を直したか" ${ids}`,
+    "",
+  ].join("\n");
 }
 
 function section(thread: ReviewThread, facts: ThreadFacts | undefined): string {

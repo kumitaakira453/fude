@@ -212,6 +212,8 @@ const 会話の見本 = {
 ## 版
 
 版は手で打てます。打った版どうしを見比べると、その間に何が動いたかが読めます。
+
+版は ⌘S で名前を付けて打てます。名前を省くと日時で呼ばれます。
 `,
   // 履歴の見本。控えを置いて、版として並べる。
   versions: [
@@ -246,11 +248,14 @@ const 会話の見本 = {
 `,
     },
     {
-      label: "指摘への対応",
+      label: "返信の確かめと、解決の取り消しを足した",
       origin: "commit",
       actor: "ai",
       hoursAgo: 2,
       text: null, // 今の本文
+      // どの指摘への対応か。紐付いていると、画面は「その対応で本文のどこが
+      // 動いたか」を指摘の箇所の外まで含めて出せる。
+      threads: ["5a1e0021", "5a1e0022"],
     },
   ],
   threads: [
@@ -368,6 +373,7 @@ function seed() {
         label: v.label,
         origin: v.origin,
         actor: v.actor,
+        ...(v.threads ? { threads: v.threads } : {}),
         created_at: at(v.hoursAgo),
       });
     }

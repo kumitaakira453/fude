@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { splitBlocks } from "./blocks";
 import type { ReviewThread } from "./review";
-import { loose, spotDiff, spotNote } from "./spotDiff";
+import { changesSince, loose, spotDiff, spotNote } from "./spotDiff";
 
 // 指摘の箇所が、コメントしてからどうなったか。
 // 見るのは状態の分かれ方と、増減の字数（コードポイントで数える）。
@@ -126,5 +126,27 @@ describe("spotDiff", () => {
     expect(spot.state).toBe("around");
     expect(spot.added).toBe(1);
     expect(spot.removed).toBe(1);
+  });
+});
+
+describe("changesSince", () => {
+  const base = "# 題\n\nはじめの段落。\n\nまんなかの段落。\n\nおわりの段落。\n";
+
+  it("書き換わった塊を、今の番号で返す", () => {
+    const head = "# 題\n\nはじめの段落。\n\nまんなかを直した。\n\nおわりの段落。\n";
+    expect(changesSince(base, splitBlocks(head))).toEqual([
+      { index: 2, kind: "changed", before: "まんなかの段落。" },
+    ]);
+  });
+
+  it("足された塊と消えた塊を見分ける", () => {
+    const head = "# 題\n\nはじめの段落。\n\n足した段落。\n\nまんなかの段落。\n";
+    const got = changesSince(base, splitBlocks(head));
+    expect(got).toContainEqual({ index: 2, kind: "added", before: null });
+    expect(got).toContainEqual({ index: 4, kind: "removed", before: "おわりの段落。" });
+  });
+
+  it("何も変わっていなければ空", () => {
+    expect(changesSince(base, splitBlocks(base))).toEqual([]);
   });
 });
