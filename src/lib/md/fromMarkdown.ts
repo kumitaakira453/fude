@@ -494,6 +494,16 @@ function blockOf(
   switch (node.type) {
     case "paragraph": {
       const inline = inlineOf(node.children, source, base);
+      // 絵だけの段落は塊として持つ。段落のままだと、絵を塊のように描いている
+      // ぶん「絵の下の行」に見える位置が段落の中にでき、カーソルも Backspace も
+      // 見た目と食い違う。原文へ戻すときに段落へ包み直す。
+      const only = inline.nodes.length === 1 ? inline.nodes[0] : null;
+      if (only?.type === schema.nodes.image) {
+        return {
+          node: schema.nodes.imageBlock.create({ ...attrs, ...only.attrs }),
+          span: span(start, end),
+        };
+      }
       return {
         node: schema.nodes.paragraph.create(attrs, inline.nodes),
         span: span(start, end, inline.spans),

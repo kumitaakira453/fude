@@ -44,18 +44,18 @@ function closePick(view: EditorView): void {
 
 // 決まった道筋を本文へ書き、枠を閉じる。
 function write(view: EditorView, spot: Pick, src: string): void {
-  const nodes = view.state.schema.nodes;
-  const image = nodes.image.create({ src, alt: "", title: null });
   const doc = view.state.doc;
   const block = Math.min(Math.max(spot.block, 0), doc.content.size);
+  const image = view.state.schema.nodes.imageBlock.create({ src, alt: "", title: null });
   const tr = view.state.tr.setMeta(pickKey, null);
   if (spot.empty) {
-    tr.insert(block + 1, image);
-  } else {
-    // 何か載っている塊の下に、新しい塊として置く。同じ塊へ入れると、絵が
-    // 2 枚並んだ 1 つの段落になり、塊ごとの操作がどちらの絵にも当たらない。
+    // 空の塊はそのまま絵に差し替える。書きかけの無い行を残さない。
     const node = doc.nodeAt(block);
-    tr.insert(block + (node?.nodeSize ?? 0), nodes.paragraph.create(null, image));
+    tr.replaceWith(block, block + (node?.nodeSize ?? 0), image);
+  } else {
+    // 何か載っている塊の下へ置く。
+    const node = doc.nodeAt(block);
+    tr.insert(block + (node?.nodeSize ?? 0), image);
   }
   view.dispatch(tr.scrollIntoView());
 }

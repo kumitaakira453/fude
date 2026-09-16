@@ -189,6 +189,45 @@ export const schema = new Schema({
         ] as DOMOutputSpec,
     },
 
+    // 絵だけの段落は、段落ではなく塊として持つ。
+    //
+    // 原文（CommonMark）では `![](x)` は段落の中の行内要素だが、塊のように
+    // 描くので、段落の中の位置が「絵の下の行」に見える。行内のまま持つと、
+    // そこに置いたカーソルも、そこで押した Backspace も、見た目と食い違う。
+    // 読み書きのときだけ段落に包み直す（原文は `![](x)` のまま）。
+    imageBlock: {
+      group: "block",
+      atom: true,
+      draggable: true,
+      attrs: {
+        ...id,
+        src: { default: "" },
+        alt: { default: "" },
+        title: { default: null as string | null },
+      },
+      parseDOM: [
+        {
+          tag: "div[data-mg-image]",
+          getAttrs: (dom: HTMLElement) => ({
+            src: dom.getAttribute("data-src") ?? "",
+            alt: dom.getAttribute("data-alt") ?? "",
+            title: dom.getAttribute("data-title"),
+          }),
+        },
+      ],
+      toDOM: (node) =>
+        [
+          "div",
+          {
+            "data-mg-image": "",
+            "data-src": node.attrs.src as string,
+            "data-alt": node.attrs.alt as string,
+            ...(node.attrs.title ? { "data-title": node.attrs.title as string } : {}),
+          },
+          ["img", { src: node.attrs.src as string, alt: node.attrs.alt as string }],
+        ] as DOMOutputSpec,
+    },
+
     // widths は原文の桁幅。編集したセルの列だけが広がり、他は動かない。
     table: {
       group: "block",

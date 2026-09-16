@@ -203,6 +203,20 @@ function toMdast(node: PmNode): RootContent {
     case "paragraph":
       return { type: "paragraph", children: inlineToMdast(node) };
 
+    // 塊として持っている絵は、原文では段落の中の行内要素へ戻す。
+    case "imageBlock":
+      return {
+        type: "paragraph",
+        children: [
+          {
+            type: "image",
+            url: node.attrs.src as string,
+            alt: node.attrs.alt as string,
+            title: node.attrs.title as string | null,
+          },
+        ],
+      };
+
     case "heading":
       return { type: "heading", depth: node.attrs.level, children: inlineToMdast(node) };
 
@@ -451,6 +465,7 @@ function leaf(node: PmNode): PhrasingContent {
   switch (node.type.name) {
     case "image":
       return { type: "image", url: node.attrs.src, alt: node.attrs.alt, title: node.attrs.title };
+
     case "hardBreak":
       return { type: "break" };
     case "rawInline":

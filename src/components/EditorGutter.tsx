@@ -409,11 +409,10 @@ export function EditorGutter({
         return;
       }
 
-      // 絵だけの塊は絵そのものを相手にする。入れ物は本文の幅いっぱいに広がる
-      // ので、そのまま塗ると絵より大きい枠が出る。
-      const lone =
-        node.childCount === 1 && node.firstChild?.type === schema.nodes.image;
-      const tight = lone ? tightImage(hit.el) : null;
+      // 絵の塊は絵そのものを相手にする。入れ物は本文の幅いっぱいに広がるので、
+      // そのまま塗ると絵より大きい枠が出る。
+      const tight =
+        node.type === schema.nodes.imageBlock ? tightImage(hit.el) : null;
       const outline = tight ?? box;
       const room = scroller
         ? outline.left - scroller.getBoundingClientRect().left

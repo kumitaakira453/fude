@@ -690,9 +690,9 @@ describe("並びどうしの付け替え", () => {
   });
 });
 
-describe("絵の直後で開く", () => {
-  // 絵は塊のように描くので、絵の後ろは「次の行」に見える。そこで打った "/" は
-  // 段落の先頭ではないが、字は 1 つも無いので先頭とみなす。
+describe("字と絵が並ぶ行でも開く", () => {
+  // 絵だけの段落は塊（imageBlock）になるので、そこに「絵の直後」という位置は
+  // もう無い。字と同じ行に絵が並んだときだけ、行内の絵の直後が残る。
   const at = (md: string, pos: number) => {
     const view = editor(md);
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
@@ -700,38 +700,12 @@ describe("絵の直後で開く", () => {
     return view;
   };
 
-  it("絵だけが前にあるなら開く", () => {
-    // 段落の始まり(0) + 画像(1) = 2 が絵の直後。
-    expect(state(at("![](./a.png)\n", 2))).not.toBe(null);
+  it("行内の絵の直後なら開く", () => {
+    expect(state(at("k![](./a.png)\n", 3))).not.toBe(null);
   });
 
   it("字が前にあるときは開かない（URL や道筋を邪魔しない）", () => {
     expect(state(at("http:\n", 6))).toBe(null);
-  });
-
-  // 打ち込みの口が呼ばれない経路（絵の直後は字の節点が無い）でも開く。
-  // 本文へ直に差し込んで、できあがった形から拾えることを見る。
-  it("本文へ直に差し込まれた / でも開く", () => {
-    const view = editor("![](./a.png)\n");
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
-    view.dispatch(view.state.tr.insertText("/", 2));
-    expect(state(view)).not.toBe(null);
-  });
-
-  it("字 + 絵 の段落でも、差し込まれた / を拾う", () => {
-    const view = editor("k![](./a.png)\n");
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 3)));
-    view.dispatch(view.state.tr.insertText("/", 3));
-    expect(state(view)).not.toBe(null);
-  });
-
-  it("絵の前に字があっても、絵の直後なら開く", () => {
-    // k![](…) のように字と絵が同じ段落に並ぶことがある。そこでも絵の直後は
-    // 見た目には行の頭。
-    const view = editor("k![](./a.png)\n");
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 3)));
-    type(view, "/");
-    expect(state(view)).not.toBe(null);
   });
 
   it("字の途中へ差し込まれた / では開かない", () => {
@@ -739,5 +713,12 @@ describe("絵の直後で開く", () => {
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 5)));
     view.dispatch(view.state.tr.insertText("/", 5));
     expect(state(view)).toBe(null);
+  });
+
+  it("差し込まれた / も拾う（打ち込みの口を通らない経路）", () => {
+    const view = editor("k![](./a.png)\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 3)));
+    view.dispatch(view.state.tr.insertText("/", 3));
+    expect(state(view)).not.toBe(null);
   });
 });

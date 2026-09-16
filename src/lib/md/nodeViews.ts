@@ -471,6 +471,7 @@ class ImageView implements NodeView {
   private alt: string;
   private title: string | null;
   private src: string;
+  private kind: PmNode["type"];
 
   constructor(
     node: PmNode,
@@ -479,18 +480,22 @@ class ImageView implements NodeView {
     deps: EditorDeps,
   ) {
     const src = node.attrs.src as string;
+    this.kind = node.type;
     this.src = src;
     this.alt = node.attrs.alt as string;
     this.title = node.attrs.title as string | null;
     const remote = /^(https?:|data:|blob:)/.test(src);
     const at = remote ? src : (deps.peekAsset?.(src) ?? null);
 
-    this.dom = document.createElement("span");
+    // 塊の絵は div、行内の絵は span。塊の絵は段落の中に入らないので、
+    // 入れ物の種類も合わせておく。
+    const block = node.type === schema.nodes.imageBlock;
+    this.dom = document.createElement(block ? "div" : "span");
     this.dom.className = "mg-img";
     this.dom.contentEditable = "false";
-    this.shown = document.createElement("span");
+    this.shown = document.createElement(block ? "div" : "span");
     this.shown.className = "mg-img-body";
-    this.col = document.createElement("span");
+    this.col = document.createElement(block ? "div" : "span");
     this.col.className = "mg-img-col";
     this.shown.appendChild(this.col);
     this.dom.appendChild(this.shown);
@@ -627,7 +632,7 @@ class ImageView implements NodeView {
   }
 
   update(node: PmNode) {
-    if (node.type !== schema.nodes.image) return false;
+    if (node.type !== this.kind) return false;
     const src = node.attrs.src as string;
     this.alt = node.attrs.alt as string;
     this.title = node.attrs.title as string | null;
@@ -964,6 +969,8 @@ export function nodeViews(deps: EditorDeps) {
       new ListItemView(node, view, getPos),
     image: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new ImageView(node, view, getPos, deps),
+    imageBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
+      new ImageView(node, view, getPos, deps),
     inlineMath: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new MathView(node, view, getPos),
     mathBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
@@ -997,10 +1004,10 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
 // 画像は行内の節点なので、絵だけの段落では行箱が絵の丈になり、カーソルも
 // その丈で立つ。塊そのものを block にすると Markdown の読み書きと貼り付けまで
 // 波及するので、印を付けて棒だけ消す。
-// カーソルが絵の隣に居るあいだ、その絵に印を付ける。
+// カーソルが行内の絵の隣に居るあいだ、その絵に印を付ける。
 //
-// 画像は行内の節点だが塊のように描くので、棒だけでは「絵の隣に居る」ことが
-// 読み取りにくい。次の一打で絵が消えることに気付けるよう、絵の縁で示す。
+// 絵だけの段落は塊（imageBlock）として持つので、ここに当たるのは字と同じ行に
+// 並んだ絵だけ。棒だけでは「絵の隣に居る」ことが読み取りにくいので縁で示す。
 function imageMarks(state: EditorState): DecorationSet {
   const sel = state.selection;
   if (!sel.empty) return DecorationSet.empty;

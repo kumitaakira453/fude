@@ -118,19 +118,24 @@ describe("仮置きの枠", () => {
   });
 
   it("何か載っている塊では、枠を下に出して新しい塊へ入れる", async () => {
-    // 絵の直後で /image を打つと、カーソルは絵と同じ段落の中に居る。
-    // そこへ入れると絵が 2 枚並んだ 1 つの段落になり、塊ごとの操作が
-    // どちらの絵にも当たらなくなる。
     const ways = goes("/Users/me/写真/次.png", "./images/次.png");
-    const at = editor("![](./images/図解.png)\n", ways);
-    // 絵の直後（段落の始まり + 画像 1）
+    const at = editor("本文\n", ways);
     at.view.dispatch(
-      at.view.state.tr.setSelection(TextSelection.create(at.view.state.doc, 2)),
+      at.view.state.tr.setSelection(TextSelection.create(at.view.state.doc, 1)),
     );
     openImagePick(at.view);
     at.button(".mg-imgpick-open")?.click();
     await settle();
-    expect(at.out()).toBe("![](./images/図解.png)\n\n![](./images/次.png)\n");
+    expect(at.out()).toBe("本文\n\n![](./images/次.png)\n");
+  });
+
+  it("空の塊は、絵にそのまま差し替える", async () => {
+    const ways = goes("/Users/me/写真/次.png", "./images/次.png");
+    const at = editor("\n", ways);
+    openImagePick(at.view);
+    at.button(".mg-imgpick-open")?.click();
+    await settle();
+    expect(at.out()).toBe("![](./images/次.png)\n");
   });
 
   it("本文を書き始めたら閉じる", () => {

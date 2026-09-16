@@ -190,26 +190,21 @@ describe("絵の隣のカーソル", () => {
   const put = (view: EditorView, at: number) =>
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
 
-  it("絵の直後では、その絵に印を出す", () => {
-    const at = editor("![](./images/図解.png)\n");
-    put(at.view, 2);
+  it("行内の絵の直後でも付ける", () => {
+    // k(1) + 絵(1) なので、3 が絵の直後。
+    const at = editor("k![](./images/図解.png)\n");
+    put(at.view, 3);
     expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
   });
 
-  it("絵の直前でも同じ", () => {
-    const at = editor("![](./images/図解.png)\n");
-    put(at.view, 1);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
-  });
-
-  it("字と混ざっていても、絵の隣なら付ける", () => {
+  it("行内の絵の直前でも付ける", () => {
     const at = editor("k![](./images/図解.png)\n");
     put(at.view, 2);
     expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
   });
 
   it("絵から離れていれば付けない", () => {
-    const at = editor("k![](./images/図解.png)\n");
+    const at = editor("kあ![](./images/図解.png)\n");
     put(at.view, 1);
     expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
   });
@@ -221,7 +216,7 @@ describe("絵の隣のカーソル", () => {
   });
 
   it("次の行へ移ったら印も外れる（持ち越さない）", () => {
-    const at = editor("![](./images/図解.png)\n\n次\n");
+    const at = editor("k![](./images/図解.png)\n\n次\n");
     put(at.view, 2);
     expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
     put(at.view, at.view.state.doc.content.size - 1);
@@ -229,7 +224,7 @@ describe("絵の隣のカーソル", () => {
   });
 
   it("字を打って位置が動いたときも、印は今の場所に合う", () => {
-    const at = editor("![](./images/図解.png)\n\n次\n");
+    const at = editor("k![](./images/図解.png)\n\n次\n");
     put(at.view, at.view.state.doc.content.size - 1);
     at.view.dispatch(at.view.state.tr.insertText("あ"));
     expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();

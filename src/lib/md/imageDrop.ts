@@ -1,4 +1,4 @@
-import type { Node as PmNode } from "prosemirror-model";
+import type { Node as PmNode, ResolvedPos } from "prosemirror-model";
 import { Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { imageFiles, readIncoming, type Held, type Incoming } from "../images";
@@ -20,23 +20,22 @@ export interface ImageGoes {
   copy: (src: string) => void;
 }
 
-// その塊に載っている画像。画像だけの塊のときに返す。
+// その位置の絵。絵だけの塊（imageBlock）のときに返す。
 //
-// つまみのメニューは塊を相手にするので、行の中に字と混ざっているものは
-// 返さない（どの絵の話か決められない）。
+// つまみのメニューは塊を相手にするので、行の中に字と混ざっている絵は返さない
+// （どの絵の話か決められない）。
 export function loneImage(doc: PmNode, blockPos: number): { at: number; node: PmNode } | null {
   const block = doc.nodeAt(blockPos);
-  if (!block || block.childCount !== 1) return null;
-  const only = block.firstChild;
-  if (!only || only.type !== schema.nodes.image) return null;
-  return { at: blockPos + 1, node: only };
+  if (block?.type !== schema.nodes.imageBlock) return null;
+  return { at: blockPos, node: block };
 }
 
-// 置ける位置か。コードの塊の中は字のまま扱うので、画像は入れない。
+// 置ける位置か。コードの塊の中は字のまま扱うので、絵は入れない。
 export function canHold(view: EditorView, pos: number): boolean {
   const at = Math.min(Math.max(pos, 0), view.state.doc.content.size);
   const $at = view.state.doc.resolve(at);
-  return $at.parent.inlineContent && !$at.parent.type.spec.code;
+  for (let d = $at.depth; d > 0; d--) if ($at.node(d).type.spec.code) return false;
+  return true;
 }
 
 // 画像を 1 枚ずつ、その位置へ置く。
@@ -48,8 +47,8 @@ async function land(view: EditorView, at: number, files: File[], goes: ImageGoes
   for (const shot of await readIncoming(files)) {
     const src = await goes.stow(shot);
     if (!src || view.isDestroyed) continue;
-    const here = Math.min(Math.max(pos, 0), view.state.doc.content.size);
-    const node = schema.nodes.image.create({ src, alt: "", title: null });
+    const here = blockAfter(view.state.doc.resolve(Math.min(Math.max(pos, 0), view.state.doc.content.size)));
+    const node = schema.nodes.imageBlock.create({ src, alt: "", title: null });
     const tr = view.state.tr.insert(here, node);
     view.dispatch(
       tr
@@ -58,6 +57,15 @@ async function land(view: EditorView, at: number, files: File[], goes: ImageGoes
     );
     pos = view.state.selection.to;
   }
+}
+
+// 絵を置く塊の境目。空の塊ならその場、何か載っていればその下。
+//
+// 絵は塊なので、字の途中には入れられない。書いている行を割らずに、行の
+// 切れ目へ置く。
+export function blockAfter($at: ResolvedPos): number {
+  const depth = Math.max($at.depth, 1);
+  return $at.parent.content.size === 0 ? $at.before(depth) : $at.after(depth);
 }
 
 // 持ち込みを受けるかどうかを決め、受けるなら取り込みを始める。
