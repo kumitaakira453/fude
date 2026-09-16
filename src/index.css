@@ -3989,7 +3989,6 @@ svg[id^="mmd-"] foreignObject p {
 .mg-spot {
   margin: 0 -1rem 0.85rem;
   padding: 0.5rem 1rem 0.15rem;
-  border-radius: 0.6rem;
   background: var(--mg-accent-soft);
 }
 /* 中の一部まで絞れているときは、塊全体の地色を引いて印だけを立てる。 */
@@ -4142,7 +4141,6 @@ svg[id^="mmd-"] foreignObject p {
 .mg-spot-side {
   min-width: 0;
   padding: 0.5rem 1rem 0.15rem;
-  border-radius: 0.6rem;
 }
 .mg-spot-side.is-base {
   background: var(--mg-del);
@@ -4150,30 +4148,10 @@ svg[id^="mmd-"] foreignObject p {
 .mg-spot-side.is-head {
   background: var(--mg-add);
 }
-.mg-spot-side-head {
-  display: flex;
-  gap: 0.15rem;
-  align-items: center;
-  margin-bottom: 0.1rem;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-.mg-spot-side.is-base .mg-spot-side-head {
-  color: var(--mg-del-fg);
-}
-.mg-spot-side.is-head .mg-spot-side-head {
-  color: var(--mg-add-fg);
-}
 /* 増減の字数。側の名前のすぐ後ろに、同じ濃さで添える。 */
 .mg-spot-n {
   margin-left: 0.3rem;
   font-variant-numeric: tabular-nums;
-}
-/* 組の中の「今」の本文。面は側が敷いているので、ここでは何も塗らない
-   （選ばれていた字の印だけを立てる）。 */
-.mg-spot-now {
-  border-radius: 0.45rem;
 }
 
 /* 送信。この帯で唯一色を置くボタンなので、大きさは控えめにする。 */
@@ -5624,7 +5602,6 @@ body.mg-carrying {
 .mg-ver-side {
   min-width: 0;
   padding: 0.5rem 1.1rem 0.15rem;
-  border-radius: 0.6rem;
 }
 .mg-ver-side.is-base {
   background: var(--mg-del);
@@ -5657,7 +5634,6 @@ body.mg-carrying {
   place-items: center;
   min-width: 0;
   padding: 1rem 0.85rem;
-  border-radius: 0.6rem;
   background: color-mix(in srgb, var(--mg-border) 22%, transparent);
   font-size: 11.5px;
   color: var(--mg-muted);

@@ -231,11 +231,8 @@ export function DocumentView({
           return (
             <div key={block.index} className="mg-spot-pair" data-diff-pair="">
               <Tag state={spot.state} added={spot.added} removed={spot.removed} />
+              {/* どちらが前でどちらが後かは、面の色と字に付いた印が言う。 */}
               <section className="mg-spot-side is-base">
-                <header className="mg-spot-side-head">
-                  <Icon name="remove" size={13} />
-                  コメント時点
-                </header>
                 <div data-diff-side="base">
                   <div
                     className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
@@ -246,9 +243,6 @@ export function DocumentView({
                 </div>
               </section>
               <section className="mg-spot-side is-head">
-                <header className="mg-spot-side-head">
-                  <Icon name="add" size={13} />今
-                </header>
                 {/* 選んだ字がどのブロックかを引く目印。本文の画面と同じ名前で
                     持つので、コメントを書く仕組みがそのまま乗る。コメント時点の
                     字（上の段）には付けない。 */}
