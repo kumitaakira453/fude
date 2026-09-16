@@ -7,7 +7,7 @@ import {
   highlightAtom,
   searchActiveHitAtom,
 } from "../state/atoms";
-import { clipRects, scrollBoxOf, SYNTHETIC } from "../lib/domText";
+import { clipRects, rangeAt, readFlowText, scrollBoxOf } from "../lib/domText";
 import { buildMatcher, stepHit, type HitStep } from "../lib/search";
 import { Icon } from "./Icon";
 
@@ -120,24 +120,17 @@ export function DocSearchOverlay({
       return;
     }
     const ranges: Range[] = [];
-    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
-    let node: Node | null;
-    while ((node = walker.nextNode())) {
-      // 画面には出るがソースには無い文字は対象外。アイコンは合字なので、
-      // 除かないと "drag" で drag_indicator が当たる。図（svg）は再描画で
-      // 矩形が不安定になるのでこれにも入っている。
-      if (node.parentElement?.closest(SYNTHETIC)) continue;
-      const text = node.nodeValue ?? "";
-      re.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(text)) !== null) {
-        const len = m[0].length || 1;
-        const r = new Range();
-        r.setStart(node, m.index);
-        r.setEnd(node, m.index + len);
-        ranges.push(r);
-        if (m.index === re.lastIndex) re.lastIndex++;
-      }
+    // 本文を 1 本の文字列として探す。強調やリンクは文字ノードを割るので、
+    // ノードごとに探すと飾りをまたぐ語が当たらない。画面には出るがソースには
+    // 無い文字（アイコンの合字・図）は readFlowText が除く。
+    const flow = readFlowText(content);
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(flow.plain)) !== null) {
+      const len = m[0].length || 1;
+      const r = rangeAt(flow, m.index, m.index + len);
+      if (r) ranges.push(r);
+      if (m.index === re.lastIndex) re.lastIndex++;
     }
     rangesRef.current = ranges;
     measure(ranges);

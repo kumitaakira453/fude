@@ -144,6 +144,34 @@ export function readBlockText(block: HTMLElement): BlockText {
   return { plain, runs };
 }
 
+// 塊の境目になる要素。ここをまたいで拾うと、画面では続いて見えない語が
+// 1 続きとして当たってしまう。
+const BLOCKISH =
+  "p,li,td,th,h1,h2,h3,h4,h5,h6,pre,blockquote,figcaption,dt,dd,summary,div,tr,table,section,article";
+
+// 文字ノードをつないだ 1 本の文字列。塊の境目には改行を挟む。
+//
+// 強調やリンクは本文の途中で文字ノードを割る。ノードごとに探すと、
+// `このファイルは**mdglow**の` のような飾りをまたぐ語が当たらない。画面では
+// 続いて見えているものは、続いた 1 本として探せる必要がある。
+export function readFlowText(root: HTMLElement): BlockText {
+  const runs: { node: Text; start: number }[] = [];
+  let plain = "";
+  let box: Element | null = null;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (node.parentElement?.closest(SYNTHETIC)) continue;
+    const text = node as Text;
+    const here = text.parentElement?.closest(BLOCKISH) ?? null;
+    if (plain !== "" && here !== box) plain += "\n";
+    box = here;
+    runs.push({ node: text, start: plain.length });
+    plain += text.nodeValue ?? "";
+  }
+  return { plain, runs };
+}
+
 // DOM 上の位置をブロック内の文字位置に変換する。
 export function offsetOf(bt: BlockText, node: Node, offset: number): number | null {
   for (const run of bt.runs) {
