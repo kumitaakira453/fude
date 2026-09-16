@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { imageCaret, nodeViews } from "./nodeViews";
+import { nodeViews } from "./nodeViews";
 import { toMarkdown } from "./toMarkdown";
 
 // 画像のキャプション。Markdown の代替テキスト（![ここ](src)）そのもの。
@@ -35,7 +35,7 @@ function editor(body: string, images = ways()) {
   const place = document.createElement("div");
   document.body.appendChild(place);
   const view = new EditorView(place, {
-    state: EditorState.create({ doc: loaded.doc, plugins: [imageCaret] }),
+    state: EditorState.create({ doc: loaded.doc, plugins: [] }),
     nodeViews: nodeViews({
       dark: false,
       modes: new Map(),
@@ -181,52 +181,5 @@ describe("絵の上に出す帯", () => {
     const at = editor("![](./images/図解.png)\n");
     at.press("画像をコピー");
     expect(at.images.copy).toHaveBeenCalledWith("./images/図解.png");
-  });
-});
-
-describe("絵の隣のカーソル", () => {
-  // 絵の隣では行箱が絵の丈になり、カーソルも絵と同じ丈で立つ。棒は消して
-  // 絵の縁で居場所を示す。
-  const put = (view: EditorView, at: number) =>
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
-
-  it("行内の絵の直後でも付ける", () => {
-    // k(1) + 絵(1) なので、3 が絵の直後。
-    const at = editor("k![](./images/図解.png)\n");
-    put(at.view, 3);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
-  });
-
-  it("行内の絵の直前でも付ける", () => {
-    const at = editor("k![](./images/図解.png)\n");
-    put(at.view, 2);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
-  });
-
-  it("絵から離れていれば付けない", () => {
-    const at = editor("kあ![](./images/図解.png)\n");
-    put(at.view, 1);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
-  });
-
-  it("絵の無い塊では何もしない", () => {
-    const at = editor("本文\n");
-    put(at.view, 1);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
-  });
-
-  it("次の行へ移ったら印も外れる（持ち越さない）", () => {
-    const at = editor("k![](./images/図解.png)\n\n次\n");
-    put(at.view, 2);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
-    put(at.view, at.view.state.doc.content.size - 1);
-    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
-  });
-
-  it("字を打って位置が動いたときも、印は今の場所に合う", () => {
-    const at = editor("k![](./images/図解.png)\n\n次\n");
-    put(at.view, at.view.state.doc.content.size - 1);
-    at.view.dispatch(at.view.state.tr.insertText("あ"));
-    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
   });
 });

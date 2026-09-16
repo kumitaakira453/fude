@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
+import { EditorState } from "prosemirror-state";
+import { EditorView } from "prosemirror-view";
 import { describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
+import { nodeViews } from "./nodeViews";
 import { toMarkdown } from "./toMarkdown";
 import { schema } from "./schema";
 
@@ -61,5 +65,40 @@ describe("絵だけの段落", () => {
   it("行内の絵は今までどおり行内の節点", () => {
     const doc = fromMarkdown("k![](./a.png)\n").doc;
     expect(doc.firstChild?.lastChild?.type).toBe(schema.nodes.image);
+  });
+});
+
+describe("描き分け", () => {
+  // 塊の絵だけを中央の塊として描く。行内の絵まで塊のように描くと、同じ段落の
+  // 中の位置が「絵の下の行」に見え、カーソルも Backspace も見た目と食い違う。
+  const draw = (md: string) => {
+    const loaded = fromMarkdown(md);
+    const place = document.createElement("div");
+    document.body.appendChild(place);
+    const view = new EditorView(place, {
+      state: EditorState.create({ doc: loaded.doc, plugins: [] }),
+      nodeViews: nodeViews({ dark: false, modes: new Map(), redraws: new Set(), peekAsset: () => "blob:絵" }),
+    });
+    const out = {
+      block: !!view.dom.querySelector(".mg-img.is-block"),
+      inline: !!view.dom.querySelector(".mg-img:not(.is-block)"),
+      bar: !!view.dom.querySelector(".mg-img-bar"),
+      cap: !!view.dom.querySelector(".mg-cap"),
+    };
+    view.destroy();
+    place.remove();
+    return out;
+  };
+
+  it("絵だけの段落は塊として描く", () => {
+    expect(draw("![](./a.png)\n")).toMatchObject({ block: true, inline: false });
+  });
+
+  it("字と並んだ絵は行内のまま描く", () => {
+    expect(draw("k![](./a.png)\n")).toMatchObject({ block: false, inline: true });
+  });
+
+  it("行内の絵には帯もキャプションも付けない", () => {
+    expect(draw("k![](./a.png)\n")).toMatchObject({ bar: false, cap: false });
   });
 });

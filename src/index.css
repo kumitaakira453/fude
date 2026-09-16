@@ -6404,26 +6404,31 @@ body.mg-carrying {
 }
 
 /* 編集面の画像とキャプション。欄は書かれているあいだ（と打っている
-   あいだ）だけ出す。 */
-.mg-img {
+   あいだ）だけ出す。
+
+   塊の絵（is-block）だけを中央の塊として描く。字と同じ行に並んだ絵は行内の
+   まま描く。行内の絵まで塊のように描くと、同じ段落の中の位置が「絵の下の行」
+   に見え、そこに立つカーソルも押した Backspace も見た目と食い違う。 */
+.mg-img.is-block {
   display: block;
 }
-.mg-img-body {
+.mg-img:not(.is-block) .mg-img-hold {
+  display: inline-block;
+  vertical-align: middle;
+}
+.mg-img:not(.is-block) .mg-img-hold > img {
+  display: inline-block;
+  max-width: 100%;
+}
+.mg-img.is-block .mg-img-body {
   display: flex;
   justify-content: center;
   /* 上下の余白はここが持つ。絵そのものに付けると、絵にぴったり付けたい
      帯やつまみが余白のぶんだけ浮き、選ぶ枠も絵より大きく出る。 */
   margin-block: 1rem;
 }
-/* カーソルが絵の隣に居るあいだ、その絵を縁で示す。絵は塊のように描かれる
-   ので、棒だけでは「絵の隣に居る」ことが読み取りにくい。 */
-.mg-img.is-here .mg-img-hold > img {
-  outline: 2px solid color-mix(in srgb, var(--mg-accent) 55%, transparent);
-  outline-offset: 1px;
-}
-
 /* 絵とキャプションの桁。絵の幅に縮むので、キャプションの左端が絵とそろう。 */
-.mg-img-col {
+.mg-img.is-block .mg-img-col {
   display: flex;
   flex-direction: column;
   min-width: 0;

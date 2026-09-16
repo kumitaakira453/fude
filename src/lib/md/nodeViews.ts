@@ -472,6 +472,8 @@ class ImageView implements NodeView {
   private title: string | null;
   private src: string;
   private kind: PmNode["type"];
+  // 塊の絵か。行内の絵には帯もキャプションも付けない。
+  private block: boolean;
 
   constructor(
     node: PmNode,
@@ -490,8 +492,9 @@ class ImageView implements NodeView {
     // 塊の絵は div、行内の絵は span。塊の絵は段落の中に入らないので、
     // 入れ物の種類も合わせておく。
     const block = node.type === schema.nodes.imageBlock;
+    this.block = block;
     this.dom = document.createElement(block ? "div" : "span");
-    this.dom.className = "mg-img";
+    this.dom.className = block ? "mg-img is-block" : "mg-img";
     this.dom.contentEditable = "false";
     this.shown = document.createElement(block ? "div" : "span");
     this.shown.className = "mg-img-body";
@@ -527,13 +530,13 @@ class ImageView implements NodeView {
       }
     });
 
-    this.fill(at, view, getPos, deps.images);
-    this.paintCap();
+    this.fill(at, view, getPos, block ? deps.images : undefined);
+    if (block) this.paintCap();
 
     if (!remote && !at && deps.resolveAsset) {
       void deps.resolveAsset(src)
-        .then((found) => this.fill(found, view, getPos, deps.images))
-        .catch(() => this.fill(null, view, getPos, deps.images));
+        .then((found) => this.fill(found, view, getPos, block ? deps.images : undefined))
+        .catch(() => this.fill(null, view, getPos, block ? deps.images : undefined));
     }
   }
 
@@ -589,7 +592,7 @@ class ImageView implements NodeView {
       box.className =
         "mg-img-missing inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--mg-border)] px-2 py-1 text-xs text-[var(--mg-muted)]";
       box.textContent = `🖼 ${this.alt || "画像"}`;
-      this.col.replaceChildren(box, this.cap);
+      this.col.replaceChildren(...(this.block ? [box, this.cap] : [box]));
       return;
     }
     const el = document.createElement("img");
@@ -608,7 +611,7 @@ class ImageView implements NodeView {
     if (goes) hold.appendChild(this.bar(view, getPos, goes));
     // キャプションは絵と同じ幅の桁に入れる。入れ物に直に置くと本文の幅
     // いっぱいに伸び、絵の左端とそろわない。
-    this.col.replaceChildren(hold, this.cap);
+    this.col.replaceChildren(...(this.block ? [hold, this.cap] : [hold]));
   }
 
   // 書かれているものを欄に写し、出す・しまうを決める。
@@ -640,6 +643,10 @@ class ImageView implements NodeView {
     // 読み直すと、打鍵ごとに絵が点滅する。
     if (src !== this.src) return false;
     const img = this.col.querySelector("img");
+    if (this.kind !== schema.nodes.imageBlock) {
+      if (img) img.alt = this.alt;
+      return true;
+    }
     if (img) {
       img.alt = this.alt;
       if (this.title) img.title = this.title;
@@ -1004,35 +1011,6 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
 // 画像は行内の節点なので、絵だけの段落では行箱が絵の丈になり、カーソルも
 // その丈で立つ。塊そのものを block にすると Markdown の読み書きと貼り付けまで
 // 波及するので、印を付けて棒だけ消す。
-// カーソルが行内の絵の隣に居るあいだ、その絵に印を付ける。
-//
-// 絵だけの段落は塊（imageBlock）として持つので、ここに当たるのは字と同じ行に
-// 並んだ絵だけ。棒だけでは「絵の隣に居る」ことが読み取りにくいので縁で示す。
-function imageMarks(state: EditorState): DecorationSet {
-  const sel = state.selection;
-  if (!sel.empty) return DecorationSet.empty;
-  const $head = sel.$head;
-  const before = $head.nodeBefore;
-  const after = $head.nodeAfter;
-  const at =
-    before?.type === schema.nodes.image
-      ? $head.pos - before.nodeSize
-      : after?.type === schema.nodes.image
-        ? $head.pos
-        : -1;
-  if (at < 0) return DecorationSet.empty;
-
-  return DecorationSet.create(state.doc, [Decoration.node(at, at + 1, { class: "is-here" })]);
-}
-
-// 状態に持ち越さない。見るのはカーソルの両隣だけなので毎回その場で決められる
-// し、持ち越すと「選択が動いたのに印が残る」食い違いが出る。
-export const imageCaret = new Plugin({
-  props: {
-    decorations: imageMarks,
-  },
-});
-
 export const insideBlock = new Plugin<DecorationSet>({
   state: {
     init: (_, state) => insideDecos(state, DecorationSet.empty),

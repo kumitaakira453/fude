@@ -32,7 +32,7 @@ import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { composingKeys } from "./ime";
-import { imageCaret, insideBlock } from "./nodeViews";
+import { insideBlock } from "./nodeViews";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
 import {
@@ -1063,7 +1063,6 @@ export function editorPlugins({
     // コードの色と、カーソルの居る塊の印（図だけを出しているときに使う）。
     highlightCode,
     insideBlock,
-    imageCaret,
     // 掴んでいるあいだ実体を薄くする印。
     lifted,
     // 指摘の居場所。打っても付いてくるように、位置を写していく。
