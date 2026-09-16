@@ -4077,7 +4077,6 @@ svg[id^="mmd-"] foreignObject p {
   margin-left: -0.7rem;
   padding-left: calc(0.7rem - 3px);
   border-left: 3px solid var(--mg-border);
-  border-radius: 3px;
 }
 .mg-change-side.is-base {
   border-left-color: color-mix(in srgb, var(--mg-del-fg) 55%, transparent);
