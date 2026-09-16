@@ -122,6 +122,8 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 // Markdown 以外もツリーに出すか。画像・HTML・PDF が並ぶ。切ると読み物だけの
 // 見え方になる（開ける・開けないは変わらない。1 枚だけ開く経路は常に通る）。
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
+// 一覧から外す名前。1 行に 1 つ、しるし付き（glob）で書く。書き方は lib/exclude。
+export const excludeAtom = atomWithStorage<string>("mdglow:exclude", "");
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
 // （`>` は引用）から外れるので、入れた人にだけ効かせる。
 export const notionKeysAtom = atomWithStorage<boolean>("mdglow:notionkeys", false);

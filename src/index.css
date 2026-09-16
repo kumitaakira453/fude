@@ -1206,6 +1206,9 @@ button.mg-task-check:hover {
   white-space: pre;
   tab-size: 2;
 }
+.mg-source-line:hover {
+  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
+}
 .mg-source-line {
   display: flex;
   align-items: baseline;
@@ -1214,9 +1217,6 @@ button.mg-task-check:hover {
   min-height: 1.7em;
   width: max-content;
   min-width: 100%;
-}
-.mg-source-line:hover {
-  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
 }
 /* 番号は横に流しても左に残す。行を数えながら横へ辿れる。 */
 .mg-source-no {
@@ -1689,6 +1689,40 @@ button.mg-task-check:hover {
   font-size: 13px;
   color: var(--mg-fg-dim);
 }
+/* 一覧から外すものを書く欄。釦の並びと同じ桁に置く。 */
+.mg-set-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.5rem 0.7rem 0.6rem;
+}
+.mg-set-drop textarea {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  background: var(--mg-input-bg);
+  font-family: var(--mg-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--mg-fg-dim);
+  outline: none;
+  resize: none;
+  transition: border-color 0.12s ease;
+}
+.mg-set-drop textarea:focus {
+  border-color: var(--mg-accent);
+}
+.mg-set-drop textarea::placeholder {
+  color: var(--mg-muted);
+}
+.mg-set-drop code {
+  padding: 0 0.2em;
+  border-radius: 0.25rem;
+  background: var(--mg-hover);
+  font-family: var(--mg-font-mono);
+}
+
 .mg-set-beta {
   padding: 0 0.25rem;
   border-radius: 0.25rem;

@@ -1,12 +1,14 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useOptimisticSetting } from "../hooks/useOptimisticSetting";
+import { excludeRules } from "../lib/exclude";
 import { FONTS } from "../lib/fonts";
 import { THEMES } from "../lib/themes";
 import {
   editorialAtom,
+  excludeAtom,
   fontAtom,
   liveEditAtom,
   notionKeysAtom,
@@ -19,6 +21,7 @@ import {
   updateStatusAtom,
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
+import { AutoTextarea } from "./AutoTextarea";
 import { Icon } from "./Icon";
 
 // 設定。⌘, で開く。
@@ -51,6 +54,7 @@ export function Settings() {
   const [liveValue, setLiveValue] = useAtom(liveEditAtom);
   const [notionValue, setNotionValue] = useAtom(notionKeysAtom);
   const [showOtherValue, setShowOtherValue] = useAtom(showOtherFilesAtom);
+  const [exclude, setExclude] = useAtom(excludeAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -65,6 +69,8 @@ export function Settings() {
     showOtherValue,
     setShowOtherValue,
   );
+  // いま効いている数。書き方を間違えた行（空・覚書）が落ちるので、数で分かる。
+  const dropCount = useMemo(() => excludeRules(exclude).length, [exclude]);
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
   const updateStatus = useAtomValue(updateStatusAtom);
@@ -228,14 +234,34 @@ export function Settings() {
                     <span className="mg-set-row-main">
                       <span className="mg-set-row-name">Markdown 以外も並べる</span>
                       <span className="mg-set-note">
-                        画像・HTML・PDF をツリーに出す。切ると読み物だけの一覧になる（1
-                        枚だけ開く経路はどちらでも通る）
+                        画像・HTML・PDF と字で書かれたファイルをツリーに出す。切ると
+                        読み物だけの一覧になる（1 枚だけ開く経路はどちらでも通る）
                       </span>
                     </span>
                     <span className={`mg-switch${showOther ? " is-on" : ""}`}>
                       <i />
                     </span>
                   </button>
+
+                  <div className="mg-set-drop">
+                    <span className="mg-set-row-name">一覧から外すもの</span>
+                    <span className="mg-set-note">
+                      1 行に 1 つ。<code>log</code> のように拡張子だけでも、
+                      <code>*.min.js</code> のように <code>*</code>（任意の並び）と
+                      <code>?</code>（1 文字）でも書ける。<code>#</code> で始まる行は覚書
+                    </span>
+                    <AutoTextarea
+                      value={exclude}
+                      onChange={(e) => setExclude(e.target.value)}
+                      placeholder={"*.lock\nlog\n.DS_Store"}
+                      minRows={3}
+                      maxRows={10}
+                      spellCheck={false}
+                    />
+                    <span className="mg-set-note">
+                      {dropCount > 0 ? `${dropCount} 件で外しています` : "いまは何も外していません"}
+                    </span>
+                  </div>
                 </section>
               </>
             )}

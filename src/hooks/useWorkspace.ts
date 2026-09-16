@@ -1,6 +1,7 @@
 import { message } from "@tauri-apps/plugin-dialog";
 import { useStore, type getDefaultStore } from "jotai";
 import { useCallback, useRef } from "react";
+import { withExcluded } from "../lib/exclude";
 import { isViewable, kindOf } from "../lib/kind";
 import {
   buildTree,
@@ -105,9 +106,13 @@ function whenIdle(run: () => void) {
 
 type Store = ReturnType<typeof getDefaultStore>;
 
-// ツリーに出すもの。設定が切られていれば Markdown だけ並べる。
+// ツリーに出すもの。設定が切られていれば Markdown だけ並べる。そのうえで、
+// 設定で書いた分を外す。
 const shownFiles = (store: Store) =>
-  store.get(A.showOtherFilesAtom) ? isViewable : isMarkdown;
+  withExcluded(
+    store.get(A.showOtherFilesAtom) ? isViewable : isMarkdown,
+    store.get(A.excludeAtom),
+  );
 
 export function useWorkspace() {
   const store = useStore();

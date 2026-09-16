@@ -31,11 +31,15 @@ import {
   sidebarOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
+  excludeAtom,
   showOtherFilesAtom,
   fontAtom,
   themeAtom,
 } from "./state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "./state/review";
+
+// 外すものを書き換えてから、木を並べ直すまでの待ち。
+const EXCLUDE_WAIT = 400;
 
 export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
@@ -48,6 +52,7 @@ export default function App() {
   const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
   const showOther = useAtomValue(showOtherFilesAtom);
+  const exclude = useAtomValue(excludeAtom);
   const { refreshTreeStructure } = useWorkspace();
   const reviewOpen = useAtomValue(reviewScreenAtom);
   const versionFile = useAtomValue(versionScreenAtom);
@@ -81,6 +86,18 @@ export default function App() {
     filterWas.current = showOther;
     void refreshTreeStructure();
   }, [showOther, refreshTreeStructure]);
+
+  // 外すものを書き換えたときも並べ直す。打っている途中で走らせると 1 文字ごとに
+  // 木を読み直すので、手が止まってから動かす。
+  const excludeWas = useRef(exclude);
+  useEffect(() => {
+    if (excludeWas.current === exclude) return;
+    const wait = window.setTimeout(() => {
+      excludeWas.current = exclude;
+      void refreshTreeStructure();
+    }, EXCLUDE_WAIT);
+    return () => window.clearTimeout(wait);
+  }, [exclude, refreshTreeStructure]);
 
   // ドラッグ&ドロップの取りこぼしで WebView が既定動作（ドロップされたパスへ
   // ナビゲーション→リロード＝画面全体が真っ白）になるのを全域で抑止する。

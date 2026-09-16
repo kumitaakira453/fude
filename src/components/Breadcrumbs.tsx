@@ -13,9 +13,10 @@ import {
   readLevel,
   type TreeNode,
 } from "../lib/fsAccess";
+import { withExcluded } from "../lib/exclude";
 import { isViewable } from "../lib/kind";
 import { revealInTree } from "../lib/ui";
-import { showOtherFilesAtom, treeAtom } from "../state/atoms";
+import { excludeAtom, showOtherFilesAtom, treeAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 // ヘッダーの道筋。区切りを押すと、その階層がツリーとして開く。
@@ -64,7 +65,12 @@ export function Breadcrumbs({
   const tree = useAtomValue(treeAtom);
   const { openFile, openDoc } = useWorkspace();
   // 一覧に出すものは設定に合わせる。木と同じ見え方にする。
-  const show = useAtomValue(showOtherFilesAtom) ? isViewable : isMarkdown;
+  const other = useAtomValue(showOtherFilesAtom);
+  const exclude = useAtomValue(excludeAtom);
+  const show = useMemo(
+    () => withExcluded(other ? isViewable : isMarkdown, exclude),
+    [other, exclude],
+  );
   // 1 枚だけのときに読み込んだ階層。道筋（絶対パス）から引く。
   const [level, setLevel] = useState<Map<string, TreeNode[]>>(new Map());
   const navRef = useRef<HTMLDivElement>(null);
