@@ -8,6 +8,7 @@ import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
 import {
   anchorThreads,
+  posOfAnchor,
   sectionPathTo,
   targetOfBlock,
   targetOfSpan,
@@ -399,5 +400,26 @@ describe("箇条書きの項目を対象にする", () => {
     expect(
       targetOfSpan(state.doc, loaded, "", span.from, span.to)?.text,
     ).toBe("みつめ");
+  });
+});
+
+describe("posOfAnchor", () => {
+  it("その id を持つ見出しの位置を返す", () => {
+    const { state } = opened("## h1\n\n### h2\n\n本文\n\n### h23\n");
+    const doc = state.doc;
+    expect(posOfAnchor(doc, "h1")).toBe(0);
+    expect(posOfAnchor(doc, "h2")).toBe(posOf(doc, 1));
+    expect(posOfAnchor(doc, "h23")).toBe(posOf(doc, 3));
+  });
+
+  it("同じ見出しが並ぶときは、描くときと同じ連番で引く", () => {
+    const { state } = opened("## 版\n\nあ\n\n## 版\n");
+    expect(posOfAnchor(state.doc, "版")).toBe(0);
+    expect(posOfAnchor(state.doc, "版-1")).toBe(posOf(state.doc, 2));
+  });
+
+  it("無い見出しは null", () => {
+    const { state } = opened("## h1\n");
+    expect(posOfAnchor(state.doc, "無い")).toBeNull();
   });
 });

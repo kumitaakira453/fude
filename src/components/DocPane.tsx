@@ -77,7 +77,8 @@ import {
   rememberViewpoint,
   viewKey,
 } from "../lib/viewpoint";
-import { landOn } from "../lib/anchors";
+import { land as land0, landOn } from "../lib/anchors";
+import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import {
   readingMarks,
@@ -1201,14 +1202,23 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     (id: string) => {
       landRef.current?.();
       landing.current = true;
-      // 出ている面へ寄せる。編集中は編集面が本文を持っている。
-      const paper = editing ? editContent : content;
-      if (!paper || !id) return;
-      landRef.current = landOn(paper, id, () =>
+      if (!id) return;
+      // 編集中は編集面が本文を持っている。編集面の見出しには id が無いので、
+      // 字から位置を引いて寄せる（読む面は rehype-slug が振った id で引く）。
+      if (editing) {
+        const view = pm?.view;
+        const at = view && !view.isDestroyed ? posOfAnchor(view.state.doc, id) : null;
+        const dom = at === null || !view ? null : view.nodeDOM(at);
+        if (dom instanceof HTMLElement) land0(dom);
+        else notify(store, "その見出しは見つかりません");
+        return;
+      }
+      if (!content) return;
+      landRef.current = landOn(content, id, () =>
         notify(store, "その見出しは見つかりません"),
       );
     },
-    [content, editContent, editing, store],
+    [content, editing, pm, store],
   );
   useEffect(() => () => landRef.current?.(), []);
 
