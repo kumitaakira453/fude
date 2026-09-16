@@ -4082,9 +4082,6 @@ svg[id^="mmd-"] foreignObject p {
 .mg-change-side.is-head {
   border-left-color: color-mix(in srgb, var(--mg-add-fg) 55%, transparent);
 }
-.mg-change-side .mg-spot-side-head {
-  color: var(--mg-del-fg);
-}
 /* 前と後ろの間。詰め切ると 1 つの塊に見える。 */
 .mg-change-side.is-base + .mg-change-side.is-head {
   margin-top: 0.4rem;

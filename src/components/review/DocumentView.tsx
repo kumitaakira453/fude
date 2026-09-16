@@ -288,11 +288,9 @@ export function DocumentView({
             {isSpot && <Tag state={spot.state} added={0} removed={0} />}
             {change && <ChangeHead kind={change.kind} answered={answered} />}
             {change && change.before !== null && (
+              // どちらが前でどちらが後かは、左の罫の色と字に付いた印が言う。
+              // 静かな組なので、そこへ語を足すと行数ばかり増える。
               <section className="mg-change-side is-base">
-                <header className="mg-spot-side-head">
-                  <Icon name="remove" size={13} />
-                  コメント時点
-                </header>
                 <div data-diff-side="base">
                   <div
                     className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
