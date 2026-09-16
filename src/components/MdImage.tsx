@@ -56,7 +56,7 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
       title={title}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="mx-auto my-4 max-w-full rounded-lg shadow-md"
+      className="mx-auto my-4 max-w-full rounded shadow-md"
     />
   );
 

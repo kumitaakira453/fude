@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { EditorState } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { loneImages, nodeViews } from "./nodeViews";
+import { afterImage, loneImages, nodeViews } from "./nodeViews";
 import { toMarkdown } from "./toMarkdown";
 
 // 画像のキャプション。Markdown の代替テキスト（![ここ](src)）そのもの。
@@ -204,5 +204,53 @@ describe("絵だけの塊の印", () => {
     const at = editor("![](./images/図解.png)\n");
     at.view.dispatch(at.view.state.tr.delete(0, at.view.state.doc.content.size));
     expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
+  });
+});
+
+describe("絵の直後のカーソル", () => {
+  // 絵は塊のように描くので、絵の後ろは「次の行」に見える。そこに字を打つと
+  // 本文では絵と同じ段落へ入り、見た目と食い違う（スラッシュの小窓も開かない）。
+  function withPlugin(body: string) {
+    const loaded = fromMarkdown(body);
+    const place = document.createElement("div");
+    document.body.appendChild(place);
+    const view = new EditorView(place, {
+      state: EditorState.create({ doc: loaded.doc, plugins: [afterImage] }),
+    });
+    open = { view, place };
+    return view;
+  }
+
+  const put = (view: EditorView, at: number) =>
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(at))));
+
+  it("絵の後ろへ置いたら、次の行の先頭へ送る", () => {
+    const view = withPlugin("![](./images/図解.png)\n\n次\n");
+    put(view, 2);
+    const { $head } = view.state.selection;
+    expect($head.parent.textContent).toBe("次");
+    expect($head.parentOffset).toBe(0);
+  });
+
+  it("下に行が無ければ、新しい行を起こす", () => {
+    const view = withPlugin("![](./images/図解.png)\n");
+    put(view, 2);
+    expect(view.state.doc.childCount).toBe(2);
+    expect(view.state.selection.$head.parent.type.name).toBe("paragraph");
+    expect(view.state.selection.$head.parent.content.size).toBe(0);
+  });
+
+  it("絵の前は触らない（前に書き足せる場所を潰さない）", () => {
+    const view = withPlugin("![](./images/図解.png)\n\n次\n");
+    put(view, 1);
+    expect(view.state.selection.$head.parentOffset).toBe(0);
+    expect(view.state.selection.$head.parent.firstChild?.type.name).toBe("image");
+  });
+
+  it("字と混ざっている段落は触らない", () => {
+    const view = withPlugin("前 ![](./images/図解.png)\n");
+    const size = view.state.doc.content.size;
+    put(view, size - 1);
+    expect(view.state.doc.content.size).toBe(size);
   });
 });
