@@ -52,6 +52,7 @@ import {
   BAR,
   BOTH,
   firstLine,
+  HEAD_ROW,
   GRIP,
   indentStep,
   itemAtY,
@@ -449,10 +450,17 @@ export function EditorGutter({
             : null,
         // 1 行目の字に合わせる。測れないもの（図・区切り線など）は、上端から
         // 半行下げた高さで代わりにする。
+        //
+        // どちらも上端から 1 行ぶんまでに抑える。表や絵のような背の高い塊で
+        // 下がると、つまみが本文の横で真ん中に浮き、何を掴むのか読めない。
         line: (() => {
+          const top = box.top - base.top;
+          const lift = Math.min(lineHeight(hit.el), box.height, HEAD_ROW) / 2;
           const head = firstLine(hit.el);
-          if (head && head.height > 0) return head.top - base.top + head.height / 2;
-          return box.top - base.top + Math.min(lineHeight(hit.el), box.height) / 2;
+          if (head && head.height > 0) {
+            return Math.min(head.top - base.top + head.height / 2, top + lift);
+          }
+          return top + lift;
         })(),
         table: geo
           ? {

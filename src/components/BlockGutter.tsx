@@ -16,6 +16,7 @@ import {
   itemEdgeOf,
   itemLine,
   lineHeight,
+  HEAD_ROW,
   ONLY,
   relative,
   tableBands,
@@ -366,7 +367,8 @@ export function BlockGutter({
             : null,
         // ブロックの上端から半行下げる。行箱を直に測ると、コールアウトのように
         // 中に別の箱を抱えるブロックで見当違いの行に付く。
-        y: box.top - base.top + Math.min(lineHeight(hit.el), box.height) / 2,
+        // 上端から 1 行ぶんまで。背の高い塊（表・絵）で真ん中に浮かせない。
+        y: box.top - base.top + Math.min(lineHeight(hit.el), box.height, HEAD_ROW) / 2,
         room,
         table: null,
         row: null,

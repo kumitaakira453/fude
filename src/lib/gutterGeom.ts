@@ -25,6 +25,9 @@ export const EDGE = 26;
 export const ADD = 14;
 // 帯を表から離す幅。触れると罫線と一本に見え、離すとどの表のものか読みにくい。
 export const ADD_AWAY = 4;
+// つまみを塊の上端から下げられる幅の上限（1 行ぶん）。表や絵のように背の
+// 高い塊では、行の高さで測ると真ん中まで下がってしまう（Notion は上端）。
+export const HEAD_ROW = 40;
 // つまみ 2 つ分（挿入 + 掴み）と、掴みだけのときに要る左の余白。
 export const BOTH = GRIP * 2 + 4 + AWAY;
 export const ONLY = GRIP + AWAY;

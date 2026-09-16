@@ -159,4 +159,17 @@ describe("相手を隠さない置き場所", () => {
     open(three, () => {}, undefined, 50);
     expect(topOf()).toBe(50);
   });
+
+  it("画面の上へははみ出さない（背の高い相手でも）", () => {
+    // 絵のように背の高い塊を、画面の上の方で押したとき。
+    open(three, () => {}, { top: -200, bottom: 400 }, -120);
+    expect(topOf()).toBe(8);
+  });
+
+  it("画面の下へもはみ出さない", () => {
+    const tall = window.innerHeight;
+    open(three, () => {}, { top: -200, bottom: tall + 200 }, tall - 10);
+    // 3 行ぶん（116）と余白が入る高さまでで止める。
+    expect(topOf()).toBe(tall - 116 - 8);
+  });
 });

@@ -529,11 +529,15 @@ class ImageView implements NodeView {
     bar.className = "mg-img-bar not-prose";
     bar.contentEditable = "false";
 
+    // 記号だけだと何をするのか読めない。字を添える（出るのはホバーの間だけ）。
     const add = (name: string, title: string, run: () => void) => {
       const button = document.createElement("button");
       button.type = "button";
       button.title = title;
-      button.appendChild(icon(name, 16));
+      button.appendChild(icon(name, 15));
+      const label = document.createElement("span");
+      label.textContent = title;
+      button.appendChild(label);
       button.addEventListener("mousedown", (event) => event.preventDefault());
       button.addEventListener("click", run);
       bar.appendChild(button);
@@ -576,7 +580,9 @@ class ImageView implements NodeView {
     el.alt = this.alt;
     if (this.title) el.title = this.title;
     el.loading = "lazy";
-    el.className = "my-4 max-w-full rounded-lg shadow-md";
+    // 上下の余白は入れ物（.mg-img-body）が持つ。絵そのものに付けると、
+    // 絵にぴったり付けたい帯やつまみが、その余白のぶんだけ浮く。
+    el.className = "max-w-full rounded-lg shadow-md";
 
     // 帯は絵にぴったり付ける。入れ物に付けると、幅の狭い絵では離れて浮く。
     const hold = document.createElement("span");

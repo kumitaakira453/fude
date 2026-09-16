@@ -164,7 +164,8 @@ function placeY(
   rows: number,
 ): number {
   const height = rows * ROW + 20;
-  const fit = Math.min(y, window.innerHeight - height - 20);
+  // 画面からはみ出さない。上にぶつかるなら、できる限り上で止める。
+  const fit = Math.max(EDGE, Math.min(y, window.innerHeight - height - EDGE));
   if (!avoid || avoid.bottom - avoid.top >= height) return fit;
   const below = avoid.bottom + GAP;
   if (below + height <= window.innerHeight - EDGE) return below;
