@@ -512,7 +512,10 @@ export const slashKey = new PluginKey<SlashState | null>("slash");
 // コードの塊の中では邪魔しない。
 function canOpen(state: EditorState): boolean {
   const { $from, empty } = state.selection;
-  if (!empty || $from.parentOffset !== 0) return false;
+  if (!empty) return false;
+  // 前に字が無ければ先頭とみなす。絵のような行内の塊は数えない（絵は塊の
+  // ように描かれるので、その下の行に見える位置が同じ段落の中にある）。
+  if ($from.parent.textBetween(0, $from.parentOffset) !== "") return false;
   const type = $from.parent.type;
   return type === schema.nodes.paragraph || type === schema.nodes.heading;
 }

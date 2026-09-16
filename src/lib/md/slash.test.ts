@@ -689,3 +689,23 @@ describe("並びどうしの付け替え", () => {
     expect(change("- [ ] あ\n", "todo").can).toBe(false);
   });
 });
+
+describe("絵の直後で開く", () => {
+  // 絵は塊のように描くので、絵の後ろは「次の行」に見える。そこで打った "/" は
+  // 段落の先頭ではないが、字は 1 つも無いので先頭とみなす。
+  const at = (md: string, pos: number) => {
+    const view = editor(md);
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
+    type(view, "/");
+    return view;
+  };
+
+  it("絵だけが前にあるなら開く", () => {
+    // 段落の始まり(0) + 画像(1) = 2 が絵の直後。
+    expect(state(at("![](./a.png)\n", 2))).not.toBe(null);
+  });
+
+  it("字が前にあるときは開かない（URL や道筋を邪魔しない）", () => {
+    expect(state(at("http:\n", 6))).toBe(null);
+  });
+});
