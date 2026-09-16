@@ -22,6 +22,7 @@ import { setNotionKeys } from "./lib/md/inputRules";
 import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useWorkspace } from "./hooks/useWorkspace";
+import { watchDragScroll } from "./lib/dragScroll";
 import { folderDisplayName } from "./lib/idb";
 import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
 import { setWindowTitle } from "./lib/windows";
@@ -111,6 +112,10 @@ export default function App() {
       window.removeEventListener("drop", prevent);
     };
   }, []);
+
+  // 掴んだまま端へ寄ったら面を送る。無いと、運べる範囲がそのとき画面に出て
+  // いる分に限られる。
+  useEffect(() => watchDragScroll(), []);
 
   // リンククリックの安全ネット: 未処理の外部リンクは opener で開き、
   // それ以外のナビゲーション（生HTML内の相対リンク等）は抑止して
