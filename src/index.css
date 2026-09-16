@@ -2176,7 +2176,7 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details-mark::before {
   background: currentColor;
   clip-path: polygon(0 5px, 8px 11px, 0 17px);
-  transition: transform 120ms ease;
+  transition: clip-path 120ms ease;
 }
 .mg-pm .mg-details-mark {
   cursor: pointer;
@@ -2209,9 +2209,13 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details[data-level="4"] > .mg-details-mark {
   top: calc(1px - var(--mg-mark-lift));
 }
+/* 開いた三角も形として書く。回して作ると、箱の中心が軸になるぶんだけ印が
+   右上へずれる（左端に寄せた三角を回すと、横 8 と縦 12 が入れ替わるため、
+   左端を揃えることと縦の中央を保つことは両立しない）。
+   頂点は回した後の対応で並べてあるので、移り変わりは回転として見える。 */
 .mg-prose details[open] > summary::before,
 .mg-pm .mg-details:not(.is-closed) > .mg-details-mark::before {
-  transform: rotate(90deg);
+  clip-path: polygon(12px 7px, 6px 15px, 0 7px);
 }
 @media (prefers-reduced-motion: reduce) {
   .mg-prose summary::before,

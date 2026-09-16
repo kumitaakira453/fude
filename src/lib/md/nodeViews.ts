@@ -733,9 +733,6 @@ class DetailsView implements NodeView {
     this.mark = document.createElement("button");
     this.mark.type = "button";
     this.mark.className = "mg-details-mark";
-    this.mark.title = "折りたたむ";
-    this.mark.setAttribute("aria-label", "折りたたむ");
-    this.mark.setAttribute("aria-expanded", "true");
     this.mark.contentEditable = "false";
     this.mark.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -757,6 +754,9 @@ class DetailsView implements NodeView {
   private show() {
     this.dom.classList.toggle("is-closed", !this.open);
     this.mark.setAttribute("aria-expanded", String(this.open));
+    const label = this.open ? "折りたたむ" : "広げる";
+    this.mark.title = label;
+    this.mark.setAttribute("aria-label", label);
   }
 
   // 三角は題の 1 行目の中央に置く。行の高さは見出しの段で変わるので、段を
