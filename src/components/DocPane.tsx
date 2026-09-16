@@ -44,6 +44,7 @@ import {
   draftAskAtom,
   draftsDirAtom,
   freshFileAtom,
+  imageDirAtom,
   liveEditAtom,
   metaOpenAtom,
   paletteOpenAtom,
@@ -64,6 +65,7 @@ import { MetaModal } from "./meta/MetaModal";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
+import { cleanDir, stow, type Incoming } from "../lib/images";
 import { kindOf } from "../lib/kind";
 import { BodyEditor, type Editing } from "./BodyEditor";
 import { HtmlDoc } from "./HtmlDoc";
@@ -308,6 +310,26 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       }
     },
     [absOf, path, settled, store],
+  );
+
+  // 落とされた / 貼られた画像を取り込む。置き場所は設定で決めた名前の
+  // フォルダで、文書と同じところに作る。
+  const imageDir = useAtomValue(imageDirAtom);
+  const stowImage = useCallback(
+    async (incoming: Incoming): Promise<string | null> => {
+      const abs = path ? absOf(path) : null;
+      if (!abs) {
+        notify(store, "画像を置く場所が決まっていません");
+        return null;
+      }
+      try {
+        return await stow(abs, cleanDir(imageDir), incoming);
+      } catch {
+        notify(store, "画像を取り込めませんでした");
+        return null;
+      }
+    },
+    [absOf, imageDir, path, store],
   );
 
   const sole = useAtomValue(soleAtom);
@@ -1584,6 +1606,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 if (path) autoSave(path, next);
               }}
               onSave={onCmdS}
+              onStow={stowImage}
               flushRef={flushRef}
               adoptRef={adoptRef}
               fontFamily={fontStack(font)}

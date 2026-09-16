@@ -124,6 +124,8 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
 // 一覧から外す名前。1 行に 1 つ、しるし付き（glob）で書く。書き方は lib/exclude。
 export const excludeAtom = atomWithStorage<string>("mdglow:exclude", "");
+// 取り込んだ画像の置き場所。文書と同じところに、この名前のフォルダを作る。
+export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images");
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
 // （`>` は引用）から外れるので、入れた人にだけ効かせる。
 export const notionKeysAtom = atomWithStorage<boolean>("mdglow:notionkeys", false);

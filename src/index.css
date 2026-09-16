@@ -1700,7 +1700,8 @@ button.mg-task-check:hover {
   gap: 0.3rem;
   padding: 0.5rem 0.7rem 0.6rem;
 }
-.mg-set-drop textarea {
+.mg-set-drop textarea,
+.mg-set-drop input {
   width: 100%;
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--mg-border);
@@ -1714,10 +1715,12 @@ button.mg-task-check:hover {
   resize: none;
   transition: border-color 0.12s ease;
 }
-.mg-set-drop textarea:focus {
+.mg-set-drop textarea:focus,
+.mg-set-drop input:focus {
   border-color: var(--mg-accent);
 }
-.mg-set-drop textarea::placeholder {
+.mg-set-drop textarea::placeholder,
+.mg-set-drop input::placeholder {
   color: var(--mg-muted);
 }
 .mg-set-drop code {

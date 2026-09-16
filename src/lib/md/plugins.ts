@@ -26,6 +26,7 @@ import { rules } from "./inputRules";
 import { anchors } from "./anchors";
 import { emojiMenu } from "./emoji";
 import { editingMark } from "./editing";
+import { imageDrops, type ImageGoes } from "./imageDrop";
 import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
@@ -985,10 +986,13 @@ const realKeys = (map: Record<string, Command>): Plugin => {
 export function editorPlugins({
   onSave,
   links,
+  images,
 }: {
   onSave: () => void;
   // リンクを押したときの行き先。渡さなければ押下は素通り（試験など）。
   links?: LinkGoes;
+  // 持ち込まれた画像の取り込み先。渡さなければ落とす・貼るは素通り。
+  images?: ImageGoes;
 }): Plugin[] {
   const item = schema.nodes.listItem;
   const typed = inputRules({ rules });
@@ -997,6 +1001,8 @@ export function editorPlugins({
   return [
     history(),
     ...(links ? [linkClicks(links)] : []),
+    // 画像の持ち込みは、字としての貼り付けより先に見る。
+    ...(images ? [imageDrops(images)] : []),
     pasteMarkdown,
     // 貼ったものの印を、貼り先の項目にそろえる。
     pasteInto,

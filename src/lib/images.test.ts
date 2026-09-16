@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { absFrom, adopt, freeName, imageName, stow } from "./images";
+import { absFrom, adopt, cleanDir, freeName, imageName, stow } from "./images";
 
 // 画像を取り込むところ。保存先と名前の決め方を見る。
 //
@@ -82,6 +82,24 @@ describe("imageName", () => {
 
   it("区切りの字は落とす", () => {
     expect(imageName({ bytes, name: "a:b.png", mime: null }, NOW)).toBe("ab.png");
+  });
+});
+
+describe("cleanDir", () => {
+  it("そのまま使える名前は触らない", () => {
+    expect(cleanDir("images")).toBe("images");
+    expect(cleanDir("素材/図")).toBe("素材/図");
+  });
+
+  it("空にしたら既定へ戻す", () => {
+    expect(cleanDir("")).toBe("images");
+    expect(cleanDir("   ")).toBe("images");
+    expect(cleanDir("/")).toBe("images");
+  });
+
+  it("文書のあるところより外は指させない", () => {
+    expect(cleanDir("../外")).toBe("外");
+    expect(cleanDir("/tmp/images")).toBe("tmp/images");
   });
 });
 

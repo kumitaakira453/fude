@@ -5,11 +5,13 @@ import { createPortal } from "react-dom";
 import { useOptimisticSetting } from "../hooks/useOptimisticSetting";
 import { excludeRules } from "../lib/exclude";
 import { FONTS } from "../lib/fonts";
+import { cleanDir, DEFAULT_DIR } from "../lib/images";
 import { THEMES } from "../lib/themes";
 import {
   editorialAtom,
   excludeAtom,
   fontAtom,
+  imageDirAtom,
   liveEditAtom,
   notionKeysAtom,
   readingWidthAtom,
@@ -55,6 +57,7 @@ export function Settings() {
   const [notionValue, setNotionValue] = useAtom(notionKeysAtom);
   const [showOtherValue, setShowOtherValue] = useAtom(showOtherFilesAtom);
   const [exclude, setExclude] = useAtom(excludeAtom);
+  const [imageDir, setImageDir] = useAtom(imageDirAtom);
   // 押した瞬間に選択状態を切り替える（反映に伴う再描画を待たせない）
   const [theme, setTheme] = useOptimisticSetting(themeValue, setThemeValue);
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
@@ -261,6 +264,20 @@ export function Settings() {
                     <span className="mg-set-note">
                       {dropCount > 0 ? `${dropCount} 件で外しています` : "いまは何も外していません"}
                     </span>
+                  </div>
+
+                  <div className="mg-set-drop">
+                    <span className="mg-set-row-name">取り込んだ画像の置き場所</span>
+                    <span className="mg-set-note">
+                      貼った画像・落とした画像は、文書と同じところに作ったこの名前の
+                      フォルダへ入る。本文には <code>./{cleanDir(imageDir)}/…</code> として書かれる
+                    </span>
+                    <input
+                      value={imageDir}
+                      onChange={(e) => setImageDir(e.target.value)}
+                      placeholder={DEFAULT_DIR}
+                      spellCheck={false}
+                    />
                   </div>
                 </section>
               </>

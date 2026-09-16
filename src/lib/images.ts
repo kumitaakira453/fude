@@ -80,6 +80,20 @@ export function absFrom(docAbs: string, input: string): string {
   return stack.join("/");
 }
 
+// 設定に打たれたフォルダ名を、置き場所として使える形に均す。
+//
+// 文書のあるところより外は指させない。空にしたときは既定へ戻す（画像だけが
+// 文書と同じ階層に散らばるのを避ける）。
+export const DEFAULT_DIR = "images";
+
+export function cleanDir(name: string): string {
+  const parts = name
+    .split("/")
+    .map((seg) => usable(seg))
+    .filter((seg) => seg !== "" && seg !== "." && seg !== "..");
+  return parts.join("/") || DEFAULT_DIR;
+}
+
 // 画像の置き場所。文書と同じところの、設定で決めたフォルダ。
 function homeOf(docAbs: string, dirName: string): string {
   return `${dirOf(docAbs)}/${dirName}`;
@@ -120,12 +134,25 @@ export async function adopt(
   return `./${dirName}/${name}`;
 }
 
-// 持ち込みの中から画像だけを取り出す。字や他の種別のファイルは拾わない。
-export async function imagesIn(data: DataTransfer | null): Promise<Incoming[]> {
-  const files = Array.from(data?.files ?? []);
-  const shots = files.filter((f) => f.type.startsWith("image/") || isImage(f.name));
+// 持ち込み（落としたもの・写したもの）。DataTransfer と DataTransferList が
+// どちらも当てはまる形で受ける。
+export interface Held {
+  files: FileList | File[];
+}
+
+// 持ち込みの中の画像。字や他の種別のファイルは拾わない。
+//
+// 落とした / 貼った瞬間に「受けるかどうか」を決める必要があるので、ここは
+// 待ちを挟まない。中身を読むのは受けると決めたあと。
+export function imageFiles(data: Held | null): File[] {
+  return Array.from(data?.files ?? []).filter(
+    (f) => f.type.startsWith("image/") || isImage(f.name),
+  );
+}
+
+export async function readIncoming(files: File[]): Promise<Incoming[]> {
   return Promise.all(
-    shots.map(async (file) => ({
+    files.map(async (file) => ({
       bytes: new Uint8Array(await file.arrayBuffer()),
       name: file.name || null,
       mime: file.type || null,
