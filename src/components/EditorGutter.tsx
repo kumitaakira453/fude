@@ -316,6 +316,7 @@ export function EditorGutter({
   host,
   scroller,
   onComment,
+  onCopyLink,
 }: {
   view: EditorView;
   host: HTMLElement;
@@ -323,6 +324,8 @@ export function EditorGutter({
   // 指摘する。ブロック丸ごとなら pos だけ、箇条書きの項目のように中の一部を
   // 相手にするなら範囲も渡す。渡されたときだけメニューに出す。
   onComment?: (pos: number, span?: { from: number; to: number }) => void;
+  // その塗を指すリンクを写す。行き先は位置から出す。
+  onCopyLink?: (pos: number) => void;
 }) {
   // 層の置き場所。React が描いている入れ物へ直に差すと、ファイルを
   // 切り替えたときに片付けの順で落ちる（useLayerHost の説明）。
@@ -995,8 +998,18 @@ export function EditorGutter({
           },
         ]
       : [];
+    const link: MenuItem[] = onCopyLink
+      ? [
+          {
+            icon: "link",
+            label: "リンクをコピー",
+            run: () => onCopyLink(where.pos),
+          },
+        ]
+      : [];
     return [
       ...comment,
+      ...link,
       typeMenu(where.pos),
       { icon: "vertical_align_top", label: "上に挿入", run: act("insertBefore") },
       { icon: "vertical_align_bottom", label: "下に挿入", run: act("insertAfter") },

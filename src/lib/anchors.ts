@@ -33,16 +33,21 @@ function decode(id: string): string {
   }
 }
 
+// 見出しの字の並びから id を作る。順番に意味があるので、並びごと受ける
+// （同じ見出しが 2 度目に出たときに連番が付く）。
+export function slugsOf(texts: string[]): string[] {
+  const slugger = new GithubSlugger();
+  return texts.map((text) => slugger.slug(text.trim()));
+}
+
 // 文書の見出しに振られる id を、ブロック番号から引けるようにする。
 export function headingIds(blocks: Block[]): Map<number, string> {
-  const slugger = new GithubSlugger();
+  const heads = blocks.filter((b) => b.type === "heading");
+  const ids = slugsOf(heads.map((b) => buildProjection(b.src).plain));
   const out = new Map<number, string>();
-  for (const block of blocks) {
-    if (block.type !== "heading") continue;
-    const text = buildProjection(block.src).plain.trim();
-    if (!text) continue;
-    out.set(block.index, slugger.slug(text));
-  }
+  heads.forEach((block, i) => {
+    if (ids[i]) out.set(block.index, ids[i]);
+  });
   return out;
 }
 

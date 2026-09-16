@@ -52,6 +52,7 @@ import {
   toggleTaskNth,
 } from "../lib/blocks";
 import { useAtomValue } from "jotai";
+import { anchorAt } from "../lib/anchors";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { themeAtom } from "../state/atoms";
@@ -108,6 +109,7 @@ export function EditableBody({
   scroller,
   contentKey,
   onComment,
+  onCopyLink,
   onCommentItem,
   onCommentCell,
 }: {
@@ -120,6 +122,9 @@ export function EditableBody({
   contentKey?: string;
   // ブロック全体への指摘。選択の付け替えが要るので呼び出し側で行う。
   onComment?: (index: number) => void;
+  // その塗を指すリンクを写す。行き先（節の id）はここで出し、道筋の組み立てと
+  // 写しは呼び出し側が持つ。
+  onCopyLink?: (anchor: string | null) => void;
   // 箇条書きの項目への指摘。目印は描画側が持っているソースオフセット。
   onCommentItem?: (index: number, anchor: number) => void;
   // 表のセルへの指摘。目印はセルの中身が始まるソース上の位置。
@@ -799,6 +804,7 @@ export function EditableBody({
         contentKey={contentKey ?? ""}
         isTable={isTable}
         onComment={(index) => onComment?.(index)}
+        onCopyLink={(index) => onCopyLink?.(anchorAt(blocks, index))}
         onTableMove={moveTable}
         onTableAct={actOnTable}
         onTableAppend={appendTable}

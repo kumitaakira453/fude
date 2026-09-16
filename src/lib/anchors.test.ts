@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchorAt, headingIds, splitHref } from "./anchors";
+import { anchorAt, headingIds, slugsOf, splitHref } from "./anchors";
 import { splitBlocks } from "./blocks";
 
 // ページ内リンクの行き先。見出しの id は描くときに rehype-slug が振るので、
@@ -80,5 +80,19 @@ describe("anchorAt", () => {
 
   it("手前に見出しが無ければ null", () => {
     expect(anchorAt(splitBlocks("本文だけ。\n"), 0)).toBeNull();
+  });
+});
+
+describe("slugsOf", () => {
+  it("並びの順で id を作る", () => {
+    expect(slugsOf(["やり取り", "版"])).toEqual(["やり取り", "版"]);
+  });
+
+  it("同じ字が 2 度目に出たら連番を振る（描くときと同じ）", () => {
+    expect(slugsOf(["版", "他", "版", "版"])).toEqual(["版", "他", "版-1", "版-2"]);
+  });
+
+  it("前後の空白は落とす", () => {
+    expect(slugsOf(["  やり取り  "])).toEqual(["やり取り"]);
   });
 });

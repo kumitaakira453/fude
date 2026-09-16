@@ -15,6 +15,7 @@ import { parseAway } from "../lib/md/parseAway";
 import { GROW } from "../lib/md/grow";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { reload } from "../lib/md/reload";
+import { anchorTo } from "../lib/md/reviewAnchors";
 import {
   closeEmoji,
   emojiKey,
@@ -494,6 +495,7 @@ export function BodyEditor({
   onDom,
   onBuilt,
   onComment,
+  onCopyLink,
   onChange,
   onSave,
   flushRef,
@@ -523,6 +525,8 @@ export function BodyEditor({
   onBuilt?: (built: Editing | null) => void;
   // ブロック全体への指摘。つまみのメニューに出す。
   onComment?: (pos: number) => void;
+  // その塗を指すリンクを写す。行き先（節の id）はここで出す。
+  onCopyLink?: (anchor: string | null) => void;
   // 組み直した本文。打鍵ごとではなく、手を止めてから届く。
   onChange: (raw: string) => void;
   onSave: () => void;
@@ -1237,6 +1241,7 @@ export function BodyEditor({
           host={built.host}
           scroller={built.scroller}
           onComment={onComment}
+          onCopyLink={(pos) => onCopyLink?.(anchorTo(built.view.state.doc, pos))}
         />
       )}
       {picking && (

@@ -1206,6 +1206,22 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   );
   useEffect(() => () => landRef.current?.(), []);
 
+  // その塗を指すリンクを写す。貼る先がどこでも同じ場所を指すよう、フォルダの
+  // 根からの道筋で書く。見出しの外の塗は、その塗を含む節を指す（md には
+  // 見出しにしか id が無い）。
+  const copyLink = useCallback(
+    async (anchor: string | null) => {
+      if (!path) return;
+      const link = anchor ? `/${path}#${anchor}` : `/${path}`;
+      if (!(await copyText(link))) {
+        notify(store, "リンクを写せませんでした");
+        return;
+      }
+      notify(store, anchor ? `「${anchor}」へのリンクを写しました` : "ファイルへのリンクを写しました");
+    },
+    [path, store],
+  );
+
   // 別のファイルの節へのリンクで開かれたとき。自分のファイルの分だけ拾う。
   const pending = useAtomValue(pendingAnchorAtom);
   useEffect(() => {
@@ -1522,6 +1538,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 }
               }}
               onComment={commentOnNode}
+              onCopyLink={(anchor) => void copyLink(anchor)}
               onChange={(next) => {
                 setDraft(next);
                 if (path) autoSave(path, next);
@@ -1577,6 +1594,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                         scroller={scroller}
                         contentKey={path}
                         onComment={commentOnBlock}
+                        onCopyLink={(anchor) => void copyLink(anchor)}
                         onCommentItem={commentOnItem}
                         onCommentCell={commentOnCellAt}
                       />

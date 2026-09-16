@@ -43,6 +43,7 @@ import {
   newDraft as makeDraft,
 } from "../lib/drafts";
 import { splitHref } from "../lib/anchors";
+import { dirOf, resolvePath } from "../lib/paths";
 import { notify } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
@@ -64,23 +65,6 @@ function histFor(rel: string) {
     contentHistory.set(rel, h);
   }
   return h;
-}
-
-// path 正規化（. / .. を解決）。
-function resolvePath(baseDir: string, rel: string): string {
-  const cleanRel = rel.split("#")[0].split("?")[0];
-  const stack = baseDir ? baseDir.split("/") : [];
-  for (const seg of cleanRel.split("/")) {
-    if (seg === "" || seg === ".") continue;
-    if (seg === "..") stack.pop();
-    else stack.push(seg);
-  }
-  return stack.join("/");
-}
-
-function dirOf(path: string): string {
-  const i = path.lastIndexOf("/");
-  return i === -1 ? "" : path.slice(0, i);
 }
 
 function baseOf(path: string): string {

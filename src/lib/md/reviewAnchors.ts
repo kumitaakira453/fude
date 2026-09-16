@@ -7,6 +7,7 @@ import {
   stripMarkup,
   type Resolution,
 } from "../blockDiff";
+import { slugsOf } from "../anchors";
 import type { ReviewThread, ReviewUnit } from "../review";
 import type { Loaded } from "./fromMarkdown";
 import { schema } from "./schema";
@@ -103,6 +104,26 @@ function similar(parts: Part[], thread: ReviewThread): number {
   if (top < PRESENT) return -1;
   // ほぼ丸ごと含む節点が 2 つ以上あるときは決められない。
   return second >= PRESENT ? -1 : best;
+}
+
+// その位置を含む節の id。手前の見出しを遡って探す。
+//
+// 見出しの字から id を作るのは読む面と同じ道（slugsOf）。同じ順で回すので、
+// 同じ見出しが複数ある文書でも連番まで画面と一致する。
+export function anchorTo(doc: PmNode, pos: number): string | null {
+  const heads: { at: number; text: string }[] = [];
+  let at = 0;
+  for (let i = 0; i < doc.childCount; i++) {
+    const node = doc.child(i);
+    if (node.type.name === "heading") heads.push({ at, text: node.textContent });
+    at += node.nodeSize;
+  }
+  const ids = slugsOf(heads.map((h) => h.text));
+  let found: string | null = null;
+  heads.forEach((h, i) => {
+    if (h.at <= pos && ids[i]) found = ids[i];
+  });
+  return found;
 }
 
 // 指摘に持たせる見出しの道筋。手前の見出しの節点から組む。

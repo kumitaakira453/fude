@@ -171,6 +171,7 @@ export function BlockGutter({
   isTable,
   onEdit,
   onComment,
+  onCopyLink,
   onMove,
   onInsert,
   onDuplicate,
@@ -196,6 +197,8 @@ export function BlockGutter({
   isTable: (index: number) => boolean;
   onEdit: (index: number) => void;
   onComment: (index: number) => void;
+  // その塗を指すリンクを写す。
+  onCopyLink: (index: number) => void;
   onMove: (from: number, to: number) => void;
   onInsert: (index: number, side: "before" | "after") => void;
   onDuplicate: (index: number) => void;
@@ -801,6 +804,11 @@ export function BlockGutter({
               label: "編集する",
               keys: "⌘E",
               run: () => onEdit(menu.index),
+            },
+            {
+              icon: "link",
+              label: "リンクをコピー",
+              run: () => onCopyLink(menu.index),
             },
             {
               icon: "vertical_align_top",
