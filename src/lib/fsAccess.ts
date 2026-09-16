@@ -322,6 +322,14 @@ const IMG_MIME: Record<string, string> = {
 
 // 画像の拡張子（点なし）。ダイアログの絞り込みに使う。
 export const IMAGE_EXTENSIONS = Object.keys(IMG_MIME);
+
+// 種別から拡張子を引く。貼り付けた画像には名前が無いので、ここから補う。
+// 同じ種別に複数の綴りがあるもの（jpg / jpeg）は先に並べたほうを返す。
+export function extForMime(mime: string | null): string | null {
+  if (!mime) return null;
+  const want = mime.toLowerCase().split(";")[0].trim();
+  return IMAGE_EXTENSIONS.find((ext) => IMG_MIME[ext] === want) ?? null;
+}
 const imgCache = new Map<string, string>();
 
 export function peekImageUrl(abs: string): string | null {
