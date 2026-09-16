@@ -190,35 +190,34 @@ describe("絵の隣のカーソル", () => {
   const put = (view: EditorView, at: number) =>
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
 
-  it("絵の直後では棒を消し、絵に縁を出す", () => {
+  it("絵の直後では、その絵に印を出す", () => {
     const at = editor("![](./images/図解.png)\n");
     put(at.view, 2);
-    expect(at.view.dom.querySelector(".mg-no-caret")).not.toBeNull();
     expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
   });
 
   it("絵の直前でも同じ", () => {
     const at = editor("![](./images/図解.png)\n");
     put(at.view, 1);
-    expect(at.view.dom.querySelector(".mg-no-caret")).not.toBeNull();
+    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
   });
 
-  it("字と混ざっていても、絵の隣なら消す", () => {
+  it("字と混ざっていても、絵の隣なら付ける", () => {
     const at = editor("k![](./images/図解.png)\n");
     put(at.view, 2);
-    expect(at.view.dom.querySelector(".mg-no-caret")).not.toBeNull();
+    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
   });
 
-  it("絵から離れていれば、棒はそのまま", () => {
+  it("絵から離れていれば付けない", () => {
     const at = editor("k![](./images/図解.png)\n");
     put(at.view, 1);
-    expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
+    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
   });
 
   it("絵の無い塊では何もしない", () => {
     const at = editor("本文\n");
     put(at.view, 1);
-    expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
+    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
   });
 
   it("次の行へ移ったら印も外れる（持ち越さない）", () => {
@@ -227,7 +226,6 @@ describe("絵の隣のカーソル", () => {
     expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
     put(at.view, at.view.state.doc.content.size - 1);
     expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
-    expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
   });
 
   it("字を打って位置が動いたときも、印は今の場所に合う", () => {

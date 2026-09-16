@@ -127,6 +127,26 @@ export interface Editing {
 // いる・焦点が無い）。
 type Spot = { left: number; top: number; height: number } | "native" | "keep" | null;
 
+// その位置の行の高さ。棒の丈をこれで頭打ちにする。
+//
+// coordsAtPos は、絵のような塊を行内に抱えた位置では塊の丈で返る。そのまま
+// 描くと絵と同じ丈の棒が立ち、何を指しているのか読めない。
+function lineAt(view: EditorView, pos: number): number {
+  let el: Element | null = null;
+  try {
+    const at = view.domAtPos(pos).node;
+    el = at instanceof Element ? at : at.parentElement;
+  } catch {
+    el = null;
+  }
+  if (!el) return Infinity;
+  const style = getComputedStyle(el);
+  const line = parseFloat(style.lineHeight);
+  if (Number.isFinite(line) && line > 0) return line;
+  const size = parseFloat(style.fontSize);
+  return Number.isFinite(size) && size > 0 ? size * 1.6 : 24;
+}
+
 function caretBar(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
   bar.className = "mg-caret is-idle";
@@ -187,10 +207,13 @@ function caretBar(view: EditorView, host: HTMLElement) {
     // 場所を保つ。
     if (!at) return view.composing ? "keep" : "native";
     const box = host.getBoundingClientRect();
+    // 行の高さで頭打ちにし、下端にそろえる。素の字では測った丈がそのまま
+    // 行の高さなので、ここは何も変わらない。
+    const height = Math.min(at.bottom - at.top, lineAt(view, selection.head));
     return {
       left: at.left - box.left,
-      top: at.top - box.top,
-      height: at.bottom - at.top,
+      top: at.bottom - box.top - height,
+      height,
     };
   };
 

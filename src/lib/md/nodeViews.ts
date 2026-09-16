@@ -997,12 +997,10 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
 // 画像は行内の節点なので、絵だけの段落では行箱が絵の丈になり、カーソルも
 // その丈で立つ。塊そのものを block にすると Markdown の読み書きと貼り付けまで
 // 波及するので、印を付けて棒だけ消す。
-// 絵の隣に立つカーソルを消し、代わりに絵の縁で居場所を示す。
+// カーソルが絵の隣に居るあいだ、その絵に印を付ける。
 //
-// 画像は行内の節点だが塊のように描くので、その隣では行箱が絵の丈になり、
-// カーソルも絵と同じ丈で立つ。棒は消す。ただし何も出さないと、どこに居るのか
-// 読めず「空の行を消したつもり」で絵を消してしまう（消す前に選ばせる手当ては
-// あるが、居場所が見えること自体が要る）。
+// 画像は行内の節点だが塊のように描くので、棒だけでは「絵の隣に居る」ことが
+// 読み取りにくい。次の一打で絵が消えることに気付けるよう、絵の縁で示す。
 function imageMarks(state: EditorState): DecorationSet {
   const sel = state.selection;
   if (!sel.empty) return DecorationSet.empty;
@@ -1017,13 +1015,7 @@ function imageMarks(state: EditorState): DecorationSet {
         : -1;
   if (at < 0) return DecorationSet.empty;
 
-  const block = $head.before($head.depth);
-  const node = state.doc.nodeAt(block);
-  if (!node) return DecorationSet.empty;
-  return DecorationSet.create(state.doc, [
-    Decoration.node(block, block + node.nodeSize, { class: "mg-no-caret" }),
-    Decoration.node(at, at + 1, { class: "is-here" }),
-  ]);
+  return DecorationSet.create(state.doc, [Decoration.node(at, at + 1, { class: "is-here" })]);
 }
 
 // 状態に持ち越さない。見るのはカーソルの両隣だけなので毎回その場で決められる
