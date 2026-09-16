@@ -56,10 +56,11 @@ describe("原文の面", () => {
     expect(rows()).toBe(3);
   });
 
-  it("行番号は 1 から振る", () => {
+  it("行番号は節点として置かない", () => {
+    // 数え上げ（counter）で描く。節点として置くと、本文を選んだときに一緒に
+    // 選ばれて写した中身に混ざる。
     show("あ\nい");
-    const no = [...document.querySelectorAll(".mg-source-no")].map((el) => el.textContent);
-    expect(no).toEqual(["1", "2"]);
+    expect(document.querySelector(".mg-source")?.textContent).toBe("あい");
   });
 
   it("長いファイルは最初の分だけ出て、フレームごとに伸びる", () => {

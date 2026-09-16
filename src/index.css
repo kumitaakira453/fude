@@ -1205,6 +1205,7 @@ button.mg-task-check:hover {
   /* 折り返さない。折ると行番号と中身がずれて、原文の形が読めなくなる。 */
   white-space: pre;
   tab-size: 2;
+  counter-reset: mg-line;
 }
 .mg-source-line {
   display: flex;
@@ -1214,6 +1215,7 @@ button.mg-task-check:hover {
   min-height: 1.7em;
   width: max-content;
   min-width: 100%;
+  counter-increment: mg-line;
 }
 /* 番号は横に流しても左に残す。行を数えながら横へ辿れる。 */
 .mg-source-no {
@@ -1225,8 +1227,12 @@ button.mg-task-check:hover {
   background: var(--mg-code-bg);
   color: var(--mg-muted);
   text-align: right;
-  user-select: none;
   font-variant-numeric: tabular-nums;
+}
+/* 数字は字ではなく数え上げで描く。字として置くと、本文を選んだときに一緒に
+   選ばれ（user-select: none でも選びの帯は掛かる）、写した中身にも混ざる。 */
+.mg-source-no::before {
+  content: counter(mg-line);
 }
 .mg-source code {
   padding-right: 1.5rem;

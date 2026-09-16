@@ -29,7 +29,8 @@ export function SourceView({ code, lang }: { code: string; lang: string | null }
     <div className="mg-source">
       {lines.slice(0, limit).map((pieces, n) => (
         <div key={n} className="mg-source-line">
-          <span className="mg-source-no">{n + 1}</span>
+          {/* 番号は CSS の数え上げで描く（SourceView は中身を持たない）。 */}
+          <span className="mg-source-no" />
           <code>
             {pieces.map((piece, i) =>
               piece.cls ? (
