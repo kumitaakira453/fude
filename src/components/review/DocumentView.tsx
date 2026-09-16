@@ -3,7 +3,7 @@ import type { Block } from "../../lib/blocks";
 import { applyDiffMarks } from "../../lib/diffMarks";
 import { readBlockText, rangeAt } from "../../lib/domText";
 import { findPlain, findPlainLoose } from "../../lib/projection";
-import { SPOT_NAME, type SpotDiff } from "../../lib/spotDiff";
+import { SPOT_ICON, SPOT_NAME, type SpotDiff, type SpotState } from "../../lib/spotDiff";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
@@ -35,7 +35,6 @@ export function DocumentView({
   editorial,
   style,
   focusNonce,
-  focusAt,
   onSettled,
   selection,
 }: {
@@ -46,8 +45,6 @@ export function DocumentView({
   style: React.CSSProperties;
   // 増えるたびに指摘の箇所へ戻す。読み進めて見失ったときのための合図。
   focusNonce: number;
-  // 候補が複数あるときに、今どれを見ているか
-  focusAt: number;
   // 指摘のときに選ばれていた文字列。ブロックの中のどこかを示すのに使う。
   selection: string;
   // 対象の箇所を描いて、そこへ寄せ終わったときに 1 度だけ呼ぶ。
@@ -73,9 +70,8 @@ export function DocumentView({
   }, []);
 
   // 寄せ先。effect より前で決める（下の描画と、寄せ終わりの判定の両方で使う）。
+  // 決められなかった指摘には寄せ先が無い（近そうな塊へは寄せない）。
   const at = spot.state === "unknown" ? -1 : spot.index;
-  const maybe = spot.state === "unknown" ? spot.candidates : [];
-  const scrollTo = at >= 0 ? at : (maybe[focusAt] ?? maybe[0] ?? -1);
   // コメント時点と並べて出す状態。箇所が今の本文に残っているものだけ。
   const paired =
     (spot.state === "rewritten" || spot.state === "around") && spot.before !== null;
@@ -83,18 +79,12 @@ export function DocumentView({
   // 何を見ているかは中身で表す。配列やオブジェクトの同一性で見張ると、
   // 中身が同じでも作り直されるたびに先頭へ巻き戻ってしまう。
   const total = blocks.length;
-  const spotKey =
-    spot.state === "unknown"
-      ? `unknown:${spot.candidates.join(",")}`
-      : `${spot.state}:${spot.index}`;
+  const spotKey = `${spot.state}:${spot.index}`;
 
   // 最初の描画に対象を含める。ブロックの位置は前にあるものの高さで決まるので、
   // 対象へ寄せるには結局そこまで描くしかない。先頭から少しずつ足していくと、
   // 対象が後半にあるほど到達が遅れ、待ち時間がそのぶん伸びる。1 回で描き切る。
-  const opening = Math.min(
-    total,
-    Math.max(FIRST_CHUNK, (at >= 0 ? at : (maybe[0] ?? -1)) + 1 + FIRST_CHUNK),
-  );
+  const opening = Math.min(total, Math.max(FIRST_CHUNK, at + 1 + FIRST_CHUNK));
 
   // 残りは後から足す。始めから終わりまでを 1 つの effect が持つ。
   // 「足す」と「先頭に戻す」を別々の effect に分けると、片方が進めた直後に
@@ -169,18 +159,18 @@ export function DocumentView({
     // 対象がまだ描かれていないうちに知らせると、移動前に読み込み中の表示が
     // 消えてしまう。描かれた回で初めて知らせる。対象が無いときは待たせない。
     if (settledRef.current) return;
-    if (scrollTo < 0 || limit > scrollTo) {
+    if (at < 0 || limit > at) {
       settledRef.current = true;
       onSettled?.();
     }
-  }, [limit, spotKey, marked, focus, scrollTo, onSettled]);
+  }, [limit, spotKey, marked, focus, at, onSettled]);
 
   // 頼まれたら戻す。自分でスクロールしていても、このときだけは動かす。
   useEffect(() => {
     if (focusNonce === 0) return;
     touchedRef.current = true; // 戻したあとは、また自由にスクロールできる
     focus("smooth");
-  }, [focusNonce, focusAt, focus]);
+  }, [focusNonce, focus]);
 
   if (blocks.length === 0) {
     return <p className="text-[12px] text-[var(--mg-muted)]">この文書は空です。</p>;
@@ -193,10 +183,9 @@ export function DocumentView({
       {shown.map((block, i) => {
         const gone = i === at && spot.state === "removed";
         const isSpot = i === at && !gone;
-        const rank = maybe.indexOf(i);
         // 寄せる先は目印そのもの。組の外側に付けると、コメント時点の段が
         // 長いときに今の本文が画面の下へ押し出されてしまう。
-        const isTarget = i === scrollTo;
+        const isTarget = i === at;
         const now = (
           <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
             <Markdown body={block.src} editorial={editorial} />
@@ -204,22 +193,25 @@ export function DocumentView({
         );
         if (isSpot && paired && spot.before !== null) {
           return (
-            <div
-              key={block.index}
-              className="mg-spot-pair"
-              data-label={SPOT_NAME[spot.state]}
-              data-diff-pair=""
-            >
-              <Was
-                src={spot.before}
-                removed={spot.removed}
-                editorial={editorial}
-                style={style}
-              />
+            <div key={block.index} className="mg-spot-pair" data-diff-pair="">
+              <Tag state={spot.state} added={spot.added} removed={spot.removed} />
+              <section className="mg-spot-side is-base">
+                <header className="mg-spot-side-head">
+                  <Icon name="remove" size={13} />
+                  コメント時点
+                </header>
+                <div data-diff-side="base">
+                  <div
+                    className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
+                    style={style}
+                  >
+                    <Markdown body={spot.before} editorial={editorial} />
+                  </div>
+                </div>
+              </section>
               <section className="mg-spot-side is-head">
                 <header className="mg-spot-side-head">
                   <Icon name="add" size={13} />今
-                  {spot.added > 0 && <span className="mg-spot-n">＋{spot.added}</span>}
                 </header>
                 {/* 選んだ字がどのブロックかを引く目印。本文の画面と同じ名前で
                     持つので、コメントを書く仕組みがそのまま乗る。コメント時点の
@@ -243,23 +235,18 @@ export function DocumentView({
                 ref={isTarget ? targetRef : undefined}
                 className={isTarget ? "mg-anchor" : undefined}
               >
+                <Tag state={spot.state} added={0} removed={spot.removed} />
                 <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
               </div>
             )}
+            {isSpot && <Tag state={spot.state} added={0} removed={0} />}
             <div
               ref={isTarget && !gone ? targetRef : undefined}
               // 選んだ字がどのブロックかを引く目印。
               data-mg-block={block.index}
-              data-label={
-                isSpot
-                  ? "コメントの箇所"
-                  : rank >= 0
-                    ? `候補 ${rank + 1} / ${maybe.length}`
-                    : undefined
-              }
-              className={`${isSpot ? "mg-spot" : rank >= 0 ? "mg-maybe" : "mg-plain"}${
-                rank >= 0 && rank === focusAt ? " is-current" : ""
-              }${isTarget && !gone ? " mg-anchor" : ""}${
+              className={`${isSpot ? "mg-spot" : "mg-plain"}${
+                isTarget && !gone ? " mg-anchor" : ""
+              }${
                 // 選ばれていた文字列まで絞れたときは、ブロック全体の地色を弱める
                 isSpot && marked ? " is-narrow" : ""
               }`}
@@ -273,6 +260,7 @@ export function DocumentView({
       {/* 末尾のブロックが消えていた場合は、続くブロックが無いのでここに出す */}
       {spot.state === "removed" && at >= blocks.length && (
         <div ref={targetRef} className="mg-anchor">
+          <Tag state={spot.state} added={0} removed={spot.removed} />
           <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
         </div>
       )}
@@ -286,34 +274,31 @@ export function DocumentView({
   );
 }
 
-// コメントを付けた時点の姿。今の本文の真上に置いて、消えた字に印を付ける。
+// 何が起きたかの見出し。面の上に 1 行で置く。
 //
-// 色だけでは前後を言い分けられない（テーマによって danger とアクセントが
-// 同系色になる）。記号と語を必ず添える。
-function Was({
-  src,
+// 面の上端に貼り付く丸い札にしていた頃は、すぐ下の「コメント時点」と二重になって、
+// 小さい面の中で 2 つのラベルがぶつかっていた。見出しは 1 つに絞り、増減の字数も
+// ここへ寄せる（同じことを 2 か所で言わない）。
+function Tag({
+  state,
+  added,
   removed,
-  editorial,
-  style,
 }: {
-  src: string;
+  state: SpotState;
+  added: number;
   removed: number;
-  editorial: boolean;
-  style: React.CSSProperties;
 }) {
   return (
-    <section className="mg-spot-side is-base">
-      <header className="mg-spot-side-head">
-        <Icon name="remove" size={13} />
-        コメント時点
-        {removed > 0 && <span className="mg-spot-n">−{removed}</span>}
-      </header>
-      <div data-diff-side="base">
-        <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-          <Markdown body={src} editorial={editorial} />
-        </div>
-      </div>
-    </section>
+    <header className={`mg-spot-tag is-${state}`}>
+      <Icon name={SPOT_ICON[state]} size={13} fill />
+      {SPOT_NAME[state]}
+      {(added > 0 || removed > 0) && (
+        <span className="mg-spot-delta">
+          {removed > 0 && <span className="is-del">−{removed}</span>}
+          {added > 0 && <span className="is-add">＋{added}</span>}
+        </span>
+      )}
+    </header>
   );
 }
 
@@ -328,7 +313,7 @@ function Gone({
   style: React.CSSProperties;
 }) {
   return (
-    <div className="mg-spot mg-spot-gone" data-label="ここに在った">
+    <div className="mg-spot mg-spot-gone">
       <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
         <Markdown body={src} editorial={editorial} />
       </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { splitBlocks } from "./blocks";
 import type { ReviewThread } from "./review";
-import { loose, spotDiff } from "./spotDiff";
+import { loose, spotDiff, spotNote } from "./spotDiff";
 
 // 指摘の箇所が、コメントしてからどうなったか。
 // 見るのは状態の分かれ方と、増減の字数（コードポイントで数える）。
@@ -73,7 +73,9 @@ describe("spotDiff", () => {
     expect(loose(spot)).toBe(true);
   });
 
-  it("見当たらなければ、近そうなブロックを挙げる", () => {
+  it("どの版にも見当たらなければ、当てにいかない", () => {
+    // 語が重なる塊があっても寄せない。実台帳で外れた指摘は、どの版にも
+    // 引用の文が無く、寄せ先を挙げても当たりようがなかった。
     const head = "# 見出し\n\nこの機能は管理者のみが使えるはずでした。\n";
     const spot = spotDiff(
       thread({ quote: "まったく別の文。", selection: "まったく別" }),
@@ -83,17 +85,20 @@ describe("spotDiff", () => {
     expect(spot.state).toBe("unknown");
     expect(spot.index).toBe(-1);
     expect(loose(spot)).toBe(true);
+    // 控えは読めていた（指摘した時点の本文が残っていない側の言い方になる）。
+    expect(spot.kept).toBe(true);
+    expect(spotNote(spot)).toContain("取り込んだ指摘");
   });
 
-  it("手掛かりも無ければ、候補を出さない", () => {
-    const head = "# 見出し\n\nまるで関係の無い話。\n";
+  it("控えが残っていないときは、そう言う", () => {
     const spot = spotDiff(
-      thread({ quote: "この機能は管理者のみが使えます。" }),
-      of(head),
-      head,
+      thread({ quote: "どこにも無い文。", selection: "どこにも無い" }),
+      of("# 見出し\n\nまるで関係の無い話。\n"),
+      null,
     );
     expect(spot.state).toBe("unknown");
-    expect(spot.candidates).toEqual([]);
+    expect(spot.kept).toBe(false);
+    expect(spotNote(spot)).toContain("基準版が残っていない");
   });
 
   it("版を引けなくても、今の本文に同じ文があれば居場所は出せる", () => {

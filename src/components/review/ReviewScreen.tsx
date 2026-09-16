@@ -121,10 +121,9 @@ function factsOf(
   };
 }
 
-// 見出しを辿った道筋。箇所を確定できなくても、いちばん近い候補の節までは
-// 手掛かりになる（節の名前が分かれば、どの話題への指摘かは掴める）。
+// 見出しを辿った道筋。決められなかった指摘は、指摘に残っている節を出す。
 function whereAt(spot: SpotDiff, thread: ReviewThread, blocks: Block[]): string {
-  const at = spot.index >= 0 ? spot.index : (spot.candidates[0] ?? -1);
+  const at = spot.index;
   if (at >= 0) {
     const path = sectionPathAt(blocks, Math.min(at, blocks.length - 1));
     if (path.length > 0) return path.join(" › ");
@@ -707,8 +706,8 @@ function ThreadDetail({
   const sendingRef = useRef(false);
   const resolvingRef = useRef(false);
   const removingRef = useRef(false);
-  // 押すたびに本文を指摘の箇所へ戻す。候補が複数あるときは次の候補へ送る。
-  const [focus, setFocus] = useState({ nonce: 0, at: 0 });
+  // 押すたびに本文を指摘の箇所へ戻す。
+  const [focus, setFocus] = useState(0);
 
   const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
   const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
@@ -847,14 +846,8 @@ function ThreadDetail({
   );
 
   const style = { fontFamily: fontStack(font) };
-  // 候補が複数あるときは、今どれを見ているかを出しつつ次へ送れるようにする。
-  const candidates = view?.spot.candidates.length ?? 0;
-  const hasTarget = view !== null && (view.spot.state !== "unknown" || candidates > 0);
-  const jump = () =>
-    setFocus((f) => ({
-      nonce: f.nonce + 1,
-      at: candidates > 1 ? (f.at + 1) % candidates : 0,
-    }));
+  const hasTarget = view !== null && view.spot.state !== "unknown";
+  const jump = () => setFocus((n) => n + 1);
   // 会話を左右に振る。指摘を出した人（＝最初に発言した人）を右に置く。
   const reviewer =
     thread.comments.find((c) => !AGENT_AUTHORS.has(c.author))?.author ?? REVIEW_AUTHOR;
@@ -880,8 +873,7 @@ function ThreadDetail({
                 spot={view.spot}
                 editorial={editorial}
                 style={style}
-                focusNonce={focus.nonce}
-                focusAt={focus.at}
+                focusNonce={focus}
                 selection={thread.selection}
                 onSettled={settle}
               />
@@ -928,21 +920,14 @@ function ThreadDetail({
             onClick={jump}
             disabled={!hasTarget}
             title={
-              !hasTarget
-                ? "コメントの箇所も、近そうな箇所も見つかっていません"
-                : candidates > 1
-                  ? "次の候補へ送る"
-                  : "本文のコメントの箇所へ戻る"
+              hasTarget
+                ? "本文のコメントの箇所へ戻る"
+                : "コメントの箇所が今の本文のどこかを決められていません"
             }
             className="mg-side-open"
           >
             <Icon name="my_location" size={13} />
-            {candidates > 1 ? "次の候補へ" : "対象箇所へ"}
-            {candidates > 1 && (
-              <span className="mg-side-of">
-                {focus.at + 1}/{candidates}
-              </span>
-            )}
+            対象箇所へ
           </button>
           {rel && (
             <button

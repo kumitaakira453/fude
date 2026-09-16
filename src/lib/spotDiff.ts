@@ -1,8 +1,6 @@
 import {
   diffBlocks,
   headIndexAt,
-  probeOf,
-  rankByCoverage,
   resolveInDiff,
   targetIndex,
   type BlockChange,
@@ -37,19 +35,17 @@ export interface SpotDiff {
   before: string | null;
   added: number;
   removed: number;
-  // 見失ったときの、近そうなブロック。
-  candidates: number[];
+  // 指摘した時点の本文（控え）を読めたか。見失ったときに、なぜ決められないのかを
+  // 言い分けるのに使う。
+  kept: boolean;
 }
-
-// 候補として挙げる下限と数。これ以下の重なりは手掛かりにならない。
-const ENOUGH = 0.3;
-const CANDIDATES = 3;
 
 export function spotDiff(
   thread: ReviewThread,
   head: Block[],
   baseText: string | null,
 ): SpotDiff {
+  const kept = baseText !== null;
   if (baseText !== null) {
     const base = splitBlocks(parseFrontmatter(baseText).body);
     const diff = diffBlocks(base, head);
@@ -62,7 +58,7 @@ export function spotDiff(
         before: found.head.src,
         added: 0,
         removed: 0,
-        candidates: [],
+        kept,
       };
     }
     if (found.state === "removed") {
@@ -72,11 +68,11 @@ export function spotDiff(
         before: found.base.src,
         added: 0,
         removed: count(text(found.base.src)),
-        candidates: [],
+        kept,
       };
     }
     if (found.state === "rewritten") {
-      return { ...within(thread, found.base.src, found.head.src), index };
+      return { ...within(thread, found.base.src, found.head.src), index, kept };
     }
   }
 
@@ -84,23 +80,12 @@ export function spotDiff(
   const plain = head.map((b): BlockChange => ({ kind: "same", base: b, head: b }));
   const index = targetIndex(plain, thread.quote, thread.selection);
   if (index >= 0) {
-    return {
-      state: "untouched",
-      index,
-      before: null,
-      added: 0,
-      removed: 0,
-      candidates: [],
-    };
+    return { state: "untouched", index, before: null, added: 0, removed: 0, kept };
   }
 
-  // 特定できないときは、引用をいくらか含んでいるブロックを近い順に示す。
-  // 「分かりません」で終えると、読み手は文書全体を目で探すことになる。
-  const candidates = rankByCoverage(plain, probeOf(thread.quote, thread.selection))
-    .filter((c) => c.score >= ENOUGH)
-    .slice(0, CANDIDATES)
-    .map((c) => c.index);
-  return { state: "unknown", index: -1, before: null, added: 0, removed: 0, candidates };
+  // ここまでで決まらなければ、決められない。語の重なりだけで「近そうな箇所」を
+  // 挙げても当たらない（実台帳で外れた指摘は、どの版にも引用の文が無かった）。
+  return { state: "unknown", index: -1, before: null, added: 0, removed: 0, kept };
 }
 
 // ブロックの中で何が起きたか。指摘した文に掛かる書き換えがあったかで、
@@ -109,14 +94,14 @@ function within(
   thread: ReviewThread,
   base: string,
   head: string,
-): Omit<SpotDiff, "index"> {
+): Omit<SpotDiff, "index" | "kept"> {
   const before = text(base);
   const after = text(head);
   // 記法だけが違う（強調を付けた、見出しの綴りを変えた）ときは、画面に出る字が
   // 変わらない。読む人にとっては動いていないので、そのままとして扱う。
   // 記法そのものを見たいときはバージョンの画面でソースを比べる。
   if (before === after) {
-    return { state: "untouched", before: base, added: 0, removed: 0, candidates: [] };
+    return { state: "untouched", before: base, added: 0, removed: 0 };
   }
   const diff = charDiff(before, after);
   const added = diff.ins.reduce((n, s) => n + count(after.slice(s.from, s.to)), 0);
@@ -135,13 +120,7 @@ function within(
     !diff.del.some((s) => s.from < spot.end && s.to > spot.start) &&
     after.includes(before.slice(spot.start, spot.end));
 
-  return {
-    state: held ? "around" : "rewritten",
-    before: base,
-    added,
-    removed,
-    candidates: [],
-  };
+  return { state: held ? "around" : "rewritten", before: base, added, removed };
 }
 
 // ブロックの原文を、画面に出るときの字の並びへ均す。記法の綴りの違いで
@@ -185,9 +164,11 @@ export function spotNote(spot: SpotDiff): string {
     case "removed":
       return "コメントの箇所は、今の本文から削除されています。";
     default:
-      return spot.candidates.length === 0
-        ? "コメントの文は今の本文に見当たらず、近そうな箇所も見つかりませんでした。"
-        : `コメントの文は今の本文に見当たりません。近そうな箇所を ${spot.candidates.length} つ挙げています。`;
+      // なぜ決められないのかを言い分ける。「見当たりません」だけだと、読み手は
+      // 探し直せば見つかると思ってしまう。
+      return spot.kept
+        ? "指摘した時点の本文が残っていません（取り込んだ指摘）。今の本文のどこを指していたかは決められません。"
+        : "この指摘の基準版が残っていないため、今の本文と突き合わせられません。";
   }
 }
 

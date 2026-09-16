@@ -3985,21 +3985,18 @@ svg[id^="mmd-"] foreignObject p {
 .mg-plain {
   margin-bottom: 0.35rem;
 }
-.mg-spot,
-.mg-maybe {
-  position: relative;
-  margin: 1.35rem -1rem 0.85rem;
-  padding: 0.85rem 1rem 0.35rem;
-  border-radius: 0.75rem;
-}
+/* 指摘の箇所。地色を敷いて、どの塊のことかを示す。 */
 .mg-spot {
+  margin: 0 -1rem 0.85rem;
+  padding: 0.5rem 1rem 0.15rem;
+  border-radius: 0.6rem;
   background: var(--mg-accent-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
 }
-/* 中の一部まで絞れているときは、ブロック全体の地色を引いて印だけを立てる。 */
+/* 中の一部まで絞れているときは、塊全体の地色を引いて印だけを立てる。 */
 .mg-spot.is-narrow {
   background: color-mix(in srgb, var(--mg-accent) 5%, transparent);
 }
+/* 今の本文から消えている箇所。そこに在ったものを、消した線を引いて出す。 */
 .mg-spot-gone {
   margin-bottom: 0.35rem;
   opacity: 0.72;
@@ -4009,47 +4006,46 @@ svg[id^="mmd-"] foreignObject p {
   text-decoration-color: color-mix(in srgb, var(--mg-danger) 55%, transparent);
   text-decoration-thickness: 1px;
 }
-.mg-maybe {
-  box-shadow: inset 0 0 0 1px var(--mg-border);
-}
-/* いま見ている候補。他の候補より一段だけ強く出す。 */
-.mg-maybe.is-current {
-  background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 30%, transparent);
-}
-/* いま見ている候補の札。 */
-.mg-maybe.is-current::before {
-  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-panel));
-  color: var(--mg-fg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 35%, transparent);
-}
-.mg-spot::before,
-.mg-maybe::before,
-.mg-spot-pair::before {
-  content: attr(data-label);
-  position: absolute;
-  top: -0.65rem;
-  left: 0.9rem;
-  padding: 0 0.55rem;
-  border-radius: 999px;
-  font-size: 9.5px;
+
+/* 何が起きたかの見出し。面の上に 1 行で置く。
+   面の上端に貼り付く丸い札にしていた頃は、すぐ下の「コメント時点」と二重になって、
+   小さい面の中で 2 つのラベルがぶつかっていた。 */
+.mg-spot-tag {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin: 1.5rem 0 0.4rem;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  line-height: 1.3rem;
-  white-space: nowrap;
-}
-/* 札は本文の上に重なるので、地を透かしてはいけない。アクセントを混ぜるときも
-   透明ではなくパネル色に混ぜる。塗り潰すと、読ませたい本文より札が立つ。 */
-.mg-spot::before,
-.mg-spot-pair::before {
-  background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-panel));
+  letter-spacing: 0.04em;
   color: var(--mg-accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 30%, transparent);
 }
-.mg-maybe::before {
-  background: var(--mg-panel);
+/* 組の中の見出しは、面の外へ出した分だけ内側へ寄せて、本文と桁を揃える
+   （組は左右 1rem ぶん外へ出ている）。組は自分で上の余白を持つので、
+   見出し側の余白は要らない。 */
+.mg-spot-pair > .mg-spot-tag {
+  margin-top: 0;
+  padding-inline: 1rem;
+}
+.mg-spot-tag.is-untouched {
   color: var(--mg-muted);
-  box-shadow: inset 0 0 0 1px var(--mg-border);
+}
+.mg-spot-tag.is-removed,
+.mg-spot-tag.is-unknown {
+  color: var(--mg-danger);
+}
+/* 増減の字数。見出しの右端に寄せ、桁を揃える。 */
+.mg-spot-tag .mg-spot-delta {
+  display: flex;
+  gap: 0.45rem;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.mg-spot-tag .is-add {
+  color: var(--mg-add-fg);
+}
+.mg-spot-tag .is-del {
+  color: var(--mg-del-fg);
 }
 
 /* 選ばれていた文字列そのものへの印。表のように大きなブロックでは、
