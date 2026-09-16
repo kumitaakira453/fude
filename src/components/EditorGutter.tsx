@@ -53,6 +53,7 @@ import {
   BOTH,
   firstLine,
   HEAD_ROW,
+  tightImage,
   GRIP,
   indentStep,
   itemAtY,
@@ -88,6 +89,8 @@ interface Spot {
   room: number;
   // ブロックの外枠。メニューの対象を塗るのに使う。
   box: Box;
+  // 絵だけの塊か。塗る枠にまわりの余白を足さない。
+  tight: boolean;
   // 1 行目の中心。ブロックのつまみをこの高さに揃える。
   line: number;
   // 箇条書きのときだけ。Markdown ではリスト全体が 1 ブロックだが、掴む単位は
@@ -138,7 +141,8 @@ const sameBox = (a: Box, b: Box) =>
 function same(a: Spot | null, b: Spot | null): boolean {
   if (!a || !b) return a === b;
   if (a.pos !== b.pos || a.line !== b.line) return false;
-  if (a.room !== b.room || !sameBox(a.box, b.box)) return false;
+  if (a.room !== b.room || a.tight !== b.tight) return false;
+  if (!sameBox(a.box, b.box)) return false;
   if (!a.item || !b.item) {
     if (a.item !== b.item) return false;
   } else if (
@@ -397,7 +401,9 @@ export function EditorGutter({
       }
       const hit = tableBand(view, found, y) ?? found;
       const base = host.getBoundingClientRect();
-      const box = hit.el.getBoundingClientRect();
+      // 絵だけの塊は絵そのものを相手にする。入れ物は本文の幅いっぱいに広がる。
+      const tight = tightImage(hit.el);
+      const box = tight ?? hit.el.getBoundingClientRect();
       const room = scroller
         ? box.left - scroller.getBoundingClientRect().left
         : BOTH;
@@ -436,6 +442,7 @@ export function EditorGutter({
         pos: hit.pos,
         room,
         box: relative(box, base),
+        tight: !!tight,
         item:
           li && liBox && spot && line
             ? {
@@ -1246,7 +1253,10 @@ export function EditorGutter({
           {/* 何に対するメニューかを塗って示す。メニューへ動かすと相手から
               離れるので、印が無いとどのブロック・行・列だったか分からなくなる。 */}
           {menu?.kind === "block" && spot && (
-            <div className="mg-target" style={spot.box} />
+            <div
+              className={`mg-target${spot.tight ? " is-tight" : ""}`}
+              style={spot.box}
+            />
           )}
           {menu?.kind === "item" && spot?.item && (
             <div className="mg-target" style={spot.item.box} />

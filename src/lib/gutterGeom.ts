@@ -136,6 +136,25 @@ export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {
   return firstLine(li) ?? box;
 }
 
+// 絵だけの塊の、絵そのものの箱。
+//
+// 入れ物は本文の幅いっぱいに広がるので、そのまま塗ると絵より大きい枠が出て
+// 「どこを選んだのか」がぼやける。キャプションを出しているときは、その下端
+// までを塊とする（キャプションも塊の一部）。
+export function tightImage(el: Element): DOMRect | null {
+  const hold = el.querySelector(".mg-img-hold");
+  if (!hold) return null;
+  // 絵だけの塊のときだけ。字と混ざっている行は、塊の箱そのものを使う
+  // （どこまでが選ばれているのか、絵の箱では言い表せない）。
+  if ((el.textContent ?? "").trim() !== "") return null;
+  const box = hold.getBoundingClientRect();
+  if (box.height <= 0) return null;
+  const cap = el.querySelector(".mg-img.has-cap .mg-cap");
+  const under = cap?.getBoundingClientRect();
+  const bottom = under && under.height > 0 ? Math.max(box.bottom, under.bottom) : box.bottom;
+  return new DOMRect(box.left, box.top, box.width, bottom - box.top);
+}
+
 // ブロックの 1 行の高さ。見出しのように行が高いものでも文字の中心に並ぶよう、
 // 実際に組まれた行送りを読む。
 export function lineHeight(el: Element): number {

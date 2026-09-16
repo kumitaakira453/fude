@@ -534,7 +534,7 @@ class ImageView implements NodeView {
       const button = document.createElement("button");
       button.type = "button";
       button.title = title;
-      button.appendChild(icon(name, 15));
+      button.appendChild(icon(name, 14));
       const label = document.createElement("span");
       label.textContent = title;
       button.appendChild(label);
