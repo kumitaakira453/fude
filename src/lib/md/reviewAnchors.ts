@@ -126,6 +126,20 @@ export function anchorTo(doc: PmNode, pos: number): string | null {
   return found;
 }
 
+// その id を持つ見出しの位置。編集面には id が無いので、字から作り直して探す。
+export function posOfAnchor(doc: PmNode, id: string): number | null {
+  const heads: { at: number; text: string }[] = [];
+  let at = 0;
+  for (let i = 0; i < doc.childCount; i++) {
+    const node = doc.child(i);
+    if (node.type.name === "heading") heads.push({ at, text: node.textContent });
+    at += node.nodeSize;
+  }
+  const ids = slugsOf(heads.map((h) => h.text));
+  const found = ids.indexOf(id);
+  return found < 0 ? null : heads[found].at;
+}
+
 // 指摘に持たせる見出しの道筋。手前の見出しの節点から組む。
 export function sectionPathTo(doc: PmNode, pos: number): string[] {
   const stack: { depth: number; text: string }[] = [];

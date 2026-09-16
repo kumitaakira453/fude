@@ -879,6 +879,40 @@ const pasteInto = new Plugin({
   },
 });
 
+// 編集面のリンクを押したときの行き先。
+//
+// 何も手当てしないと、素の <a> のまま窓の既定の遷移に落ちる（読む面には手当てが
+// あるのに、編集面には無かった）。押下をここで受け、読む面と同じ振り分けをする。
+//
+// ⌥ を押しながらのときは触らない。リンクの中へ字を置きたいときの逃げ道。
+export interface LinkGoes {
+  // 外（http / mailto / tel）。
+  out: (href: string) => void;
+  // 同じ文書の節へ。
+  anchor: (id: string) => void;
+  // 別のファイルへ。
+  file: (href: string) => void;
+}
+
+export const linkClicks = (goes: LinkGoes): Plugin =>
+  new Plugin({
+    props: {
+      handleClickOn(view, _pos, _node, _nodePos, event) {
+        if (event.altKey || event.button !== 0) return false;
+        const target = event.target;
+        const el = target instanceof Element ? target.closest("a[href]") : null;
+        if (!el || !view.dom.contains(el)) return false;
+        const href = el.getAttribute("href") ?? "";
+        if (!href) return false;
+        event.preventDefault();
+        if (/^(https?:|mailto:|tel:)/.test(href)) goes.out(href);
+        else if (href.startsWith("#")) goes.anchor(href.slice(1));
+        else goes.file(href);
+        return true;
+      },
+    },
+  });
+
 const pasteMarkdown = new Plugin({
   props: {
     handlePaste(view, event) {
@@ -940,13 +974,21 @@ const realKeys = (map: Record<string, Command>): Plugin => {
   });
 };
 
-export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
+export function editorPlugins({
+  onSave,
+  links,
+}: {
+  onSave: () => void;
+  // リンクを押したときの行き先。渡さなければ押下は素通り（試験など）。
+  links?: LinkGoes;
+}): Plugin[] {
   const item = schema.nodes.listItem;
   const typed = inputRules({ rules });
   const kept = rememberRule(typed);
 
   return [
     history(),
+    ...(links ? [linkClicks(links)] : []),
     pasteMarkdown,
     // 貼ったものの印を、貼り先の項目にそろえる。
     pasteInto,

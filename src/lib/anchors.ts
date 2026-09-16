@@ -71,6 +71,13 @@ const WAIT_FRAMES = 40;
 // 着地を目立たせている間。飛んだ先が画面のどこにあるかを言う。
 const FLASH = 1200;
 
+// そこへ寄せて、しばらく目立たせる。返すのは印を外す時計の札。
+export function land(el: HTMLElement): number {
+  el.scrollIntoView({ block: "start", behavior: "smooth" });
+  el.classList.add("mg-landed");
+  return window.setTimeout(() => el.classList.remove("mg-landed"), FLASH);
+}
+
 export function landOn(
   content: HTMLElement,
   id: string,
@@ -90,9 +97,7 @@ export function landOn(
   const step = () => {
     const el = find();
     if (el) {
-      el.scrollIntoView({ block: "start", behavior: "smooth" });
-      el.classList.add("mg-landed");
-      timer = window.setTimeout(() => el.classList.remove("mg-landed"), FLASH);
+      timer = land(el);
       return;
     }
     if (--left <= 0) {

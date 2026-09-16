@@ -39,10 +39,31 @@ declare module "mdast" {
   }
 }
 
+// 素の字のまま持っているリンク・画像の記法から、逃がしを外す。
+//
+// 既定では `[題](url)` が `\[題]\(url)` になる。素の字として読ませるための
+// 逃がしだが、fude は Markdown の編集面なので、`[題](url)` と書いたらリンクの
+// 意図と取る。逃がすと、次に読み込んでもリンクにならない字が残ってしまう
+// （入力変換が走らなかったときに、書いたものが死ぬ）。
+const LINKISH = /(!?)\\?\[([^\]\n]*)\]\\?\(/g;
+
+function unescapeLinks(text: string): string {
+  return text.replace(LINKISH, "$1[$2](");
+}
+
 // 実データの書き方に寄せた設定。箇条書きは "-"、強調は "**"、水平線は "---"。
 const OPTIONS: Options = {
   extensions: [gfmToMarkdown({ tablePipeAlign: false })],
   handlers: {
+    // 素の字の逃がし。`]` の直後の `(` だけは逃がさない。
+    //
+    // 既定では `[題](url)` の素の字が `[題]\(url)` になる。素の字として読ませる
+    // ための逃がしだが、fude は Markdown の編集面なので、`](` と書いたら
+    // リンクの意図と取る。逃がすと、次に読み込んでもリンクにならない字が
+    // 残ってしまう。
+    text: (node, _parent, state, info) => {
+      return unescapeLinks(state.safe(node.value, { ...info }));
+    },
     mgUnderline: (node, _parent, state, info) => {
       if (node.type !== "mgUnderline") return "";
       // 前後にタグの山かっこが立つので、逃がしの判断もそれで見させる。

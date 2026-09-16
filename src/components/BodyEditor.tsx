@@ -14,8 +14,10 @@ import { schema } from "../lib/md/schema";
 import { parseAway } from "../lib/md/parseAway";
 import { GROW } from "../lib/md/grow";
 import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { reload } from "../lib/md/reload";
-import { anchorTo } from "../lib/md/reviewAnchors";
+import { anchorTo, posOfAnchor } from "../lib/md/reviewAnchors";
+import { land } from "../lib/anchors";
 import {
   closeEmoji,
   emojiKey,
@@ -496,6 +498,8 @@ export function BodyEditor({
   onBuilt,
   onComment,
   onCopyLink,
+  onAnchor,
+  onNavigate,
   onChange,
   onSave,
   flushRef,
@@ -525,6 +529,9 @@ export function BodyEditor({
   onBuilt?: (built: Editing | null) => void;
   // ブロック全体への指摘。つまみのメニューに出す。
   onComment?: (pos: number) => void;
+  // リンクを押したときの行き先。外（http）はここで開くので受けない。
+  onAnchor?: (id: string) => void;
+  onNavigate?: (href: string) => void;
   // その塗を指すリンクを写す。行き先（節の id）はここで出す。
   onCopyLink?: (anchor: string | null) => void;
   // 組み直した本文。打鍵ごとではなく、手を止めてから届く。
@@ -538,6 +545,10 @@ export function BodyEditor({
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
   const saved = useRef(onSave);
+  // リンクの行き先。組み立ての閉包に捕まえると、ファイルを替えたときに古い
+  // 行き先を掴んだままになるので、ref から読む。
+  const links = useRef({ anchor: onAnchor, file: onNavigate });
+  links.current = { anchor: onAnchor, file: onNavigate };
   const moved = useRef(onViewpoint);
   // フロントマターは書いている最中にも差し替わる。組み立ての閉包に捕まえると
   // 次の保存で古いものを書き戻すので、毎描画で写して ref から読む。
@@ -773,7 +784,22 @@ export function BodyEditor({
               first.resolve(Math.min(target.pos + 1, first.content.size)),
             )
           : undefined,
-        plugins: editorPlugins({ onSave: () => saved.current() }),
+        plugins: editorPlugins({
+          onSave: () => saved.current(),
+          // 押した先は呼び出し側が決める。編集面はどのファイルを開いているかを
+          // 知らないので、行き先の判断まで持たない。
+          links: {
+            out: (href) => void openUrl(href),
+            anchor: (id) => {
+              // 編集面の見出しには id が無い。字から位置を引いて寄せる。
+              const at = posOfAnchor(view.state.doc, id);
+              const dom = at === null ? null : view.nodeDOM(at);
+              if (dom instanceof HTMLElement) land(dom);
+              else links.current.anchor?.(id);
+            },
+            file: (href) => links.current.file?.(href),
+          },
+        }),
       });
 
       const view = new EditorView(at, {

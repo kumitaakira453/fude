@@ -1197,12 +1197,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const land = useCallback(
     (id: string) => {
       landRef.current?.();
-      if (!content || !id) return;
-      landRef.current = landOn(content, id, () =>
+      // 出ている面へ寄せる。編集中は編集面が本文を持っている。
+      const paper = editing ? editContent : content;
+      if (!paper || !id) return;
+      landRef.current = landOn(paper, id, () =>
         notify(store, "その見出しは見つかりません"),
       );
     },
-    [content, store],
+    [content, editContent, editing, store],
   );
   useEffect(() => () => landRef.current?.(), []);
 
@@ -1539,6 +1541,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               }}
               onComment={commentOnNode}
               onCopyLink={(anchor) => void copyLink(anchor)}
+              // リンクの行き先は読む面と同じ道へ通す。編集面でも押したら開く。
+              onAnchor={(id) => land(id)}
+              onNavigate={(href) => path && navigate(path, href)}
               onChange={(next) => {
                 setDraft(next);
                 if (path) autoSave(path, next);

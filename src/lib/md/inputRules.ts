@@ -42,17 +42,27 @@ const codeRule = new InputRule(/(?<![`｀])[`｀]([^`｀\n]+)[`｀]$/, (state, m
     .removeStoredMark(schema.marks.code);
 });
 
-// [題](url) を打ったらリンクにする。
-const linkRule = new InputRule(
-  /\[([^\]\n]+)\]\(([^)\s]+)(?:\s+"([^"\n]*)")?\)$/,
-  (state, match, start, end) => {
-    const [, label, href, title] = match;
-    const mark = schema.marks.link.create({ href, title: title ?? null });
-    return state.tr
-      .replaceWith(start, end, schema.text(label, [mark]))
-      .removeStoredMark(schema.marks.link);
-  },
-);
+// [題](url) を打ったらリンクにする。![題](src) なら画像にする。
+//
+// 括弧は全角も受ける。日本語入力のままだと（）［］で出る。コードの規則が
+// 全角のバッククォート（｀）を受けているのと同じ扱い。
+const LINK = /(!?)[[［]([^\]］\n]+)[\]］][(（]([^)）\s]+)(?:\s+"([^"\n]*)")?[)）]$/;
+
+const linkRule = new InputRule(LINK, (state, match, start, end) => {
+  const [, bang, label, href, title] = match;
+  if (bang) {
+    // 画像は中身を持たない節点。題は alt として残す。
+    return state.tr.replaceWith(
+      start,
+      end,
+      schema.nodes.image.create({ src: href, alt: label, title: title ?? null }),
+    );
+  }
+  const mark = schema.marks.link.create({ href, title: title ?? null });
+  return state.tr
+    .replaceWith(start, end, schema.text(label, [mark]))
+    .removeStoredMark(schema.marks.link);
+});
 
 // --- や *** を打ったら水平線にする。打った形をそのまま覚える。
 const ruleRule = new InputRule(/^(-{3,}|\*{3,}|_{3,})$/, (state, match, start, end) =>
