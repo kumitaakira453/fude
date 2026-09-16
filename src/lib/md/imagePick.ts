@@ -14,10 +14,27 @@ import { icon } from "./nodeViews";
 // なってカーソルが枠と同じ丈で立ち、本文の組版（字間・寄せ）もそのまま枠に
 // 掛かる。外へ出したうえで、空になった段落は畳んで隠す。
 
-const pickKey = new PluginKey<number | null>("imagePick");
+// 枠を出す場所。塊の始まりと、その塊が空かどうか。
+//
+// 空の塊なら、その塊を畳んで枠を差し替える。何か載っている塊（絵など）なら、
+// 枠はその塊の**下**に出し、決まった絵も新しい塊として下へ入れる。上に出すと、
+// 打った場所と入る場所が食い違う。
+interface Pick {
+  block: number;
+  empty: boolean;
+}
+
+const pickKey = new PluginKey<Pick | null>("imagePick");
 
 export function openImagePick(view: EditorView): void {
-  view.dispatch(view.state.tr.setMeta(pickKey, view.state.selection.from));
+  const $at = view.state.selection.$from;
+  const depth = Math.max($at.depth, 1);
+  view.dispatch(
+    view.state.tr.setMeta(pickKey, {
+      block: $at.before(depth),
+      empty: $at.parent.content.size === 0,
+    } satisfies Pick),
+  );
 }
 
 function closePick(view: EditorView): void {
@@ -26,13 +43,24 @@ function closePick(view: EditorView): void {
 }
 
 // 決まった道筋を本文へ書き、枠を閉じる。
-function write(view: EditorView, at: number, src: string): void {
-  const node = view.state.schema.nodes.image.create({ src, alt: "", title: null });
-  const here = Math.min(Math.max(at, 0), view.state.doc.content.size);
-  view.dispatch(view.state.tr.setMeta(pickKey, null).insert(here, node).scrollIntoView());
+function write(view: EditorView, spot: Pick, src: string): void {
+  const nodes = view.state.schema.nodes;
+  const image = nodes.image.create({ src, alt: "", title: null });
+  const doc = view.state.doc;
+  const block = Math.min(Math.max(spot.block, 0), doc.content.size);
+  const tr = view.state.tr.setMeta(pickKey, null);
+  if (spot.empty) {
+    tr.insert(block + 1, image);
+  } else {
+    // 何か載っている塊の下に、新しい塊として置く。同じ塊へ入れると、絵が
+    // 2 枚並んだ 1 つの段落になり、塊ごとの操作がどちらの絵にも当たらない。
+    const node = doc.nodeAt(block);
+    tr.insert(block + (node?.nodeSize ?? 0), nodes.paragraph.create(null, image));
+  }
+  view.dispatch(tr.scrollIntoView());
 }
 
-function frame(view: EditorView, at: number, goes: ImageGoes): HTMLElement {
+function frame(view: EditorView, spot: Pick, goes: ImageGoes): HTMLElement {
   // not-prose で本文の組版から切り離す。枠の中の字は本文ではない。
   const box = document.createElement("div");
   box.className = "mg-imgpick not-prose";
@@ -49,7 +77,7 @@ function frame(view: EditorView, at: number, goes: ImageGoes): HTMLElement {
     void goes.pick().then((path) => {
       if (!path) return;
       void goes.take(path).then((src) => {
-        if (src && !view.isDestroyed) write(view, at, src);
+        if (src && !view.isDestroyed) write(view, spot, src);
       });
     });
   });
@@ -83,16 +111,16 @@ export const imagePicker = (goes: ImageGoes): Plugin<number | null> =>
     },
     props: {
       decorations(state) {
-        const at = pickKey.getState(state);
-        if (at === null || at === undefined) return null;
-        const here = Math.min(Math.max(at, 0), state.doc.content.size);
-        const $at = state.doc.resolve(here);
-        const depth = Math.max($at.depth, 1);
-        const start = $at.before(depth);
-        const end = $at.after(depth);
+        const spot = pickKey.getState(state);
+        if (!spot) return null;
+        const block = Math.min(Math.max(spot.block, 0), state.doc.content.size);
+        const node = state.doc.nodeAt(block);
+        if (!node) return null;
+        const end = block + node.nodeSize;
 
         const marks = [
-          Decoration.widget(start, (view) => frame(view, here, goes), {
+          // 空の塊は畳んで差し替えるので上に、載っている塊はその下に置く。
+          Decoration.widget(spot.empty ? block : end, (view) => frame(view, spot, goes), {
             key: "imgpick",
             side: -1,
             // 枠の中の出来事は編集面の仕事にしない。
@@ -102,8 +130,8 @@ export const imagePicker = (goes: ImageGoes): Plugin<number | null> =>
         ];
         // 空の塊はしまう。枠のすぐ上に何もない行とカーソルが残ると、
         // どちらへ書くのか読めない。
-        if ($at.parent.content.size === 0) {
-          marks.push(Decoration.node(start, end, { class: "mg-imgpick-gone" }));
+        if (spot.empty) {
+          marks.push(Decoration.node(block, end, { class: "mg-imgpick-gone" }));
         }
         return DecorationSet.create(state.doc, marks);
       },

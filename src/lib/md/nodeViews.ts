@@ -997,25 +997,33 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
 // 画像は行内の節点なので、絵だけの段落では行箱が絵の丈になり、カーソルも
 // その丈で立つ。塊そのものを block にすると Markdown の読み書きと貼り付けまで
 // 波及するので、印を付けて棒だけ消す。
-function loneImageDecos(doc: PmNode): DecorationSet {
+// カーソルが居る塊なら印を強める。棒を消しているので、どこに居るのかを
+// 絵そのものの縁で示さないと、次の一打で絵が消えることに気付けない。
+function loneImageDecos(state: EditorState): DecorationSet {
+  const here = state.selection.empty ? state.selection.$head.before(state.selection.$head.depth) : -1;
   const marks: Decoration[] = [];
-  doc.descendants((node, pos) => {
+  state.doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
     if (node.childCount === 1 && node.firstChild?.type === schema.nodes.image) {
-      marks.push(Decoration.node(pos, pos + node.nodeSize, { class: "mg-lone-img" }));
+      const on = pos === here;
+      marks.push(
+        Decoration.node(pos, pos + node.nodeSize, {
+          class: on ? "mg-lone-img is-here" : "mg-lone-img",
+        }),
+      );
     }
     return false;
   });
-  return marks.length > 0 ? DecorationSet.create(doc, marks) : DecorationSet.empty;
+  return marks.length > 0 ? DecorationSet.create(state.doc, marks) : DecorationSet.empty;
 }
 
 export const loneImages = new Plugin<DecorationSet>({
   state: {
-    init: (_, state) => loneImageDecos(state.doc),
-    // 本文が動いたときだけ数え直す。絵の数は多くないが、選択のたびに歩くと
+    init: (_, state) => loneImageDecos(state),
+    // 本文か選択が動いたときだけ数え直す。絵の数は多くないが、毎度歩くと
     // 打鍵のたびに全文を舐めることになる。
     apply: (tr, prev, _old, next) =>
-      tr.docChanged ? loneImageDecos(next.doc) : prev,
+      tr.docChanged || tr.selectionSet ? loneImageDecos(next) : prev,
   },
   props: {
     decorations(state) {
