@@ -27,6 +27,7 @@ import { anchors } from "./anchors";
 import { emojiMenu } from "./emoji";
 import { editingMark } from "./editing";
 import { imageDrops, type ImageGoes } from "./imageDrop";
+import { imagePicker } from "./imagePick";
 import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
@@ -1002,7 +1003,7 @@ export function editorPlugins({
     history(),
     ...(links ? [linkClicks(links)] : []),
     // 画像の持ち込みは、字としての貼り付けより先に見る。
-    ...(images ? [imageDrops(images)] : []),
+    ...(images ? [imageDrops(images), imagePicker(images)] : []),
     pasteMarkdown,
     // 貼ったものの印を、貼り先の項目にそろえる。
     pasteInto,

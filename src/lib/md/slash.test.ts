@@ -304,9 +304,9 @@ const CASES: { id: string; query: string; want: string }[] = [
   { id: "rule", query: "hr", want: "あ\n\n---\n\nい\n" },
 ];
 
-// 式は決めた後の続きが入力欄の側なので、本文へ打ち込む形の CASES では
-// 追えない。下の「式」で別に見る。
-const IN_BOX = new Set(["math", "mathBlock"]);
+// 決めた後の続きが枠の側にあるものは、本文へ打ち込む形の CASES では追えない。
+// 式は下の「式」で、画像は imagePick.test.ts で別に見る。
+const IN_BOX = new Set(["math", "mathBlock", "image"]);
 
 describe("決めた構造にする", () => {
   it("候補はすべて試している", () => {
@@ -614,7 +614,7 @@ describe("範囲を選んだままの変換", () => {
 
   it("入れるだけの項目には印が付いている（変換の一覧に出さない）", () => {
     const inserts = SLASH_ITEMS.filter((one) => one.inserts).map((one) => one.id);
-    expect(inserts).toEqual(["emoji", "table", "math", "mathBlock", "rule"]);
+    expect(inserts).toEqual(["emoji", "image", "table", "math", "mathBlock", "rule"]);
   });
 });
 

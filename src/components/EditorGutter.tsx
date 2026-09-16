@@ -23,6 +23,7 @@ import {
   itemIndexOf,
   itemOutTr,
 } from "../lib/md/listTree";
+import { loneImage, type ImageGoes } from "../lib/md/imageDrop";
 import { blockKindOf } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
@@ -317,6 +318,7 @@ export function EditorGutter({
   scroller,
   onComment,
   onCopyLink,
+  images,
 }: {
   view: EditorView;
   host: HTMLElement;
@@ -326,6 +328,8 @@ export function EditorGutter({
   onComment?: (pos: number, span?: { from: number; to: number }) => void;
   // その塗を指すリンクを写す。行き先は位置から出す。
   onCopyLink?: (pos: number) => void;
+  // 画像の取り込み口。画像だけの塊にメニューを出すときに使う。
+  images?: ImageGoes;
 }) {
   // 層の置き場所。React が描いている入れ物へ直に差すと、ファイルを
   // 切り替えたときに片付けの順で落ちる（useLayerHost の説明）。
@@ -985,6 +989,33 @@ export function EditorGutter({
     };
   };
 
+  // 画像だけの塊に足す項目。使われなくなった元のファイルは消さない。
+  // 他の文書から参照されているかは、この操作の中では分からない。
+  const imageItems = (pos: number): MenuItem[] => {
+    const held = images ? loneImage(view.state.doc, pos) : null;
+    if (!images || !held) return [];
+    const src = held.node.attrs.src as string;
+    return [
+      { icon: "image", label: "画像をコピー", run: () => images.copy(src) },
+      {
+        icon: "swap_horiz",
+        label: "置換",
+        run: () => {
+          void images.pick().then(async (chosen) => {
+            if (!chosen) return;
+            const next = await images.take(chosen);
+            // 押してから決まるまでに本文が動いていることがある。取り直す。
+            const now = loneImage(view.state.doc, pos);
+            if (!next || !now) return;
+            view.dispatch(
+              view.state.tr.setNodeMarkup(now.at, null, { ...now.node.attrs, src: next }),
+            );
+          });
+        },
+      },
+    ];
+  };
+
   // ブロックのメニュー。読むとき側にある「編集する」は入れない
   // （編集は編集面そのもの）。
   const blockItems = (where: Spot): MenuItem[] => {
@@ -1010,6 +1041,7 @@ export function EditorGutter({
     return [
       ...comment,
       ...link,
+      ...imageItems(where.pos),
       typeMenu(where.pos),
       { icon: "vertical_align_top", label: "上に挿入", run: act("insertBefore") },
       { icon: "vertical_align_bottom", label: "下に挿入", run: act("insertAfter") },

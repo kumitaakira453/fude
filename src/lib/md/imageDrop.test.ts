@@ -3,7 +3,7 @@ import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { canHold, takeImages } from "./imageDrop";
+import { canHold, loneImage, takeImages } from "./imageDrop";
 import { editorPlugins } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
 
@@ -36,7 +36,13 @@ const shot = (name: string, type: string) => new File([new Uint8Array([1, 2])], 
 // 取り込み先。渡された順に道筋を返す。
 const stows = (...paths: string[]) => {
   let n = 0;
-  return { stow: vi.fn(() => Promise.resolve(paths[n++] ?? null)) };
+  const next = () => Promise.resolve(paths[n++] ?? null);
+  return {
+    stow: vi.fn(next),
+    take: vi.fn(next),
+    pick: vi.fn(() => Promise.resolve(null)),
+    copy: vi.fn(),
+  };
 };
 
 // 待ちが 2 段（中身を読む → 取り込む）あるので、片付くまで回す。
@@ -87,7 +93,7 @@ describe("takeImages", () => {
 
   it("取り込めなかったものは本文に書かない", async () => {
     const { view, out } = editor("本文\n");
-    const goes = { stow: vi.fn(() => Promise.resolve(null)) };
+    const goes = { ...stows(), stow: vi.fn(() => Promise.resolve(null)) };
     expect(takeImages(view, { files: [shot("図解.png", "image/png")] }, 3, goes)).toBe(true);
     await settle();
     expect(out()).not.toContain("![]");
@@ -105,6 +111,24 @@ describe("takeImages", () => {
     await settle();
     const text = out();
     expect(text.indexOf("1.png")).toBeLessThan(text.indexOf("2.png"));
+  });
+});
+
+describe("loneImage", () => {
+  it("画像だけの塊なら、その画像を返す", () => {
+    const { view } = editor("![](./images/図解.png)\n");
+    const held = loneImage(view.state.doc, 0);
+    expect(held?.node.attrs.src).toBe("./images/図解.png");
+  });
+
+  it("字と混ざっている行は返さない（どの絵の話か決められない）", () => {
+    const { view } = editor("前 ![](./images/図解.png) 後\n");
+    expect(loneImage(view.state.doc, 0)).toBeNull();
+  });
+
+  it("画像の無い塊は返さない", () => {
+    const { view } = editor("本文\n");
+    expect(loneImage(view.state.doc, 0)).toBeNull();
   });
 });
 

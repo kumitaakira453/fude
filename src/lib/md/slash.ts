@@ -18,6 +18,7 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { icon } from "./nodeViews";
 import { openEmojiBoard } from "./emoji";
+import { openImagePick } from "./imagePick";
 import { openMath } from "./math";
 import { DETAILS_HEAD, schema } from "./schema";
 
@@ -406,6 +407,19 @@ export const SLASH_ITEMS: SlashItem[] = [
     run: (_state, _dispatch, view) => {
       if (!view) return false;
       openEmojiBoard(view);
+      return true;
+    },
+  },
+  {
+    id: "image",
+    label: "画像",
+    icon: "image",
+    hint: "",
+    aliases: ["image", "img", "gazou", "画像", "写真", "図"],
+    inserts: true,
+    run: (_state, _dispatch, view) => {
+      if (!view) return false;
+      openImagePick(view);
       return true;
     },
   },

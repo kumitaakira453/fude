@@ -37,7 +37,7 @@ import {
 } from "../lib/md/emoji";
 import { markEditing } from "../lib/md/editing";
 import { applyMath, closeMath, liveMath, mathKey } from "../lib/md/math";
-import type { Incoming } from "../lib/images";
+import type { ImageGoes } from "../lib/md/imageDrop";
 import { editorPlugins } from "../lib/md/plugins";
 import { domSpan, type Span } from "../lib/md/domSpan";
 import { seenAt } from "../lib/md/seenAt";
@@ -513,7 +513,7 @@ export function BodyEditor({
   onNavigate,
   onChange,
   onSave,
-  onStow,
+  images,
   flushRef,
   adoptRef,
 }: {
@@ -549,9 +549,9 @@ export function BodyEditor({
   // 組み直した本文。打鍵ごとではなく、手を止めてから届く。
   onChange: (raw: string) => void;
   onSave: () => void;
-  // 落とされた / 貼られた画像を取り込み、本文に書く道筋を返す。編集面は
-  // どのファイルを開いているかを知らないので、置き場所の判断は持たない。
-  onStow?: (incoming: Incoming) => Promise<string | null>;
+  // 画像の取り込み口。編集面はどのファイルを開いているかを知らないので、
+  // 置き場所の判断は持たない。
+  images?: ImageGoes;
   // 待たずに今すぐ届けさせる口。⌘S・編集を抜ける・窓を離れるときに使う。
   flushRef?: { current: (() => void) | null };
   // 外で書き換わった本文を入れる口。
@@ -564,9 +564,9 @@ export function BodyEditor({
   // 行き先を掴んだままになるので、ref から読む。
   const links = useRef({ anchor: onAnchor, file: onNavigate });
   links.current = { anchor: onAnchor, file: onNavigate };
-  // 画像の取り込み先も同じく、組み立ての閉包には捕まえない。
-  const stow = useRef(onStow);
-  stow.current = onStow;
+  // 画像の取り込み口も同じく、組み立ての閉包には捕まえない。
+  const shots = useRef(images);
+  shots.current = images;
 
   const moved = useRef(onViewpoint);
   // フロントマターは書いている最中にも差し替わる。組み立ての閉包に捕まえると
@@ -829,7 +829,10 @@ export function BodyEditor({
             file: (href) => links.current.file?.(href),
           },
           images: {
-            stow: (incoming) => stow.current?.(incoming) ?? Promise.resolve(null),
+            stow: (incoming) => shots.current?.stow(incoming) ?? Promise.resolve(null),
+            take: (at) => shots.current?.take(at) ?? Promise.resolve(null),
+            pick: () => shots.current?.pick() ?? Promise.resolve(null),
+            copy: (src) => shots.current?.copy(src),
           },
         }),
       });
@@ -1300,6 +1303,7 @@ export function BodyEditor({
           scroller={built.scroller}
           onComment={onComment}
           onCopyLink={(pos) => onCopyLink?.(anchorTo(built.view.state.doc, pos))}
+          images={images}
         />
       )}
       {picking && (

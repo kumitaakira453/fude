@@ -1,3 +1,4 @@
+import type { Node as PmNode } from "prosemirror-model";
 import { Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { imageFiles, readIncoming, type Held, type Incoming } from "../images";
@@ -11,6 +12,24 @@ import { schema } from "./schema";
 export interface ImageGoes {
   // バイト列を取り込み、本文に書く道筋を返す。取り込めなければ null。
   stow: (incoming: Incoming) => Promise<string | null>;
+  // 既にあるファイルを取り込む。絶対パスでも文書からの相対でもよい。
+  take: (path: string) => Promise<string | null>;
+  // ファイルを選ぶ小窓を出し、選ばれた絶対パスを返す。選ばなければ null。
+  pick: () => Promise<string | null>;
+  // 本文の道筋が指す画像を、そのまま写し取る。
+  copy: (src: string) => void;
+}
+
+// その塊に載っている画像。画像だけの塊のときに返す。
+//
+// つまみのメニューは塊を相手にするので、行の中に字と混ざっているものは
+// 返さない（どの絵の話か決められない）。
+export function loneImage(doc: PmNode, blockPos: number): { at: number; node: PmNode } | null {
+  const block = doc.nodeAt(blockPos);
+  if (!block || block.childCount !== 1) return null;
+  const only = block.firstChild;
+  if (!only || only.type !== schema.nodes.image) return null;
+  return { at: blockPos + 1, node: only };
 }
 
 // 置ける位置か。コードの塊の中は字のまま扱うので、画像は入れない。

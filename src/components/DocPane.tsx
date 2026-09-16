@@ -19,10 +19,10 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
-import { copyText } from "../lib/clip";
+import { copyImage, copyText } from "../lib/clip";
 import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
-import { displayName, readText, writeFile } from "../lib/fsAccess";
+import { displayName, pathExists, readText, writeFile } from "../lib/fsAccess";
 import { createCheckpoint, moveReviewFile } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
@@ -65,8 +65,8 @@ import { MetaModal } from "./meta/MetaModal";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
-import { cleanDir, stow, type Incoming } from "../lib/images";
-import { kindOf } from "../lib/kind";
+import { absFrom, adopt, cleanDir, stow, type Incoming } from "../lib/images";
+import { kindOf, pickImageFile } from "../lib/kind";
 import { BodyEditor, type Editing } from "./BodyEditor";
 import { HtmlDoc } from "./HtmlDoc";
 import { ImageDoc } from "./ImageDoc";
@@ -330,6 +330,49 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       }
     },
     [absOf, imageDir, path, store],
+  );
+
+  // 既にあるファイルを取り込む。/image の枠で選んだものと、打たれた道筋。
+  const takeImage = useCallback(
+    async (input: string): Promise<string | null> => {
+      const abs = path ? absOf(path) : null;
+      if (!abs) {
+        notify(store, "画像を置く場所が決まっていません");
+        return null;
+      }
+      const from = absFrom(abs, input);
+      if (!from || !(await pathExists(from))) {
+        notify(store, "その道筋にファイルがありません");
+        return null;
+      }
+      try {
+        return await adopt(abs, cleanDir(imageDir), from);
+      } catch {
+        notify(store, "画像を取り込めませんでした");
+        return null;
+      }
+    },
+    [absOf, imageDir, path, store],
+  );
+
+  // 本文の道筋が指す画像を写し取る。読むときと同じ経路で解く。
+  const copyImageAt = useCallback(
+    (src: string) => {
+      void (async () => {
+        const url = path ? await resolveAsset(path, src) : null;
+        if (!url) {
+          notify(store, "その画像が見つかりません");
+          return;
+        }
+        notify(store, (await copyImage(url)) ? "画像をコピーしました" : "画像をコピーできませんでした");
+      })();
+    },
+    [path, resolveAsset, store],
+  );
+
+  const images = useMemo(
+    () => ({ stow: stowImage, take: takeImage, pick: pickImageFile, copy: copyImageAt }),
+    [copyImageAt, stowImage, takeImage],
   );
 
   const sole = useAtomValue(soleAtom);
@@ -1606,7 +1649,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 if (path) autoSave(path, next);
               }}
               onSave={onCmdS}
-              onStow={stowImage}
+              images={images}
               flushRef={flushRef}
               adoptRef={adoptRef}
               fontFamily={fontStack(font)}

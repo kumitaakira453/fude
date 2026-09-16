@@ -26,3 +26,31 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 }
+
+// 画像をそのまま写し取る。
+//
+// 窓に描かせてから画素を取り出す。書式（jpeg / webp / heic …）ごとの解き方を
+// こちらで持たずに済み、窓が描けるものは何でも写せる。アプリ側へ渡すのは
+// 生の画素なので、Rust 側に絵の解読を足す必要も無い。
+export async function copyImage(url: string): Promise<boolean> {
+  try {
+    const img = document.createElement("img");
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const paint = canvas.getContext("2d");
+    // 寸法を持たない絵（寸法の無い SVG など）は描けない。
+    if (!paint || !canvas.width || !canvas.height) return false;
+    paint.drawImage(img, 0, 0);
+    const { data } = paint.getImageData(0, 0, canvas.width, canvas.height);
+    const { Image } = await import("@tauri-apps/api/image");
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const held = await Image.new(new Uint8Array(data), canvas.width, canvas.height);
+    await writeImage(held);
+    return true;
+  } catch {
+    return false;
+  }
+}

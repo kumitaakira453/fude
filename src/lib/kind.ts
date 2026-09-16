@@ -89,6 +89,16 @@ export function iconOf(nameOrPath: string): string {
 // fude で開けるもの。ツリーの絞り込みとダイアログで共に使う。
 export const isViewable = (nameOrPath: string): boolean => kindOf(nameOrPath) !== "other";
 
+// 画像を 1 枚選ぶダイアログ。本文へ取り込むときの入口。
+export async function pickImageFile(): Promise<string | null> {
+  const sel = await open({
+    multiple: false,
+    title: "画像を選択",
+    filters: [{ name: "画像", extensions: IMAGE_EXTENSIONS }],
+  });
+  return typeof sel === "string" ? sel : null;
+}
+
 // 1 枚だけ選ぶダイアログ。フォルダを開かずに読むときの入口。
 export async function pickDocFile(): Promise<string | null> {
   const md = MD_EXTENSIONS.map((e) => e.slice(1));
