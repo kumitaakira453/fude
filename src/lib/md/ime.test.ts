@@ -3,6 +3,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
+import { nodeViews } from "./nodeViews";
 import { editorPlugins } from "./plugins";
 
 // prosemirror-view が「変換が終わった時刻」を控える欄。ここを戻すと、確定の
@@ -15,12 +16,17 @@ const dropping = (view: EditorView) => endedAt(view) !== -2e8;
 
 let open: { view: EditorView; place: HTMLElement } | null = null;
 
+// 画面と同じ器で組む。コードの塊のように、本文に無い操作（言語の札・コピー）を
+// 抱える節点があるので、そこを含めて試す。
+const deps = () => ({ dark: false, modes: new Map(), redraws: new Set<() => void>() });
+
 function editor(body = "- あ\n") {
   const loaded = fromMarkdown(body);
   const place = document.createElement("div");
   document.body.appendChild(place);
   const view = new EditorView(place, {
     state: EditorState.create({ doc: loaded.doc, plugins: editorPlugins({ onSave: () => {} }) }),
+    nodeViews: nodeViews(deps()),
   });
   open = { view, place };
   return view;
@@ -158,6 +164,18 @@ describe("変換の確定のあと", () => {
     expect(item.type.name).toBe("listItem");
     expect(item.attrs.checked).toBe(false);
     expect(item.textContent).toBe("やる");
+  });
+
+  it("コードの塊でも、溜まった変化を捨てる", () => {
+    // 塊は言語の札とコピーの釦を抱えている。画面の字をそのまま数えると本文と
+    // 食い違い、作り替えを読ませてしまう（塊が段落へ落ちる）。
+    const view = editor("```ts\nconst a = 1;\n```\n");
+    caretEnd(view);
+    send(view, "compositionstart");
+    breakDom(view);
+    send(view, "compositionend");
+    expect(kept(view)).toBe(0);
+    expect(view.state.doc.child(0).type.name).toBe("codeBlock");
   });
 
   it("変換の最中には何もしない", () => {

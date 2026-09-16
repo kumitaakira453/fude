@@ -1,5 +1,6 @@
 import { Plugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { readBlockText } from "../domText";
 
 // 変換を確定した直後の 1 打を、編集面に届ける。
 //
@@ -80,7 +81,10 @@ const mendAfterCompose = (view: EditorView): void => {
   const node = view.state.doc.nodeAt(from);
   const dom = view.nodeDOM(from);
   if (!node || !(dom instanceof HTMLElement)) return;
-  if (dom.textContent !== node.textContent) return;
+  // 画面の字は、本文に無いもの（コードの塊の言語の札やコピーの釦、アイコンの
+  // 合字）を除いて数える。そのまま数えると、それらを抱える節点では本文と必ず
+  // 食い違い、手当てが素通りして塊が段落へ落ちる。
+  if (readBlockText(dom).plain !== node.textContent) return;
 
   watch.pendingRecords();
   watch.queue.length = 0;
