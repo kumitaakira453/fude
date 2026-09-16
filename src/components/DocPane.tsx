@@ -19,9 +19,10 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
+import { copyText } from "../lib/clip";
 import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
-import { displayName, writeFile } from "../lib/fsAccess";
+import { displayName, readText, writeFile } from "../lib/fsAccess";
 import { createCheckpoint, moveReviewFile } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
@@ -307,6 +308,21 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const kind = path ? kindOf(path) : "markdown";
   const isDoc = kind === "markdown";
   const [ask, setAsk] = useAtom(draftAskAtom);
+
+  // 開いているファイルの全文を写す。Markdown は書いたままの原文（組んだ後の字
+  // ではない）。絵と PDF は字で出来ていないので、押す口自体を出さない。
+  const canCopy = !!path && kind !== "image" && kind !== "pdf";
+  const copyAll = useCallback(async () => {
+    if (!path) return;
+    const abs = absOf(path);
+    // 書きかけを先に流してから読む。それ以外はファイルから読む。
+    const text = isDoc ? settled() : abs ? await readText(abs).catch(() => null) : null;
+    if (text === null) {
+      notify(store, "全文を読めませんでした");
+      return;
+    }
+    notify(store, (await copyText(text)) ? "全文をコピーしました" : "コピーできませんでした");
+  }, [absOf, isDoc, path, settled, store]);
 
   // 保存先を決めて、そこへ移す。指摘と版も付いていく。
   //
@@ -1255,6 +1271,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>
+        )}
+        {canCopy && (
+          <button
+            onClick={() => void copyAll()}
+            title="全文をコピー"
+            className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+          >
+            <Icon name="content_copy" size={15} />
+          </button>
         )}
         {path && isDoc && (
           <>

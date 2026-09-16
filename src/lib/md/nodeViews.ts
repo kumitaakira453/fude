@@ -8,6 +8,7 @@ import {
   type ViewMutationRecord,
 } from "prosemirror-view";
 import katex from "katex";
+import { copyText } from "../clip";
 import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
 import { openMath } from "./math";
@@ -24,8 +25,6 @@ import { schema } from "./schema";
 // 図の見せ方。読むときと同じ「図だけ」を既定にする。
 export type MermaidMode = "code" | "split" | "diagram";
 
-// 見せ方の三択。**並びは index.css が nth-child で参照している**（カーソルが
-// 中に居るあいだ、印を分割へ移すため）。順を変えるときはそちらも直す。
 // 見せ方の三択。**並びは index.css が nth-child で参照している**（カーソルが
 // 中に居るあいだ、印を分割へ移すため）。順を変えるときはそちらも直す。
 const MODES: { mode: MermaidMode; icon: string; label: string }[] = [
@@ -396,13 +395,9 @@ class CodeBlockView implements NodeView {
   }
 
   private async toClipboard() {
-    try {
-      await navigator.clipboard.writeText(this.node.textContent);
-      this.copy.classList.add("is-done");
-      window.setTimeout(() => this.copy.classList.remove("is-done"), 1400);
-    } catch {
-      /* クリップボードが使えないときは黙って諦める */
-    }
+    if (!(await copyText(this.node.textContent))) return;
+    this.copy.classList.add("is-done");
+    window.setTimeout(() => this.copy.classList.remove("is-done"), 1400);
   }
 
   // 図を描く。書きかけで構文が通らない間は、直前に描けた図を残す。
