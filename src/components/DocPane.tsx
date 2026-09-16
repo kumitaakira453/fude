@@ -132,6 +132,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [content, setContent] = useState<HTMLElement | null>(null);
+  // Markdown 以外を出している入れ物。ファイル内検索の探し先に使う。
+  const [other, setOther] = useState<HTMLElement | null>(null);
   // 進捗バーはスクロール毎に DOM へ直接反映する。
   // （React 再描画 + CSS transition を挟むと遅延してむしろ煩わしいため）
   const progressRef = useRef<HTMLDivElement>(null);
@@ -1419,15 +1421,19 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
         {path && !isDoc ? (
-          kind === "image" ? (
-            <ImageDoc abs={absPath ?? path} />
-          ) : kind === "html" ? (
-            <HtmlDoc abs={absPath ?? path} />
-          ) : kind === "pdf" ? (
-            <PdfDoc abs={absPath ?? path} />
-          ) : kind === "text" ? (
-            <TextDoc abs={absPath ?? path} />
-          ) : null
+          // 読むだけの面。ファイル内検索の探し先にもなるので、印を重ねられる
+          // 入れ物（位置の基準を持つ）で包む。
+          <div ref={setOther} className="relative flex min-h-0 min-w-0 flex-1">
+            {kind === "image" ? (
+              <ImageDoc abs={absPath ?? path} />
+            ) : kind === "html" ? (
+              <HtmlDoc abs={absPath ?? path} />
+            ) : kind === "pdf" ? (
+              <PdfDoc abs={absPath ?? path} />
+            ) : kind === "text" ? (
+              <TextDoc abs={absPath ?? path} />
+            ) : null}
+          </div>
         ) : writing && path ? (
           <div
             ref={setEditScroller}
@@ -1656,8 +1662,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             入れ物へ重ねる）。 */}
         {path && (
           <DocSearchOverlay
-            content={writing ? editContent : content}
-            into={writing ? pm?.host : content}
+            content={writing ? editContent : isDoc ? content : other}
+            into={writing ? pm?.host : isDoc ? content : other}
             isActive={isActive}
             path={path}
             docKey={
