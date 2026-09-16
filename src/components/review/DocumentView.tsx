@@ -68,17 +68,6 @@ export function DocumentView({
   onSettled?: () => void;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
-  // 見比べるために開いている塊。番号で持つ。
-  const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set());
-  const flip = useCallback(
-    (at: number) =>
-      setOpen((was) => {
-        const next = new Set(was);
-        if (!next.delete(at)) next.add(at);
-        return next;
-      }),
-    [],
-  );
   const root = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
   // 選ばれていた文字列そのものに印を付けられたときの、その位置
@@ -143,11 +132,10 @@ export function DocumentView({
   }, []);
 
   // コメント時点と今の組で、変わった字に印を付ける。中身は表にもなるので、
-  // バージョンの画面と同じ道を通す。開いた組もここで見る。
-  const openKey = [...open].join(",");
+  // バージョンの画面と同じ道を通す。箇所の外で動いた塊の組も、ここで一緒に見る。
   useEffect(
     () => applyDiffMarks(root.current),
-    [paired, spotKey, openKey, limit, editorial, style],
+    [paired, spotKey, changes, limit, editorial, style],
   );
 
   // 選ばれていた文字列そのものに印を付ける。表のように大きなブロックでは、
@@ -277,13 +265,8 @@ export function DocumentView({
           );
         }
         const change = isSpot ? undefined : moved.get(i);
-        const seeing = open.has(i);
         return (
-          <div
-            key={block.index}
-            data-mg-at={i}
-            data-diff-pair={change && seeing ? "" : undefined}
-          >
+          <div key={block.index} data-mg-at={i} data-diff-pair={change ? "" : undefined}>
             {gone && (
               <div
                 ref={isTarget ? targetRef : undefined}
@@ -303,16 +286,9 @@ export function DocumentView({
               />
             ))}
             {isSpot && <Tag state={spot.state} added={0} removed={0} />}
-            {change && (
-              <ChangeHead
-                kind={change.kind}
-                answered={answered}
-                open={seeing}
-                onFlip={change.kind === "changed" ? () => flip(i) : undefined}
-              />
-            )}
-            {change && seeing && change.before !== null && (
-              <section className="mg-spot-side is-base">
+            {change && <ChangeHead kind={change.kind} answered={answered} />}
+            {change && change.before !== null && (
+              <section className="mg-change-side is-base">
                 <header className="mg-spot-side-head">
                   <Icon name="remove" size={13} />
                   コメント時点
@@ -331,13 +307,13 @@ export function DocumentView({
               ref={isTarget && !gone ? targetRef : undefined}
               // 選んだ字がどのブロックかを引く目印。
               data-mg-block={block.index}
-              data-diff-side={change && seeing ? "head" : undefined}
+              data-diff-side={change ? "head" : undefined}
               className={`${isSpot ? "mg-spot" : "mg-plain"}${
                 isTarget && !gone ? " mg-anchor" : ""
               }${
                 // 選ばれていた文字列まで絞れたときは、ブロック全体の地色を弱める
                 isSpot && marked ? " is-narrow" : ""
-              }${change ? " mg-moved" : ""}`}
+              }${change ? " mg-change-side is-head" : ""}`}
             >
               {now}
             </div>
@@ -392,28 +368,12 @@ function Tag({
 
 // 指摘の箇所の外で動いた塊の見出し。本文の読み心地を壊さないよう、線 1 本と
 // 短い語だけにして、見比べたいときに開く。
-function ChangeHead({
-  kind,
-  answered,
-  open,
-  onFlip,
-}: {
-  kind: Change["kind"];
-  answered: boolean;
-  open: boolean;
-  onFlip?: () => void;
-}) {
-  const since = answered ? "この対応で" : "コメント時点から";
+function ChangeHead({ kind, answered }: { kind: Change["kind"]; answered: boolean }) {
   return (
     <header className="mg-change-head">
       <Icon name={kind === "added" ? "add" : "difference"} size={12} />
-      {since}
-      {kind === "added" ? "足された" : "変わった"}
-      {onFlip && (
-        <button type="button" className="mg-change-see" onClick={onFlip}>
-          {open ? "閉じる" : "見比べる"}
-        </button>
-      )}
+      {answered ? "この対応で" : "コメント時点から"}
+      {kind === "added" ? "足された" : kind === "removed" ? "消えた" : "変わった"}
     </header>
   );
 }
@@ -430,26 +390,14 @@ function Dropped({
   editorial: boolean;
   style: React.CSSProperties;
 }) {
-  const [open, setOpen] = useState(false);
   return (
     <>
-      <header className="mg-change-head">
-        <Icon name="remove" size={12} />
-        {answered ? "この対応で" : "コメント時点から"}消えた
-        <button type="button" className="mg-change-see" onClick={() => setOpen((v) => !v)}>
-          {open ? "閉じる" : "見る"}
-        </button>
-      </header>
-      {open && (
-        <div className="mg-spot-gone">
-          <div
-            className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
-            style={style}
-          >
-            <Markdown body={src} editorial={editorial} />
-          </div>
+      <ChangeHead kind="removed" answered={answered} />
+      <div className="mg-change-side is-base mg-spot-gone">
+        <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
+          <Markdown body={src} editorial={editorial} />
         </div>
-      )}
+      </div>
     </>
   );
 }

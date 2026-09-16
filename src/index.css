@@ -4014,7 +4014,7 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  margin: 1.5rem 0 0.4rem;
+  margin: 1.5rem 0 0.2rem;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -4024,7 +4024,9 @@ svg[id^="mmd-"] foreignObject p {
    （組は左右 1rem ぶん外へ出ている）。組は自分で上の余白を持つので、
    見出し側の余白は要らない。 */
 .mg-spot-pair > .mg-spot-tag {
-  margin-top: 0;
+  /* 見出しは面の持ち物。離すと別々のものに見えるので、組の隙間ぶんを
+     詰め返して面にくっつける。 */
+  margin: 0 0 -0.3rem;
   padding-inline: 1rem;
 }
 .mg-spot-tag.is-untouched {
@@ -4048,13 +4050,13 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-del-fg);
 }
 
-/* 指摘の箇所の外で動いた塊。本文の読み心地を壊さないよう、線 1 本と短い語だけで
-   示し、見比べたいときに開く。開くとコメント時点の面が上に出る。 */
+/* 指摘の箇所の外で動いた塊。線 1 本と短い語で見出しを置き、その下にコメント
+   時点の面と今の面を並べる。 */
 .mg-change-head {
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  margin: 0.9rem 0 0.25rem;
+  margin: 1.2rem 0 0.2rem;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -4066,25 +4068,26 @@ svg[id^="mmd-"] foreignObject p {
   height: 1px;
   background: var(--mg-border);
 }
-.mg-change-see {
-  flex: none;
-  padding: 0 0.4rem;
-  border-radius: 999px;
-  background: var(--mg-hover);
-  font-size: 10px;
-  color: var(--mg-fg-dim);
-  line-height: 1.2rem;
-  transition: background 0.12s ease;
+/* 箇所の外で動いた塊の、コメント時点と今。比べるものどうしなので同じ形にする
+   （片方だけ面を敷くと、対になっているように見えない）。指摘の箇所の組は面を
+   敷いて立てるので、こちらは左の罫だけで静かに置く。 */
+.mg-change-side {
+  margin-left: calc(-1rem - 2px);
+  padding-left: 1rem;
+  border-left: 2px solid var(--mg-border);
 }
-.mg-change-see:hover {
-  background: color-mix(in srgb, var(--mg-accent) 16%, var(--mg-panel));
-  color: var(--mg-accent);
+.mg-change-side.is-base {
+  border-left-color: color-mix(in srgb, var(--mg-del-fg) 55%, transparent);
 }
-/* 動いた塊そのもの。地色は敷かず、左の縁だけで示す（指摘の箇所と紛れない）。 */
-.mg-moved {
-  margin-left: -0.75rem;
-  padding-left: 0.65rem;
-  border-left: 2px solid color-mix(in srgb, var(--mg-add-fg) 40%, transparent);
+.mg-change-side.is-head {
+  border-left-color: color-mix(in srgb, var(--mg-add-fg) 55%, transparent);
+}
+.mg-change-side .mg-spot-side-head {
+  color: var(--mg-del-fg);
+}
+/* 前と後ろの間。詰め切ると 1 つの塊に見える。 */
+.mg-change-side.is-base + .mg-change-side.is-head {
+  margin-top: 0.4rem;
 }
 
 /* 右の欄の「他にどれだけ動いたか」。 */
