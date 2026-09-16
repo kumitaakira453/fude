@@ -113,7 +113,49 @@ export function buildMatcher(query: string, opts: SearchOptions): RegExp | null 
   }
 }
 
+// 飾りの記号を落として、画面に出ている字に近づけた行。
+//
+// 源の側には記号が挟まっているので、画面で「重要な点」と続いて見えていても
+// 源は `**重要**な点` で、打った語とは繋がらない。読む道具の検索としては、
+// 見えている字で当たるほうが素直なので、探す前に落とす。
+//
+// 落とすのは行の中の飾りだけ。見出しの `#` や箇条書きの `-` のような行頭の印は
+// 残す（打った語がそこをまたぐことはまず無い）。
+export function readable(line: string): string {
+  if (!DECOR.test(line)) return line;
+  return (
+    line
+      // リンクと画像は札だけ残す。URL は画面に出ない。
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/!?\[([^\]]*)\]\[[^\]]*\]/g, "$1")
+      .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/__(.+?)__/g, "$1")
+      .replace(/~~(.+?)~~/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      // `_` は前後が英数字なら飾りではない（snake_case を壊さない）。
+      .replace(/(^|[^\w])_(.+?)_(?!\w)/g, "$1$2")
+      .replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, "$1")
+  );
+}
+
+// 飾りに使われる記号。1 つも無い行は触らない。
+const DECOR = /[*_`~[\\<]/;
+
 const MAX_HITS_PER_FILE = 50;
+
+// 射影した行はファイルごとに覚える。検索は打鍵ごとに走るので、毎回すべての行に
+// 正規表現を掛け直すと重い。源が同じあいだは作り直さない。
+const projected = new Map<string, { from: string; lines: string[] }>();
+
+function readableLines(path: string, text: string): string[] {
+  const known = projected.get(path);
+  if (known && known.from === text) return known.lines;
+  const lines = text.split("\n").map(readable);
+  projected.set(path, { from: text, lines });
+  return lines;
+}
 
 export function searchContents(
   cache: Map<string, string>,
@@ -122,10 +164,16 @@ export function searchContents(
 ): { results: FileHits[]; total: number; error: boolean } {
   const matcher = buildMatcher(query, opts);
   if (!matcher) return { results: [], total: 0, error: !!query };
+  // 台帳から消えたファイルの射影は抱えない。
+  if (projected.size > cache.size) {
+    for (const path of projected.keys()) {
+      if (!cache.has(path)) projected.delete(path);
+    }
+  }
   const results: FileHits[] = [];
   let total = 0;
   for (const [path, text] of cache) {
-    const lines = text.split("\n");
+    const lines = readableLines(path, text);
     const hits: ContentHit[] = [];
     for (let i = 0; i < lines.length && hits.length < MAX_HITS_PER_FILE; i++) {
       const line = lines[i];

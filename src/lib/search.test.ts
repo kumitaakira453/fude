@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TreeNode } from "./fsAccess";
-import { quickOpen, recencyBonus,
+import {
+  quickOpen,
+  readable,
+  recencyBonus,
+  searchContents,
   stepHit,
 } from "./search";
 
@@ -114,5 +118,62 @@ describe("stepHit", () => {
 
   it("ヒットが無ければ先頭のまま", () => {
     expect(stepHit({ at: 0, went: 1 }, 1, 0)).toEqual({ at: 0, went: 2 });
+  });
+});
+
+describe("readable", () => {
+  it("飾りの無い行はそのまま", () => {
+    expect(readable("ただの一行です。")).toBe("ただの一行です。");
+  });
+
+  it("強調・取り消し・コードの記号を落とす", () => {
+    expect(readable("**重要**な点")).toBe("重要な点");
+    expect(readable("__太字__の後")).toBe("太字の後");
+    expect(readable("*斜体*と~~取り消し~~")).toBe("斜体と取り消し");
+    expect(readable("`code` を挟む")).toBe("code を挟む");
+  });
+
+  it("リンクと画像は札だけ残す", () => {
+    expect(readable("[入口](https://example.com/a)を見る")).toBe("入口を見る");
+    expect(readable("![図の説明](fig.png)")).toBe("図の説明");
+    expect(readable("[札][ref] を引く")).toBe("札 を引く");
+    expect(readable("<https://example.com/a>")).toBe("https://example.com/a");
+  });
+
+  it("英数字に挟まれた _ は飾りではない", () => {
+    expect(readable("snake_case_name を直す")).toBe("snake_case_name を直す");
+  });
+
+  it("逃がした記号は記号だけ残す", () => {
+    expect(readable("2 \\* 3 は 6")).toBe("2 * 3 は 6");
+  });
+});
+
+describe("searchContents", () => {
+  const OPTS = { caseSensitive: false, useRegex: false, wholeWord: false };
+  const find = (body: string, query: string) =>
+    searchContents(new Map([["doc.md", body]]), query, OPTS);
+
+  it("飾りをまたぐ語が当たる", () => {
+    const { total, results } = find("源では **重要**な点 と書いてある。", "重要な点");
+    expect(total).toBe(1);
+    expect(results[0].hits[0].line).toBe(1);
+  });
+
+  it("見せる行からも飾りが落ちる", () => {
+    const { results } = find("**重要**な点", "重要");
+    const hit = results[0].hits[0];
+    expect(hit.preview).toBe("重要な点");
+    expect(hit.preview.slice(hit.column, hit.column + hit.length)).toBe("重要");
+  });
+
+  it("リンクは札に当たり、URL には当たらない", () => {
+    expect(find("[入口](https://example.com/secret)", "入口").total).toBe(1);
+    expect(find("[入口](https://example.com/secret)", "secret").total).toBe(0);
+  });
+
+  it("行番号は源のまま数える", () => {
+    const { results } = find("一行目\n\n**三**行目", "三行目");
+    expect(results[0].hits[0].line).toBe(3);
   });
 });
