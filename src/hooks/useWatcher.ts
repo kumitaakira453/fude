@@ -104,8 +104,8 @@ export function useWatcher() {
             if (!gone && known.has(rel)) void reloadFile(rel);
             else structural = true;
           } else if (kindOf(rel) !== "other") {
-            // 画像はキャッシュを捨てて取り直させる。HTML と PDF は描いている
-            // 器が中身を抱えているので、版を上げて貼り直す。
+            // 画像はキャッシュを捨てて取り直させる。HTML・PDF・字のファイルは
+            // 描いている器が中身を抱えているので、版を上げて貼り直す。
             if (isImage(rel)) invalidateImage(abs);
             assetChanged = true;
             // 一覧に並べているのに木がまだ知らない名前なら、並べ直す。

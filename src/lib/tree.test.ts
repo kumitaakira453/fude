@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-// ファイル一覧に何を並べるか。Markdown だけの見え方と、画像・HTML・PDF も
-// 並ぶ見え方を切り替えられる。
+// ファイル一覧に何を並べるか。Markdown だけの見え方と、開けるものが
+// すべて並ぶ見え方を切り替えられる。
 
 const ENTRIES: Record<string, { name: string; isFile: boolean; isDirectory: boolean }[]> = {
   "/docs": [
@@ -10,6 +10,7 @@ const ENTRIES: Record<string, { name: string; isFile: boolean; isDirectory: bool
     { name: "頁.html", isFile: true, isDirectory: false },
     { name: "資料.pdf", isFile: true, isDirectory: false },
     { name: "控え.txt", isFile: true, isDirectory: false },
+    { name: "書庫.zip", isFile: true, isDirectory: false },
     { name: "中", isFile: false, isDirectory: true },
     { name: "node_modules", isFile: false, isDirectory: true },
     { name: ".git", isFile: false, isDirectory: true },
@@ -43,18 +44,20 @@ describe("1 階層だけ読む", () => {
     expect(names(await readLevel("/docs"))).toEqual(["中", "はじめ.md"]);
   });
 
-  it("開けるものを渡せば画像・HTML・PDF も並ぶ", async () => {
+  it("開けるものを渡せば画像・HTML・PDF・字のファイルも並ぶ", async () => {
     expect(names(await readLevel("/docs", isViewable))).toEqual([
       "中",
       "はじめ.md",
       "絵.png",
+      "控え.txt",
       "資料.pdf",
       "頁.html",
     ]);
   });
 
-  it("開けないものは、どちらでも出さない", async () => {
-    expect(names(await readLevel("/docs", isViewable))).not.toContain("控え.txt");
+  it("字にならないものは、どちらでも出さない", async () => {
+    expect(names(await readLevel("/docs", isViewable))).not.toContain("書庫.zip");
+    expect(names(await readLevel("/docs"))).not.toContain("控え.txt");
   });
 });
 

@@ -20,12 +20,22 @@ describe("拡張子から見せ方を決める", () => {
     expect(kindOf("資料.pdf")).toBe("pdf");
   });
 
-  it("開けないものは other", () => {
-    expect(kindOf("a.txt")).toBe("other");
-    expect(kindOf("Makefile")).toBe("other");
-    expect(kindOf("a.mp4")).toBe("other");
-    expect(isViewable("a.txt")).toBe(false);
+  it("字で書かれたものは text", () => {
+    for (const name of ["a.txt", "a.ts", "設定.json", "a.yaml", "Makefile", "LICENSE", ".gitignore"]) {
+      expect(kindOf(name)).toBe("text");
+    }
+  });
+
+  it("字にならないものだけ other", () => {
+    for (const name of ["a.mp4", "書庫.zip", "a.woff2", "表.xlsx", "a.dylib", "控え.sqlite"]) {
+      expect(kindOf(name)).toBe("other");
+    }
+  });
+
+  it("開けるかどうかは種別に従う", () => {
+    expect(isViewable("a.txt")).toBe(true);
     expect(isViewable("a.png")).toBe(true);
+    expect(isViewable("a.zip")).toBe(false);
   });
 
   it("二重拡張子は末尾で決まる", () => {
@@ -34,9 +44,10 @@ describe("拡張子から見せ方を決める", () => {
   });
 
   it("点の無い名前や、拡張子だけの名前に惑わされない", () => {
-    expect(kindOf("png")).toBe("other");
+    // 拡張子として付いていなければ画像ではない。字として開く。
+    expect(kindOf("png")).toBe("text");
     expect(kindOf(".png")).toBe("image");
-    expect(kindOf("/a/b.png/c")).toBe("other");
+    expect(kindOf("/a/b.png/c")).toBe("text");
   });
 });
 
@@ -46,6 +57,7 @@ describe("一覧に出す顔", () => {
     expect(iconOf("頁.html")).toBe("html");
     expect(iconOf("資料.pdf")).toBe("picture_as_pdf");
     expect(iconOf("控え.txt")).toBe("draft");
+    expect(iconOf("書庫.zip")).toBe("draft");
   });
 
   it("画像は形ごとに分ける", () => {

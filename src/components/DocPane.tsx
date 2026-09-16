@@ -62,6 +62,7 @@ import { BodyEditor, type Editing } from "./BodyEditor";
 import { HtmlDoc } from "./HtmlDoc";
 import { ImageDoc } from "./ImageDoc";
 import { PdfDoc } from "./PdfDoc";
+import { TextDoc } from "./TextDoc";
 import { SelectionBar } from "./SelectionBar";
 import { SaveVersion } from "./version/SaveVersion";
 import {
@@ -1399,6 +1400,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <HtmlDoc abs={absPath ?? path} />
           ) : kind === "pdf" ? (
             <PdfDoc abs={absPath ?? path} />
+          ) : kind === "text" ? (
+            <TextDoc abs={absPath ?? path} />
           ) : null
         ) : writing && path ? (
           <div

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { paintLines } from "./code";
+import { langOf, paintLines } from "./code";
 
 const flat = (lines: ReturnType<typeof paintLines>) =>
   lines.map((pieces) => pieces.map((p) => p.text).join(""));
@@ -41,5 +41,38 @@ describe("原文を行ごとに色分けする", () => {
     const lines = paintLines(code, "xml");
     expect(lines[0].every((p) => p.cls === null)).toBe(true);
     expect(flat(lines)[0]).toBe("<b>x</b>");
+  });
+});
+
+describe("名前から色付けの言語を決める", () => {
+  it("拡張子をそのまま引く", () => {
+    expect(langOf("a.python")).toBe("python");
+    expect(langOf("/x/y/style.css")).toBe("css");
+    expect(langOf("設定.json")).toBe("json");
+  });
+
+  it("hljs が持つ別名も当たる", () => {
+    expect(langOf("app.ts")).toBe("ts");
+    expect(langOf("app.py")).toBe("py");
+    expect(langOf("compose.yml")).toBe("yml");
+    expect(langOf("main.h")).toBe("h");
+  });
+
+  it("別名の無い綴りは表で補う", () => {
+    expect(langOf("httpd.conf")).toBe("ini");
+    expect(langOf(".env")).toBe("ini");
+    expect(langOf("Gemfile")).toBe("ruby");
+    expect(langOf("頁.mdx")).toBe("markdown");
+  });
+
+  it("拡張子の無い名前は名前そのもので引く", () => {
+    expect(langOf("Dockerfile")).toBe("dockerfile");
+    expect(langOf("/x/Makefile")).toBe("makefile");
+  });
+
+  it("決まらなければ null", () => {
+    expect(langOf("LICENSE")).toBe(null);
+    expect(langOf("控え.bak")).toBe(null);
+    expect(langOf("")).toBe(null);
   });
 });

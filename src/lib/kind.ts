@@ -6,10 +6,42 @@ import { IMAGE_EXTENSIONS, isImage, isMarkdown, MD_EXTENSIONS } from "./fsAccess
 // 判じるのは拡張子だけ。中身を覗くと、木を並べるだけで全部のファイルを
 // 読みに行くことになる。
 
-export type Kind = "markdown" | "image" | "html" | "pdf" | "other";
+export type Kind = "markdown" | "image" | "html" | "pdf" | "text" | "other";
 
 export const HTML_EXTENSIONS = ["html", "htm", "xhtml"];
 export const PDF_EXTENSIONS = ["pdf"];
+
+// 開くダイアログの絞り込みに並べる、字のファイルの代表。ダイアログは並べた
+// ものしか選べないので、よく使うものだけを挙げる（木では拡張子を問わず出る）。
+export const TEXT_EXTENSIONS = [
+  "txt", "log", "csv", "tsv", "json", "jsonc", "yaml", "yml", "toml", "ini",
+  "xml", "css", "scss", "less", "js", "jsx", "mjs", "cjs", "ts", "tsx", "py",
+  "rb", "rs", "go", "java", "kt", "swift", "c", "h", "cpp", "hpp", "cs", "php",
+  "sh", "bash", "zsh", "sql", "graphql", "diff", "patch", "env", "conf",
+];
+
+// 字にならないもの。ここに無い拡張子は字として開く（VS Code と同じく、
+// 読めるものは読ませる側に倒す）。中身まで覗くと、木を並べるだけで全部の
+// ファイルを読みに行くことになるので、判じるのは名前だけ。
+const BINARY_EXTENSIONS = [
+  // 書庫
+  "zip", "gz", "tgz", "bz2", "xz", "zst", "7z", "rar", "tar", "lz4",
+  // 実行物・目的ファイル
+  "exe", "dll", "dylib", "so", "o", "a", "bin", "wasm", "class", "jar",
+  "pyc", "pyo", "node", "msi", "com",
+  // 音と動画
+  "mp3", "m4a", "aac", "wav", "flac", "ogg", "oga", "opus", "mp4", "m4v",
+  "mov", "avi", "mkv", "webm", "wmv", "flv", "mpg", "mpeg",
+  // 書体
+  "woff", "woff2", "ttf", "otf", "eot",
+  // 他のアプリの書類
+  "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp",
+  "psd", "ai", "sketch", "fig", "key", "numbers", "pages", "epub",
+  // 入れ物
+  "dmg", "iso", "img", "pkg", "deb", "rpm", "apk", "ipa", "crx", "appimage",
+  // 控えと鍵
+  "db", "sqlite", "sqlite3", "mdb", "realm", "p12", "pfx", "der", "keychain",
+];
 
 const endsWithAny = (lower: string, exts: string[]) =>
   exts.some((ext) => lower.endsWith(`.${ext}`));
@@ -21,7 +53,10 @@ export function kindOf(nameOrPath: string): Kind {
   if (isImage(lower)) return "image";
   if (endsWithAny(lower, HTML_EXTENSIONS)) return "html";
   if (endsWithAny(lower, PDF_EXTENSIONS)) return "pdf";
-  return "other";
+  if (endsWithAny(lower, BINARY_EXTENSIONS)) return "other";
+  // 拡張子の無い名前（Makefile・LICENSE）も字として開く。名前が空のとき
+  // （道筋がフォルダで終わるとき）だけは、開くものが無いので除く。
+  return name ? "text" : "other";
 }
 
 // 一覧に出す顔。名前を読む前に何のファイルか分かるようにする。
@@ -39,6 +74,7 @@ const BY_KIND: Record<Kind, string> = {
   image: "image",
   html: "html",
   pdf: "picture_as_pdf",
+  text: "draft",
   other: "draft",
 };
 
@@ -62,12 +98,19 @@ export async function pickDocFile(): Promise<string | null> {
     filters: [
       {
         name: "読めるもの",
-        extensions: [...md, ...IMAGE_EXTENSIONS, ...HTML_EXTENSIONS, ...PDF_EXTENSIONS],
+        extensions: [
+          ...md,
+          ...IMAGE_EXTENSIONS,
+          ...HTML_EXTENSIONS,
+          ...PDF_EXTENSIONS,
+          ...TEXT_EXTENSIONS,
+        ],
       },
       { name: "Markdown", extensions: md },
       { name: "画像", extensions: IMAGE_EXTENSIONS },
       { name: "HTML", extensions: HTML_EXTENSIONS },
       { name: "PDF", extensions: PDF_EXTENSIONS },
+      { name: "字のファイル", extensions: TEXT_EXTENSIONS },
     ],
   });
   return typeof sel === "string" ? sel : null;
