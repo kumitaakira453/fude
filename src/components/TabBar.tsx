@@ -12,6 +12,7 @@ import { setDragChip } from "../lib/dragImage";
 import { displayName, findNode, type TreeNode } from "../lib/fsAccess";
 import {
   activateTab,
+  closeAll,
   closeOthers,
   closeTab,
   closeTabAt,
@@ -198,6 +199,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               ? () => closeOthers(store, pane.id, menu.at)
               : undefined
           }
+          onCloseAll={() => closeAll(store, pane.id)}
         />
       )}
     </>

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as A from "../state/atoms";
 import {
   activateTab,
+  closeAll,
   closeOthers,
   closePane,
   closeTab,
@@ -141,6 +142,44 @@ describe("closeOthers", () => {
     closeOthers(store, "p1", 0);
     expect(pane("p1")!.tabs).toEqual(["a.md"]);
     expect(pane(side)!.tabs).toEqual(["b.md", "c.md"]);
+  });
+});
+
+describe("closeAll", () => {
+  it("そのペインのタブをすべて閉じる", () => {
+    for (const f of ["a.md", "b.md", "c.md"]) openInPane(store, "p1", f);
+    closeAll(store, "p1");
+    expect(first().tabs).toEqual([]);
+  });
+
+  it("空なら何もしない", () => {
+    closeAll(store, "p1");
+    expect(first().tabs).toEqual([]);
+  });
+
+  it("ペインは残す（画面が消えると戻る手段が無くなる）", () => {
+    openInPane(store, "p1", "a.md");
+    closeAll(store, "p1");
+    expect(panes().length).toBe(1);
+  });
+
+  it("閉じたものは控えに残り、押し続けると元の並びに戻る", () => {
+    for (const f of ["a.md", "b.md", "c.md"]) openInPane(store, "p1", f);
+    closeAll(store, "p1");
+    expect(reopenTab(store)).toBe("a.md");
+    expect(reopenTab(store)).toBe("b.md");
+    expect(reopenTab(store)).toBe("c.md");
+    expect(first().tabs).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("他のペインには手を出さない", () => {
+    openInPane(store, "p1", "a.md");
+    splitPane(store, "row");
+    const side = panes()[1].id;
+    openInPane(store, side, "c.md");
+    closeAll(store, "p1");
+    expect(pane("p1")!.tabs).toEqual([]);
+    expect(pane(side)!.tabs.length).toBeGreaterThan(0);
   });
 });
 

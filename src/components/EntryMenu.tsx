@@ -30,6 +30,7 @@ export function EntryMenu({
   onNewFile,
   onNewFolder,
   onCloseOthers,
+  onCloseAll,
 }: {
   menu: EntryMenuState;
   onClose: () => void;
@@ -38,6 +39,7 @@ export function EntryMenu({
   onNewFolder?: (n: TreeNode) => void;
   // タブの並びから出したときだけ渡る。ツリーの行には閉じるものが無い。
   onCloseOthers?: () => void;
+  onCloseAll?: () => void;
 }) {
   const { openInNewWindow, getRootPath, deleteEntry } = useWorkspace();
   const store = useStore();
@@ -145,14 +147,24 @@ export function EntryMenu({
             label: "新しいウィンドウで開く",
             action: () => void openInNewWindow(node.path),
           },
+          ...(onCloseOthers || onCloseAll ? ["sep" as const] : []),
           ...(onCloseOthers
             ? [
-                "sep" as const,
                 {
                   icon: "close",
                   label: "他のタブを閉じる",
                   keys: "⌘⌥W",
                   action: onCloseOthers,
+                } satisfies MI,
+              ]
+            : []),
+          ...(onCloseAll
+            ? [
+                {
+                  icon: "close_fullscreen",
+                  label: "すべてのタブを閉じる",
+                  keys: "⌘⇧W",
+                  action: onCloseAll,
                 } satisfies MI,
               ]
             : []),
