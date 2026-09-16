@@ -51,12 +51,20 @@ export function headingIds(blocks: Block[]): Map<number, string> {
   return out;
 }
 
-// その塊を含む節の id。手前の見出しを遡って探す。見出しの外なら null。
-export function anchorAt(blocks: Block[], at: number): string | null {
+// その塊を含む節。手前の見出しを遡って探す。見出しの外なら null。
+//
+// 字も返す。リンクとして渡すときの題になる（行き先だけ渡しても、貼った先で
+// 何を指しているのか読めない）。
+export interface Section {
+  id: string;
+  text: string;
+}
+
+export function anchorAt(blocks: Block[], at: number): Section | null {
   const ids = headingIds(blocks);
   for (let i = Math.min(at, blocks.length - 1); i >= 0; i--) {
     const id = ids.get(blocks[i].index);
-    if (id) return id;
+    if (id) return { id, text: buildProjection(blocks[i].src).plain.trim() };
   }
   return null;
 }

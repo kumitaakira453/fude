@@ -77,7 +77,7 @@ import {
   rememberViewpoint,
   viewKey,
 } from "../lib/viewpoint";
-import { land as land0, landOn } from "../lib/anchors";
+import { land as land0, landOn, type Section } from "../lib/anchors";
 import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import {
@@ -1222,20 +1222,28 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   );
   useEffect(() => () => landRef.current?.(), []);
 
-  // その塗を指すリンクを写す。貼る先がどこでも同じ場所を指すよう、フォルダの
-  // 根からの道筋で書く。見出しの外の塗は、その塗を含む節を指す（md には
-  // 見出しにしか id が無い）。
+  // その塗を指すリンクを写す。
+  //
+  // 写すのは記法ごと（[題](道筋#節)）。道筋の字だけでは、貼った先で素の字の
+  // ままになってリンクとして働かない。
+  //
+  // 道筋はファイル系の絶対パス。開いているフォルダの根からの形だと、別の
+  // フォルダを開いているときや、そのフォルダの外のファイルに貼ると効かない。
+  //
+  // 見出しの外の塗は、その塗を含む節を指す（md には見出しにしか id が無い）。
   const copyLink = useCallback(
-    async (anchor: string | null) => {
-      if (!path) return;
-      const link = anchor ? `/${path}#${anchor}` : `/${path}`;
+    async (section: Section | null) => {
+      const abs = path ? absOf(path) : null;
+      if (!abs) return;
+      const label = section?.text || displayName(path ?? "");
+      const link = `[${label}](${section ? `${abs}#${section.id}` : abs})`;
       if (!(await copyText(link))) {
         notify(store, "リンクを写せませんでした");
         return;
       }
-      notify(store, anchor ? `「${anchor}」へのリンクを写しました` : "ファイルへのリンクを写しました");
+      notify(store, `「${label}」へのリンクを写しました`);
     },
-    [path, store],
+    [absOf, path, store],
   );
 
   // 道筋つきのリンクで開かれたとき。自分のファイルの分だけ拾う。

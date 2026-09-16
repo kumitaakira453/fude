@@ -555,28 +555,48 @@ export function useWorkspace() {
       // 断片（#見出し）は道筋の一部ではない。付けたまま解こうとすると、
       // どのファイルにも一致せず黙って何も起きない。
       const { path, id } = splitHref(href);
-      let target = resolvePath(dirOf(fromDocPath), path);
-      if (
-        !store.get(A.filesAtom).some((f) => f.path === target) &&
-        !/\.[a-z]+$/i.test(target)
-      ) {
-        target = `${target}.md`;
-      }
-      if (!store.get(A.filesAtom).some((f) => f.path === target)) {
-        notify(store, "そのファイルは見つかりません");
-        return;
-      }
-      openFile(target);
       // 当てる先は、そのファイルが描き終わってから。開く側は置くだけにする。
-      if (id) {
+      const aim = (at: string) => {
+        if (!id) return;
         store.set(A.pendingAnchorAtom, (was) => ({
-          path: target,
+          path: at,
           id,
           nonce: (was?.nonce ?? 0) + 1,
         }));
+      };
+      const here = (at: string) => store.get(A.filesAtom).some((f) => f.path === at);
+
+      // 1. 開いているフォルダの中の道筋として解く（相対も、根からの / も）。
+      let target = resolvePath(dirOf(fromDocPath), path);
+      if (!here(target) && !/\.[a-z]+$/i.test(target)) target = `${target}.md`;
+      if (here(target)) {
+        openFile(target);
+        aim(target);
+        return;
       }
+
+      // 2. ファイル系の絶対パスとして見る。開いているフォルダの中なら、
+      //    根からの相対に落として開く。
+      const root = getRootPath();
+      if (root && path.startsWith(`${root}/`)) {
+        const inside = path.slice(root.length + 1);
+        if (here(inside)) {
+          openFile(inside);
+          aim(inside);
+          return;
+        }
+      }
+
+      // 3. フォルダの外なら、1 枚だけ開く。
+      if (path.startsWith("/")) {
+        openDocRef.current?.(path);
+        aim(soleTree(path).node.path);
+        return;
+      }
+
+      notify(store, "そのファイルは見つかりません");
     },
-    [store, openFile],
+    [store, openFile, getRootPath],
   );
 
   // 相対パス資産（画像など）: キャッシュ済み blob URL を同期取得。

@@ -8,6 +8,7 @@ import { fromMarkdown } from "./fromMarkdown";
 import { editorPlugins } from "./plugins";
 import {
   anchorThreads,
+  anchorTo,
   posOfAnchor,
   sectionPathTo,
   targetOfBlock,
@@ -400,6 +401,21 @@ describe("箇条書きの項目を対象にする", () => {
     expect(
       targetOfSpan(state.doc, loaded, "", span.from, span.to)?.text,
     ).toBe("みつめ");
+  });
+});
+
+describe("anchorTo", () => {
+  it("その位置を含む節を、id と字で返す", () => {
+    const { state } = opened("## やり取り\n\n本文\n");
+    expect(anchorTo(state.doc, posOf(state.doc, 1))).toEqual({
+      id: "やり取り",
+      text: "やり取り",
+    });
+  });
+
+  it("手前に見出しが無ければ null", () => {
+    const { state } = opened("本文だけ\n");
+    expect(anchorTo(state.doc, 0)).toBeNull();
   });
 });
 

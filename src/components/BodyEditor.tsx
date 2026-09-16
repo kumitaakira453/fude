@@ -17,7 +17,7 @@ import { nodeViews, type EditorDeps } from "../lib/md/nodeViews";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { reload } from "../lib/md/reload";
 import { anchorTo, posOfAnchor } from "../lib/md/reviewAnchors";
-import { land } from "../lib/anchors";
+import { land, type Section } from "../lib/anchors";
 
 // 編集面の中で、その節へ寄せる。編集面の見出しには id が無いので、字から
 // 位置を引く。見つからなければ呼び出し側へ返す（外の画面が持っているかも
@@ -542,8 +542,8 @@ export function BodyEditor({
   // リンクを押したときの行き先。外（http）はここで開くので受けない。
   onAnchor?: (id: string) => void;
   onNavigate?: (href: string) => void;
-  // その塗を指すリンクを写す。行き先（節の id）はここで出す。
-  onCopyLink?: (anchor: string | null) => void;
+  // その塗を指すリンクを写す。行き先（節）はここで出す。
+  onCopyLink?: (section: Section | null) => void;
   // 組み直した本文。打鍵ごとではなく、手を止めてから届く。
   onChange: (raw: string) => void;
   onSave: () => void;

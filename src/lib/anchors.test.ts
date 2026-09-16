@@ -66,16 +66,23 @@ describe("headingIds", () => {
 describe("anchorAt", () => {
   const blocks = splitBlocks("# 題\n\n前書き。\n\n## やり取り\n\n本文。\n\n### 中\n\n奥。\n");
 
-  it("その塊を含む節を返す", () => {
-    expect(anchorAt(blocks, 3)).toBe("やり取り");
+  it("その塊を含む節を、id と字で返す", () => {
+    // 字はリンクの題になる。行き先だけ渡しても、貼った先で何を指しているのか
+    // 読めない。
+    expect(anchorAt(blocks, 3)).toEqual({ id: "やり取り", text: "やり取り" });
   });
 
   it("いちばん近い見出しを採る（深い節が勝つ）", () => {
-    expect(anchorAt(blocks, 5)).toBe("中");
+    expect(anchorAt(blocks, 5)?.id).toBe("中");
   });
 
-  it("見出しそのものは、自分の id を返す", () => {
-    expect(anchorAt(blocks, 2)).toBe("やり取り");
+  it("見出しそのものは、自分の節を返す", () => {
+    expect(anchorAt(blocks, 2)?.id).toBe("やり取り");
+  });
+
+  it("記法は落として、画面に出る字を題にする", () => {
+    const withCode = splitBlocks("## `Code` の話\n\n本文。\n");
+    expect(anchorAt(withCode, 1)).toEqual({ id: "code-の話", text: "Code の話" });
   });
 
   it("手前に見出しが無ければ null", () => {

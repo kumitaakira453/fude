@@ -7,7 +7,7 @@ import {
   stripMarkup,
   type Resolution,
 } from "../blockDiff";
-import { slugsOf } from "../anchors";
+import { slugsOf, type Section } from "../anchors";
 import type { ReviewThread, ReviewUnit } from "../review";
 import type { Loaded } from "./fromMarkdown";
 import { schema } from "./schema";
@@ -110,33 +110,31 @@ function similar(parts: Part[], thread: ReviewThread): number {
 //
 // 見出しの字から id を作るのは読む面と同じ道（slugsOf）。同じ順で回すので、
 // 同じ見出しが複数ある文書でも連番まで画面と一致する。
-export function anchorTo(doc: PmNode, pos: number): string | null {
-  const heads: { at: number; text: string }[] = [];
-  let at = 0;
-  for (let i = 0; i < doc.childCount; i++) {
-    const node = doc.child(i);
-    if (node.type.name === "heading") heads.push({ at, text: node.textContent });
-    at += node.nodeSize;
-  }
+export function anchorTo(doc: PmNode, pos: number): Section | null {
+  const heads = headingsIn(doc);
   const ids = slugsOf(heads.map((h) => h.text));
-  let found: string | null = null;
+  let found: Section | null = null;
   heads.forEach((h, i) => {
-    if (h.at <= pos && ids[i]) found = ids[i];
+    if (h.at <= pos && ids[i]) found = { id: ids[i], text: h.text.trim() };
   });
   return found;
 }
 
-// その id を持つ見出しの位置。編集面には id が無いので、字から作り直して探す。
-export function posOfAnchor(doc: PmNode, id: string): number | null {
-  const heads: { at: number; text: string }[] = [];
+function headingsIn(doc: PmNode): { at: number; text: string }[] {
+  const out: { at: number; text: string }[] = [];
   let at = 0;
   for (let i = 0; i < doc.childCount; i++) {
     const node = doc.child(i);
-    if (node.type.name === "heading") heads.push({ at, text: node.textContent });
+    if (node.type.name === "heading") out.push({ at, text: node.textContent });
     at += node.nodeSize;
   }
-  const ids = slugsOf(heads.map((h) => h.text));
-  const found = ids.indexOf(id);
+  return out;
+}
+
+// その id を持つ見出しの位置。編集面には id が無いので、字から作り直して探す。
+export function posOfAnchor(doc: PmNode, id: string): number | null {
+  const heads = headingsIn(doc);
+  const found = slugsOf(heads.map((h) => h.text)).indexOf(id);
   return found < 0 ? null : heads[found].at;
 }
 
