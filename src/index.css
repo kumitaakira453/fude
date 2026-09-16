@@ -4072,9 +4072,12 @@ svg[id^="mmd-"] foreignObject p {
    （片方だけ面を敷くと、対になっているように見えない）。指摘の箇所の組は面を
    敷いて立てるので、こちらは左の罫だけで静かに置く。 */
 .mg-change-side {
-  margin-left: calc(-1rem - 2px);
-  padding-left: 1rem;
-  border-left: 2px solid var(--mg-border);
+  /* 罫と字の間は、見出しの色帯と同じ取り方にする（帯 3px・字まで 0.7rem）。
+     離すと罫が本文から切り離されて、どの段落のものか読み取れない。 */
+  margin-left: -0.7rem;
+  padding-left: calc(0.7rem - 3px);
+  border-left: 3px solid var(--mg-border);
+  border-radius: 3px;
 }
 .mg-change-side.is-base {
   border-left-color: color-mix(in srgb, var(--mg-del-fg) 55%, transparent);
