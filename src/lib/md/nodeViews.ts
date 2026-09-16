@@ -14,6 +14,7 @@ import { covers } from "./decos";
 import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
+import type { ImageGoes } from "./imageDrop";
 import { schema } from "./schema";
 
 // 編集面の専用の描画。
@@ -50,6 +51,8 @@ export interface EditorDeps {
   redraws: Set<() => void>;
   // いま開いているファイル。トグルの開閉を覚える鍵に使う。
   path?: string | null;
+  // 画像の取り込み口。絵の上に出す小さな帯から使う。
+  images?: ImageGoes;
 }
 
 export function icon(name: string, size = 15, fill = false): HTMLElement {
@@ -509,18 +512,56 @@ class ImageView implements NodeView {
     });
     this.dom.appendChild(this.cap);
 
-    this.fill(at);
+    this.fill(at, view, getPos, deps.images);
     this.paintCap();
 
     if (!remote && !at && deps.resolveAsset) {
       void deps.resolveAsset(src)
-        .then((found) => this.fill(found))
-        .catch(() => this.fill(null));
+        .then((found) => this.fill(found, view, getPos, deps.images))
+        .catch(() => this.fill(null, view, getPos, deps.images));
     }
   }
 
+  // 絵の上に出す小さな帯。絵そのものを相手にする操作を、絵の場所から出す。
+  // 塊のつまみは本文の左端にあり、絵の話をしているようには見えない。
+  private bar(view: EditorView, getPos: () => number | undefined, goes: ImageGoes): HTMLElement {
+    const bar = document.createElement("span");
+    bar.className = "mg-img-bar not-prose";
+    bar.contentEditable = "false";
+
+    const add = (name: string, title: string, run: () => void) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.title = title;
+      button.appendChild(icon(name, 16));
+      button.addEventListener("mousedown", (event) => event.preventDefault());
+      button.addEventListener("click", run);
+      bar.appendChild(button);
+    };
+
+    add("swap_horiz", "置換", () => {
+      void goes.pick().then(async (chosen) => {
+        if (!chosen) return;
+        const next = await goes.take(chosen);
+        const pos = getPos();
+        if (!next || pos === undefined || view.isDestroyed) return;
+        const now = view.state.doc.nodeAt(pos);
+        if (!now) return;
+        view.dispatch(view.state.tr.setNodeMarkup(pos, null, { ...now.attrs, src: next }));
+      });
+    });
+    add("subtitles", "キャプション", () => this.edit());
+    add("content_copy", "画像をコピー", () => goes.copy(this.src));
+    return bar;
+  }
+
   // 解けたら画像、解けなければ読むときと同じ枠。
-  private fill(src: string | null) {
+  private fill(
+    src: string | null,
+    view: EditorView,
+    getPos: () => number | undefined,
+    goes: ImageGoes | undefined,
+  ) {
     if (!this.alive) return;
     if (!src) {
       const box = document.createElement("span");
@@ -535,8 +576,14 @@ class ImageView implements NodeView {
     el.alt = this.alt;
     if (this.title) el.title = this.title;
     el.loading = "lazy";
-    el.className = "mx-auto my-4 max-w-full rounded-lg shadow-md";
-    this.shown.replaceChildren(el);
+    el.className = "my-4 max-w-full rounded-lg shadow-md";
+
+    // 帯は絵にぴったり付ける。入れ物に付けると、幅の狭い絵では離れて浮く。
+    const hold = document.createElement("span");
+    hold.className = "mg-img-hold";
+    hold.appendChild(el);
+    if (goes) hold.appendChild(this.bar(view, getPos, goes));
+    this.shown.replaceChildren(hold);
   }
 
   // 書かれているものを欄に写し、出す・しまうを決める。
@@ -549,7 +596,7 @@ class ImageView implements NodeView {
     this.dom.classList.toggle("has-cap", on);
   }
 
-  // つまみのメニューから呼ぶ。空でも欄を出して、そこへ手を渡す。
+  // 帯とつまみのメニューから呼ぶ。空でも欄を出して、そこへ手を渡す。
   edit() {
     this.showCap(true);
     this.cap.focus();
@@ -558,26 +605,22 @@ class ImageView implements NodeView {
   update(node: PmNode) {
     if (node.type !== schema.nodes.image) return false;
     const src = node.attrs.src as string;
-    const alt = node.attrs.alt as string;
-    const title = node.attrs.title as string | null;
-    const same = src === this.src;
-    this.alt = alt;
-    this.title = title;
-    this.src = src;
+    this.alt = node.attrs.alt as string;
+    this.title = node.attrs.title as string | null;
     // 道筋が変わったときだけ描き直す。キャプションを打つたびに画像を
     // 読み直すと、打鍵ごとに絵が点滅する。
-    if (!same) return false;
-    const img = this.shown.firstElementChild;
-    if (img instanceof HTMLImageElement) {
-      img.alt = alt;
-      if (title) img.title = title;
+    if (src !== this.src) return false;
+    const img = this.shown.querySelector("img");
+    if (img) {
+      img.alt = this.alt;
+      if (this.title) img.title = this.title;
       else img.removeAttribute("title");
     }
     this.paintCap();
     return true;
   }
 
-  // 欄の中の出来事は編集面の仕事にしない。
+  // 帯と欄の中の出来事は編集面の仕事にしない。
   stopEvent() {
     return true;
   }

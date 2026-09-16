@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
 import { nodeViews } from "./nodeViews";
 import { toMarkdown } from "./toMarkdown";
@@ -19,7 +19,18 @@ afterEach(() => {
   open = null;
 });
 
-function editor(body: string) {
+const ways = (chosen: string | null = "/Users/me/写真/新しい.png") => ({
+  stow: vi.fn((): Promise<string | null> => Promise.resolve(null)),
+  take: vi.fn((): Promise<string | null> => Promise.resolve("./images/新しい.png")),
+  pick: vi.fn((): Promise<string | null> => Promise.resolve(chosen)),
+  copy: vi.fn(),
+});
+
+const settle = async () => {
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+};
+
+function editor(body: string, images = ways()) {
   const loaded = fromMarkdown(body);
   const place = document.createElement("div");
   document.body.appendChild(place);
@@ -30,14 +41,18 @@ function editor(body: string) {
       modes: new Map(),
       redraws: new Set(),
       peekAsset: () => "blob:図解",
+      images,
     }),
   });
   open = { view, place };
   return {
     view,
+    images,
     out: () => toMarkdown(view.state.doc, loaded),
     img: () => view.dom.querySelector<HTMLElement>(".mg-img")!,
     cap: () => view.dom.querySelector<HTMLInputElement>(".mg-cap")!,
+    press: (title: string) =>
+      view.dom.querySelector<HTMLElement>(`.mg-img-bar button[title="${title}"]`)?.click(),
   };
 }
 
@@ -85,5 +100,42 @@ describe("画像のキャプション", () => {
     const at = editor("![滞留の内訳](./images/図解.png)\n");
     at.cap().dispatchEvent(new FocusEvent("blur"));
     expect(at.img().classList.contains("has-cap")).toBe(true);
+  });
+});
+
+describe("絵の上に出す帯", () => {
+  it("絵にぴったり付ける（入れ物ではなく）", () => {
+    const at = editor("![](./images/図解.png)\n");
+    const bar = at.view.dom.querySelector(".mg-img-bar");
+    expect(bar?.parentElement?.className).toBe("mg-img-hold");
+  });
+
+  it("キャプションを押すと、空でも欄が出て手が渡る", () => {
+    const at = editor("![](./images/図解.png)\n");
+    at.press("キャプション");
+    expect(at.img().classList.contains("has-cap")).toBe(true);
+    expect(document.activeElement).toBe(at.cap());
+  });
+
+  it("置換で道筋が差し替わる（キャプションは残る）", async () => {
+    const at = editor("![滞留の内訳](./images/図解.png)\n");
+    at.press("置換");
+    await settle();
+    expect(at.out()).toBe("![滞留の内訳](./images/新しい.png)\n");
+  });
+
+  it("選び直さなければ何も起きない", async () => {
+    const images = ways(null);
+    const at = editor("![](./images/図解.png)\n", images);
+    at.press("置換");
+    await settle();
+    expect(images.take).not.toHaveBeenCalled();
+    expect(at.out()).toBe("![](./images/図解.png)\n");
+  });
+
+  it("コピーは今の道筋を渡す", () => {
+    const at = editor("![](./images/図解.png)\n");
+    at.press("画像をコピー");
+    expect(at.images.copy).toHaveBeenCalledWith("./images/図解.png");
   });
 });

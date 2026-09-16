@@ -6397,7 +6397,48 @@ body.mg-carrying {
   display: block;
 }
 .mg-img-body {
-  display: block;
+  display: flex;
+  justify-content: center;
+}
+/* 帯は絵にぴったり付ける。入れ物に付けると、幅の狭い絵では離れて浮く。 */
+.mg-img-hold {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+.mg-img-bar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.15rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.5rem;
+  background: var(--mg-panel);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.mg-img-hold:hover .mg-img-bar,
+.mg-img-bar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mg-img-bar button {
+  display: flex;
+  align-items: center;
+  padding: 0.3rem;
+  border-radius: 0.35rem;
+  color: var(--mg-fg-dim);
+  line-height: 0;
+}
+.mg-img-bar button:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
 }
 .mg-img .mg-cap {
   display: none;
