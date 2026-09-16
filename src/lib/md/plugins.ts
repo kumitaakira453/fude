@@ -32,7 +32,7 @@ import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { composingKeys } from "./ime";
-import { afterImage, insideBlock, loneImages } from "./nodeViews";
+import { insideBlock, loneImages } from "./nodeViews";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
 import {
@@ -1064,7 +1064,6 @@ export function editorPlugins({
     highlightCode,
     insideBlock,
     loneImages,
-    afterImage,
     // 掴んでいるあいだ実体を薄くする印。
     lifted,
     // 指摘の居場所。打っても付いてくるように、位置を写していく。

@@ -1024,32 +1024,6 @@ export const loneImages = new Plugin<DecorationSet>({
   },
 });
 
-// 絵だけの塊では、絵の後ろにカーソルを置かない。
-//
-// 画像は行内の節点だが塊のように描くので、絵の後ろは「次の行」に見える。
-// そこに字を打つと本文では絵と同じ段落へ入り、見た目と食い違う（スラッシュの
-// 小窓が開かず、塗る枠もつまみも絵ごとの扱いから外れる）。
-// 次の塊の先頭へ送り、無ければ段落を起こす。
-export const afterImage = new Plugin({
-  appendTransaction(_trs, _old, next) {
-    const { $head, empty } = next.selection;
-    if (!empty) return null;
-    const parent = $head.parent;
-    if (parent.childCount !== 1 || parent.firstChild?.type !== schema.nodes.image) return null;
-    // 絵の前は触らない。前に書き足せる場所を潰さない。
-    if ($head.parentOffset !== parent.content.size) return null;
-
-    const depth = $head.depth;
-    const after = $head.after(depth);
-    const tr = next.tr;
-    const below = next.doc.nodeAt(after);
-    if (!below || !below.isTextblock) {
-      tr.insert(after, schema.nodes.paragraph.create());
-    }
-    return tr.setSelection(TextSelection.near(tr.doc.resolve(after + 1), 1));
-  },
-});
-
 export const insideBlock = new Plugin<DecorationSet>({
   state: {
     init: (_, state) => insideDecos(state, DecorationSet.empty),
