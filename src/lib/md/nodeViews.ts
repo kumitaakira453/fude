@@ -500,19 +500,26 @@ class ImageView implements NodeView {
     this.cap.className = "mg-cap not-prose";
     this.cap.placeholder = "キャプションを書く…";
     this.cap.spellcheck = false;
-    this.cap.addEventListener("input", () => {
+    // 書くのは離れたときの一度だけ。打鍵ごとに本文を書き換えると、
+    // ProseMirror が DOM の選択を本文へ戻し、1 文字目で欄から手が離れる
+    // （以降の字は編集面へ流れ、Enter は段落を割る）。
+    this.cap.addEventListener("blur", () => {
       const pos = getPos();
-      if (pos === undefined) return;
-      const now = view.state.doc.nodeAt(pos);
-      if (!now) return;
-      view.dispatch(
-        view.state.tr.setNodeMarkup(pos, null, { ...now.attrs, alt: this.cap.value }),
-      );
+      const now = pos === undefined ? null : view.state.doc.nodeAt(pos);
+      if (now && now.attrs.alt !== this.cap.value) {
+        view.dispatch(
+          view.state.tr.setNodeMarkup(pos!, null, { ...now.attrs, alt: this.cap.value }),
+        );
+      }
+      // 何も書かずに離れたら、欄を出したままにしない。
+      this.showCap(!!this.cap.value);
     });
-    // 何も書かずに離れたら、出したままにしない。
-    this.cap.addEventListener("blur", () => this.showCap(!!this.cap.value));
     this.cap.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === "Escape") this.cap.blur();
+      if (event.key === "Escape") this.cap.value = this.alt;
+      if (event.key === "Enter" || event.key === "Escape") {
+        event.preventDefault();
+        this.cap.blur();
+      }
     });
 
     this.fill(at, view, getPos, deps.images);
@@ -532,15 +539,17 @@ class ImageView implements NodeView {
     bar.className = "mg-img-bar not-prose";
     bar.contentEditable = "false";
 
-    // 記号だけだと何をするのか読めない。字を添える（出るのはホバーの間だけ）。
+    // 記号だけを並べ、名前は当てたときに出す。窓の既定の吹き出しは出るまで
+    // 間があり、押すかどうかを決める前に間に合わない。
     const add = (name: string, title: string, run: () => void) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.title = title;
-      button.appendChild(icon(name, 13));
-      const label = document.createElement("span");
-      label.textContent = title;
-      button.appendChild(label);
+      button.setAttribute("aria-label", title);
+      button.appendChild(icon(name, 15));
+      const tip = document.createElement("span");
+      tip.className = "mg-img-tip";
+      tip.textContent = title;
+      button.appendChild(tip);
       button.addEventListener("mousedown", (event) => event.preventDefault());
       button.addEventListener("click", run);
       bar.appendChild(button);
@@ -598,7 +607,11 @@ class ImageView implements NodeView {
   }
 
   // 書かれているものを欄に写し、出す・しまうを決める。
+  //
+  // 打っているあいだは写さない。本文の側はまだ古いので、打った字を上書きして
+  // しまう（書き込むのは離れたときの一度だけ）。
   private paintCap() {
+    if (document.activeElement === this.cap) return;
     if (this.cap.value !== this.alt) this.cap.value = this.alt;
     this.showCap(!!this.alt);
   }
@@ -978,6 +991,38 @@ function insideDecos(state: EditorState, prev: DecorationSet): DecorationSet {
   }
   return DecorationSet.empty;
 }
+
+// 絵だけの塊に印を付ける。
+//
+// 画像は行内の節点なので、絵だけの段落では行箱が絵の丈になり、カーソルも
+// その丈で立つ。塊そのものを block にすると Markdown の読み書きと貼り付けまで
+// 波及するので、印を付けて棒だけ消す。
+function loneImageDecos(doc: PmNode): DecorationSet {
+  const marks: Decoration[] = [];
+  doc.descendants((node, pos) => {
+    if (!node.isTextblock) return true;
+    if (node.childCount === 1 && node.firstChild?.type === schema.nodes.image) {
+      marks.push(Decoration.node(pos, pos + node.nodeSize, { class: "mg-lone-img" }));
+    }
+    return false;
+  });
+  return marks.length > 0 ? DecorationSet.create(doc, marks) : DecorationSet.empty;
+}
+
+export const loneImages = new Plugin<DecorationSet>({
+  state: {
+    init: (_, state) => loneImageDecos(state.doc),
+    // 本文が動いたときだけ数え直す。絵の数は多くないが、選択のたびに歩くと
+    // 打鍵のたびに全文を舐めることになる。
+    apply: (tr, prev, _old, next) =>
+      tr.docChanged ? loneImageDecos(next.doc) : prev,
+  },
+  props: {
+    decorations(state) {
+      return this.getState(state);
+    },
+  },
+});
 
 export const insideBlock = new Plugin<DecorationSet>({
   state: {

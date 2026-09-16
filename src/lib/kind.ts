@@ -90,13 +90,30 @@ export function iconOf(nameOrPath: string): string {
 export const isViewable = (nameOrPath: string): boolean => kindOf(nameOrPath) !== "other";
 
 // 画像を 1 枚選ぶダイアログ。本文へ取り込むときの入口。
-export async function pickImageFile(): Promise<string | null> {
-  const sel = await open({
-    multiple: false,
-    title: "画像を選択",
-    filters: [{ name: "画像", extensions: IMAGE_EXTENSIONS }],
+//
+// 開いている最中の 2 度目は受けない。OS の選択窓が二重に開くと、主たる実行の
+// 環がどちらの窓を待てばよいか決まらず、窓ごと止まることがある。
+//
+// 窓を出すのは押下の処理から抜けたあと。押している最中に OS の窓を出すと、
+// 窓の側は手が離れるのを待ち、こちらは窓が閉じるのを待つ形になり得る。
+let picking: Promise<string | null> | null = null;
+
+export function pickImageFile(): Promise<string | null> {
+  if (picking) return picking;
+  picking = new Promise<string | null>((done) => {
+    requestAnimationFrame(() => {
+      open({
+        multiple: false,
+        title: "画像を選択",
+        filters: [{ name: "画像", extensions: IMAGE_EXTENSIONS }],
+      })
+        .then((sel) => done(typeof sel === "string" ? sel : null))
+        .catch(() => done(null));
+    });
+  }).finally(() => {
+    picking = null;
   });
-  return typeof sel === "string" ? sel : null;
+  return picking;
 }
 
 // 1 枚だけ選ぶダイアログ。フォルダを開かずに読むときの入口。

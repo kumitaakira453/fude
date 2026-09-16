@@ -3,7 +3,7 @@ import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { nodeViews } from "./nodeViews";
+import { loneImages, nodeViews } from "./nodeViews";
 import { toMarkdown } from "./toMarkdown";
 
 // 画像のキャプション。Markdown の代替テキスト（![ここ](src)）そのもの。
@@ -35,7 +35,7 @@ function editor(body: string, images = ways()) {
   const place = document.createElement("div");
   document.body.appendChild(place);
   const view = new EditorView(place, {
-    state: EditorState.create({ doc: loaded.doc, plugins: [] }),
+    state: EditorState.create({ doc: loaded.doc, plugins: [loneImages] }),
     nodeViews: nodeViews({
       dark: false,
       modes: new Map(),
@@ -52,7 +52,7 @@ function editor(body: string, images = ways()) {
     img: () => view.dom.querySelector<HTMLElement>(".mg-img")!,
     cap: () => view.dom.querySelector<HTMLInputElement>(".mg-cap")!,
     press: (title: string) =>
-      view.dom.querySelector<HTMLElement>(`.mg-img-bar button[title="${title}"]`)?.click(),
+      view.dom.querySelector<HTMLElement>(`.mg-img-bar button[aria-label="${title}"]`)?.click(),
   };
 }
 
@@ -69,21 +69,65 @@ describe("画像のキャプション", () => {
     expect(at.cap().value).toBe("");
   });
 
-  it("打つと本文の代替テキストになる", () => {
+  it("打っているあいだは本文を書き換えない", () => {
+    // 打鍵ごとに書き換えると、ProseMirror が DOM の選択を本文へ戻し、
+    // 1 文字目で欄から手が離れる。
     const at = editor("![](./images/図解.png)\n");
     const field = at.cap();
     field.value = "滞留の内訳";
     field.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(at.out()).toBe("![](./images/図解.png)\n");
+  });
+
+  it("離れたときに一度だけ本文へ書く", () => {
+    const at = editor("![](./images/図解.png)\n");
+    const field = at.cap();
+    field.value = "滞留の内訳";
+    field.dispatchEvent(new FocusEvent("blur"));
     expect(at.out()).toBe("![滞留の内訳](./images/図解.png)\n");
   });
 
-  it("打っているあいだ、絵を描き直さない", () => {
+  it("Enter で欄を離れ、書いた字が残る", () => {
+    const at = editor("![](./images/図解.png)\n");
+    const field = at.cap();
+    field.focus();
+    field.value = "滞留の内訳";
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(at.out()).toBe("![滞留の内訳](./images/図解.png)\n");
+    expect(at.img().classList.contains("has-cap")).toBe(true);
+  });
+
+  it("Escape なら書かずに戻す", () => {
+    const at = editor("![滞留の内訳](./images/図解.png)\n");
+    const field = at.cap();
+    field.focus();
+    field.value = "打ちかけ";
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(at.out()).toBe("![滞留の内訳](./images/図解.png)\n");
+    expect(field.value).toBe("滞留の内訳");
+  });
+
+  it("手があるあいだは、本文の側で欄を上書きしない", () => {
+    const at = editor("![](./images/図解.png)\n");
+    const field = at.cap();
+    field.focus();
+    field.value = "打ちかけ";
+    // 別の書き換え（置換など）が本文に入っても、打っている字は消さない。
+    at.view.dispatch(at.view.state.tr.setNodeMarkup(0, null, {
+      src: "./images/別.png",
+      alt: "",
+      title: null,
+    }));
+    expect(field.value).toBe("打ちかけ");
+  });
+
+  it("書いてから離れても、絵は描き直さない", () => {
     const at = editor("![](./images/図解.png)\n");
     const before = at.img().querySelector("img");
     const field = at.cap();
     field.value = "滞";
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    // 打鍵ごとに作り直すと、絵がその都度読み直されて点滅する。
+    field.dispatchEvent(new FocusEvent("blur"));
+    // 道筋が同じなら作り直さない。作り直すと絵が読み直されて点滅する。
     expect(at.img().querySelector("img")).toBe(before);
   });
 
@@ -137,5 +181,28 @@ describe("絵の上に出す帯", () => {
     const at = editor("![](./images/図解.png)\n");
     at.press("画像をコピー");
     expect(at.images.copy).toHaveBeenCalledWith("./images/図解.png");
+  });
+});
+
+describe("絵だけの塊の印", () => {
+  it("絵だけの段落に付く（背の高いカーソルを消すため）", () => {
+    const at = editor("![](./images/図解.png)\n");
+    expect(at.view.dom.querySelector(".mg-lone-img")).not.toBeNull();
+  });
+
+  it("字と混ざっている段落には付かない", () => {
+    const at = editor("前 ![](./images/図解.png) 後\n");
+    expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
+  });
+
+  it("絵の無い段落には付かない", () => {
+    const at = editor("本文\n");
+    expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
+  });
+
+  it("絵を消したら印も外れる", () => {
+    const at = editor("![](./images/図解.png)\n");
+    at.view.dispatch(at.view.state.tr.delete(0, at.view.state.doc.content.size));
+    expect(at.view.dom.querySelector(".mg-lone-img")).toBeNull();
   });
 });

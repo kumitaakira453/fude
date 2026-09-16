@@ -43,7 +43,7 @@ function frame(view: EditorView, at: number, goes: ImageGoes): HTMLElement {
   open.className = "mg-imgpick-open";
   open.appendChild(icon("image", 18));
   const name = document.createElement("span");
-  name.textContent = "画像を選ぶか、ここに落とす";
+  name.textContent = "画像を選ぶ";
   open.appendChild(name);
   open.addEventListener("click", () => {
     void goes.pick().then((path) => {
