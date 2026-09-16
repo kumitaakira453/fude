@@ -4071,10 +4071,11 @@ svg[id^="mmd-"] foreignObject p {
    （片方だけ面を敷くと、対になっているように見えない）。指摘の箇所の組は面を
    敷いて立てるので、こちらは左の罫だけで静かに置く。 */
 .mg-change-side {
-  /* 罫と字の間は、見出しの色帯と同じ取り方にする（帯 3px・字まで 0.7rem）。
-     離すと罫が本文から切り離されて、どの段落のものか読み取れない。 */
-  margin-left: -0.7rem;
-  padding-left: calc(0.7rem - 3px);
+  /* 罫の左端は、指摘の箇所の面の左端に合わせる。差分のものは 1 本の筋に
+     揃えて置き、本文の桁と合わせて左端を 2 つに絞る（数が増えるほど
+     読み下ろしたときに端がぎざぎざに見える）。 */
+  margin-left: -0.5rem;
+  padding-left: calc(0.5rem - 3px);
   border-left: 3px solid var(--mg-border);
 }
 .mg-change-side.is-base {
