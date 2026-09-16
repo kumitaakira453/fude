@@ -896,20 +896,28 @@ export interface LinkGoes {
 
 export const linkClicks = (goes: LinkGoes): Plugin =>
   new Plugin({
-    props: {
-      handleClickOn(view, _pos, _node, _nodePos, event) {
-        if (event.altKey || event.button !== 0) return false;
+    // 押下は DOM で受ける。prosemirror の handleClickOn は、押し下げから
+    // 離すまでの組と位置の解決が揃ったときにしか呼ばれない（本物の押下を
+    // 投げても走らないことを試験で確かめた）。リンクは字の上を押した時点で
+    // 窓が遷移を始めるので、そこへ間に合う口で受ける。
+    view(view) {
+      const onClick = (event: MouseEvent) => {
+        if (event.defaultPrevented || event.button !== 0 || event.altKey) return;
         const target = event.target;
         const el = target instanceof Element ? target.closest("a[href]") : null;
-        if (!el || !view.dom.contains(el)) return false;
+        if (!el || !view.dom.contains(el)) return;
         const href = el.getAttribute("href") ?? "";
-        if (!href) return false;
+        if (!href) return;
         event.preventDefault();
+        event.stopPropagation();
         if (/^(https?:|mailto:|tel:)/.test(href)) goes.out(href);
         else if (href.startsWith("#")) goes.anchor(href.slice(1));
         else goes.file(href);
-        return true;
-      },
+      };
+      view.dom.addEventListener("click", onClick, true);
+      return {
+        destroy: () => view.dom.removeEventListener("click", onClick, true),
+      };
     },
   });
 
