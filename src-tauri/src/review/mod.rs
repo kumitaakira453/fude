@@ -609,6 +609,7 @@ pub fn create_thread(input: NewThread) -> Result<String, String> {
             Origin::Comment,
             Actor::System,
             None,
+            Vec::new(),
             now,
         );
         let id = ledger.fresh_thread_id();
@@ -930,7 +931,10 @@ fn apply_resolve_many(
 }
 
 // AI が「直した」を宣言する。現在のファイルの内容を版として記録する。
-pub fn commit(file: &Path, message: &str) -> Result<String, String> {
+//
+// どの指摘への対応かを添えられる。添えてあると、読む側は「その対応で本文の
+// どこが動いたか」を、指摘の箇所の外まで含めて出せる。
+pub fn commit(file: &Path, message: &str, threads: &[String]) -> Result<String, String> {
     let key = normalize(file)?;
     let text = fs::read_to_string(&key).map_err(|e| format!("{key} を読めません: {e}"))?;
     let id = snapshot::put(&text)?;
@@ -944,6 +948,7 @@ pub fn commit(file: &Path, message: &str) -> Result<String, String> {
             Origin::Commit,
             Actor::Ai,
             Some(label.clone()),
+            threads.to_vec(),
             now,
         );
         Ok(())
@@ -973,6 +978,7 @@ pub fn checkpoint(
             Origin::Checkpoint,
             actor,
             label.clone(),
+            Vec::new(),
             now,
         );
         Ok(Checkpointed {
@@ -1035,9 +1041,27 @@ fn apply_restore(ledger: &mut Ledger, file: &str, backup: &str, target: &str, no
     } else {
         Some(BACKUP_LABEL.to_string())
     };
-    record_version(ledger, file, backup, Origin::Checkpoint, Actor::System, label, now);
+    record_version(
+        ledger,
+        file,
+        backup,
+        Origin::Checkpoint,
+        Actor::System,
+        label,
+        Vec::new(),
+        now,
+    );
     // 戻した版は台帳にあるので畳まれる。名前も主体も触らない。
-    record_version(ledger, file, target, Origin::Checkpoint, Actor::System, None, now);
+    record_version(
+        ledger,
+        file,
+        target,
+        Origin::Checkpoint,
+        Actor::System,
+        None,
+        Vec::new(),
+        now,
+    );
 }
 
 // 同じ内容の版が既にあれば重ねて記録しない。ラベルは後から来た方を優先する。
@@ -1048,6 +1072,7 @@ fn record_version(
     origin: Origin,
     actor: Actor,
     label: Option<String>,
+    threads: Vec<String>,
     now: i64,
 ) {
     if let Some(existing) = ledger
@@ -1060,6 +1085,12 @@ fn record_version(
             existing.origin = origin;
             existing.actor = Some(actor);
         }
+        // 同じ内容で打ち直したときは、指摘の紐付けだけを足す。
+        for id in threads {
+            if !existing.threads.contains(&id) {
+                existing.threads.push(id);
+            }
+        }
         return;
     }
     ledger.versions.push(Version {
@@ -1068,7 +1099,8 @@ fn record_version(
         label,
         origin,
         actor: Some(actor),
-        created_at: now,
+        threads,
+created_at: now,
     });
 }
 
@@ -1284,8 +1316,8 @@ mod tests {
     #[test]
     fn version_records_are_deduplicated_by_content() {
         let mut ledger = Ledger::default();
-        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, Actor::System, None, 10);
-        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, Actor::System, None, 20);
+        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, Actor::System, None, Vec::new(), 10);
+        record_version(&mut ledger, "/a.md", "hash1", Origin::Comment, Actor::System, None, Vec::new(), 20);
         assert_eq!(ledger.versions.len(), 1);
         assert_eq!(ledger.versions[0].created_at, 10);
 
@@ -1297,15 +1329,18 @@ mod tests {
             Origin::Commit,
             Actor::Ai,
             Some("指摘1〜3に対応".into()),
+            vec!["t1".into()],
             30,
         );
         assert_eq!(ledger.versions.len(), 1);
         assert_eq!(ledger.versions[0].label.as_deref(), Some("指摘1〜3に対応"));
         assert_eq!(ledger.versions[0].origin, Origin::Commit);
+        // 同じ内容で打ち直したときは、指摘の紐付けだけが足される
+        assert_eq!(ledger.versions[0].threads, vec!["t1".to_string()]);
         assert_eq!(ledger.versions[0].who(), Actor::Ai);
 
         // 別ファイルの同一内容は別の版として持つ
-        record_version(&mut ledger, "/b.md", "hash1", Origin::Comment, Actor::System, None, 40);
+        record_version(&mut ledger, "/b.md", "hash1", Origin::Comment, Actor::System, None, Vec::new(), 40);
         assert_eq!(ledger.versions.len(), 2);
     }
 
@@ -1319,6 +1354,7 @@ mod tests {
             Origin::Checkpoint,
             Actor::You,
             Some("初稿".into()),
+            Vec::new(),
             10,
         );
         assert_eq!(ledger.versions.len(), 1);
@@ -1334,6 +1370,7 @@ mod tests {
             Origin::Checkpoint,
             Actor::You,
             Some("初稿".into()),
+            Vec::new(),
             20,
         );
         assert_eq!(ledger.versions.len(), 1);
@@ -1350,6 +1387,7 @@ mod tests {
             Origin::Checkpoint,
             Actor::You,
             Some("初稿".into()),
+            Vec::new(),
             10,
         );
         apply_restore(&mut ledger, "/a.md", "now", "old", 30);
@@ -1379,9 +1417,10 @@ mod tests {
             Origin::Checkpoint,
             Actor::You,
             Some("下書き整理".into()),
+            Vec::new(),
             10,
         );
-        record_version(&mut ledger, "/a.md", "old", Origin::Comment, Actor::System, None, 5);
+        record_version(&mut ledger, "/a.md", "old", Origin::Comment, Actor::System, None, Vec::new(), 5);
         apply_restore(&mut ledger, "/a.md", "now", "old", 30);
 
         let kept = ledger.versions.iter().find(|v| v.id == "now").unwrap();
@@ -1471,6 +1510,7 @@ mod tests {
                 label: None,
                 origin: Origin::Comment,
                 actor: None,
+                threads: Vec::new(),
                 created_at: 0,
             });
         }
@@ -1484,7 +1524,8 @@ mod tests {
             label: None,
             origin,
             actor: Some(actor),
-            created_at: at,
+            threads: Vec::new(),
+created_at: at,
         }
     }
 

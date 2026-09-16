@@ -83,6 +83,10 @@ enum ReviewAction {
         file: PathBuf,
         #[arg(long)]
         message: String,
+        /// どの指摘への対応か（繰り返し可）。添えると、読む側がその対応で
+        /// 本文のどこが動いたかを指摘ごとに出せる
+        #[arg(long = "thread")]
+        threads: Vec<String>,
     },
     /// 現在の内容をバージョンとして記録する（名前は任意）
     Checkpoint {
@@ -251,10 +255,19 @@ fn run_review(action: ReviewAction) -> Result<(), String> {
             review::reopen(&thread)?;
             println!("未解決に戻しました: #{thread}");
         }
-        ReviewAction::Commit { file, message } => {
-            let id = review::commit(&file, &message)?;
+        ReviewAction::Commit {
+            file,
+            message,
+            threads,
+        } => {
+            let id = review::commit(&file, &message, &threads)?;
             let short: String = id.chars().take(8).collect();
-            println!("バージョンを記録しました: {short} \"{message}\"");
+            let tied = if threads.is_empty() {
+                String::new()
+            } else {
+                format!("  対応: {}", threads.join(" "))
+            };
+            println!("バージョンを記録しました: {short} \"{message}\"{tied}");
         }
         ReviewAction::Checkpoint {
             file,

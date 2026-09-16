@@ -446,7 +446,8 @@ mod tests {
                 label: None,
                 origin: Origin::Comment,
                 actor: None,
-                created_at: 1_772_183_400_000,
+                threads: Vec::new(),
+created_at: 1_772_183_400_000,
             }),
             latest: Some(Version {
                 id: "ccccccccdddd".into(),
@@ -454,7 +455,8 @@ mod tests {
                 label: Some("指摘1〜3に対応".into()),
                 origin: Origin::Commit,
                 actor: None,
-                created_at: 1_772_190_000_000,
+                threads: Vec::new(),
+created_at: 1_772_190_000_000,
             }),
         }
     }

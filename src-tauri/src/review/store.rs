@@ -150,6 +150,11 @@ pub struct Version {
     // 記録が無い版は origin から見なす（who）。
     #[serde(default)]
     pub actor: Option<Actor>,
+    // この版がどの指摘への対応か。対応の記録（commit）に添える。
+    // 読む側は、指摘ごとに「その対応で本文のどこが動いたか」をこれで引く。
+    // 紐付けの無い古い記録は空のまま（読む側は時刻で寄せる）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub threads: Vec<String>,
     pub created_at: i64,
 }
 
@@ -487,7 +492,8 @@ mod tests {
                 label: None,
                 origin: Origin::Commit,
                 actor: None,
-                created_at: at,
+                threads: Vec::new(),
+created_at: at,
             });
         }
         l.versions.push(Version {
@@ -496,7 +502,8 @@ mod tests {
             label: None,
             origin: Origin::Commit,
             actor: None,
-            created_at: 999,
+            threads: Vec::new(),
+created_at: 999,
         });
         let ids: Vec<&str> = l
             .versions_of("/tmp/a.md")
@@ -578,7 +585,8 @@ mod tests {
             label: None,
             origin,
             actor: None,
-            created_at: 0,
+            threads: Vec::new(),
+created_at: 0,
         };
         assert_eq!(version(Origin::Checkpoint).who(), Actor::You);
         assert_eq!(version(Origin::Commit).who(), Actor::Ai);
