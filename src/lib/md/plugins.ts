@@ -697,6 +697,28 @@ const eraseInMark: Command = (state, dispatch) => {
   return true;
 };
 
+// 行の頭に置かれた Backspace の始末。飾りを外す・空の行を消す・手前へ継ぐ、を
+// 順に試す。どれも「行の頭に居ること」を条件にしているので、並べる順は
+// 互いに干渉しない。
+const backAtHead: Command[] = [
+  toSourceBack,
+  unlistBack,
+  plainDetailsHead,
+  toDetailsHead,
+  outOfDetailsBack,
+  dropEmptyBack,
+  joinItemBack,
+  outdentBack,
+  keepOutOfHolder,
+];
+
+// ⌘⌫。行の頭までを消す。
+//
+// 行の頭に居るなら、前に消すものはもう無い。そこで素の Backspace と同じ
+// 後片付けへ進む。ここを配らないと、字を消して空になった項目に点だけが残り、
+// 押すたびに積み上がる（ブラウザの行削除は字を消すだけで、項目には触れない）。
+export const eraseLineBack: Command = chainCommands(eraseToLineStart, ...backAtHead);
+
 // 行内の装飾を付け外しする。
 //
 // 記号を画面に出さないモードでは、入力変換で付けることはできても外す道が無い。
@@ -941,25 +963,13 @@ export function editorPlugins({ onSave }: { onSave: () => void }): Plugin[] {
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
       // 項目の先頭では飾りを外し、装飾の末尾で消したときは打ち直しが同じ
       // 装飾へ入るようにする。
-      Backspace: chainCommands(
-        undoRule(kept),
-        toSourceBack,
-        unlistBack,
-        eraseInMark,
-        plainDetailsHead,
-        toDetailsHead,
-        outOfDetailsBack,
-        dropEmptyBack,
-        joinItemBack,
-        outdentBack,
-        keepOutOfHolder,
-      ),
+      Backspace: chainCommands(undoRule(kept), eraseInMark, ...backAtHead),
       Delete: toSourceForward,
       "Mod-s": () => {
         onSave();
         return true;
       },
-      "Mod-Backspace": chainCommands(eraseToLineStart, dropEmptyBack),
+      "Mod-Backspace": eraseLineBack,
       "Mod-z": undo,
       "Shift-Mod-z": redo,
       "Mod-y": redo,
