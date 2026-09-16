@@ -510,12 +510,18 @@ export const slashKey = new PluginKey<SlashState | null>("slash");
 
 // 小窓を出すのは段落と見出しの先頭だけ。文の途中の "/"（URL やパス）や
 // コードの塊の中では邪魔しない。
+// 「行の頭」と見なせる位置か。
+//
+// 塊の先頭か、絵の直後。絵は塊のように描かれるので、その直後は同じ段落の
+// 中でも見た目には新しい行の頭になる（`k![](…)` のように字と絵が同じ段落に
+// 並ぶことがあり、そこでも直後は行の頭に見える）。
+function atLineHead($at: ResolvedPos): boolean {
+  return $at.parentOffset === 0 || $at.nodeBefore?.type === schema.nodes.image;
+}
+
 function canOpen(state: EditorState): boolean {
   const { $from, empty } = state.selection;
-  if (!empty) return false;
-  // 前に字が無ければ先頭とみなす。絵のような行内の塊は数えない（絵は塊の
-  // ように描かれるので、その下の行に見える位置が同じ段落の中にある）。
-  if ($from.parent.textBetween(0, $from.parentOffset) !== "") return false;
+  if (!empty || !atLineHead($from)) return false;
   const type = $from.parent.type;
   return type === schema.nodes.paragraph || type === schema.nodes.heading;
 }
@@ -684,13 +690,13 @@ export const slashMenu = new Plugin<SlashState | null>({
     if (!empty) return null;
     const at = $head.parentOffset - 1;
     if (at < 0 || $head.parent.textBetween(at, at + 1) !== "/") return null;
-    // "/" が最初の字であること。文の途中の "/"（URL や道筋）は邪魔しない。
-    if ($head.parent.textBetween(0, at) !== "") return null;
+    // "/" が行の頭に打たれたこと。文の途中の "/"（URL や道筋）は邪魔しない。
+    if (!atLineHead(next.doc.resolve($head.pos - 1))) return null;
     const type = $head.parent.type;
     if (type !== schema.nodes.paragraph && type !== schema.nodes.heading) return null;
-    // 打つ前は字が 1 つも無かったこと。閉じたあとの打鍵で開き直さない。
+    // 打つ前も行の頭だったこと。閉じたあとの打鍵で開き直さない。
     const was = old.selection;
-    if (!was.empty || was.$head.parent.textBetween(0, was.$head.parentOffset) !== "") return null;
+    if (!was.empty || !atLineHead(was.$head)) return null;
     return next.tr.setMeta(slashKey, { type: "open", from: $head.pos - 1 } satisfies Meta);
   },
   state: {

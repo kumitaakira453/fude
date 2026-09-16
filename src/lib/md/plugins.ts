@@ -11,7 +11,6 @@ import {
 } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
 import {
-  NodeSelection,
   Plugin,
   Selection,
   TextSelection,
@@ -33,7 +32,7 @@ import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { composingKeys } from "./ime";
-import { insideBlock, loneImages } from "./nodeViews";
+import { imageCaret, insideBlock } from "./nodeViews";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { slashMenu } from "./slash";
 import {
@@ -700,35 +699,6 @@ const eraseInMark: Command = (state, dispatch) => {
   return true;
 };
 
-// 絵を消す前に、まず選ぶ。
-//
-// 絵は塊のように描かれるので、その直後は「次の行」に見える。窓に任せると
-// 一打で絵が消え、消したつもりのない絵が黙って無くなる（空の行を消した直後は
-// ちょうどこの位置に着地する）。一度選んでから消させると、何を消すのかが
-// 見えたうえでの二打目になる。
-const pickImageBack: Command = (state, dispatch) => {
-  const { $head, empty } = state.selection;
-  if (!empty || $head.parentOffset === 0) return false;
-  const before = $head.nodeBefore;
-  if (before?.type !== schema.nodes.image) return false;
-  dispatch?.(
-    state.tr
-      .setSelection(NodeSelection.create(state.doc, $head.pos - before.nodeSize))
-      .scrollIntoView(),
-  );
-  return true;
-};
-
-// 前へ消すときも同じ。
-const pickImageForward: Command = (state, dispatch) => {
-  const { $head, empty } = state.selection;
-  if (!empty) return false;
-  const after = $head.nodeAfter;
-  if (after?.type !== schema.nodes.image) return false;
-  dispatch?.(state.tr.setSelection(NodeSelection.create(state.doc, $head.pos)).scrollIntoView());
-  return true;
-};
-
 // 行の頭に置かれた Backspace の始末。飾りを外す・空の行を消す・手前へ継ぐ、を
 // 順に試す。どれも「行の頭に居ること」を条件にしているので、並べる順は
 // 互いに干渉しない。
@@ -1050,8 +1020,8 @@ export function editorPlugins({
       // 打った直後でなくても、ブロックの先頭からは記号へ戻せるようにする。
       // 項目の先頭では飾りを外し、装飾の末尾で消したときは打ち直しが同じ
       // 装飾へ入るようにする。
-      Backspace: chainCommands(undoRule(kept), eraseInMark, pickImageBack, ...backAtHead),
-      Delete: chainCommands(pickImageForward, toSourceForward),
+      Backspace: chainCommands(undoRule(kept), eraseInMark, ...backAtHead),
+      Delete: toSourceForward,
       "Mod-s": () => {
         onSave();
         return true;
@@ -1093,7 +1063,7 @@ export function editorPlugins({
     // コードの色と、カーソルの居る塊の印（図だけを出しているときに使う）。
     highlightCode,
     insideBlock,
-    loneImages,
+    imageCaret,
     // 掴んでいるあいだ実体を薄くする印。
     lifted,
     // 指摘の居場所。打っても付いてくるように、位置を写していく。

@@ -3,7 +3,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { loneImages, nodeViews } from "./nodeViews";
+import { imageCaret, nodeViews } from "./nodeViews";
 import { toMarkdown } from "./toMarkdown";
 
 // 画像のキャプション。Markdown の代替テキスト（![ここ](src)）そのもの。
@@ -35,7 +35,7 @@ function editor(body: string, images = ways()) {
   const place = document.createElement("div");
   document.body.appendChild(place);
   const view = new EditorView(place, {
-    state: EditorState.create({ doc: loaded.doc, plugins: [loneImages] }),
+    state: EditorState.create({ doc: loaded.doc, plugins: [imageCaret] }),
     nodeViews: nodeViews({
       dark: false,
       modes: new Map(),
@@ -219,5 +219,21 @@ describe("絵の隣のカーソル", () => {
     const at = editor("本文\n");
     put(at.view, 1);
     expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
+  });
+
+  it("次の行へ移ったら印も外れる（持ち越さない）", () => {
+    const at = editor("![](./images/図解.png)\n\n次\n");
+    put(at.view, 2);
+    expect(at.view.dom.querySelector(".mg-img.is-here")).not.toBeNull();
+    put(at.view, at.view.state.doc.content.size - 1);
+    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
+    expect(at.view.dom.querySelector(".mg-no-caret")).toBeNull();
+  });
+
+  it("字を打って位置が動いたときも、印は今の場所に合う", () => {
+    const at = editor("![](./images/図解.png)\n\n次\n");
+    put(at.view, at.view.state.doc.content.size - 1);
+    at.view.dispatch(at.view.state.tr.insertText("あ"));
+    expect(at.view.dom.querySelector(".mg-img.is-here")).toBeNull();
   });
 });

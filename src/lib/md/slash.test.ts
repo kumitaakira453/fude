@@ -718,6 +718,22 @@ describe("絵の直後で開く", () => {
     expect(state(view)).not.toBe(null);
   });
 
+  it("字 + 絵 の段落でも、差し込まれた / を拾う", () => {
+    const view = editor("k![](./a.png)\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 3)));
+    view.dispatch(view.state.tr.insertText("/", 3));
+    expect(state(view)).not.toBe(null);
+  });
+
+  it("絵の前に字があっても、絵の直後なら開く", () => {
+    // k![](…) のように字と絵が同じ段落に並ぶことがある。そこでも絵の直後は
+    // 見た目には行の頭。
+    const view = editor("k![](./a.png)\n");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 3)));
+    type(view, "/");
+    expect(state(view)).not.toBe(null);
+  });
+
   it("字の途中へ差し込まれた / では開かない", () => {
     const view = editor("http\n");
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 5)));

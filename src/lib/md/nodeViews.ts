@@ -1026,16 +1026,11 @@ function imageMarks(state: EditorState): DecorationSet {
   ]);
 }
 
-export const loneImages = new Plugin<DecorationSet>({
-  state: {
-    init: (_, state) => imageMarks(state),
-    apply: (tr, prev, _old, next) =>
-      tr.docChanged || tr.selectionSet ? imageMarks(next) : prev,
-  },
+// 状態に持ち越さない。見るのはカーソルの両隣だけなので毎回その場で決められる
+// し、持ち越すと「選択が動いたのに印が残る」食い違いが出る。
+export const imageCaret = new Plugin({
   props: {
-    decorations(state) {
-      return this.getState(state);
-    },
+    decorations: imageMarks,
   },
 });
 
