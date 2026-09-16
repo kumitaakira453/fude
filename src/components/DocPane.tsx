@@ -1194,9 +1194,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 節へ寄せる。本文は先頭から順に描かれるので、行き先が出るまで待つ
   // （待ち方と後片付けは anchors が持つ）。
   const landRef = useRef<(() => void) | undefined>(undefined);
+  // 節へ寄せている最中。見ていた場所へ戻す側が横から scrollTop を動かすと、
+  // 滑らかな移動が途中で切れて飛んだように見える。
+  const landing = useRef(false);
   const land = useCallback(
     (id: string) => {
       landRef.current?.();
+      landing.current = true;
       // 出ている面へ寄せる。編集中は編集面が本文を持っている。
       const paper = editing ? editContent : content;
       if (!paper || !id) return;
@@ -1231,6 +1235,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     land(pending.id);
   }, [pending, content, path, land]);
 
+  // 別のファイルへ移ったら、寄せている最中の印は落とす。
+  useEffect(() => {
+    landing.current = false;
+  }, [path]);
+
   // 漸進描画をどこまで先に出すか。プレビューに戻る時点で決める（描画より前に
   // 決まっていないと、合わせ先のブロックがまだ無い）。
   const [startAt, setStartAt] = useState(0);
@@ -1251,7 +1260,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     let left = 12;
     let raf = 0;
     const apply = () => {
-      if (settled) return;
+      // 節へ寄せているあいだは触らない。合わせ先は向こうが決めている。
+      if (settled || landing.current) return;
       const el = content.querySelector<HTMLElement>(`[data-mg-block="${at}"]`);
       const box = el ? blockRect(el) : null;
       if (box) {
