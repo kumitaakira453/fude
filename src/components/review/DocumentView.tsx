@@ -4,13 +4,11 @@ import { applyDiffMarks } from "../../lib/diffMarks";
 import { readBlockText, rangeAt } from "../../lib/domText";
 import { findPlain, findPlainLoose } from "../../lib/projection";
 import {
-  SPOT_ICON,
   SPOT_NAME,
   type Change,
   type SpotDiff,
   type SpotState,
 } from "../../lib/spotDiff";
-import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
 
 // 指摘が付いた文書を、現在の姿のまま出す。
@@ -345,8 +343,9 @@ function Tag({
   removed: number;
 }) {
   return (
+    // 印は付けない。字の頭が本文の桁から数ピクセルずれて、揃っていないのが
+    // かえって目に付く（字面の余白ぶん、印の絵は箱より内側から始まる）。
     <header className={`mg-spot-tag is-${state}`}>
-      <Icon name={SPOT_ICON[state]} size={13} fill />
       {SPOT_NAME[state]}
       {(added > 0 || removed > 0) && (
         <span className="mg-spot-delta">
@@ -363,7 +362,6 @@ function Tag({
 function ChangeHead({ kind, answered }: { kind: Change["kind"]; answered: boolean }) {
   return (
     <header className="mg-change-head">
-      <Icon name={kind === "added" ? "add" : "difference"} size={12} />
       {answered ? "この対応で" : "コメント時点から"}
       {kind === "added" ? "足された" : kind === "removed" ? "消えた" : "変わった"}
     </header>
