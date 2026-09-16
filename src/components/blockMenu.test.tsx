@@ -22,13 +22,21 @@ function open(
   onClose = () => {},
   avoid?: { top: number; bottom: number },
   y = 10,
+  bounds?: { top: number; bottom: number },
 ) {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   act(() =>
     root!.render(
-      <BlockMenu x={10} y={y} avoid={avoid} items={items} onClose={onClose} />,
+      <BlockMenu
+        x={10}
+        y={y}
+        avoid={avoid}
+        bounds={bounds}
+        items={items}
+        onClose={onClose}
+      />,
     ),
   );
 }
@@ -164,6 +172,13 @@ describe("相手を隠さない置き場所", () => {
     // 絵のように背の高い塊を、画面の上の方で押したとき。
     open(three, () => {}, { top: -200, bottom: 400 }, -120);
     expect(topOf()).toBe(8);
+  });
+
+  it("渡された範囲の中で止める（タブの帯の上には出ない）", () => {
+    // 本文の見えている範囲だけを使う。窓の上端まで許すと、開いた一枚が
+    // タブの帯を覆う。
+    open(three, () => {}, { top: -200, bottom: 400 }, -120, { top: 120, bottom: 700 });
+    expect(topOf()).toBe(128);
   });
 
   it("画面の下へもはみ出さない", () => {

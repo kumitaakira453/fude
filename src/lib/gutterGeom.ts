@@ -136,23 +136,18 @@ export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {
   return firstLine(li) ?? box;
 }
 
-// 絵だけの塊の、絵そのものの箱。
+// 絵の桁（絵とキャプション）の箱。
 //
 // 入れ物は本文の幅いっぱいに広がるので、そのまま塗ると絵より大きい枠が出て
-// 「どこを選んだのか」がぼやける。キャプションを出しているときは、その下端
-// までを塊とする（キャプションも塊の一部）。
+// 「どこを選んだのか」がぼやける。桁は絵の幅に縮むので、そのまま使える。
+//
+// 「絵だけの塊か」は呼ぶ側が編集モデルで判じる。DOM の字で判じると、絵の上に
+// 出す帯の字（置換・キャプション…）まで数えてしまう。
 export function tightImage(el: Element): DOMRect | null {
-  const hold = el.querySelector(".mg-img-hold");
-  if (!hold) return null;
-  // 絵だけの塊のときだけ。字と混ざっている行は、塊の箱そのものを使う
-  // （どこまでが選ばれているのか、絵の箱では言い表せない）。
-  if ((el.textContent ?? "").trim() !== "") return null;
-  const box = hold.getBoundingClientRect();
-  if (box.height <= 0) return null;
-  const cap = el.querySelector(".mg-img.has-cap .mg-cap");
-  const under = cap?.getBoundingClientRect();
-  const bottom = under && under.height > 0 ? Math.max(box.bottom, under.bottom) : box.bottom;
-  return new DOMRect(box.left, box.top, box.width, bottom - box.top);
+  const col = el.querySelector(".mg-img-col");
+  if (!col) return null;
+  const box = col.getBoundingClientRect();
+  return box.height > 0 ? box : null;
 }
 
 // ブロックの 1 行の高さ。見出しのように行が高いものでも文字の中心に並ぶよう、

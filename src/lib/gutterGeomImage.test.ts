@@ -8,8 +8,7 @@ import { tightImage } from "./gutterGeom";
 // 出て、どこを選んだのかがぼやける。jsdom は組版しないので箱は差し替える。
 
 function box(el: Element, r: { top: number; left: number; width: number; height: number }) {
-  el.getBoundingClientRect = () =>
-    new DOMRect(r.left, r.top, r.width, r.height);
+  el.getBoundingClientRect = () => new DOMRect(r.left, r.top, r.width, r.height);
 }
 
 function paper(html: string): HTMLElement {
@@ -20,47 +19,39 @@ function paper(html: string): HTMLElement {
   return el;
 }
 
+const IMG =
+  '<span class="mg-img"><span class="mg-img-body"><span class="mg-img-col">' +
+  '<span class="mg-img-hold"><img></span><input class="mg-cap"></span></span></span>';
+
 afterEach(() => {
   document.body.innerHTML = "";
 });
 
 describe("tightImage", () => {
-  it("絵の箱を返す（入れ物の幅ではなく）", () => {
-    const el = paper(
-      '<span class="mg-img"><span class="mg-img-body"><span class="mg-img-hold"><img></span></span></span>',
-    );
-    box(el.querySelector(".mg-img-hold")!, { top: 116, left: 120, width: 460, height: 188 });
+  it("絵の桁の箱を返す（入れ物の幅ではなく）", () => {
+    const el = paper(IMG);
+    box(el.querySelector(".mg-img-col")!, { top: 116, left: 120, width: 460, height: 188 });
     const out = tightImage(el)!;
     expect([out.top, out.left, out.width, out.height]).toEqual([116, 120, 460, 188]);
   });
 
-  it("キャプションを出していれば、その下端まで含める", () => {
-    const el = paper(
-      '<span class="mg-img has-cap"><span class="mg-img-body"><span class="mg-img-hold"><img></span></span><input class="mg-cap"></span>',
-    );
-    box(el.querySelector(".mg-img-hold")!, { top: 116, left: 120, width: 460, height: 160 });
-    box(el.querySelector(".mg-cap")!, { top: 282, left: 120, width: 460, height: 20 });
-    expect(tightImage(el)!.height).toBe(186);
+  it("絵の無い塊は測らない", () => {
+    expect(tightImage(paper("本文"))).toBeNull();
   });
 
-  it("しまってあるキャプションは含めない", () => {
-    const el = paper(
-      '<span class="mg-img"><span class="mg-img-body"><span class="mg-img-hold"><img></span></span><input class="mg-cap"></span>',
-    );
-    box(el.querySelector(".mg-img-hold")!, { top: 116, left: 120, width: 460, height: 160 });
-    box(el.querySelector(".mg-cap")!, { top: 282, left: 120, width: 460, height: 20 });
-    expect(tightImage(el)!.height).toBe(160);
-  });
-
-  it("字と混ざっている行は、塊の箱に任せる", () => {
-    const el = paper(
-      '前 <span class="mg-img"><span class="mg-img-body"><span class="mg-img-hold"><img></span></span></span> 後',
-    );
-    box(el.querySelector(".mg-img-hold")!, { top: 116, left: 120, width: 460, height: 188 });
+  it("まだ組まれていなければ測らない", () => {
+    const el = paper(IMG);
+    box(el.querySelector(".mg-img-col")!, { top: 0, left: 0, width: 0, height: 0 });
     expect(tightImage(el)).toBeNull();
   });
 
-  it("絵の無い塊は測らない", () => {
-    expect(tightImage(paper("本文"))).toBeNull();
+  it("帯に添えた字は数に入れない（桁の箱だけを見る）", () => {
+    // 絵の上の帯には「置換」などの字がある。DOM の字で絵だけの塊かを
+    // 判じると、その字まで数えて判定が落ちる。
+    const el = paper(
+      IMG.replace("<img>", '<img><span class="mg-img-bar"><button>置換</button></span>'),
+    );
+    box(el.querySelector(".mg-img-col")!, { top: 116, left: 120, width: 460, height: 188 });
+    expect(tightImage(el)?.height).toBe(188);
   });
 });

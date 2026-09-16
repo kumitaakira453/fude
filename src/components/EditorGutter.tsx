@@ -401,18 +401,23 @@ export function EditorGutter({
       }
       const hit = tableBand(view, found, y) ?? found;
       const base = host.getBoundingClientRect();
-      // 絵だけの塊は絵そのものを相手にする。入れ物は本文の幅いっぱいに広がる。
-      const tight = tightImage(hit.el);
-      const box = tight ?? hit.el.getBoundingClientRect();
-      const room = scroller
-        ? box.left - scroller.getBoundingClientRect().left
-        : BOTH;
+      const box = hit.el.getBoundingClientRect();
 
       const node = view.state.doc.nodeAt(hit.pos);
       if (!node) {
         show(null);
         return;
       }
+
+      // 絵だけの塊は絵そのものを相手にする。入れ物は本文の幅いっぱいに広がる
+      // ので、そのまま塗ると絵より大きい枠が出る。
+      const lone =
+        node.childCount === 1 && node.firstChild?.type === schema.nodes.image;
+      const tight = lone ? tightImage(hit.el) : null;
+      const outline = tight ?? box;
+      const room = scroller
+        ? outline.left - scroller.getBoundingClientRect().left
+        : BOTH;
 
       // 箇条書きは項目ごとに掴む。指している高さの li から編集モデルの位置を引く。
       const li = itemAtY(hit.el, y, "li");
@@ -441,7 +446,7 @@ export function EditorGutter({
       show({
         pos: hit.pos,
         room,
-        box: relative(box, base),
+        box: relative(outline, base),
         tight: !!tight,
         item:
           li && liBox && spot && line
@@ -461,8 +466,8 @@ export function EditorGutter({
         // どちらも上端から 1 行ぶんまでに抑える。表や絵のような背の高い塊で
         // 下がると、つまみが本文の横で真ん中に浮き、何を掴むのか読めない。
         line: (() => {
-          const top = box.top - base.top;
-          const lift = Math.min(lineHeight(hit.el), box.height, HEAD_ROW) / 2;
+          const top = outline.top - base.top;
+          const lift = Math.min(lineHeight(hit.el), outline.height, HEAD_ROW) / 2;
           const head = firstLine(hit.el);
           if (head && head.height > 0) {
             return Math.min(head.top - base.top + head.height / 2, top + lift);
@@ -1283,6 +1288,7 @@ export function EditorGutter({
           x={menu.x}
           y={menu.y}
           avoid={avoidBox()}
+          bounds={scroller?.getBoundingClientRect()}
           items={
             menu.kind === "block"
               ? blockItems(menu.spot)

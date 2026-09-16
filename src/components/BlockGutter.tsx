@@ -1148,6 +1148,7 @@ export function BlockGutter({
           x={menu.x}
           y={menu.y}
           avoid={avoidBox()}
+          bounds={scroller?.getBoundingClientRect()}
           items={items}
           onClose={() => setMenu(null)}
         />

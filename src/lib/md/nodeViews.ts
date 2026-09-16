@@ -466,6 +466,7 @@ class ImageView implements NodeView {
   dom: HTMLElement;
   private alive = true;
   private shown: HTMLElement;
+  private col: HTMLElement;
   private cap: HTMLInputElement;
   private alt: string;
   private title: string | null;
@@ -489,6 +490,9 @@ class ImageView implements NodeView {
     this.dom.contentEditable = "false";
     this.shown = document.createElement("span");
     this.shown.className = "mg-img-body";
+    this.col = document.createElement("span");
+    this.col.className = "mg-img-col";
+    this.shown.appendChild(this.col);
     this.dom.appendChild(this.shown);
 
     // キャプション（代替テキスト）。書かれているあいだだけ出す。
@@ -510,7 +514,6 @@ class ImageView implements NodeView {
     this.cap.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === "Escape") this.cap.blur();
     });
-    this.dom.appendChild(this.cap);
 
     this.fill(at, view, getPos, deps.images);
     this.paintCap();
@@ -534,7 +537,7 @@ class ImageView implements NodeView {
       const button = document.createElement("button");
       button.type = "button";
       button.title = title;
-      button.appendChild(icon(name, 14));
+      button.appendChild(icon(name, 13));
       const label = document.createElement("span");
       label.textContent = title;
       button.appendChild(label);
@@ -572,7 +575,7 @@ class ImageView implements NodeView {
       box.className =
         "mg-img-missing inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--mg-border)] px-2 py-1 text-xs text-[var(--mg-muted)]";
       box.textContent = `🖼 ${this.alt || "画像"}`;
-      this.shown.replaceChildren(box);
+      this.col.replaceChildren(box, this.cap);
       return;
     }
     const el = document.createElement("img");
@@ -589,7 +592,9 @@ class ImageView implements NodeView {
     hold.className = "mg-img-hold";
     hold.appendChild(el);
     if (goes) hold.appendChild(this.bar(view, getPos, goes));
-    this.shown.replaceChildren(hold);
+    // キャプションは絵と同じ幅の桁に入れる。入れ物に直に置くと本文の幅
+    // いっぱいに伸び、絵の左端とそろわない。
+    this.col.replaceChildren(hold, this.cap);
   }
 
   // 書かれているものを欄に写し、出す・しまうを決める。
@@ -616,7 +621,7 @@ class ImageView implements NodeView {
     // 道筋が変わったときだけ描き直す。キャプションを打つたびに画像を
     // 読み直すと、打鍵ごとに絵が点滅する。
     if (src !== this.src) return false;
-    const img = this.shown.querySelector("img");
+    const img = this.col.querySelector("img");
     if (img) {
       img.alt = this.alt;
       if (this.title) img.title = this.title;

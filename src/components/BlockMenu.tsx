@@ -37,6 +37,7 @@ export function BlockMenu({
   x,
   y,
   avoid,
+  bounds,
   items,
   onClose,
 }: {
@@ -45,6 +46,9 @@ export function BlockMenu({
   // 隠してはいけない相手（画面の座標）。メニューが何に対するものかを
   // 塗って示しているので、その塗りを覆うと何を選んだのか読めなくなる。
   avoid?: { top: number; bottom: number };
+  // 出してよい範囲（本文の見えている領域）。渡されなければ窓いっぱい。
+  // タブの帯の上まで出ると、開いた一枚が窓の飾りを覆って浮いて見える。
+  bounds?: { top: number; bottom: number };
   items: MenuItem[];
   onClose: () => void;
 }) {
@@ -80,7 +84,7 @@ export function BlockMenu({
           ref={box}
           style={{
             left: Math.min(x, window.innerWidth - MENU_WIDTH),
-            top: placeY(y, avoid, items.length),
+            top: placeY(y, avoid, items.length, bounds),
           }}
           onClick={(e) => e.stopPropagation()}
           className="mg-block-menu fixed z-50 w-[13.5rem] rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
@@ -162,15 +166,18 @@ function placeY(
   y: number,
   avoid: { top: number; bottom: number } | undefined,
   rows: number,
+  bounds?: { top: number; bottom: number },
 ): number {
   const height = rows * ROW + 20;
-  // 画面からはみ出さない。上にぶつかるなら、できる限り上で止める。
-  const fit = Math.max(EDGE, Math.min(y, window.innerHeight - height - EDGE));
+  const top = (bounds?.top ?? 0) + EDGE;
+  const bottom = (bounds?.bottom ?? window.innerHeight) - EDGE;
+  // 見えている範囲からはみ出さない。上にぶつかるなら、できる限り上で止める。
+  const fit = Math.max(top, Math.min(y, bottom - height));
   if (!avoid || avoid.bottom - avoid.top >= height) return fit;
   const below = avoid.bottom + GAP;
-  if (below + height <= window.innerHeight - EDGE) return below;
+  if (below + height <= bottom) return below;
   const above = avoid.top - GAP - height;
-  if (above >= EDGE) return above;
-  // どちらにも入らないときは画面に収める（相手は覆うが、読めない方が困る）。
-  return Math.max(EDGE, fit);
+  if (above >= top) return above;
+  // どちらにも入らないときは範囲に収める（相手は覆うが、読めない方が困る）。
+  return fit;
 }
