@@ -18,6 +18,16 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { reload } from "../lib/md/reload";
 import { anchorTo, posOfAnchor } from "../lib/md/reviewAnchors";
 import { land } from "../lib/anchors";
+
+// 編集面の中で、その節へ寄せる。編集面の見出しには id が無いので、字から
+// 位置を引く。見つからなければ呼び出し側へ返す（外の画面が持っているかも
+// しれない）。
+function toAnchor(view: EditorView, id: string, miss: () => void): void {
+  const at = posOfAnchor(view.state.doc, id);
+  const dom = at === null ? null : view.nodeDOM(at);
+  if (dom instanceof HTMLElement) land(dom);
+  else miss();
+}
 import {
   closeEmoji,
   emojiKey,
@@ -549,6 +559,7 @@ export function BodyEditor({
   // 行き先を掴んだままになるので、ref から読む。
   const links = useRef({ anchor: onAnchor, file: onNavigate });
   links.current = { anchor: onAnchor, file: onNavigate };
+
   const moved = useRef(onViewpoint);
   // フロントマターは書いている最中にも差し替わる。組み立ての閉包に捕まえると
   // 次の保存で古いものを書き戻すので、毎描画で写して ref から読む。
@@ -566,6 +577,22 @@ export function BodyEditor({
     host: HTMLElement;
     scroller: HTMLElement | null;
   } | null>(null);
+
+  // 札から行き先へ進む。押下の振り分け（linkClicks）と同じ道を通す。窓に
+  // 任せると、アプリの中の道筋まで外のブラウザで開いてしまう。
+  const goLink = (href: string) => {
+    if (/^(https?:|mailto:|tel:)/.test(href)) {
+      void openUrl(href);
+      return;
+    }
+    if (href.startsWith("#")) {
+      const id = href.slice(1);
+      if (built) toAnchor(built.view, id, () => onAnchor?.(id));
+      else onAnchor?.(id);
+      return;
+    }
+    onNavigate?.(href);
+  };
 
   // 拡大中の図。モーダルは React の側にあるので、NodeView からは合図だけ受ける。
   const [zoomed, setZoomed] = useState<{ svg: string; onEdit: () => void } | null>(
@@ -790,13 +817,7 @@ export function BodyEditor({
           // 知らないので、行き先の判断まで持たない。
           links: {
             out: (href) => void openUrl(href),
-            anchor: (id) => {
-              // 編集面の見出しには id が無い。字から位置を引いて寄せる。
-              const at = posOfAnchor(view.state.doc, id);
-              const dom = at === null ? null : view.nodeDOM(at);
-              if (dom instanceof HTMLElement) land(dom);
-              else links.current.anchor?.(id);
-            },
+            anchor: (id) => toAnchor(view, id, () => links.current.anchor?.(id)),
             file: (href) => links.current.file?.(href),
           },
         }),
@@ -1292,6 +1313,11 @@ export function BodyEditor({
         <LinkCard
           href={onLink.href}
           at={{ left: onLink.x, top: onLink.y }}
+          onOpen={() => {
+            const href = onLink.href;
+            setOnLink(null);
+            goLink(href);
+          }}
           onEdit={() => {
             setAskLink({
               span: onLink.span,

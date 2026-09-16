@@ -3254,14 +3254,20 @@ svg[id^="mmd-"] foreignObject p {
 .mg-link-globe {
   color: var(--mg-muted);
 }
-/* 行き先。長いものは省いて 1 行に保つ。 */
-.mg-link-href {
+/* 行き先。長いものは省いて 1 行に保つ。押すと開く（丸い釦にはしない）。 */
+.mg-link-card .mg-link-href {
+  display: block;
   overflow: hidden;
   max-width: 22rem;
+  padding: 0;
+  border-radius: 0;
   color: var(--mg-fg-dim);
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.mg-link-card .mg-link-href:hover {
+  background: none;
 }
 .mg-link-href:hover {
   color: var(--mg-accent);
