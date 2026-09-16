@@ -10,6 +10,7 @@
     "core:default",
     "opener:default",
     "dialog:default",
+    "clipboard-manager:allow-write-text",
     "updater:default",
     "process:allow-restart",
     "fs:allow-read-text-file",
