@@ -9,9 +9,9 @@ import { CommentRail } from "./CommentRail";
 
 // 本文の横に出すコメント。
 //
-// 見たいのは「本文と同じ高さに、辿れるものだけが並ぶ」こと。台帳の並び（書いた順）
-// のまま積むと本文を送ったときに札だけが取り残されるし、居場所を失った指摘を
-// 列に混ぜると押しても飛ぶ先が無い。
+// 見たいのは 2 つ。札が本文と同じ高さ・同じ順に並ぶことと、開くのが 1 枚だけで
+// あること。全部を開いたまま並べると、指摘が数件あるだけで欄が埋まり、いま見て
+// いる 1 件がどれなのか分からなくなる。
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -79,7 +79,7 @@ function body(tops: Record<number, number>): HTMLElement {
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
-let picked: string[] = [];
+let picked: (string | null)[] = [];
 let opened: string[] = [];
 let resolved: string[] = [];
 let replied: { id: string; body: string }[] = [];
@@ -96,9 +96,10 @@ function show(
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  // 外れた指摘の畳み開きは呼ぶ側が持つ。試験でも同じ形で持たせる。
+  // 開いている 1 枚と、外れた指摘の畳み開きは呼ぶ側が持つ（DocPane と同じ形）。
   function Host() {
     const [openLoose, setOpenLoose] = useState(false);
+    const [active, setActive] = useState<string | null>(null);
     return (
       <CommentRail
         content={over.content ?? null}
@@ -108,8 +109,11 @@ function show(
         loose={over.loose ?? []}
         openLoose={openLoose}
         onOpenLoose={setOpenLoose}
-        active={null}
-        onPick={(id) => picked.push(id)}
+        active={active}
+        onPick={(id) => {
+          picked.push(id);
+          setActive(id);
+        }}
         onOpen={(id) => opened.push(id)}
         onResolve={(id) => resolved.push(id)}
         onReply={(id, text) => replied.push({ id, body: text })}
@@ -130,13 +134,28 @@ afterEach(() => {
 const cards = () => Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-card"));
 const flowed = () =>
   Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-flow > .mg-rail-card"));
-const quotes = () =>
-  Array.from(document.querySelectorAll(".mg-rail-quote")).map((el) => el.textContent);
+const peeks = () =>
+  Array.from(document.querySelectorAll(".mg-rail-peek")).map((el) => el.textContent);
+const opens = () =>
+  Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-card.is-open"));
 const click = (el: HTMLElement) => act(() => el.click());
+const openStray = () => click(document.querySelector<HTMLElement>(".mg-rail-stray-top")!);
 
 const at = (index: number) => ({ state: "unchanged", index, head: block(index) }) as const;
 
-describe("CommentRail", () => {
+// 欄に高さを与えて測り直させる。丈が 0 のあいだ（画面が狭い・分割中）は
+// 測れないので、置き直しは走らない。
+function measure(top: number) {
+  rects.set(
+    document.querySelector<HTMLElement>(".mg-rail")!,
+    new DOMRect(0, top, 288, 800),
+  );
+  act(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
+}
+
+describe("並び", () => {
   it("本文の並び順に出す（書いた順ではなく）", () => {
     show(
       [thread("t1"), thread("t2")],
@@ -145,7 +164,7 @@ describe("CommentRail", () => {
         ["t2", at(0)],
       ]),
     );
-    expect(quotes()).toEqual(["選んだ字 t2", "選んだ字 t1"]);
+    expect(peeks()).toEqual(["t2 の指摘", "t1 の指摘"]);
   });
 
   it("居場所を失った指摘は、流れる列に混ぜない", () => {
@@ -163,10 +182,39 @@ describe("CommentRail", () => {
   it("対応付けが済んでいない指摘も出さない", () => {
     show([thread("t1")], new Map());
     expect(cards()).toHaveLength(0);
-    expect(document.body.textContent).toContain("未解決のコメントはありません");
+    expect(document.body.textContent).toContain("コメントはありません");
   });
 
-  it("返信まで並べる", () => {
+  it("帯に未解決の件数を出す", () => {
+    show(
+      [thread("t1"), thread("t2")],
+      new Map<string, Resolution>([
+        ["t1", at(0)],
+        ["t2", at(1)],
+      ]),
+      { loose: [thread("x1")] },
+    );
+    expect(document.querySelector(".mg-rail-count")?.textContent).toBe("未解決 3");
+  });
+});
+
+describe("畳んだ姿", () => {
+  it("最初の書き込みを 1 行で出し、引用も返信欄も出さない", () => {
+    show(
+      [
+        thread("t1", {
+          comments: [{ id: "c1", author: "you", body: "**ここ**直して", created_at: 0 }],
+        }),
+      ],
+      new Map<string, Resolution>([["t1", at(0)]]),
+    );
+    // 組版はしないので、記法の印は落として字にする。
+    expect(peeks()).toEqual(["ここ直して"]);
+    expect(document.querySelector(".mg-rail-quote")).toBeNull();
+    expect(document.querySelector(".mg-rail-reply-open")).toBeNull();
+  });
+
+  it("返信の数と、返事が届いている印を出す", () => {
     show(
       [
         thread("t1", {
@@ -178,45 +226,84 @@ describe("CommentRail", () => {
       ],
       new Map<string, Resolution>([["t1", at(0)]]),
     );
-    const text = cards()[0].textContent ?? "";
+    expect(document.querySelector(".mg-rail-chip.is-answered")).not.toBeNull();
+    expect(
+      document.querySelector(".mg-rail-chip:not(.is-answered)")?.textContent,
+    ).toContain("1");
+  });
+});
+
+describe("開いた姿", () => {
+  const two = () =>
+    show(
+      [thread("t1"), thread("t2")],
+      new Map<string, Resolution>([
+        ["t1", at(0)],
+        ["t2", at(1)],
+      ]),
+    );
+
+  it("押すと開いて、会話が全部出る", () => {
+    show(
+      [
+        thread("t1", {
+          comments: [
+            { id: "c1", author: "you", body: "ここ直して", created_at: 0 },
+            { id: "c2", author: "AI", body: "直しました", created_at: 1 },
+          ],
+        }),
+      ],
+      new Map<string, Resolution>([["t1", at(0)]]),
+    );
+    click(cards()[0]);
+    const text = opens()[0].textContent ?? "";
     expect(text).toContain("ここ直して");
     expect(text).toContain("直しました");
-    expect(text).toContain("AI");
+    expect(document.querySelector(".mg-rail-quote")?.textContent).toBe("選んだ字 t1");
   });
 
-  it("札を押すとその指摘を選ぶ", () => {
-    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
+  it("開くのは 1 枚だけ", () => {
+    two();
     click(cards()[0]);
-    expect(picked).toEqual(["t1"]);
+    click(cards()[1]);
+    expect(opens()).toHaveLength(1);
+    expect(picked).toEqual(["t1", "t2"]);
+  });
+
+  it("開いている札を押しても畳まない", () => {
+    // 読んでいる途中に閉じると、戻す手立てが無い。
+    two();
+    click(cards()[0]);
+    click(opens()[0]);
+    expect(opens()).toHaveLength(1);
   });
 
   it("解決と一覧で開くは、札を押すのとは別に届く", () => {
-    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
-    const acts = cards()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    two();
+    click(cards()[0]);
+    const acts = opens()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
     click(acts[0]);
     click(acts[1]);
     expect(resolved).toEqual(["t1"]);
     expect(opened).toEqual(["t1"]);
-    // 札そのものは選ばれていない（押下は釦で止まる）。
-    expect(picked).toEqual([]);
   });
 });
 
 describe("本文から外れた指摘", () => {
   const loose = [thread("x1"), thread("x2")];
 
-  it("畳んだ見出しで件数を知らせ、開くと中身が出る", () => {
+  it("帯の札から開くと中身が出る", () => {
     show([], new Map(), { loose });
-    expect(document.body.textContent).toContain("本文から外れたコメント 2 件");
+    expect(document.querySelector(".mg-rail-stray-top")?.textContent).toContain("2");
     expect(cards()).toHaveLength(0);
-    click(document.querySelector<HTMLElement>(".mg-rail-loose-top")!);
+    openStray();
     expect(cards()).toHaveLength(2);
   });
 
   it("押しても画面は切り替わらない。選ぶだけ", () => {
     // 欄に中身が出ているのだから、読むだけの一押しで全画面へ移さない。
     show([], new Map(), { loose });
-    click(document.querySelector<HTMLElement>(".mg-rail-loose-top")!);
+    openStray();
     click(cards()[0]);
     expect(picked).toEqual(["x1"]);
     expect(opened).toEqual([]);
@@ -224,24 +311,30 @@ describe("本文から外れた指摘", () => {
 
   it("一覧で開くのは、その釦を押したときだけ", () => {
     show([], new Map(), { loose });
-    click(document.querySelector<HTMLElement>(".mg-rail-loose-top")!);
-    const acts = cards()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    openStray();
+    click(cards()[0]);
+    const acts = opens()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
     click(acts[acts.length - 1]);
     expect(opened).toEqual(["x1"]);
   });
 
   it("流れる列には入れない（飛び先が無いので置き場所が決まらない）", () => {
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { loose });
-    click(document.querySelector<HTMLElement>(".mg-rail-loose-top")!);
+    openStray();
     expect(flowed()).toHaveLength(1);
   });
 });
 
 describe("返信", () => {
-  it("書いて ⌘Enter で送ると、その本文が渡る", () => {
+  const one = () => {
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
-    click(cards()[0].querySelector<HTMLElement>(".mg-rail-reply-open")!);
-    const box = cards()[0].querySelector<HTMLTextAreaElement>("textarea")!;
+    click(cards()[0]);
+    click(opens()[0].querySelector<HTMLElement>(".mg-rail-reply-open")!);
+  };
+
+  it("書いて ⌘Enter で送ると、その本文が渡る", () => {
+    one();
+    const box = opens()[0].querySelector<HTMLTextAreaElement>("textarea")!;
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(
         window.HTMLTextAreaElement.prototype,
@@ -259,11 +352,10 @@ describe("返信", () => {
   });
 
   it("空のまま送ろうとしたら、何も渡さずに畳む", () => {
-    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
-    click(cards()[0].querySelector<HTMLElement>(".mg-rail-reply-open")!);
-    click(cards()[0].querySelector<HTMLElement>(".mg-rail-reply-send")!);
+    one();
+    click(opens()[0].querySelector<HTMLElement>(".mg-rail-reply-send")!);
     expect(replied).toEqual([]);
-    expect(cards()[0].querySelector("textarea")).toBeNull();
+    expect(opens()[0].querySelector("textarea")).toBeNull();
   });
 });
 
@@ -279,11 +371,7 @@ describe("札の置き場所", () => {
       { content },
     );
     // 欄の上端は 50。ブロックは 100 と 400 なので、そこからの差が行き先。
-    const rail = document.querySelector<HTMLElement>(".mg-rail")!;
-    rects.set(rail, new DOMRect(0, 50, 288, 800));
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
+    measure(50);
     expect(flowed().map((el) => el.style.top)).toEqual(["50px", "350px"]);
   });
 
@@ -297,13 +385,16 @@ describe("札の置き場所", () => {
       ]),
       { content },
     );
-    const rail = document.querySelector<HTMLElement>(".mg-rail")!;
-    rects.set(rail, new DOMRect(0, 100, 288, 800));
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
+    measure(100);
     // jsdom では札の背丈が 0 なので、押し下げは間隔のぶんだけになる。
     expect(flowed().map((el) => el.style.top)).toEqual(["0px", "8px"]);
+  });
+
+  it("欄が出ていないあいだは何も書かない", () => {
+    // 丈が 0 のときに書くと、測れていない値で札を置いてしまう。
+    const content = body({ 0: 100 });
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
+    expect(flowed()[0].style.top).toBe("");
   });
 
   it("まだ描かれていないブロックの札は隠す", () => {
@@ -316,6 +407,7 @@ describe("札の置き場所", () => {
       ]),
       { content },
     );
+    measure(0);
     expect(flowed().map((el) => el.style.visibility)).toEqual(["", "hidden"]);
   });
 });

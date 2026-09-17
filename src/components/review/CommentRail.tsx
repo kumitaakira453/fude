@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
-import type { ReviewComment, ReviewThread } from "../../lib/review";
+import { answeredByAgent, type ReviewComment, type ReviewThread } from "../../lib/review";
 import { ago } from "../../lib/when";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
@@ -12,17 +12,33 @@ import { CommentBody } from "./CommentMarkdown";
 // 札は指摘したブロックの高さに置き、本文と一緒に流す。上から順に積むと、本文を
 // 送ったときに札だけが取り残されて、どの札がどこの話なのか分からなくなる。
 // 重なりそうなら下へ押し下げる——本文の順は保たれるので、読む向きは変わらない。
+//
+// 開くのは選んでいる 1 枚だけ。全部を開いたまま並べると、指摘が 3 件あるだけで
+// 欄が埋まり、いま見ている 1 件がどれなのか分からなくなる。畳んだ札は「そこに
+// 何かある」ことだけを伝える。
 
 // 札と札のあいだ。
 const GAP = 8;
-// 引用に出す長さ。札の背丈を揃えるためで、続きは一覧で読める。
+// 畳んだ姿に出す一言の長さ。狭い桁なので切って、続きは開いてから読ませる。
+const PEEK_LIMIT = 44;
+// 引用に出す長さ。
 const QUOTE_LIMIT = 80;
 // 答える側の顔。エージェントには機械らしい印を出す。
 const AGENTS = new Set(["AI", "ai", "assistant", "claude"]);
 
-function oneLine(text: string, limit = QUOTE_LIMIT): string {
+function oneLine(text: string, limit: number): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
+}
+
+// 畳んだ姿に出す一言。組版はしないので、記法の印だけ落として字にする。
+function plainish(body: string, limit = PEEK_LIMIT): string {
+  const bare = body
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/^\s{0,3}[#>|]+\s*/gm, "")
+    .replace(/^\s{0,3}[-*+]\s+/gm, "")
+    .replace(/[*_`~]/g, "");
+  return oneLine(bare, limit);
 }
 
 interface Card {
@@ -56,8 +72,9 @@ export function CommentRail({
   // 外れた指摘の組を開いているか。ツールバーの札からも開けるよう、外で持つ。
   openLoose: boolean;
   onOpenLoose: (open: boolean) => void;
+  // 開いている 1 枚。本文の印と同じ合図を使う。
   active: string | null;
-  onPick: (id: string) => void;
+  onPick: (id: string | null) => void;
   onOpen: (id: string) => void;
   onResolve: (id: string) => void;
   onReply: (id: string, body: string) => void;
@@ -85,7 +102,11 @@ export function CommentRail({
     const flow = flowRef.current;
     const rail = railRef.current;
     if (!flow || !rail || !content) return;
-    const top0 = rail.getBoundingClientRect().top;
+    const box = rail.getBoundingClientRect();
+    // 欄が出ていないあいだ（狭い画面・分割中）は測れない。出たら欄そのものの
+    // 大きさが変わって呼び直されるので、ここでは何も書かない。
+    if (box.height === 0) return;
+    const top0 = box.top;
     let prev = -Infinity;
     for (const el of Array.from(flow.children) as HTMLElement[]) {
       const block = el.dataset.mgFor;
@@ -112,9 +133,10 @@ export function CommentRail({
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(place);
     };
-    // 札の背丈は返信を開いたときにも変わる。中身と枠の両方を見張る。
+    // 札の背丈は開いたときにも返信を書くときにも変わる。中身と枠の両方を見張る。
     const ro = new ResizeObserver(schedule);
     for (const el of Array.from(flow.children)) ro.observe(el);
+    if (railRef.current) ro.observe(railRef.current);
     if (content) ro.observe(content);
     const mo = content ? new MutationObserver(schedule) : null;
     mo?.observe(content!, { childList: true, subtree: true });
@@ -127,7 +149,7 @@ export function CommentRail({
       scroller?.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
     };
-  }, [place, content, scroller, cards, openLoose]);
+  }, [place, content, scroller, cards, openLoose, active]);
 
   // 札を押したら、その箇所を選ぶ。札は箇所の真横に居るので、見えている
   // ものへ送り直さない（押しただけで本文が動くと、読んでいた場所を失う）。
@@ -141,56 +163,74 @@ export function CommentRail({
     at.scrollIntoView({ block: "center", behavior: "smooth" });
   };
 
+  const total = cards.length + loose.length;
+
   return (
     <nav
       ref={railRef}
-      className="mg-rail relative hidden min-h-0 w-72 shrink-0 self-stretch overflow-hidden border-l border-[var(--mg-border)] lg:block"
+      onKeyDown={(e) => {
+        // 開いた札を畳む。欄の中だけの取り決めにして、全体のキー操作には触らない。
+        if (e.key === "Escape" && active) {
+          e.stopPropagation();
+          onPick(null);
+        }
+      }}
+      className={`mg-rail relative hidden min-h-0 w-72 shrink-0 self-stretch border-l border-[var(--mg-border)] lg:block${
+        content ? "" : " is-static"
+      }`}
     >
-      {loose.length > 0 && (
-        <div className="mg-rail-loose">
+      <div className="mg-rail-bar">
+        <span className="mg-rail-count">
+          {total > 0 ? `未解決 ${total}` : "コメントはありません"}
+        </span>
+        {loose.length > 0 && (
           <button
             type="button"
             onClick={() => onOpenLoose(!openLoose)}
-            className="mg-rail-loose-top"
+            title="本文から外れたコメント"
+            className={`mg-rail-stray-top${openLoose ? " is-on" : ""}`}
           >
-            <Icon name="link_off" size={14} />
-            本文から外れたコメント {loose.length} 件
-            <Icon name={openLoose ? "expand_less" : "expand_more"} size={16} />
+            <Icon name="link_off" size={13} />
+            {loose.length}
+            <Icon name={openLoose ? "expand_less" : "expand_more"} size={14} />
           </button>
-          {openLoose &&
-            loose.map((thread) => (
-              <RailCard
-                key={thread.id}
-                thread={thread}
-                on={active === thread.id}
-                stray
-                onJump={() => onPick(thread.id)}
-                onOpen={() => onOpen(thread.id)}
-                onResolve={() => onResolve(thread.id)}
-                onReply={(body) => onReply(thread.id, body)}
-              />
-            ))}
+        )}
+      </div>
+
+      {openLoose && loose.length > 0 && (
+        <div className="mg-rail-loose">
+          {loose.map((thread) => (
+            <RailCard
+              key={thread.id}
+              thread={thread}
+              open={active === thread.id}
+              stray
+              onJump={() => onPick(thread.id)}
+              onOpen={() => onOpen(thread.id)}
+              onResolve={() => onResolve(thread.id)}
+              onReply={(text) => onReply(thread.id, text)}
+            />
+          ))}
         </div>
       )}
 
-      <div ref={flowRef} className="mg-rail-flow">
+      {/* 本文を引けないとき（編集面は目印を持たない）は、絶対配置をやめて
+          上から積む。行き先が決まらないまま絶対配置にすると、札がぜんぶ
+          同じ場所へ重なる。 */}
+      <div ref={flowRef} className={`mg-rail-flow${content ? "" : " is-static"}`}>
         {cards.map((card) => (
           <RailCard
             key={card.thread.id}
             thread={card.thread}
             block={card.block}
-            on={active === card.thread.id}
+            open={active === card.thread.id}
             onJump={() => jump(card)}
             onOpen={() => onOpen(card.thread.id)}
             onResolve={() => onResolve(card.thread.id)}
-            onReply={(body) => onReply(card.thread.id, body)}
+            onReply={(text) => onReply(card.thread.id, text)}
           />
         ))}
       </div>
-
-      {cards.length === 0 && loose.length === 0 && (
-        <p className="mg-rail-none">このファイルに未解決のコメントはありません。</p>
-      )}
     </nav>
   );
 }
@@ -198,7 +238,7 @@ export function CommentRail({
 function RailCard({
   thread,
   block,
-  on,
+  open,
   stray,
   onJump,
   onOpen,
@@ -208,15 +248,17 @@ function RailCard({
   thread: ReviewThread;
   // 流れる列に置くときの行き先。外れた指摘は持たない。
   block?: number;
-  on: boolean;
+  open: boolean;
   stray?: boolean;
   onJump: () => void;
   onOpen: () => void;
   onResolve: () => void;
   onReply: (body: string) => void;
 }) {
-  const quote = oneLine(thread.selection || thread.quote);
   const [writing, setWriting] = useState(false);
+  const head = thread.comments[0];
+  const replies = Math.max(0, thread.comments.length - 1);
+
   return (
     // 中に Markdown のリンクと入力欄が入るので、札そのものは button にしない
     // （押せるものの入れ子になる）。押下の伝播は中の釦の側で止める。
@@ -224,56 +266,98 @@ function RailCard({
       role="button"
       tabIndex={0}
       data-mg-for={block}
-      onClick={onJump}
+      // 開いている札を押しても畳まない。読んでいる途中に閉じると戻す手立てが無い。
+      onClick={() => !open && onJump()}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (!open && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onJump();
         }
       }}
-      className={`mg-rail-card${on ? " is-on" : ""}${stray ? " is-stray" : ""}`}
+      className={`mg-rail-card${open ? " is-open" : ""}${stray ? " is-stray" : ""}`}
     >
-      {quote && <div className="mg-rail-quote">{quote}</div>}
-      {stray && <div className="mg-rail-stray">本文から外れています</div>}
-      {thread.comments.map((c) => (
-        <Said key={c.id} comment={c} />
-      ))}
-      {writing ? (
-        <Reply
-          onSend={(body) => {
-            setWriting(false);
-            onReply(body);
-          }}
-          onCancel={() => setWriting(false)}
-        />
+      {open ? (
+        <>
+          <div className="mg-rail-quote">
+            {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}
+          </div>
+          {stray && (
+            <div className="mg-rail-note">
+              <Icon name="link_off" size={12} />
+              本文から外れています
+            </div>
+          )}
+          <div className="mg-rail-talk">
+            {thread.comments.map((c) => (
+              <Said key={c.id} comment={c} />
+            ))}
+          </div>
+          {writing ? (
+            <Reply
+              onSend={(text) => {
+                setWriting(false);
+                onReply(text);
+              }}
+              onCancel={() => setWriting(false)}
+            />
+          ) : (
+            <div className="mg-rail-foot">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setWriting(true);
+                }}
+                className="mg-rail-reply-open"
+              >
+                返信を書く
+              </button>
+              <RailAct icon="done" label="解決にする" onPick={onResolve} />
+              <RailAct icon="open_in_full" label="一覧で開く" onPick={onOpen} />
+            </div>
+          )}
+        </>
       ) : (
-        <div className="mg-rail-foot">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setWriting(true);
-            }}
-            className="mg-rail-reply-open"
-          >
-            返信…
-          </button>
-          <RailAct icon="done" label="解決にする" onPick={onResolve} />
-          <RailAct icon="open_in_full" label="一覧で開く" onPick={onOpen} />
-        </div>
+        <>
+          <div className="mg-rail-who">
+            <Face author={head?.author ?? ""} />
+            <span className="mg-rail-name">{head?.author}</span>
+            <span>{head ? ago(head.created_at) : ""}</span>
+            <span className="mg-rail-chips">
+              {answeredByAgent(thread) && (
+                <span className="mg-rail-chip is-answered" title="返事が届いています">
+                  <Icon name="auto_awesome" size={10} fill />
+                </span>
+              )}
+              {replies > 0 && (
+                <span className="mg-rail-chip" title={`返信 ${replies} 件`}>
+                  <Icon name="forum" size={10} />
+                  {replies}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="mg-rail-peek">{plainish(head?.body ?? "")}</div>
+        </>
       )}
     </div>
   );
 }
 
+function Face({ author }: { author: string }) {
+  const agent = AGENTS.has(author);
+  return (
+    <span className={`mg-rail-face${agent ? " is-agent" : ""}`}>
+      <Icon name={agent ? "auto_awesome" : "person"} size={11} fill />
+    </span>
+  );
+}
+
 function Said({ comment }: { comment: ReviewComment }) {
-  const agent = AGENTS.has(comment.author);
   return (
     <div className="mg-rail-said">
       <div className="mg-rail-who">
-        <span className="mg-rail-face">
-          <Icon name={agent ? "auto_awesome" : "person"} size={11} fill />
-        </span>
+        <Face author={comment.author} />
         <span className="mg-rail-name">{comment.author}</span>
         <span>{ago(comment.created_at)}</span>
       </div>

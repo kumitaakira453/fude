@@ -3025,10 +3025,63 @@ svg[id^="mmd-"] foreignObject p {
 
 /* ============================================================
    本文の横に出すコメント（右の欄）
-   Notion のディスカッションに倣う。札は指摘したブロックの高さに置き、本文と
-   一緒に流す。引用は塗らずに左の縦線で示す——塗ると、札の中でいちばん強いもの
-   が引用になってしまい、誰が何を言ったのかが後ろへ下がる。
+
+   開くのは 1 枚だけ。畳んだ札は「そこに何かある」ことだけを伝え、枠も影も
+   持たない。開いた札だけが地と枠と影を持って浮く——濃淡を付けないと、指摘が
+   数件あるだけで欄が同じ強さの箱で埋まり、いま見ている 1 件が分からなくなる。
    ============================================================ */
+/* 件数と、外れたコメントの口。列の札はこの下をくぐって流れるので、地は透かさない。 */
+.mg-rail-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-bg);
+}
+.mg-rail-count {
+  font-family: var(--mg-font-sans);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--mg-muted);
+}
+.mg-rail-stray-top {
+  display: flex;
+  gap: 0.15rem;
+  align-items: center;
+  margin-left: auto;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  font-family: var(--mg-font-sans);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mg-muted);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-rail-stray-top:hover,
+.mg-rail-stray-top.is-on {
+  background: var(--mg-hover);
+  color: var(--mg-fg-dim);
+}
+.mg-rail-loose {
+  position: relative;
+  z-index: 2;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-bg);
+}
+.mg-rail-loose > .mg-rail-card + .mg-rail-card {
+  margin-top: 0.4rem;
+}
+
+.mg-rail {
+  overflow: hidden;
+}
 /* 流れる列。札は絶対配置で、行き先は CommentRail が測って入れる。 */
 .mg-rail-flow {
   position: absolute;
@@ -3039,107 +3092,108 @@ svg[id^="mmd-"] foreignObject p {
   left: 0.7rem;
   right: 0.7rem;
 }
-.mg-rail-none {
-  padding: 1.25rem 0.9rem;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--mg-muted);
+/* 本文を引けないとき（編集中）。行き先が決まらないので素直に積み、欄の側で
+   流す。絶対配置のまま行き先を書かないと、札がぜんぶ同じ場所へ重なる。 */
+.mg-rail.is-static {
+  overflow-y: auto;
 }
-
-/* 本文から外れた指摘。流れる列に混ぜられないので、上に留めて畳んでおく。
-   列の札はこの下をくぐって流れるので、地は透かさない。 */
-.mg-rail-loose {
+.mg-rail-flow.is-static {
+  position: static;
+  padding: 0.5rem 0.7rem;
+}
+.mg-rail-flow.is-static > .mg-rail-card {
   position: relative;
-  z-index: 1;
-  border-bottom: 1px solid var(--mg-border);
-  background: var(--mg-bg);
+  left: auto;
+  right: auto;
 }
-.mg-rail-loose-top {
-  display: flex;
-  gap: 0.35rem;
-  align-items: center;
-  width: 100%;
-  padding: 0.55rem 0.7rem;
-  font-family: var(--mg-font-sans);
-  font-size: 11.5px;
-  color: var(--mg-muted);
-  transition: color 0.12s ease;
-}
-.mg-rail-loose-top:hover {
-  color: var(--mg-fg);
-}
-/* 開き閉じの印は右端へ。押す場所が広いほうが当てやすい。 */
-.mg-rail-loose-top > :last-child {
-  margin-left: auto;
-}
-.mg-rail-loose .mg-rail-card {
-  margin: 0 0.7rem 0.55rem;
+.mg-rail-flow.is-static > .mg-rail-card + .mg-rail-card {
+  margin-top: 0.4rem;
 }
 
+/* ---- 札 ---- */
 .mg-rail-card {
   position: relative;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  background: var(--mg-panel);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  padding: 0.4rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
   cursor: pointer;
   transition:
+    background 0.12s ease,
     border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    background 0.12s ease;
+    box-shadow 0.12s ease;
 }
 .mg-rail-card:hover {
-  border-color: color-mix(in srgb, var(--mg-accent) 35%, var(--mg-border));
+  background: color-mix(in srgb, var(--mg-fg) 8%, transparent);
 }
 .mg-rail-card:focus-visible {
   outline: 2px solid var(--mg-accent);
   outline-offset: 1px;
 }
-/* 本文の側で光らせている指摘。欄と本文のどちらから見ても同じものを指す。 */
-.mg-rail-card.is-on {
-  border-color: var(--mg-accent);
-  background: var(--mg-accent-soft);
-  box-shadow: 0 2px 10px -4px color-mix(in srgb, var(--mg-accent) 60%, transparent);
-}
-/* 本文に行き先が無い札。飛べないことを枠で先に伝える。 */
+/* 飛び先を持たない札。押しても本文は動かないので、枠で先に伝える。 */
 .mg-rail-card.is-stray {
   border-style: dashed;
+  border-color: color-mix(in srgb, var(--mg-muted) 45%, transparent);
+}
+/* 開いている 1 枚。本文の側の印も同じ色で濃くなっている。 */
+.mg-rail-card.is-open {
+  padding: 0.6rem 0.7rem;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  background: var(--mg-panel);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 6%),
+    0 10px 26px -12px rgb(0 0 0 / 45%);
+  cursor: default;
+  animation: mgRailOpen 0.14s ease-out;
+}
+@keyframes mgRailOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-rail-card.is-open {
+    animation-duration: 0.01s;
+  }
+}
+/* 開いた札から欄の左端へ伸ばす線。札は箇所の真横に居るので、線がそのまま
+   本文の側を指す。 */
+.mg-rail-flow > .mg-rail-card.is-open::before {
+  content: "";
+  position: absolute;
+  top: 0.95rem;
+  left: -0.7rem;
+  width: 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--mg-accent) 55%, transparent);
+}
+.mg-rail-flow > .mg-rail-card.is-open::after {
+  content: "";
+  position: absolute;
+  top: calc(0.95rem - 2px);
+  left: calc(-0.7rem - 2px);
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--mg-accent);
 }
 
-/* 指摘した箇所。塗らずに縦線で添えるだけにする。 */
-.mg-rail-quote {
-  margin-bottom: 0.45rem;
-  padding-left: 0.5rem;
-  border-left: 2px solid color-mix(in srgb, var(--mg-accent) 45%, transparent);
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--mg-muted);
-  overflow-wrap: anywhere;
-}
-.mg-rail-stray {
-  display: flex;
-  gap: 0.25rem;
-  align-items: center;
-  margin-bottom: 0.4rem;
-  font-family: var(--mg-font-sans);
-  font-size: 10px;
-  color: var(--mg-muted);
-}
-
-.mg-rail-said + .mg-rail-said {
-  margin-top: 0.5rem;
-}
+/* ---- 畳んだ姿 ---- */
 .mg-rail-who {
   display: flex;
   gap: 0.3rem;
   align-items: center;
-  margin-bottom: 0.1rem;
   font-family: var(--mg-font-sans);
   font-size: 10px;
   color: var(--mg-muted);
 }
-/* 誰が言ったのかの顔。人とエージェントで印を変える。 */
+.mg-rail-name {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--mg-fg-dim);
+}
+/* 誰が言ったのかの顔。人と機械で色を分ける。 */
 .mg-rail-face {
   display: grid;
   flex: none;
@@ -3150,16 +3204,85 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
-.mg-rail-name {
-  font-weight: 700;
-  letter-spacing: 0.03em;
+.mg-rail-face.is-agent {
+  background: color-mix(in srgb, var(--mg-accent2) 18%, transparent);
+  color: var(--mg-accent2);
+}
+.mg-rail-chips {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+  margin-left: auto;
+}
+.mg-rail-chip {
+  display: inline-flex;
+  gap: 0.1rem;
+  align-items: center;
+  padding: 0.05rem 0.25rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 8%, transparent);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mg-muted);
+}
+/* 返事が届いている札。数の札より先に目へ入れる。 */
+.mg-rail-chip.is-answered {
+  background: color-mix(in srgb, var(--mg-accent2) 20%, transparent);
+  color: var(--mg-accent2);
+}
+/* 何が書いてあるかの手がかり。1 行に切って、続きは開いてから読ませる。 */
+.mg-rail-peek {
+  margin-top: 0.15rem;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--mg-fg-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 開いた姿 ---- */
+/* 指摘した箇所。塗らずに縦線で添えるだけにする。塗ると、札の中でいちばん
+   強いものが引用になってしまう。 */
+.mg-rail-quote {
+  margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid color-mix(in srgb, var(--mg-accent) 45%, transparent);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--mg-muted);
+  overflow-wrap: anywhere;
+}
+.mg-rail-note {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  font-family: var(--mg-font-sans);
+  font-size: 10px;
+  color: var(--mg-muted);
+}
+/* 会話。長い指摘や、記法で組まれた指摘でも札が伸び続けないよう丈を切る。 */
+.mg-rail-talk {
+  max-height: 20rem;
+  overflow: hidden auto;
+}
+.mg-rail-said + .mg-rail-said {
+  margin-top: 0.5rem;
 }
 .mg-rail-body {
+  margin-top: 0.1rem;
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--mg-fg);
   overflow-wrap: anywhere;
+}
+/* 狭い桁なので、はみ出しうるものは桁の幅で止める。 */
+.mg-rail-talk :where(pre, table, img, .mg-table-wrap) {
+  max-width: 100%;
+}
+.mg-rail-talk :where(pre, code) {
+  font-size: 11px;
 }
 
 /* 足元の一列。返信は左、片付ける操作は右。片付けるほうは触れているあいだ
@@ -3168,16 +3291,21 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   gap: 0.15rem;
   align-items: center;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
 }
 .mg-rail-reply-open {
   margin-right: auto;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
   font-family: var(--mg-font-sans);
   font-size: 11px;
   color: var(--mg-muted);
-  transition: color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .mg-rail-reply-open:hover {
+  background: var(--mg-hover);
   color: var(--mg-accent);
 }
 .mg-rail-act {
@@ -3204,14 +3332,14 @@ svg[id^="mmd-"] foreignObject p {
 
 /* 返信を書く欄。札の中に収めて、読んだ流れのまま続けられるようにする。 */
 .mg-rail-reply {
-  margin-top: 0.45rem;
+  margin-top: 0.5rem;
 }
 .mg-rail-reply textarea {
   width: 100%;
   padding: 0.35rem 0.45rem;
   border: 1px solid var(--mg-border);
   border-radius: 0.35rem;
-  background: var(--mg-bg);
+  background: var(--mg-input-bg);
   font-family: var(--mg-font-sans);
   font-size: 12px;
   line-height: 1.6;
