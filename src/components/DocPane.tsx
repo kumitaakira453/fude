@@ -23,7 +23,7 @@ import { copyImage, copyText } from "../lib/clip";
 import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { displayName, pathExists, readText, writeFile } from "../lib/fsAccess";
-import { createCheckpoint, moveReviewFile } from "../lib/review";
+import { createCheckpoint, moveReviewFile, type AnchorHit } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
@@ -602,6 +602,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 見ても同じものを指すようにする。
   const [picked, setPicked] = useState<string | null>(null);
   useEffect(() => setPicked(null), [path, rail]);
+
+  // 本文の印を押したときの行き先。横の欄が出ているならそこで読ませる
+  // （同じ中身をレビュー画面でもう一度開かせない）。
+  const pickMark = useCallback(
+    (hit: AnchorHit) => {
+      if (rail === "comments") setPicked(hit.id);
+      else review.inspect(hit);
+    },
+    [rail, review],
+  );
 
   // 指摘を書き始めたらコメントの面へ移る。印を引っ込めたまま書かせると、
   // いま何に対して書いているのかが本文から読み取れない。
@@ -1755,12 +1765,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {!isSplit && rail === "comments" && path && isDoc && (
           <CommentRail
             content={editing ? null : content}
+            scroller={editing ? null : scroller}
             threads={review.threads}
             resolutions={review.resolutions}
+            loose={review.looseThreads}
             active={picked}
             onPick={setPicked}
             onOpen={review.open}
             onResolve={(id) => void review.resolve(id)}
+            onReply={(id, body) => void review.reply(id, body)}
           />
         )}
 
@@ -1769,8 +1782,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             content={content}
             contentKey={path + (raw?.length ?? 0)}
             measure={measureMarks}
-            onPick={review.inspect}
+            onPick={pickMark}
             active={picked}
+            peek={rail !== "comments"}
             onEdit={(t, c, b) => void review.rewrite(t, c, b)}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}
@@ -1785,8 +1799,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             content={pm.host}
             contentKey={path ?? ""}
             measure={measureEditMarks}
-            onPick={review.inspect}
+            onPick={pickMark}
             active={picked}
+            peek={rail !== "comments"}
             onEdit={(t, c, b) => void review.rewrite(t, c, b)}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}

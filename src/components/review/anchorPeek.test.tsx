@@ -58,7 +58,7 @@ let content: HTMLElement | null = null;
 const edits: [string, string, string][] = [];
 const picks: string[] = [];
 
-function open(mine = true) {
+function open(mine = true, peek = true) {
   content = document.createElement("div");
   // 重ねる先の矩形。測る基準になるので原点を決めておく。
   content.getBoundingClientRect = () =>
@@ -74,6 +74,7 @@ function open(mine = true) {
         contentKey="f.md"
         measure={() => marked(mine)}
         onPick={(hit) => picks.push(hit.id)}
+        peek={peek}
         onEdit={(t, c, b) => edits.push([t, c, b])}
         onRemove={() => {}}
         onResolve={() => {}}
@@ -152,6 +153,29 @@ describe("本文の上のカード", () => {
     });
     act(() => vi.runAllTimers());
     expect(card()).not.toBeNull();
+  });
+
+  it("横の欄に中身が出ているときは、カードを出さない", () => {
+    // 同じことを 2 か所で言うと、どちらを読めばいいのか決まらない。
+    vi.useFakeTimers();
+    open(true, false);
+    hover();
+    expect(card()).toBeNull();
+  });
+
+  it("カードを出さないときは、印を押すと横の欄へ渡す", () => {
+    vi.useFakeTimers();
+    open(true, false);
+    act(() => {
+      content!.dispatchEvent(
+        new MouseEvent("click", {
+          clientX: SPOT.left + 5,
+          clientY: SPOT.top + 5,
+          bubbles: true,
+        }),
+      );
+    });
+    expect(picks).toEqual(["t1"]);
   });
 
   it("人の書き込みは書き直さず、一覧で開く", () => {

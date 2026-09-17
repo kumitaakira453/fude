@@ -69,6 +69,7 @@ export function AnchorOverlay({
   measure,
   onPick,
   active,
+  peek: peeking = true,
   onEdit,
   onRemove,
   onResolve,
@@ -83,6 +84,9 @@ export function AnchorOverlay({
   // 横の欄から選ばれている指摘。ホバーと同じ印を付けたままにして、
   // どこへの指摘かを目で探し直さずに済ませる。
   active?: string | null;
+  // ホバーで中身の小窓を出すか。横の欄に同じ中身が出ているあいだは偽にする。
+  // 同じことを 2 か所で言うと、どちらを読めばいいのか決まらない。
+  peek?: boolean;
   // 自分の書き込みを、カードの上でそのまま書き直す。
   onEdit: (thread: string, comment: string, body: string) => void;
   // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
@@ -183,8 +187,26 @@ export function AnchorOverlay({
     [],
   );
 
+  // 出し方が切り替わったら、開いたままのものは畳む。
   useEffect(() => {
-    if (!content) return;
+    if (!peeking) setPeek(null);
+  }, [peeking]);
+
+  // 小窓を出さないときの入口。印は押せる箱ではないので、本文への押下から
+  // 当たり判定で拾う。押した指摘は横の欄で開く。
+  useEffect(() => {
+    if (!content || peeking) return;
+    const onClick = (e: MouseEvent) => {
+      const base = content.getBoundingClientRect();
+      const found = hitAt(e.clientX - base.left, e.clientY - base.top);
+      if (found) onPick(found.mark.hit);
+    };
+    content.addEventListener("click", onClick);
+    return () => content.removeEventListener("click", onClick);
+  }, [content, peeking, hitAt, onPick]);
+
+  useEffect(() => {
+    if (!content || !peeking) return;
     let raf = 0;
     const onMove = (e: MouseEvent) => {
       // 書き直している間は動かさない。別の指摘へ移ると、書いていたものが
@@ -229,7 +251,7 @@ export function AnchorOverlay({
       content.removeEventListener("mousemove", onMove);
       content.removeEventListener("mouseleave", onLeave);
     };
-  }, [content, hitAt, keep, hideSoon, showPeek]);
+  }, [content, peeking, hitAt, keep, hideSoon, showPeek]);
 
   // 外を押したら書き直しをやめる。カードは触っていないと閉じる作りなので、
   // 書いている間の逃げ道をここで用意する。

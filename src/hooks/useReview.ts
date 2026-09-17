@@ -30,6 +30,7 @@ import {
   isOpen,
   removeThread,
   reopenThread,
+  replyToThread,
   resolveThread,
   restoreThread,
   readVersion,
@@ -148,16 +149,15 @@ export function useReview({
     };
   }, [threads, getBlocks]);
 
-  // 本文に居場所を持たない指摘の件数。印は出さない（近そうなブロックへ寄せると
-  // 関係の無い段落にぶら下がる）ので、数だけは見出しに出して辿れるようにする。
-  const loose = useMemo(() => {
-    let n = 0;
-    for (const thread of threads) {
+  // 本文に居場所を持たない指摘。印は出さない（近そうなブロックへ寄せると
+  // 関係の無い段落にぶら下がる）ので、横の欄と見出しで辿れるようにする。
+  const looseThreads = useMemo(() => {
+    return threads.filter((thread) => {
       const state = resolutions.get(thread.id)?.state;
-      if (state === "removed" || state === "unknown") n++;
-    }
-    return n;
+      return state === "removed" || state === "unknown";
+    });
   }, [resolutions, threads]);
+  const loose = looseThreads.length;
 
   // 解決結果を台帳に控える。CLI は Markdown を解析しないのでこれを読ませる。
   // 同じ内容を書き直して無駄にロックを取らないよう、送った分を覚えておく。
@@ -266,6 +266,16 @@ export function useReview({
         label: "元に戻す",
         run: () => void restore(),
       });
+    },
+    [store],
+  );
+
+  // 横の欄から返事を書く。レビュー画面まで行かずに会話を続けられるようにする。
+  const reply = useCallback(
+    async (thread: string, body: string) => {
+      if (!(await replyToThread(thread, REVIEW_AUTHOR, body))) return;
+      await syncLedger(store);
+      notify(store, "返信しました", "right");
     },
     [store],
   );
@@ -453,6 +463,7 @@ export function useReview({
     threads,
     resolutions,
     loose,
+    looseThreads,
     selection,
     draft,
     busy,
@@ -466,6 +477,7 @@ export function useReview({
     remove,
     resolve,
     rewrite,
+    reply,
     undoRemove,
   };
 }
