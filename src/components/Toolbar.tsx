@@ -11,7 +11,8 @@ import {
   panesAtom,
   sidebarOpenAtom,
   sidebarTabAtom,
-  tocOpenAtom,
+  railAtom,
+  type Rail,
 } from "../state/atoms";
 import { openTotalAtom, reviewScreenAtom } from "../state/review";
 import { AppIcon } from "./AppIcon";
@@ -60,7 +61,7 @@ export function Toolbar() {
   const setActiveFolderId = useSetAtom(activeFolderIdAtom);
   const setSole = useSetAtom(soleAtom);
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
-  const [tocOpen, setTocOpen] = useAtom(tocOpenAtom);
+  const [rail, setRail] = useAtom(railAtom);
   const [, setTab] = useAtom(sidebarTabAtom);
   const [, setPalette] = useAtom(paletteOpenAtom);
   const panes = useAtomValue(panesAtom);
@@ -74,8 +75,10 @@ export function Toolbar() {
     setActiveFolderId(null);
   };
   const isLg = useMediaQuery("(min-width: 1024px)");
-  // 目次は lg 以上かつ単一ペインのときのみ表示可能
-  const canToc = isLg && !isSplit;
+  // 右の欄は lg 以上かつ単一ペインのときのみ表示可能
+  const canRail = isLg && !isSplit;
+  // 押しているものをもう一度押したら何も出さない状態へ戻す。
+  const pickRail = (want: Rail) => setRail((now) => (now === want ? "none" : want));
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-0.5 border-b border-[var(--mg-border)] bg-[var(--mg-panel)] px-2">
@@ -139,11 +142,22 @@ export function Toolbar() {
           icon="horizontal_split"
         />
         <IconButton
-          onClick={() => setTocOpen((v) => !v)}
-          title={canToc ? "目次" : "目次（画面幅が狭い / 分割中は非表示）"}
-          active={tocOpen && canToc}
-          disabled={!canToc}
+          onClick={() => pickRail("toc")}
+          title={canRail ? "目次" : "目次（画面幅が狭い / 分割中は非表示）"}
+          active={rail === "toc" && canRail}
+          disabled={!canRail}
           icon="toc"
+        />
+        <IconButton
+          onClick={() => pickRail("comments")}
+          title={
+            canRail
+              ? "コメントを横に出す"
+              : "コメントを横に出す（画面幅が狭い / 分割中は非表示）"
+          }
+          active={rail === "comments" && canRail}
+          disabled={!canRail}
+          icon="chat"
         />
         <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
         {/* 下書きには指摘を付けない。行き先が決まってからのものなので、
@@ -155,8 +169,8 @@ export function Toolbar() {
             isDraft
               ? "コメントは保存先を決めてから"
               : openTotal > 0
-                ? `コメント — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
-                : "コメント (⌘⇧R)"
+                ? `コメント一覧 — このフォルダに未解決 ${openTotal} 件 (⌘⇧R)`
+                : "コメント一覧 (⌘⇧R)"
           }
           className="relative flex h-8 items-center gap-1 rounded-lg px-2 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--mg-muted)]"
         >

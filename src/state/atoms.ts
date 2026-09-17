@@ -148,9 +148,13 @@ export const reviewSideWidthAtom = atomWithStorage<number>(
   windowScopedKey("mdglow:reviewsidew"),
   REVIEW_SIDE_WIDTH,
 );
-export const tocOpenAtom = atomWithStorage<boolean>(
-  windowScopedKey("mdglow:toc"),
-  true,
+// 本文の右に何を出すか。目次とコメントは同じ場所を取り合うので、択一で持つ。
+// 「なし」はコメントの印も本文から引っ込める——読むだけのときに蛍光ペンが
+// 出ずっぱりなのが元の困りどころなので、消す先をここに用意する。
+export type Rail = "none" | "toc" | "comments";
+export const railAtom = atomWithStorage<Rail>(
+  windowScopedKey("mdglow:rail"),
+  "toc",
 );
 
 // 更新チェック: nonce をインクリメントで手動トリガ、状態を UI で共有する

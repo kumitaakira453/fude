@@ -68,6 +68,7 @@ export function AnchorOverlay({
   contentKey,
   measure,
   onPick,
+  active,
   onEdit,
   onRemove,
   onResolve,
@@ -79,6 +80,9 @@ export function AnchorOverlay({
   // 何をどこに出すか。重ねる先の矩形を渡すので、返す矩形はその左上を原点にする。
   measure: (base: DOMRect) => Marked;
   onPick: (hit: AnchorHit) => void;
+  // 横の欄から選ばれている指摘。ホバーと同じ印を付けたままにして、
+  // どこへの指摘かを目で探し直さずに済ませる。
+  active?: string | null;
   // 自分の書き込みを、カードの上でそのまま書き直す。
   onEdit: (thread: string, comment: string, body: string) => void;
   // 指摘そのものを取り消す。付け間違いを本文の上から消せるようにする。
@@ -364,7 +368,10 @@ export function AnchorOverlay({
         />
       ))}
       {marks.map((mark) => {
-        const hot = peek?.id === mark.id ? " mg-review-mark-active" : "";
+        const hot =
+          peek?.id === mark.id || active === mark.id
+            ? " mg-review-mark-active"
+            : "";
         return (
           <Fragment key={mark.id}>
             {mark.areas.map((rc, i) => (
@@ -377,7 +384,13 @@ export function AnchorOverlay({
               />
             ))}
             {mark.spots.map((rc, i) => (
-              <div key={i} className={`mg-review-mark${hot}`} style={rc} />
+              <div
+                key={i}
+                className={`mg-review-mark${
+                  mark.moved ? " mg-review-mark-stale" : ""
+                }${hot}`}
+                style={rc}
+              />
             ))}
           </Fragment>
         );

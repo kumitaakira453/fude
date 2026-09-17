@@ -54,7 +54,7 @@ import {
   shortcutsOpenAtom,
   soleAtom,
   themeAtom,
-  tocOpenAtom,
+  railAtom,
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
@@ -82,6 +82,7 @@ import {
 import { land as land0, landOn, type Section } from "../lib/anchors";
 import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
+import { CommentRail } from "./review/CommentRail";
 import {
   readingMarks,
   readingPending,
@@ -116,7 +117,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   liveRef.current = live;
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
-  const tocOpen = useAtomValue(tocOpenAtom);
+  const [rail, setRail] = useAtom(railAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   // 重ねた画面が出ているか。本文向けのキー操作をそこへ効かせないための判定。
@@ -597,6 +598,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const reviewRef = useRef(review);
   reviewRef.current = review;
 
+  // 横の欄で選んでいる指摘。本文の印にも同じ印を付けて、欄と本文のどちらから
+  // 見ても同じものを指すようにする。
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => setPicked(null), [path, rail]);
+
+  // 指摘を書き始めたらコメントの面へ移る。印を引っ込めたまま書かせると、
+  // いま何に対して書いているのかが本文から読み取れない。
+  useEffect(() => {
+    if (review.draft) setRail((now) => (now === "comments" ? now : "comments"));
+  }, [review.draft, setRail]);
+
   // 最新の raw/body/path を ref で参照し、saveBody を安定な関数に保つ。
   // （背景索引などで再レンダーしても Markdown のメモ化が壊れず、Mermaid の
   //  再パース＝チカチカを防ぐ）
@@ -858,7 +870,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       if (!content) return { marks: [], pending: [] };
       const draft = review.draft;
       return {
-        marks: readingMarks(content, base, review.threads, review.resolutions),
+        // 印を出すのはコメントの面のときだけ。読むだけのときに蛍光ペンが
+        // 出ずっぱりにならないようにする（書いている最中の印は別。下の
+        // pending はいつでも出す——出さないと、付け始めた手応えが無い）。
+        marks:
+          rail === "comments"
+            ? readingMarks(content, base, review.threads, review.resolutions)
+            : [],
         pendingWhole: !!draft && (draft.whole || draft.until !== undefined),
         pending: draft
           ? readingPending(content, base, {
@@ -884,7 +902,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     },
     // 指摘や下書きが変わったら測り直させる。合図は AnchorOverlay が
     // これの識別で見ている。
-    [content, review.threads, review.resolutions, review.draft],
+    [content, rail, review.threads, review.resolutions, review.draft],
   );
 
   // 組み立てた編集面。指摘の印は本文の DOM ではなく編集モデルから位置を出す。
@@ -972,7 +990,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const list = anchorsKey.getState(pm.view.state) ?? [];
       const draft = review.draft;
       return {
-        marks: editorMarks(pm.view, base, list, review.threads),
+        marks: rail === "comments" ? editorMarks(pm.view, base, list, review.threads) : [],
         pendingWhole: !draft?.spot,
         pending:
           draft?.pos === undefined
@@ -984,7 +1002,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       };
     },
     // anchorSeq は測り直させるための合図。
-    [pm, review.threads, review.draft, anchorSeq],
+    [pm, rail, review.threads, review.draft, anchorSeq],
   );
 
   // 編集面で選んだところ。指摘の入口をここに出す。
@@ -1723,11 +1741,26 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
         {/* 目次は編集中も出す。見出しの増減は MutationObserver が拾うので、
             打つそばから追従する。 */}
-        {!isSplit && tocOpen && path && isDoc && (
+        {!isSplit && rail === "toc" && path && isDoc && (
           <Toc
             content={editing ? editContent : content}
             scroller={editing ? editScroller : scroller}
             contentKey={path + (editing ? draft.length : (raw?.length ?? 0))}
+          />
+        )}
+
+        {/* コメントは目次と同じ場所に出す。飛び先はブロックの目印で引くので、
+            それを持つ読む面のときだけ渡す（編集面の DOM は ProseMirror の
+            もので、目印を持たない）。 */}
+        {!isSplit && rail === "comments" && path && isDoc && (
+          <CommentRail
+            content={editing ? null : content}
+            threads={review.threads}
+            resolutions={review.resolutions}
+            active={picked}
+            onPick={setPicked}
+            onOpen={review.open}
+            onResolve={(id) => void review.resolve(id)}
           />
         )}
 
@@ -1737,6 +1770,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             contentKey={path + (raw?.length ?? 0)}
             measure={measureMarks}
             onPick={review.inspect}
+            active={picked}
             onEdit={(t, c, b) => void review.rewrite(t, c, b)}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}
@@ -1752,6 +1786,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             contentKey={path ?? ""}
             measure={measureEditMarks}
             onPick={review.inspect}
+            active={picked}
             onEdit={(t, c, b) => void review.rewrite(t, c, b)}
             onRemove={(id) => void review.remove(id)}
             onResolve={(id) => void review.resolve(id)}

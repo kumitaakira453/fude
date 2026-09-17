@@ -287,14 +287,17 @@ export function useReview({
   // 選択を解いた操作の側からも落として、メニューを残さない。
   const clearSelection = useCallback(() => setSelection(null), []);
 
-  // 本文に付いている印を押したら、その指摘をレビュー画面で開く。
-  const inspect = useCallback(
-    (hit: AnchorHit) => {
-      setSelectedThread(hit.id);
+  // その指摘をレビュー画面で開く。本文の印からも、横の欄の札からも使う。
+  const open = useCallback(
+    (id: string) => {
+      setSelectedThread(id);
       setScreen(true);
     },
     [setSelectedThread, setScreen],
   );
+
+  // 本文に付いている印を押したら、その指摘をレビュー画面で開く。
+  const inspect = useCallback((hit: AnchorHit) => open(hit.id), [open]);
 
   // 押しても何も起きない状態を作らない。進めない理由はその場で出す。
   // at は図のように選べる文字を持たないブロックのために、呼び出し側が
@@ -456,6 +459,7 @@ export function useReview({
     startDraft,
     startDraftIn,
     inspect,
+    open,
     submit,
     close,
     clearSelection,

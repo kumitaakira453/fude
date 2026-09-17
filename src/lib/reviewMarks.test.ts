@@ -25,8 +25,20 @@ beforeAll(() => {
     return new DOMRect(box.left + 2, box.top + 2, Math.max(0, box.width - 4), box.height);
   };
   Range.prototype.getBoundingClientRect = ofRange;
+  // 字の範囲は、選んだ字数ぶんの幅を持つものとみなす。箱をそのまま返すと
+  // 「箱で塗ったのか、字の幅で塗ったのか」を見分けられない。
+  const CH = 10;
   Range.prototype.getClientRects = function () {
-    const one = ofRange.call(this);
+    const start = this.startContainer;
+    if (!(start instanceof Text)) return [ofRange.call(this)] as unknown as DOMRectList;
+    const box = start.parentElement ? boxOf(start.parentElement) : new DOMRect(0, 0, 0, 0);
+    const end = this.endContainer === start ? this.endOffset : start.length;
+    const one = new DOMRect(
+      box.left + this.startOffset * CH,
+      box.top + 2,
+      Math.max(0, (end - this.startOffset) * CH),
+      box.height,
+    );
     return [one] as unknown as DOMRectList;
   };
 });
@@ -122,7 +134,7 @@ describe("readingMarks", () => {
     expect(marks[0].note).toBe("ここ直して");
   });
 
-  it("書き換わっていれば枠も添える", () => {
+  it("書き換わっていても、箇所が分かるなら枠は添えない", () => {
     const el = content("はじめの段落。", "つぎの段落。");
     const marks = readingMarks(
       el,
@@ -135,8 +147,10 @@ describe("readingMarks", () => {
         head: block(0, "はじめの段落。"),
       }),
     );
+    // 塗りと枠を二重に出すと、どちらへの指摘なのか読み取れない。
+    // 書き換わっていることは moved として塗りの側で示す。
     expect(marks[0].moved).toBe(true);
-    expect(marks[0].areas.length).toBeGreaterThan(0);
+    expect(marks[0].areas).toHaveLength(0);
     expect(marks[0].spots.length).toBeGreaterThan(0);
   });
 
@@ -214,6 +228,29 @@ describe("readingMarks", () => {
     expect(marks[0].spots[0].height).toBe(60);
     // 箇所が出せているので、ブロックの枠は添えない
     expect(marks[0].areas).toHaveLength(0);
+  });
+
+  it("引き先を持つ指摘は、箱ではなく中の文字の幅で塗る", () => {
+    // 項目の箱は行の端まで伸びる。そのまま印にすると、数文字への指摘が
+    // 行いっぱいの帯になって、どこを指しているのか分からない。
+    const { article } = listContent();
+    const li = article.querySelectorAll("li")[0];
+    const marks = readingMarks(
+      article,
+      base,
+      [
+        thread({
+          quote: LIST_SRC,
+          selection: "",
+          selection_offset: 0,
+          unit: { kind: "item", index: 0 },
+        }),
+      ],
+      resolved({ state: "unchanged", index: 0, head: block(0, LIST_SRC) }),
+    );
+    expect(marks[0].spots).toHaveLength(1);
+    expect(marks[0].spots[0].width).toBeGreaterThan(0);
+    expect(marks[0].spots[0].width).toBeLessThan(li.getBoundingClientRect().width);
   });
 
   it("引き先が引けなければブロックの枠に落とす", () => {

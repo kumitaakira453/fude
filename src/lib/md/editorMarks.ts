@@ -9,6 +9,7 @@ import {
   tableClip,
   textRects,
   unitOf,
+  unitRects,
   type Mark,
   type Rect,
 } from "../reviewMarks";
@@ -112,12 +113,13 @@ export function editorMarks(
         : unitElementIn(view, anchor.pos, thread.unit);
     const cell = marked ?? (inner ? unitOf(inner) : null);
     const spots = cell
-      ? clipRects([cell.getBoundingClientRect()], spotClip)
+      ? clipRects(unitRects(cell), spotClip)
       : inner
         ? clipRects(mergeRects(textRects(inner)), spotClip)
         : [];
-    // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
-    const shown = spots.length === 0 || anchor.moved ? areas : [];
+    // 箇所が特定できているなら外枠は添えない。塗りと枠を二重に出すと、
+    // どちらへの指摘なのか読み取れない。書き換わっていることは塗りの側で示す。
+    const shown = spots.length === 0 ? areas : [];
     if (shown.length === 0 && spots.length === 0) continue;
 
     const at = spots[0] ?? areas[0];

@@ -181,9 +181,8 @@ export function relTo(base: DOMRect, rc: DOMRect): Rect {
   };
 }
 
-// セルや箇条書きの項目の文字を丸ごと覆っている指摘は、文字の行ではなく
-// その箱で示す。行ごとの矩形だと、`コード` の囲みやチェックの前後で切れて
-// 散らかって見える。
+// セルや箇条書きの項目の文字を丸ごと覆っている指摘。どこまでが対象かを
+// ひと目で示せるよう、囲みごと 1 つの印にする。
 const UNIT = "td,th,li[data-mg-item]";
 
 export function unitOf(range: Range): Element | null {
@@ -201,6 +200,18 @@ export function unitOf(range: Range): Element | null {
 export function unitElement(block: HTMLElement, unit: ReviewUnit): Element | null {
   const attr = unit.kind === "cell" ? "data-mg-cell" : "data-mg-item";
   return block.querySelectorAll(`[${attr}]`)[unit.index] ?? null;
+}
+
+// 丸ごと対象にした項目・セルの印。箱ではなく中の文字の幅で出す。項目の箱は
+// 行の端まで伸びるので、数文字への指摘が行いっぱいの帯になる。
+// 中身の無い項目は文字を持たないので、そのときだけ箱に戻る。
+export function unitRects(cell: Element): DOMRect[] {
+  const range = (cell.ownerDocument ?? document).createRange();
+  range.selectNodeContents(cell);
+  // 文字ノードだけを歩くので、チェックの箱は混ざらない。`コード` の囲みで
+  // 切れた矩形は mergeRects が 1 本に畳む。
+  const rects = mergeRects(textRects(range));
+  return rects.length > 0 ? rects : [cell.getBoundingClientRect()];
 }
 
 // 描画側の目印（ソース位置）から通し番号を出す。台帳へは番号で残すので、
@@ -318,14 +329,14 @@ export function readingMarks(
     const areas = clipRects(boxes, clip);
     const cell = marked ?? (inner ? unitOf(inner) : null);
     const spots = cell
-      ? clipRects([cell.getBoundingClientRect()], spotClip)
+      ? clipRects(unitRects(cell), spotClip)
       : inner
         ? clipRects(mergeRects(textRects(inner)), spotClip)
         : [];
-    // 箇所が特定できているうちは、外枠は書き換わったときだけ添える。
-    // いつも二重に出すと、どこへの指摘か読み取りにくい。
+    // 箇所が特定できているなら外枠は添えない。塗りと枠を二重に出すと、
+    // どちらへの指摘なのか読み取れない。書き換わっていることは塗りの側で示す。
     const moved = resolution.state === "rewritten";
-    const shown = spots.length === 0 || moved ? areas : [];
+    const shown = spots.length === 0 ? areas : [];
     if (shown.length === 0 && spots.length === 0) continue;
 
     const anchor = spots[0] ?? areas[0];

@@ -116,7 +116,7 @@ describe("editorMarks", () => {
     expect(marks[0].note).toBe("ここ直して");
   });
 
-  it("書き換わっていれば枠も添える", () => {
+  it("書き換わっていても、箇所が分かるなら枠は添えない", () => {
     const { view } = editor(SRC);
     const marks = editorMarks(
       view,
@@ -124,7 +124,8 @@ describe("editorMarks", () => {
       [anchored(posOf(view, 1), { moved: true })],
       [thread()],
     );
-    expect(marks[0].areas.length).toBeGreaterThan(0);
+    expect(marks[0].moved).toBe(true);
+    expect(marks[0].areas).toHaveLength(0);
     expect(marks[0].spots.length).toBeGreaterThan(0);
   });
 
