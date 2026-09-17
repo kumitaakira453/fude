@@ -36,6 +36,8 @@ export function CommentRail({
   threads,
   resolutions,
   loose,
+  openLoose,
+  onOpenLoose,
   active,
   onPick,
   onOpen,
@@ -51,6 +53,9 @@ export function CommentRail({
   resolutions: Map<string, Resolution>;
   // 本文に居場所を持たない指摘。流れる列には混ぜられないので別に置く。
   loose: ReviewThread[];
+  // 外れた指摘の組を開いているか。ツールバーの札からも開けるよう、外で持つ。
+  openLoose: boolean;
+  onOpenLoose: (open: boolean) => void;
   active: string | null;
   onPick: (id: string) => void;
   onOpen: (id: string) => void;
@@ -72,7 +77,6 @@ export function CommentRail({
 
   const railRef = useRef<HTMLElement | null>(null);
   const flowRef = useRef<HTMLDivElement | null>(null);
-  const [openLoose, setOpenLoose] = useState(false);
 
   // 札を、指摘したブロックの高さへ置く。背丈は描き終わってからでないと測れない
   // ので、状態には持たず DOM へ直に書く（状態に持つと測る→描く→また測るで
@@ -146,7 +150,7 @@ export function CommentRail({
         <div className="mg-rail-loose">
           <button
             type="button"
-            onClick={() => setOpenLoose((v) => !v)}
+            onClick={() => onOpenLoose(!openLoose)}
             className="mg-rail-loose-top"
           >
             <Icon name="link_off" size={14} />
@@ -160,7 +164,7 @@ export function CommentRail({
                 thread={thread}
                 on={active === thread.id}
                 stray
-                onJump={() => onOpen(thread.id)}
+                onJump={() => onPick(thread.id)}
                 onOpen={() => onOpen(thread.id)}
                 onResolve={() => onResolve(thread.id)}
                 onReply={(body) => onReply(thread.id, body)}

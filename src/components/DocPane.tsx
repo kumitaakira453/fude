@@ -10,6 +10,7 @@ import {
 } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useReview } from "../hooks/useReview";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
 import {
@@ -602,6 +603,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 見ても同じものを指すようにする。
   const [picked, setPicked] = useState<string | null>(null);
   useEffect(() => setPicked(null), [path, rail]);
+
+  // 本文から外れた指摘の組を、横の欄で開いているか。ツールバーの札からも
+  // 開けるようにするので、欄の内側ではなくここで持つ。
+  const [openLoose, setOpenLoose] = useState(false);
+  useEffect(() => setOpenLoose(false), [path]);
+  // 横の欄を出せる広さ・並びか。目次と同じ条件。
+  const isLg = useMediaQuery("(min-width: 1024px)");
+  const canRail = isLg && !isSplit;
 
   // 本文の印を押したときの行き先。横の欄が出ているならそこで読ませる
   // （同じ中身をレビュー画面でもう一度開かせない）。
@@ -1455,7 +1464,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             示して辿れるようにする。 */}
         {review.loose > 0 && (
           <button
-            onClick={() => openReview(true)}
+            onClick={() => {
+              // 横の欄で読めるならそちらを開く。読むだけのつもりの一押しで
+              // 全画面へ切り替わると、読んでいた場所ごと持っていかれる。
+              if (canRail) {
+                setRail("comments");
+                setOpenLoose(true);
+              } else openReview(true);
+            }}
             title={`本文から外れたコメントが ${review.loose} 件あります`}
             className="mg-loose-chip"
           >
@@ -1769,6 +1785,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             threads={review.threads}
             resolutions={review.resolutions}
             loose={review.looseThreads}
+            openLoose={openLoose}
+            onOpenLoose={setOpenLoose}
             active={picked}
             onPick={setPicked}
             onOpen={review.open}

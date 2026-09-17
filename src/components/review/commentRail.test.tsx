@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "../../lib/blocks";
@@ -96,22 +96,27 @@ function show(
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() =>
-    root!.render(
+  // 外れた指摘の畳み開きは呼ぶ側が持つ。試験でも同じ形で持たせる。
+  function Host() {
+    const [openLoose, setOpenLoose] = useState(false);
+    return (
       <CommentRail
         content={over.content ?? null}
         scroller={null}
         threads={threads}
         resolutions={resolutions}
         loose={over.loose ?? []}
+        openLoose={openLoose}
+        onOpenLoose={setOpenLoose}
         active={null}
         onPick={(id) => picked.push(id)}
         onOpen={(id) => opened.push(id)}
         onResolve={(id) => resolved.push(id)}
         onReply={(id, text) => replied.push({ id, body: text })}
-      />,
-    ),
-  );
+      />
+    );
+  }
+  act(() => root!.render(<Host />));
 }
 
 afterEach(() => {
@@ -208,12 +213,21 @@ describe("本文から外れた指摘", () => {
     expect(cards()).toHaveLength(2);
   });
 
-  it("押しても飛ばさず、一覧で開く", () => {
+  it("押しても画面は切り替わらない。選ぶだけ", () => {
+    // 欄に中身が出ているのだから、読むだけの一押しで全画面へ移さない。
     show([], new Map(), { loose });
     click(document.querySelector<HTMLElement>(".mg-rail-loose-top")!);
     click(cards()[0]);
+    expect(picked).toEqual(["x1"]);
+    expect(opened).toEqual([]);
+  });
+
+  it("一覧で開くのは、その釦を押したときだけ", () => {
+    show([], new Map(), { loose });
+    click(document.querySelector<HTMLElement>(".mg-rail-loose-top")!);
+    const acts = cards()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    click(acts[acts.length - 1]);
     expect(opened).toEqual(["x1"]);
-    expect(picked).toEqual([]);
   });
 
   it("流れる列には入れない（飛び先が無いので置き場所が決まらない）", () => {
