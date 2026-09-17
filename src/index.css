@@ -1378,10 +1378,11 @@ button.mg-task-check:hover {
 }
 .mg-set {
   display: flex;
-  width: min(40rem, 100%);
+  width: min(54rem, 100%);
   /* 高さは決め打ち。中身の量で伸びると画面からはみ出すし、見出しを
-     切り替えるたびに背丈が変わって落ち着かない。 */
-  height: min(30rem, 100%);
+     切り替えるたびに背丈が変わって落ち着かない。
+     絞り込みの当たりを何件か並べても切れない丈にしてある。 */
+  height: min(38rem, 100%);
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--mg-border);
