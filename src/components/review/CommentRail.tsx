@@ -165,16 +165,13 @@ export function CommentRail({
     };
   }, [place, content, scroller, cards, openLoose, active]);
 
-  // 札を押したら、その箇所を選ぶ。札は箇所の真横に居るので、見えている
-  // ものへ送り直さない（押しただけで本文が動くと、読んでいた場所を失う）。
+  // 札を押したら、その箇所を選んで本文をそこへ送る。札は箇所の真横に居るので、
+  // 送った先でも札はついてくる。
   const jump = (card: Card) => {
     onPick(card.thread.id);
-    const at = content?.querySelector(`[data-mg-block="${card.block}"]`);
-    if (!at) return;
-    const box = at.getBoundingClientRect();
-    const view = (scroller ?? railRef.current)?.getBoundingClientRect();
-    if (view && box.top >= view.top && box.bottom <= view.bottom) return;
-    at.scrollIntoView({ block: "center", behavior: "smooth" });
+    content
+      ?.querySelector(`[data-mg-block="${card.block}"]`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
   };
 
 
@@ -253,6 +250,7 @@ export function CommentRail({
             done={card.done}
             open={active === card.thread.id}
             onJump={() => jump(card)}
+            onBack={() => jump(card)}
             onOpen={() => onOpen(card.thread.id)}
             onResolve={() => onResolve(card.thread.id)}
             onReopen={() => onReopen(card.thread.id)}
@@ -277,6 +275,7 @@ function RailCard({
   stray,
   done,
   onJump,
+  onBack,
   onOpen,
   onResolve,
   onReopen,
@@ -290,6 +289,8 @@ function RailCard({
   // 片付いた指摘。字を落として、解決の釦は取り消しに替える。
   done?: boolean;
   onJump: () => void;
+  // 開いたまま、もう一度その箇所へ本文を送る。飛び先を持たない札は渡さない。
+  onBack?: () => void;
   onOpen: () => void;
   onResolve: () => void;
   onReopen: () => void;
@@ -320,9 +321,19 @@ function RailCard({
     >
       {open ? (
         <>
-          <div className="mg-rail-quote">
+          {/* 引用は「その箇所」そのもの。押したら本文をそこへ送り直す。 */}
+          <button
+            type="button"
+            disabled={!onBack}
+            title={onBack ? "この箇所へ移動" : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              onBack?.();
+            }}
+            className="mg-rail-quote"
+          >
             {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}
-          </div>
+          </button>
           {stray && (
             <div className="mg-rail-note">
               <Icon name="link_off" size={12} />

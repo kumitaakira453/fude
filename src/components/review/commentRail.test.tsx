@@ -409,6 +409,42 @@ describe("返信", () => {
   });
 });
 
+describe("箇所へ送る", () => {
+  // 押した札の箇所まで本文を送る。札はその高さに居るので、送った先でもついてくる。
+  function watch(content: HTMLElement, index: number) {
+    const el = content.querySelector(`[data-mg-block="${index}"]`)!;
+    const sent: unknown[] = [];
+    el.scrollIntoView = ((how: unknown) => sent.push(how)) as typeof el.scrollIntoView;
+    return sent;
+  }
+
+  it("札を押すと、その箇所へ送る", () => {
+    const content = body({ 0: 100 });
+    const sent = watch(content, 0);
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
+    click(cards()[0]);
+    expect(sent).toEqual([{ block: "center", behavior: "smooth" }]);
+  });
+
+  it("開いたあとも、引用を押せばその箇所へ戻せる", () => {
+    const content = body({ 0: 100 });
+    const sent = watch(content, 0);
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
+    click(cards()[0]);
+    click(opens()[0].querySelector<HTMLElement>(".mg-rail-quote")!);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("飛び先を持たない札からは送らない", () => {
+    show([], new Map(), { loose: [thread("x1")] });
+    openStray();
+    click(cards()[0]);
+    expect(opens()[0].querySelector<HTMLButtonElement>(".mg-rail-quote")!.disabled).toBe(
+      true,
+    );
+  });
+});
+
 describe("札の置き場所", () => {
   it("指摘したブロックの高さに合わせる", () => {
     const content = body({ 0: 100, 5: 400 });
