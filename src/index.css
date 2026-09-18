@@ -3041,12 +3041,34 @@ svg[id^="mmd-"] foreignObject p {
   border-bottom: 1px solid var(--mg-border);
   background: var(--mg-bg);
 }
-.mg-rail-count {
+/* 何を出すかの切り替え。件数も一緒に出して、片付いた分がどれだけあるかを
+   切り替える前に見せる。 */
+.mg-rail-pick {
+  display: flex;
+  gap: 0.1rem;
+  padding: 0.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 6%, transparent);
+}
+.mg-rail-pick > button {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
   font-family: var(--mg-font-sans);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
   color: var(--mg-muted);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.mg-rail-pick > button:hover {
+  color: var(--mg-fg-dim);
+}
+.mg-rail-pick > button.is-on {
+  background: var(--mg-panel);
+  font-weight: 600;
+  color: var(--mg-fg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
 }
 .mg-rail-stray-top {
   display: flex;
@@ -3094,6 +3116,12 @@ svg[id^="mmd-"] foreignObject p {
 }
 /* 本文を引けないとき（編集中）。行き先が決まらないので素直に積み、欄の側で
    流す。絶対配置のまま行き先を書かないと、札がぜんぶ同じ場所へ重なる。 */
+.mg-rail-none {
+  padding: 1.25rem 0.9rem;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--mg-muted);
+}
 .mg-rail.is-static {
   overflow-y: auto;
 }
@@ -3135,28 +3163,30 @@ svg[id^="mmd-"] foreignObject p {
   border-style: dashed;
   border-color: color-mix(in srgb, var(--mg-muted) 45%, transparent);
 }
-/* 開いている 1 枚。本文の側の印も同じ色で濃くなっている。 */
+/* 片付いた指摘。読み返すために出しているだけなので、未解決より一段落とす。 */
+.mg-rail-card.is-done {
+  opacity: 0.6;
+}
+.mg-rail-card.is-done:hover,
+.mg-rail-card.is-done.is-open {
+  opacity: 1;
+}
+.mg-rail-chip.is-done {
+  background: color-mix(in srgb, var(--mg-accent) 18%, transparent);
+  color: var(--mg-accent);
+}
+
+/* 開いている 1 枚。開いていること自体が中身の量で分かるので、枠まで色を
+   付けない。どれを指しているかは、左へ伸ばす線と本文の側の印が言う。 */
 .mg-rail-card.is-open {
   padding: 0.6rem 0.7rem;
   border-style: solid;
-  border-color: color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  border-color: var(--mg-border);
   background: var(--mg-panel);
   box-shadow:
-    0 1px 2px rgb(0 0 0 / 6%),
-    0 10px 26px -12px rgb(0 0 0 / 45%);
+    0 1px 2px rgb(0 0 0 / 5%),
+    0 6px 16px -12px rgb(0 0 0 / 35%);
   cursor: default;
-  animation: mgRailOpen 0.14s ease-out;
-}
-@keyframes mgRailOpen {
-  from {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mg-rail-card.is-open {
-    animation-duration: 0.01s;
-  }
 }
 /* 開いた札から欄の左端へ伸ばす線。札は箇所の真横に居るので、線がそのまま
    本文の側を指す。 */
@@ -3321,6 +3351,9 @@ svg[id^="mmd-"] foreignObject p {
     color 0.12s ease,
     opacity 0.12s ease;
 }
+/* 開いている 1 枚はもう注目の的なので、操作を隠さない。一覧への口が
+   ホバーしないと出ないと、事実上たどり着けない。 */
+.mg-rail-card.is-open .mg-rail-act,
 .mg-rail-card:hover .mg-rail-act,
 .mg-rail-card:focus-within .mg-rail-act {
   opacity: 1;

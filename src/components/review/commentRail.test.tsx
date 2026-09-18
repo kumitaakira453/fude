@@ -64,6 +64,10 @@ function thread(id: string, over: Partial<ReviewThread> = {}): ReviewThread {
   };
 }
 
+// 片付いた指摘。札の見た目と操作は台帳の status から決まる。
+const settled = (id: string) =>
+  thread(id, { status: { kind: "resolved", by: "you", at: 0 } });
+
 // data-mg-block を持つ本文。渡した「ブロック番号 → 上端」で矩形を置く。
 function body(tops: Record<number, number>): HTMLElement {
   const article = document.createElement("article");
@@ -82,16 +86,22 @@ let host: HTMLElement | null = null;
 let picked: (string | null)[] = [];
 let opened: string[] = [];
 let resolved: string[] = [];
+let reopened: string[] = [];
 let replied: { id: string; body: string }[] = [];
 
 function show(
   threads: ReviewThread[],
   resolutions: Map<string, Resolution>,
-  over: { loose?: ReviewThread[]; content?: HTMLElement | null } = {},
+  over: {
+    loose?: ReviewThread[];
+    done?: ReviewThread[];
+    content?: HTMLElement | null;
+  } = {},
 ) {
   picked = [];
   opened = [];
   resolved = [];
+  reopened = [];
   replied = [];
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -105,6 +115,7 @@ function show(
         content={over.content ?? null}
         scroller={null}
         threads={threads}
+        done={over.done ?? []}
         resolutions={resolutions}
         loose={over.loose ?? []}
         openLoose={openLoose}
@@ -116,6 +127,7 @@ function show(
         }}
         onOpen={(id) => opened.push(id)}
         onResolve={(id) => resolved.push(id)}
+        onReopen={(id) => reopened.push(id)}
         onReply={(id, text) => replied.push({ id, body: text })}
       />
     );
@@ -140,6 +152,8 @@ const opens = () =>
   Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-card.is-open"));
 const click = (el: HTMLElement) => act(() => el.click());
 const openStray = () => click(document.querySelector<HTMLElement>(".mg-rail-stray-top")!);
+const picks = () =>
+  Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-pick > button"));
 
 const at = (index: number) => ({ state: "unchanged", index, head: block(index) }) as const;
 
@@ -184,17 +198,46 @@ describe("並び", () => {
     expect(cards()).toHaveLength(0);
     expect(document.body.textContent).toContain("コメントはありません");
   });
+});
 
-  it("帯に未解決の件数を出す", () => {
+describe("絞り込み", () => {
+  const two = (over: { done?: ReviewThread[]; loose?: ReviewThread[] } = {}) =>
     show(
       [thread("t1"), thread("t2")],
       new Map<string, Resolution>([
         ["t1", at(0)],
         ["t2", at(1)],
+        ["d1", at(2)],
       ]),
-      { loose: [thread("x1")] },
+      over,
     );
-    expect(document.querySelector(".mg-rail-count")?.textContent).toBe("未解決 3");
+
+  it("切り替えにそれぞれの件数を出す", () => {
+    two({ done: [settled("d1")], loose: [thread("x1")] });
+    expect(picks().map((el) => el.textContent)).toEqual(["未解決 3", "すべて 4"]);
+  });
+
+  it("既定は未解決だけ。切り替えると片付いたものも本文の並び順で混ざる", () => {
+    two({ done: [settled("d1")] });
+    expect(peeks()).toEqual(["t1 の指摘", "t2 の指摘"]);
+    click(picks()[1]);
+    expect(peeks()).toEqual(["t1 の指摘", "t2 の指摘", "d1 の指摘"]);
+  });
+
+  it("片付いた札はそれと分かる", () => {
+    two({ done: [settled("d1")] });
+    click(picks()[1]);
+    expect(document.querySelectorAll(".mg-rail-card.is-done")).toHaveLength(1);
+  });
+
+  it("片付いた札の操作は、解決ではなく取り消し", () => {
+    two({ done: [settled("d1")] });
+    click(picks()[1]);
+    click(cards()[2]);
+    const acts = opens()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    click(acts[0]);
+    expect(reopened).toEqual(["d1"]);
+    expect(resolved).toEqual([]);
   });
 });
 
@@ -276,6 +319,13 @@ describe("開いた姿", () => {
     click(cards()[0]);
     click(opens()[0]);
     expect(opens()).toHaveLength(1);
+  });
+
+  it("一覧への口は、開いた札では隠さない", () => {
+    // ホバーしないと出ないと、事実上たどり着けない。
+    two();
+    click(cards()[0]);
+    expect(opens()[0].querySelector('[aria-label="一覧で開く"]')).not.toBeNull();
   });
 
   it("解決と一覧で開くは、札を押すのとは別に届く", () => {

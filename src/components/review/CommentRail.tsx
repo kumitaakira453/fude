@@ -1,7 +1,12 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
-import { answeredByAgent, type ReviewComment, type ReviewThread } from "../../lib/review";
+import {
+  answeredByAgent,
+  isOpen,
+  type ReviewComment,
+  type ReviewThread,
+} from "../../lib/review";
 import { ago } from "../../lib/when";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
@@ -44,12 +49,14 @@ function plainish(body: string, limit = PEEK_LIMIT): string {
 interface Card {
   thread: ReviewThread;
   block: number;
+  done: boolean;
 }
 
 export function CommentRail({
   content,
   scroller,
   threads,
+  done,
   resolutions,
   loose,
   openLoose,
@@ -58,6 +65,7 @@ export function CommentRail({
   onPick,
   onOpen,
   onResolve,
+  onReopen,
   onReply,
 }: {
   // 飛び先と置き場所を引く本文。印を重ねている入れ物と同じもの。
@@ -66,6 +74,8 @@ export function CommentRail({
   scroller: HTMLElement | null;
   // このファイルの未解決の指摘。
   threads: ReviewThread[];
+  // 片付いた指摘。絞り込みを「すべて」にしたときだけ列へ混ぜる。
+  done: ReviewThread[];
   resolutions: Map<string, Resolution>;
   // 本文に居場所を持たない指摘。流れる列には混ぜられないので別に置く。
   loose: ReviewThread[];
@@ -77,20 +87,24 @@ export function CommentRail({
   onPick: (id: string | null) => void;
   onOpen: (id: string) => void;
   onResolve: (id: string) => void;
+  onReopen: (id: string) => void;
   onReply: (id: string, body: string) => void;
 }) {
   // 本文の並び順に出す。台帳の並びは書いた順なので、そのままでは本文を
   // 行ったり来たりすることになる。
   //
   // 今の本文に居場所を持たない指摘はここへ入れない。押しても飛ぶ先が無い。
+  // 片付いたものも出すか。ほかに使う側が無いので欄の中で持つ。
+  const [all, setAll] = useState(false);
+
   const cards = useMemo<Card[]>(() => {
     const out: Card[] = [];
-    for (const thread of threads) {
+    for (const thread of all ? [...threads, ...done] : threads) {
       const head = headOf(resolutions.get(thread.id) ?? { state: "unknown", index: -1 });
-      if (head) out.push({ thread, block: head.index });
+      if (head) out.push({ thread, block: head.index, done: !isOpen(thread) });
     }
     return out.sort((a, b) => a.block - b.block);
-  }, [threads, resolutions]);
+  }, [all, threads, done, resolutions]);
 
   const railRef = useRef<HTMLElement | null>(null);
   const flowRef = useRef<HTMLDivElement | null>(null);
@@ -163,7 +177,6 @@ export function CommentRail({
     at.scrollIntoView({ block: "center", behavior: "smooth" });
   };
 
-  const total = cards.length + loose.length;
 
   return (
     <nav
@@ -180,9 +193,22 @@ export function CommentRail({
       }`}
     >
       <div className="mg-rail-bar">
-        <span className="mg-rail-count">
-          {total > 0 ? `未解決 ${total}` : "コメントはありません"}
-        </span>
+        <div className="mg-rail-pick">
+          <button
+            type="button"
+            onClick={() => setAll(false)}
+            className={all ? "" : "is-on"}
+          >
+            未解決 {threads.length + loose.length}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAll(true)}
+            className={all ? "is-on" : ""}
+          >
+            すべて {threads.length + loose.length + done.length}
+          </button>
+        </div>
         {loose.length > 0 && (
           <button
             type="button"
@@ -208,6 +234,7 @@ export function CommentRail({
               onJump={() => onPick(thread.id)}
               onOpen={() => onOpen(thread.id)}
               onResolve={() => onResolve(thread.id)}
+              onReopen={() => onReopen(thread.id)}
               onReply={(text) => onReply(thread.id, text)}
             />
           ))}
@@ -223,14 +250,22 @@ export function CommentRail({
             key={card.thread.id}
             thread={card.thread}
             block={card.block}
+            done={card.done}
             open={active === card.thread.id}
             onJump={() => jump(card)}
             onOpen={() => onOpen(card.thread.id)}
             onResolve={() => onResolve(card.thread.id)}
+            onReopen={() => onReopen(card.thread.id)}
             onReply={(text) => onReply(card.thread.id, text)}
           />
         ))}
       </div>
+
+      {cards.length === 0 && loose.length === 0 && (
+        <p className="mg-rail-none">
+          {all ? "コメントはありません。" : "未解決のコメントはありません。"}
+        </p>
+      )}
     </nav>
   );
 }
@@ -240,9 +275,11 @@ function RailCard({
   block,
   open,
   stray,
+  done,
   onJump,
   onOpen,
   onResolve,
+  onReopen,
   onReply,
 }: {
   thread: ReviewThread;
@@ -250,9 +287,12 @@ function RailCard({
   block?: number;
   open: boolean;
   stray?: boolean;
+  // 片付いた指摘。字を落として、解決の釦は取り消しに替える。
+  done?: boolean;
   onJump: () => void;
   onOpen: () => void;
   onResolve: () => void;
+  onReopen: () => void;
   onReply: (body: string) => void;
 }) {
   const [writing, setWriting] = useState(false);
@@ -274,7 +314,9 @@ function RailCard({
           onJump();
         }
       }}
-      className={`mg-rail-card${open ? " is-open" : ""}${stray ? " is-stray" : ""}`}
+      className={`mg-rail-card${open ? " is-open" : ""}${stray ? " is-stray" : ""}${
+        done ? " is-done" : ""
+      }`}
     >
       {open ? (
         <>
@@ -312,7 +354,11 @@ function RailCard({
               >
                 返信を書く
               </button>
-              <RailAct icon="done" label="解決にする" onPick={onResolve} />
+              {done ? (
+                <RailAct icon="undo" label="未解決に戻す" onPick={onReopen} />
+              ) : (
+                <RailAct icon="done" label="解決にする" onPick={onResolve} />
+              )}
               <RailAct icon="open_in_full" label="一覧で開く" onPick={onOpen} />
             </div>
           )}
@@ -324,6 +370,11 @@ function RailCard({
             <span className="mg-rail-name">{head?.author}</span>
             <span>{head ? ago(head.created_at) : ""}</span>
             <span className="mg-rail-chips">
+              {done && (
+                <span className="mg-rail-chip is-done" title="解決済み">
+                  <Icon name="done" size={10} />
+                </span>
+              )}
               {answeredByAgent(thread) && (
                 <span className="mg-rail-chip is-answered" title="返事が届いています">
                   <Icon name="auto_awesome" size={10} fill />

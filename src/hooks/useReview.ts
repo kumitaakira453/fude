@@ -100,10 +100,15 @@ export function useReview({
   const [selection, setSelection] = useState<BlockSelection | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const threads = useMemo(
-    () => (absPath ? ledger.threads.filter((t) => t.file === absPath && isOpen(t)) : []),
+  // このファイルの指摘ぜんぶ。居場所の対応付けはこちらで回す——片付いた指摘も
+  // 横の欄では本文の位置に並べたいので、未解決だけを通すと出せない。
+  const mine = useMemo(
+    () => (absPath ? ledger.threads.filter((t) => t.file === absPath) : []),
     [ledger, absPath],
   );
+  // 本文に印を出すのは未解決だけ。片付いたものまで塗ると読むときの邪魔になる。
+  const threads = useMemo(() => mine.filter(isOpen), [mine]);
+  const done = useMemo(() => mine.filter((t) => !isOpen(t)), [mine]);
 
   // ブロック分割は指摘があるファイルと、指摘を付ける瞬間だけ行う。
   // 大半のファイルには指摘が無いので、開くときの負荷を増やさない。
@@ -114,14 +119,14 @@ export function useReview({
   const [resolutions, setResolutions] = useState<Map<string, Resolution>>(new Map());
 
   useEffect(() => {
-    if (threads.length === 0) {
+    if (mine.length === 0) {
       setResolutions(new Map());
       return;
     }
     let alive = true;
     void (async () => {
       const head = getBlocks();
-      const ids = [...new Set(threads.map((t) => t.base_version))].filter(Boolean);
+      const ids = [...new Set(mine.map((t) => t.base_version))].filter(Boolean);
       const texts = new Map<string, string | null>();
       for (const id of ids) texts.set(id, await readVersion(id));
       if (!alive) return;
@@ -129,7 +134,7 @@ export function useReview({
       // 同じ基準版を参照する指摘は差分を共有する
       const diffs = new Map<string, BlockChange[]>();
       const next = new Map<string, Resolution>();
-      for (const thread of threads) {
+      for (const thread of mine) {
         const baseText = texts.get(thread.base_version);
         if (baseText == null) {
           next.set(thread.id, { state: "unknown", index: -1 });
@@ -147,7 +152,7 @@ export function useReview({
     return () => {
       alive = false;
     };
-  }, [threads, getBlocks]);
+  }, [mine, getBlocks]);
 
   // 本文に居場所を持たない指摘。印は出さない（近そうなブロックへ寄せると
   // 関係の無い段落にぶら下がる）ので、横の欄と見出しで辿れるようにする。
@@ -276,6 +281,16 @@ export function useReview({
       if (!(await replyToThread(thread, REVIEW_AUTHOR, body))) return;
       await syncLedger(store);
       notify(store, "返信しました", "right");
+    },
+    [store],
+  );
+
+  // 解決を取り消す。横の欄で片付いた指摘を読み返して、やっぱり戻したいとき。
+  const reopen = useCallback(
+    async (id: string) => {
+      if (!(await reopenThread(id))) return;
+      await syncLedger(store);
+      notify(store, "未解決に戻しました", "right");
     },
     [store],
   );
@@ -461,6 +476,7 @@ export function useReview({
 
   return {
     threads,
+    done,
     resolutions,
     loose,
     looseThreads,
@@ -476,6 +492,7 @@ export function useReview({
     clearSelection,
     remove,
     resolve,
+    reopen,
     rewrite,
     reply,
     undoRemove,

@@ -1783,6 +1783,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             content={editing ? null : content}
             scroller={editing ? null : scroller}
             threads={review.threads}
+            done={review.done}
             resolutions={review.resolutions}
             loose={review.looseThreads}
             openLoose={openLoose}
@@ -1791,6 +1792,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             onPick={setPicked}
             onOpen={review.open}
             onResolve={(id) => void review.resolve(id)}
+            onReopen={(id) => void review.reopen(id)}
             onReply={(id, body) => void review.reply(id, body)}
           />
         )}
