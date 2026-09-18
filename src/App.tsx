@@ -169,8 +169,19 @@ export default function App() {
   const drawn = useAfterPaint(want);
   const shown = drawn ?? want;
   const versionPath = want.version ?? shown.version;
-  // 開くほうは新しく組むので待たせる。閉じるほうは待たせない。
-  const opening = drawn !== want && over;
+  // 切り替えの最中。開くときは新しく組むので待たせ、閉じるときは前の画面が
+  // 固まったまま残らないよう地色で覆う。
+  const moving = drawn !== want;
+
+  // 重ねる画面の要素は控えておく。App が描き直されるたびに新しい要素を渡すと、
+  // React は同じ位置でも中身を作り直す。見せる / 隠すを切り替えるだけの一押しで
+  // 一覧の突き合わせと本文の組版がまるごと走り、その仕事が終わるまでコミット
+  // されないので、押しても画面が変わらない。
+  const reviewScreen = useMemo(() => <ReviewScreen />, []);
+  const versionScreen = useMemo(
+    () => (versionPath === null ? null : <VersionScreen path={versionPath} />),
+    [versionPath],
+  );
 
   return (
     <>
@@ -225,28 +236,33 @@ export default function App() {
         <div
           className={`fixed inset-0 z-50 ${want.version === null ? "invisible" : ""}`}
         >
-          <VersionScreen path={versionPath} />
+          {versionScreen}
         </div>
       )}
 
       {/* コメントも専用画面。読む画面に重ねると差分を並べて見せられない。 */}
       {(want.review || shown.review) && (
         <div className={`fixed inset-0 z-50 ${want.review ? "" : "invisible"}`}>
-          <ReviewScreen />
+          {reviewScreen}
         </div>
       )}
 
-      {/* 重ねる画面を組んでいるあいだの覆い。
+      {/* 画面を切り替えているあいだの覆い。
           組み立ては重い（本文の組み立て、指摘の一覧の突き合わせ）。押した一枚で
           やると、React は組み終わるまでコミットせず、ブラウザはコミットまで
-          塗れないので、押した手応えがまるで無い。覆いだけを先に重ねる。 */}
-      {opening && (
+          塗れないので、押した手応えがまるで無い。覆いだけを先に重ねる。
+          閉じるときにも通す。押した先が前の画面のままで残らないようにする。 */}
+      {moving && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-[var(--mg-bg)]">
-          <Icon
-            name="progress_activity"
-            size={22}
-            className="mg-spin text-[var(--mg-muted)]"
-          />
+          {/* 閉じるほうは下の読む画面が組み上がっているので、待たせる合図は
+              添えない。地色だけを一瞬通す。 */}
+          {over && (
+            <Icon
+              name="progress_activity"
+              size={22}
+              className="mg-spin text-[var(--mg-muted)]"
+            />
+          )}
         </div>
       )}
       <UpdateBanner />

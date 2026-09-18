@@ -82,12 +82,16 @@ export function useReview({
   raw,
   content,
   isActive,
+  withDone = false,
 }: {
   absPath: string | null;
   body: string;
   raw: string | undefined;
   content: HTMLElement | null;
   isActive: boolean;
+  // 片付いた指摘の居場所まで引くか。解決済みは溜まる一方で、1 件ごとに基準版の
+  // 読み込みと差分が要る。横の欄が「すべて」を出すと決めたときだけ引く。
+  withDone?: boolean;
 }) {
   const store = useStore();
   const ledger = useAtomValue(ledgerAtom);
@@ -100,15 +104,16 @@ export function useReview({
   const [selection, setSelection] = useState<BlockSelection | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // このファイルの指摘ぜんぶ。居場所の対応付けはこちらで回す——片付いた指摘も
-  // 横の欄では本文の位置に並べたいので、未解決だけを通すと出せない。
-  const mine = useMemo(
+  const all = useMemo(
     () => (absPath ? ledger.threads.filter((t) => t.file === absPath) : []),
     [ledger, absPath],
   );
   // 本文に印を出すのは未解決だけ。片付いたものまで塗ると読むときの邪魔になる。
-  const threads = useMemo(() => mine.filter(isOpen), [mine]);
-  const done = useMemo(() => mine.filter((t) => !isOpen(t)), [mine]);
+  const threads = useMemo(() => all.filter(isOpen), [all]);
+  const done = useMemo(() => all.filter((t) => !isOpen(t)), [all]);
+  // 居場所の対応付けを回す相手。片付いた指摘も横の欄では本文の位置に並べたいが、
+  // 出さないうちから引くと、解決済みの数だけ無駄に版を読んで差分を取ることになる。
+  const mine = useMemo(() => (withDone ? all : threads), [withDone, all, threads]);
 
   // ブロック分割は指摘があるファイルと、指摘を付ける瞬間だけ行う。
   // 大半のファイルには指摘が無いので、開くときの負荷を増やさない。

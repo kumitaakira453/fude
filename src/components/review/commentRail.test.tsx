@@ -109,6 +109,7 @@ function show(
   // 開いている 1 枚と、外れた指摘の畳み開きは呼ぶ側が持つ（DocPane と同じ形）。
   function Host() {
     const [openLoose, setOpenLoose] = useState(false);
+    const [all, setAll] = useState(false);
     const [active, setActive] = useState<string | null>(null);
     return (
       <CommentRail
@@ -118,6 +119,8 @@ function show(
         done={over.done ?? []}
         resolutions={resolutions}
         loose={over.loose ?? []}
+        all={all}
+        onAll={setAll}
         openLoose={openLoose}
         onOpenLoose={setOpenLoose}
         active={active}

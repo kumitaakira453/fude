@@ -594,7 +594,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   const { data, body, broken } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
-  const review = useReview({ absPath, body, raw, content, isActive });
+  // 横の欄で片付いた指摘まで出しているか。出すと決めたときだけ、その居場所を
+  // 引かせる（解決済みは溜まる一方で、1 件ごとに基準版の読み込みと差分が要る）。
+  const [railAll, setRailAll] = useState(false);
+  const review = useReview({ absPath, body, raw, content, isActive, withDone: railAll });
   // キー操作から今の選択を読むための控え。毎描画で作り直さずに済む。
   const reviewRef = useRef(review);
   reviewRef.current = review;
@@ -1786,6 +1789,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             done={review.done}
             resolutions={review.resolutions}
             loose={review.looseThreads}
+            all={railAll}
+            onAll={setRailAll}
             openLoose={openLoose}
             onOpenLoose={setOpenLoose}
             active={picked}

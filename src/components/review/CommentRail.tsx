@@ -59,6 +59,8 @@ export function CommentRail({
   done,
   resolutions,
   loose,
+  all,
+  onAll,
   openLoose,
   onOpenLoose,
   active,
@@ -79,6 +81,9 @@ export function CommentRail({
   resolutions: Map<string, Resolution>;
   // 本文に居場所を持たない指摘。流れる列には混ぜられないので別に置く。
   loose: ReviewThread[];
+  // 片付いたものも出すか。居場所を引くかどうかが変わるので、呼ぶ側が持つ。
+  all: boolean;
+  onAll: (all: boolean) => void;
   // 外れた指摘の組を開いているか。ツールバーの札からも開けるよう、外で持つ。
   openLoose: boolean;
   onOpenLoose: (open: boolean) => void;
@@ -94,9 +99,6 @@ export function CommentRail({
   // 行ったり来たりすることになる。
   //
   // 今の本文に居場所を持たない指摘はここへ入れない。押しても飛ぶ先が無い。
-  // 片付いたものも出すか。ほかに使う側が無いので欄の中で持つ。
-  const [all, setAll] = useState(false);
-
   const cards = useMemo<Card[]>(() => {
     const out: Card[] = [];
     for (const thread of all ? [...threads, ...done] : threads) {
@@ -193,14 +195,14 @@ export function CommentRail({
         <div className="mg-rail-pick">
           <button
             type="button"
-            onClick={() => setAll(false)}
+            onClick={() => onAll(false)}
             className={all ? "" : "is-on"}
           >
             未解決 {threads.length + loose.length}
           </button>
           <button
             type="button"
-            onClick={() => setAll(true)}
+            onClick={() => onAll(true)}
             className={all ? "is-on" : ""}
           >
             すべて {threads.length + loose.length + done.length}
