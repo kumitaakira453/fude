@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import type { AnchorHit } from "../../lib/review";
 import type { Mark, Marked, Rect } from "../../lib/reviewMarks";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
+import { useLayerHost } from "../../lib/layerHost";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
@@ -94,6 +95,10 @@ export function AnchorOverlay({
   // 解決にする。レビュー画面まで行かずに片付けられるようにする。
   onResolve: (id: string) => void;
 }) {
+  // 重ねる先。本文の入れ物そのものへ portal すると、ファイルを切り替えて消える
+  // ときに「親が先、層が後」の順になって片付けが空振りする（useLayerHost の
+  // 説明）。入れ物を自分で作れば、React が持つのは中身だけになる。
+  const layerHost = useLayerHost(content);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [pending, setPending] = useState<Rect[]>([]);
   // 丸ごとの対象は囲みで、範囲は文字の上のマーカーで示す。
@@ -376,7 +381,7 @@ export function AnchorOverlay({
   marksRef.current = marks;
   if (peekRef.current !== (peek?.id ?? null)) peekRef.current = peek?.id ?? null;
 
-  if (!content || (marks.length === 0 && pending.length === 0)) return null;
+  if (!content || !layerHost || (marks.length === 0 && pending.length === 0)) return null;
 
   return createPortal(
     <div className="mg-review-layer not-prose">
@@ -573,6 +578,6 @@ export function AnchorOverlay({
         </div>
       )}
     </div>,
-    content,
+    layerHost,
   );
 }

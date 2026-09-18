@@ -178,6 +178,21 @@ describe("本文の上のカード", () => {
     expect(picks).toEqual(["t1"]);
   });
 
+  it("本文が先に片付いても、層の後片付けで落ちない", () => {
+    // 印の層を本文の入れ物へ直に portal すると、ファイルを切り替えたときに
+    // 「親が先、層が後」の順になり、removeChild が行き先を見失って落ちる。
+    // 層の入れ物を自分で持てば、親が先に消えても片付けは空振りで済む。
+    vi.useFakeTimers();
+    open();
+    content!.replaceChildren();
+    expect(() =>
+      act(() => {
+        root?.unmount();
+        root = null;
+      }),
+    ).not.toThrow();
+  });
+
   it("人の書き込みは書き直さず、一覧で開く", () => {
     vi.useFakeTimers();
     open(false);
