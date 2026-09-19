@@ -1694,12 +1694,25 @@ button.mg-task-check:hover {
   font-size: 13px;
   color: var(--mg-fg-dim);
 }
-/* 一覧から外すものを書く欄。釦の並びと同じ桁に置く。 */
+/* 打ち込みで決める設定。切り替えの行と同じ箱・同じ桁に置く。絵の桁が無いと、
+   名前の左端だけが内側へ寄って列が折れて見える。 */
 .mg-set-drop {
   display: flex;
+  width: 100%;
+  gap: 0.6rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid transparent;
+}
+.mg-set-drop-ico {
+  flex: none;
+  margin-top: 0.15rem;
+}
+.mg-set-drop-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
   gap: 0.3rem;
-  padding: 0.5rem 0.7rem 0.6rem;
 }
 .mg-set-drop textarea,
 .mg-set-drop input {
@@ -1938,6 +1951,28 @@ button.mg-task-check:hover {
 /* いま開いているフォルダ。 */
 .mg-open-row.is-now {
   background: var(--mg-accent-soft);
+}
+/* 足元の開く口。一覧の行と左端を揃える。等分に割って中央へ寄せると、
+   左へ揃った一覧の下で 2 つだけ別の並びになって浮く。 */
+.mg-open-foot {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-open-foot > button {
+  display: flex;
+  flex: none;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.5rem;
+  font-size: 12.5px;
+  color: var(--mg-accent);
+  transition: background 0.12s ease;
+}
+.mg-open-foot > button:hover {
+  background: var(--mg-hover);
 }
 .mg-open-acts {
   display: flex;

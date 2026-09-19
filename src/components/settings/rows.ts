@@ -37,6 +37,8 @@ export interface SwitchRow extends Base {
 
 export interface WordsRow extends Base {
   kind: "words";
+  // 切り替えの行と同じ絵の桁を持つ。無いと名前の左端だけが内側へ寄る。
+  icon: string;
   // 1 行で足りるか、何行も書くか。
   lines: "one" | "many";
   atom: Words;

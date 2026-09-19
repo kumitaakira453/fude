@@ -102,6 +102,7 @@ const ROWS: Row[] = [
   },
   {
     kind: "words",
+    icon: "image",
     id: "imagedir",
     face: "write",
     lines: "one",
@@ -123,6 +124,7 @@ const ROWS: Row[] = [
   },
   {
     kind: "words",
+    icon: "filter_alt_off",
     id: "exclude",
     face: "files",
     lines: "many",

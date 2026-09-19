@@ -157,7 +157,11 @@ export function OpenPicker() {
             onCompositionEnd={ime.onCompositionEnd}
             onKeyDown={(e) => {
               if (ime.isComposing(e)) return; // IME 変換中のキーを無視
-              if (e.key === "ArrowDown") {
+              if (e.key === "[" || e.key === "]") {
+                // 面の行き来。開いている最中は、絞り込みより面を移るほうが多い。
+                e.preventDefault();
+                setSide(e.key === "[" ? "folders" : "docs");
+              } else if (e.key === "ArrowDown") {
                 e.preventDefault();
                 setAt((i) => Math.min(i + 1, rows.length - 1));
               } else if (e.key === "ArrowUp") {
@@ -170,7 +174,7 @@ export function OpenPicker() {
                 setOpen(false);
               }
             }}
-            placeholder="開く…（名前と道筋で絞り込み）"
+            placeholder="開く…（名前・パスで絞り込み / [ ] でタブ切り替え）"
             className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
           />
         </div>
@@ -322,12 +326,12 @@ export function OpenPicker() {
           )}
         </div>
 
-        <div className="flex gap-1 border-t border-[var(--mg-border)] p-1.5">
-          <button onClick={addFolder} className="mg-switch-open">
+        <div className="mg-open-foot">
+          <button onClick={addFolder}>
             <Icon name="folder_open" size={16} />
             フォルダを開く…
           </button>
-          <button onClick={addDoc} className="mg-switch-open">
+          <button onClick={addDoc}>
             <Icon name="description" size={16} />
             ファイルを開く…
           </button>
@@ -355,9 +359,9 @@ function Act({
         e.stopPropagation();
         run();
       }}
-      className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-accent)]"
+      className="grid h-7 w-7 place-items-center rounded-md text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-accent)]"
     >
-      <Icon name={icon} size={14} />
+      <Icon name={icon} size={17} />
     </button>
   );
 }

@@ -45,8 +45,10 @@ export function Words({
   const [value, set] = useAtom(row.atom);
   return (
     <div className="mg-set-drop">
-      <span className="mg-set-row-name">{row.name}</span>
-      <span className="mg-set-note">{row.note}</span>
+      <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
+      <div className="mg-set-drop-main">
+        <span className="mg-set-row-name">{row.name}</span>
+        <span className="mg-set-note">{row.note}</span>
       {row.lines === "many" ? (
         <AutoTextarea
           value={value}
@@ -64,7 +66,8 @@ export function Words({
           spellCheck={false}
         />
       )}
-      {foot && <span className="mg-set-note">{foot}</span>}
+        {foot && <span className="mg-set-note">{foot}</span>}
+      </div>
     </div>
   );
 }
