@@ -167,7 +167,6 @@ export function useReview({
       return state === "removed" || state === "unknown";
     });
   }, [resolutions, threads]);
-  const loose = looseThreads.length;
 
   // 解決結果を台帳に控える。CLI は Markdown を解析しないのでこれを読ませる。
   // 同じ内容を書き直して無駄にロックを取らないよう、送った分を覚えておく。
@@ -483,7 +482,6 @@ export function useReview({
     threads,
     done,
     resolutions,
-    loose,
     looseThreads,
     selection,
     draft,

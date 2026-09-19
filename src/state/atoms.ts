@@ -2,7 +2,7 @@ import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
 import type { DocEntry, FolderEntry } from "../lib/idb";
-import { REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
+import { RAIL_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { windowScopedKey } from "../lib/windows";
 
 // ---- ワークスペース ----
@@ -155,6 +155,11 @@ export type Rail = "none" | "toc" | "comments";
 export const railAtom = atomWithStorage<Rail>(
   windowScopedKey("mdglow:rail"),
   "toc",
+);
+// コメントの欄の幅。左の欄と同じく、掴んで変えた分を窓ごとに覚える。
+export const railWidthAtom = atomWithStorage<number>(
+  windowScopedKey("mdglow:railw"),
+  RAIL_WIDTH,
 );
 
 // 更新チェック: nonce をインクリメントで手動トリガ、状態を UI で共有する

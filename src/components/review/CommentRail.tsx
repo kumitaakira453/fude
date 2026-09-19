@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
 import { isOpen, type ReviewComment, type ReviewThread } from "../../lib/review";
@@ -36,6 +43,7 @@ interface Card {
 }
 
 export function CommentRail({
+  railRef,
   content,
   scroller,
   threads,
@@ -44,8 +52,7 @@ export function CommentRail({
   loose,
   all,
   onAll,
-  openLoose,
-  onOpenLoose,
+  width,
   active,
   onPick,
   onOpen,
@@ -53,6 +60,8 @@ export function CommentRail({
   onReopen,
   onReply,
 }: {
+  // 欄そのもの。掴んで幅を変えるとき、仕切りがここへ直に書く。
+  railRef: React.MutableRefObject<HTMLElement | null>;
   // 飛び先と置き場所を引く本文。印を重ねている入れ物と同じもの。
   content: HTMLElement | null;
   // 本文を流している枠。送られたら札を置き直す。
@@ -67,10 +76,9 @@ export function CommentRail({
   // 片付いたものも出すか。居場所を引くかどうかが変わるので、呼ぶ側が持つ。
   all: boolean;
   onAll: (all: boolean) => void;
-  // 外れた指摘の組を開いているか。ツールバーの札からも開けるよう、外で持つ。
-  openLoose: boolean;
-  onOpenLoose: (open: boolean) => void;
-  // 開いている 1 枚。本文の印と同じ合図を使う。
+  // 欄の幅。掴んで変えた分を呼ぶ側が覚える。
+  width: number;
+  // 選んでいる 1 枚。本文の印と同じ合図を使う。
   active: string | null;
   onPick: (id: string | null) => void;
   onOpen: (id: string) => void;
@@ -93,8 +101,9 @@ export function CommentRail({
     return out.sort((a, b) => a.block - b.block);
   }, [all, threads, done, resolutions]);
 
-  const railRef = useRef<HTMLElement | null>(null);
   const flowRef = useRef<HTMLDivElement | null>(null);
+  // 本文から外れた指摘の組。欄の中だけの開け閉めなので、ここで持つ。
+  const [openLoose, setOpenLoose] = useState(false);
 
   // 札を、指摘したブロックの高さへ置く。背丈は描き終わってからでないと測れない
   // ので、状態には持たず DOM へ直に書く（状態に持つと測る→描く→また測るで
@@ -154,6 +163,18 @@ export function CommentRail({
     };
   }, [place, content, scroller, cards, openLoose, active]);
 
+  // 札の外を押したら選びを外す。返信の口は選ばれた札にだけ出るので、これが
+  // 無いと開きっぱなしになる。押下の段で外すので、本文の印を押したときは
+  // そのあとの click で選び直される。
+  useEffect(() => {
+    if (!active) return;
+    const away = (e: PointerEvent) => {
+      if (!(e.target as Element | null)?.closest?.(".mg-rail-card")) onPick(null);
+    };
+    window.addEventListener("pointerdown", away, true);
+    return () => window.removeEventListener("pointerdown", away, true);
+  }, [active, onPick]);
+
   // 札を押したら、その箇所を選んで本文をそこへ送る。札は箇所の真横に居るので、
   // 送った先でも札はついてくる。
   const jump = (card: Card) => {
@@ -165,7 +186,9 @@ export function CommentRail({
 
   return (
     <nav
-      ref={railRef}
+      ref={(el) => {
+        railRef.current = el;
+      }}
       onKeyDown={(e) => {
         // 開いた札を畳む。欄の中だけの取り決めにして、全体のキー操作には触らない。
         if (e.key === "Escape" && active) {
@@ -173,7 +196,8 @@ export function CommentRail({
           onPick(null);
         }
       }}
-      className={`mg-rail relative hidden min-h-0 w-72 shrink-0 self-stretch border-l border-[var(--mg-border)] lg:block${
+      style={{ width }}
+      className={`mg-rail relative hidden min-h-0 shrink-0 self-stretch lg:block${
         content ? "" : " is-static"
       }`}
     >
@@ -197,7 +221,7 @@ export function CommentRail({
         {loose.length > 0 && (
           <button
             type="button"
-            onClick={() => onOpenLoose(!openLoose)}
+            onClick={() => setOpenLoose(!openLoose)}
             title="本文から外れたコメント"
             className={`mg-rail-stray-top${openLoose ? " is-on" : ""}`}
           >
@@ -214,6 +238,7 @@ export function CommentRail({
             <RailCard
               key={thread.id}
               thread={thread}
+              active={active === thread.id}
               stray
               onJump={() => onPick(thread.id)}
               onOpen={() => onOpen(thread.id)}
@@ -238,6 +263,7 @@ export function CommentRail({
             thread={card.thread}
             block={card.block}
             done={card.done}
+            active={active === card.thread.id}
             onJump={() => jump(card)}
             onOpen={() => onOpen(card.thread.id)}
             onResolve={() => onResolve(card.thread.id)}
@@ -261,6 +287,7 @@ function RailCard({
   block,
   stray,
   done,
+  active,
   onJump,
   onOpen,
   onResolve,
@@ -273,6 +300,8 @@ function RailCard({
   stray?: boolean;
   // 片付いた指摘。字を落として、解決の釦は取り消しに替える。
   done?: boolean;
+  // 選ばれている札。返信の口はここにだけ出す。
+  active: boolean;
   onJump: () => void;
   onOpen: () => void;
   onResolve: () => void;
@@ -280,8 +309,18 @@ function RailCard({
   onReply: (body: string) => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
+  // 押して選ばれるのを待っている札。入力欄は選ばれてから描かれるので、焦点は
+  // 描き終わってから当てる。本文の印から選ばれたときは当てない（読んでいる手
+  // から焦点を奪わない）ので、押した側からだけ印を立てる。
+  const wants = useRef(false);
   const [text, setText] = useState("");
   const md = useMarkdownKeys(setText);
+  useEffect(() => {
+    if (!active || !wants.current) return;
+    wants.current = false;
+    box.current?.focus();
+  }, [active]);
+
   const send = () => {
     const body = text.trim();
     if (!body) return;
@@ -298,11 +337,20 @@ function RailCard({
       // 読んだ流れが一度切れる。
       onClick={() => {
         onJump();
-        box.current?.focus();
+        if (active) box.current?.focus();
+        else wants.current = true;
       }}
       className={`mg-rail-card${stray ? " is-stray" : ""}${done ? " is-done" : ""}`}
     >
-      {/* 引用は「その箇所」そのもの。押したら本文をそこへ送り直す。 */}
+      {/* 札の始末。入力欄の有無で場所が動かないよう、右上へ寄せて重ねる。 */}
+      <div className="mg-rail-acts">
+        {done ? (
+          <RailAct icon="undo" label="未解決に戻す" onPick={onReopen} />
+        ) : (
+          <RailAct icon="done" label="解決にする" onPick={onResolve} />
+        )}
+        <RailAct icon="rate_review" label="一覧で開く" onPick={onOpen} />
+      </div>
       <div className="mg-rail-quote">
         {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}
       </div>
@@ -323,9 +371,10 @@ function RailCard({
           <Said key={c.id} comment={c} />
         ))}
       </div>
-      {/* 入力欄を押したときまで箇所へ送ると、打っている最中に本文が動く。 */}
-      <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
-        <div className="mg-rail-reply-line">
+      {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。 */}
+      {(active || text.trim()) && (
+        // 入力欄を押したときまで箇所へ送ると、打っている最中に本文が動く。
+        <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
           <AutoTextarea
             ref={box}
             value={text}
@@ -352,33 +401,22 @@ function RailCard({
             minRows={1}
             maxRows={8}
           />
-          {/* 空のあいだは札の始末を添える。打ち始めたら送る口へ場所を譲る。 */}
-          {!text.trim() && (
-            <div className="mg-rail-acts">
-              {done ? (
-                <RailAct icon="undo" label="未解決に戻す" onPick={onReopen} />
-              ) : (
-                <RailAct icon="done" label="解決にする" onPick={onResolve} />
-              )}
-              <RailAct icon="open_in_full" label="一覧で開く" onPick={onOpen} />
+          {text.trim() && (
+            <div className="mg-rail-send">
+              <button
+                type="button"
+                onClick={() => setText("")}
+                className="mg-rail-reply-off"
+              >
+                やめる
+              </button>
+              <button type="button" onClick={send} className="mg-rail-reply-send">
+                返信
+              </button>
             </div>
           )}
         </div>
-        {text.trim() && (
-          <div className="mg-rail-send">
-            <button
-              type="button"
-              onClick={() => setText("")}
-              className="mg-rail-reply-off"
-            >
-              やめる
-            </button>
-            <button type="button" onClick={send} className="mg-rail-reply-send">
-              返信
-            </button>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useState } from "react";
+import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "../../lib/blocks";
@@ -107,11 +107,12 @@ function show(
   root = createRoot(host);
   // 開いている 1 枚と、外れた指摘の畳み開きは呼ぶ側が持つ（DocPane と同じ形）。
   function Host() {
-    const [openLoose, setOpenLoose] = useState(false);
+    const railRef = useRef<HTMLElement | null>(null);
     const [all, setAll] = useState(false);
     const [active, setActive] = useState<string | null>(null);
     return (
       <CommentRail
+        railRef={railRef}
         content={over.content ?? null}
         scroller={null}
         threads={threads}
@@ -120,8 +121,7 @@ function show(
         loose={over.loose ?? []}
         all={all}
         onAll={setAll}
-        openLoose={openLoose}
-        onOpenLoose={setOpenLoose}
+        width={288}
         active={active}
         onPick={(id) => {
           picked.push(id);
@@ -151,7 +151,7 @@ const flowed = () =>
 // 札は引用で見分ける。会話は全部出ているので、並びはこれで足りる。
 const quotes = () =>
   Array.from(document.querySelectorAll(".mg-rail-quote")).map((el) => el.textContent);
-const box = (card: HTMLElement) => card.querySelector<HTMLTextAreaElement>("textarea")!;
+const box = (card: HTMLElement) => card.querySelector<HTMLTextAreaElement>("textarea");
 const click = (el: HTMLElement) => act(() => el.click());
 const openStray = () => click(document.querySelector<HTMLElement>(".mg-rail-stray-top")!);
 const picks = () =>
@@ -260,18 +260,19 @@ describe("札の姿", () => {
     expect(quotes()).toEqual(["選んだ字 t1"]);
   });
 
-  it("返信の口は最初から置いてある", () => {
-    // 釦で入力欄を生やすと、押した流れが一度切れる。
+  it("押していない札には返信の口を出さない", () => {
     talk();
-    expect(box(cards()[0])).not.toBeNull();
-    expect(cards()[0].querySelector(".mg-rail-send")).toBeNull();
+    expect(box(cards()[0])).toBeNull();
   });
 
-  it("押すとその指摘を選び、返信の口へ焦点が移る", () => {
+  it("押すとその指摘を選び、返信の口が出て焦点も入る", () => {
+    // 釦で入力欄を生やすと、押した流れが一度切れる。
     talk();
     click(cards()[0]);
     expect(picked).toEqual(["t1"]);
+    expect(box(cards()[0])).not.toBeNull();
     expect(document.activeElement).toBe(box(cards()[0]));
+    expect(cards()[0].querySelector(".mg-rail-send")).toBeNull();
   });
 
   it("解決と一覧で開くは、札を押すのとは別に届く", () => {
@@ -328,7 +329,8 @@ describe("本文から外れた指摘", () => {
 describe("返信", () => {
   const typed = (body: string) => {
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
-    const field = box(cards()[0]);
+    click(cards()[0]);
+    const field = box(cards()[0])!;
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(
         window.HTMLTextAreaElement.prototype,
@@ -356,6 +358,28 @@ describe("返信", () => {
     click(cards()[0].querySelector<HTMLElement>(".mg-rail-reply-send")!);
     expect(replied).toEqual([{ id: "t1", body: "直しておきます" }]);
     expect(field.value).toBe("");
+  });
+
+  it("書きかけがあるうちは、選びが外れても口を閉じない", () => {
+    show(
+      [thread("t1"), thread("t2")],
+      new Map<string, Resolution>([
+        ["t1", at(0)],
+        ["t2", at(1)],
+      ]),
+    );
+    click(cards()[0]);
+    const field = box(cards()[0])!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(field, "書きかけ");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    click(cards()[1]);
+    expect(box(cards()[0])?.value).toBe("書きかけ");
   });
 });
 
@@ -389,8 +413,9 @@ describe("箇所へ送る", () => {
     const content = body({ 0: 100 });
     const sent = watch(content, 0);
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
-    click(box(cards()[0]));
-    expect(sent).toHaveLength(0);
+    click(cards()[0]);
+    click(box(cards()[0])!);
+    expect(sent).toHaveLength(1);
   });
 });
 

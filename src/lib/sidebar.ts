@@ -31,3 +31,14 @@ export const REVIEW_SIDE_MAX = 640;
 export function fitReviewSideWidth(w: number): number {
   return Math.min(Math.max(Math.round(w), REVIEW_SIDE_MIN), REVIEW_SIDE_MAX);
 }
+
+// 本文の横に出すコメントの欄。
+//
+// 指摘には表やコードが入ることがあり、288px では折り返しばかりになる。今の幅を
+// 下限にして、2 倍まで広げられるようにする。
+export const RAIL_WIDTH = 288;
+export const RAIL_MAX = RAIL_WIDTH * 2;
+
+export function fitRailWidth(w: number): number {
+  return Math.min(Math.max(Math.round(w), RAIL_WIDTH), RAIL_MAX);
+}

@@ -3010,7 +3010,7 @@ svg[id^="mmd-"] foreignObject p {
 .mg-review-mark-moved {
   box-shadow: none;
   border-radius: 0.4rem;
-  outline: 1px dashed color-mix(in srgb, var(--mg-accent) 45%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--mg-accent) 30%, transparent);
   outline-offset: -1px;
 }
 .mg-review-mark-moved:hover {
@@ -3020,7 +3020,7 @@ svg[id^="mmd-"] foreignObject p {
    添えるだけにする。ブロックの外枠を重ねると、塗りと枠のどちらを指している
    のかが読み取れない。 */
 .mg-review-mark-stale {
-  border-bottom: 1px dashed color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
 
 /* ============================================================
@@ -3038,7 +3038,6 @@ svg[id^="mmd-"] foreignObject p {
   gap: 0.4rem;
   align-items: center;
   padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--mg-border);
   background: var(--mg-bg);
 }
 /* 何を出すかの切り替え。件数も一緒に出して、片付いた分がどれだけあるかを
@@ -3156,11 +3155,6 @@ svg[id^="mmd-"] foreignObject p {
   outline: 2px solid var(--mg-accent);
   outline-offset: 1px;
 }
-/* 飛び先を持たない札。押しても本文は動かないので、枠で先に伝える。 */
-.mg-rail-card.is-stray {
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--mg-muted) 45%, transparent);
-}
 /* 片付いた指摘。読み返すために出しているだけなので、未解決より一段落とす。 */
 .mg-rail-card.is-done {
   opacity: 0.6;
@@ -3200,9 +3194,10 @@ svg[id^="mmd-"] foreignObject p {
 }
 
 /* 指摘した箇所。塗らずに縦線で添えるだけにする。塗ると、札の中でいちばん
-   強いものが引用になってしまう。 */
+   強いものが引用になってしまう。右は札の始末のぶんを空ける。 */
 .mg-rail-quote {
   margin-bottom: 0.5rem;
+  padding-right: 3.2rem;
   padding-left: 0.5rem;
   border-left: 2px solid color-mix(in srgb, var(--mg-accent) 45%, transparent);
   font-size: 11.5px;
@@ -3219,23 +3214,17 @@ svg[id^="mmd-"] foreignObject p {
   font-size: 10px;
   color: var(--mg-muted);
 }
-/* 会話。長い指摘や、記法で組まれた指摘でも札が伸び続けないよう丈を切る。 */
-.mg-rail-talk {
-  max-height: 20rem;
-  overflow: hidden auto;
-}
-/* 狭い札の中では、全体で使っている 10px のバーが太すぎる。細く、淡くする。 */
-.mg-rail-talk::-webkit-scrollbar,
+/* 会話は切らずに出し切る。札の中でもう一度送らせると、本文の横に置いた意味が
+   薄れる。長い指摘は札ごと伸ばして、送るのは欄の側だけにする。 */
+/* 狭い欄の中では、全体で使っている 10px のバーが太すぎる。細く、淡くする。 */
 .mg-rail.is-static::-webkit-scrollbar {
   width: 5px;
 }
-.mg-rail-talk::-webkit-scrollbar-thumb,
 .mg-rail.is-static::-webkit-scrollbar-thumb {
   border: 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--mg-muted) 35%, transparent);
 }
-.mg-rail-talk::-webkit-scrollbar-thumb:hover,
 .mg-rail.is-static::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--mg-muted) 70%, transparent);
 }
@@ -3260,21 +3249,15 @@ svg[id^="mmd-"] foreignObject p {
 /* 返信の口。釦で生やすのではなく、最初から置いておく。空のあいだは薄い 1 行で、
    打つと伸びる。押した流れのまま書き始められるのが狙い。 */
 .mg-rail-reply {
-  margin-top: 0.5rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid var(--mg-border);
-}
-.mg-rail-reply-line {
-  display: flex;
-  gap: 0.25rem;
-  align-items: flex-end;
+  margin-top: 0.55rem;
 }
 .mg-rail-reply textarea {
-  flex: 1;
-  min-width: 0;
-  padding: 0.1rem 0;
-  border: 0;
-  background: transparent;
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
+  border-radius: 0.4rem;
+  background: var(--mg-input-bg);
   font-family: var(--mg-font-sans);
   font-size: 12px;
   line-height: 1.6;
@@ -3282,15 +3265,20 @@ svg[id^="mmd-"] foreignObject p {
   resize: none;
 }
 .mg-rail-reply textarea:focus {
+  border-color: var(--mg-accent);
   outline: none;
 }
 .mg-rail-reply textarea::placeholder {
   color: var(--mg-muted);
 }
-/* 札の始末。読むものだと伝わるよう、触れているあいだだけ出す。 */
+/* 札の始末。入力欄の有無で場所が動かないよう右上へ重ね、触れているあいだだけ
+   出す（並べておくと札が操作の列に見えて、読むものだと伝わらない）。 */
 .mg-rail-acts {
+  position: absolute;
+  z-index: 1;
+  top: 0.35rem;
+  right: 0.35rem;
   display: flex;
-  flex: none;
   gap: 0.15rem;
 }
 .mg-rail-act {
@@ -6382,26 +6370,6 @@ body.mg-carrying {
   color: var(--mg-accent);
 }
 
-/* 本文から外れたコメントの数。本文には印を出さないので、ここが唯一の
-   手掛かりになる。数だけを静かに置き、押すとレビューの画面へ行く。 */
-.mg-loose-chip {
-  display: inline-flex;
-  flex: none;
-  gap: 0.2rem;
-  align-items: center;
-  height: 1.5rem;
-  padding: 0 0.45rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mg-danger) 12%, transparent);
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--mg-danger);
-  transition: background 0.12s ease;
-}
-.mg-loose-chip:hover {
-  background: color-mix(in srgb, var(--mg-danger) 20%, transparent);
-}
 
 /* ---- メタ情報の小窓 ---- */
 

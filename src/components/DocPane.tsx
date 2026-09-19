@@ -10,7 +10,6 @@ import {
 } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
 import { useReview } from "../hooks/useReview";
-import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
 import {
@@ -20,6 +19,7 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
+import { fitRailWidth, RAIL_WIDTH } from "../lib/sidebar";
 import { copyImage, copyText } from "../lib/clip";
 import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
@@ -29,7 +29,6 @@ import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
 import {
-  reviewScreenAtom,
   screenOpenAtom,
   syncLedger,
   versionScreenAtom,
@@ -56,6 +55,7 @@ import {
   soleAtom,
   themeAtom,
   railAtom,
+  railWidthAtom,
   watchModeAtom,
   type Pane,
 } from "../state/atoms";
@@ -84,6 +84,7 @@ import { land as land0, landOn, type Section } from "../lib/anchors";
 import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import { CommentRail } from "./review/CommentRail";
+import { SidebarGrip } from "./SidebarGrip";
 import {
   readingMarks,
   readingPending,
@@ -265,7 +266,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
 
   // ---- バージョン ----
   const openVersions = useSetAtom(versionScreenAtom);
-  const openReview = useSetAtom(reviewScreenAtom);
   // バージョンの名前を決める小窓。開くたびに日時を入れ直す。
   const [naming, setNaming] = useState<string | null>(null);
   // メタ情報の小窓。開いているペインの id を持つので、⌘⇧M からも開ける。
@@ -597,6 +597,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 横の欄で片付いた指摘まで出しているか。出すと決めたときだけ、その居場所を
   // 引かせる（解決済みは溜まる一方で、1 件ごとに基準版の読み込みと差分が要る）。
   const [railAll, setRailAll] = useState(false);
+  // 欄の幅。掴んでいるあいだは仕切りが DOM へ直に書くので、控えは離した 1 回だけ。
+  const [railWidth, setRailWidth] = useAtom(railWidthAtom);
+  const railRef = useRef<HTMLElement | null>(null);
   const review = useReview({ absPath, body, raw, content, isActive, withDone: railAll });
   // キー操作から今の選択を読むための控え。毎描画で作り直さずに済む。
   const reviewRef = useRef(review);
@@ -607,13 +610,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [picked, setPicked] = useState<string | null>(null);
   useEffect(() => setPicked(null), [path, rail]);
 
-  // 本文から外れた指摘の組を、横の欄で開いているか。ツールバーの札からも
-  // 開けるようにするので、欄の内側ではなくここで持つ。
-  const [openLoose, setOpenLoose] = useState(false);
-  useEffect(() => setOpenLoose(false), [path]);
-  // 横の欄を出せる広さ・並びか。目次と同じ条件。
-  const isLg = useMediaQuery("(min-width: 1024px)");
-  const canRail = isLg && !isSplit;
 
   // 本文の印を押したときの行き先。横の欄が出ているならそこで読ませる
   // （同じ中身をレビュー画面でもう一度開かせない）。
@@ -1463,25 +1459,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>
         )}
-        {/* 本文に居場所を持たない指摘。本文には印を出さないので、ここで数だけ
-            示して辿れるようにする。 */}
-        {review.loose > 0 && (
-          <button
-            onClick={() => {
-              // 横の欄で読めるならそちらを開く。読むだけのつもりの一押しで
-              // 全画面へ切り替わると、読んでいた場所ごと持っていかれる。
-              if (canRail) {
-                setRail("comments");
-                setOpenLoose(true);
-              } else openReview(true);
-            }}
-            title={`本文から外れたコメントが ${review.loose} 件あります`}
-            className="mg-loose-chip"
-          >
-            <Icon name="link_off" size={13} />
-            {review.loose}
-          </button>
-        )}
         {canCopy && (
           <button
             onClick={() => void copyAll()}
@@ -1782,7 +1759,18 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             それを持つ読む面のときだけ渡す（編集面の DOM は ProseMirror の
             もので、目印を持たない）。 */}
         {!isSplit && rail === "comments" && path && isDoc && (
+          <SidebarGrip
+            target={railRef}
+            width={railWidth}
+            onWidth={setRailWidth}
+            side="right"
+            fit={fitRailWidth}
+            reset={RAIL_WIDTH}
+          />
+        )}
+        {!isSplit && rail === "comments" && path && isDoc && (
           <CommentRail
+            railRef={railRef}
             content={editing ? null : content}
             scroller={editing ? null : scroller}
             threads={review.threads}
@@ -1791,8 +1779,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             loose={review.looseThreads}
             all={railAll}
             onAll={setRailAll}
-            openLoose={openLoose}
-            onOpenLoose={setOpenLoose}
+            width={railWidth}
             active={picked}
             onPick={setPicked}
             onOpen={review.open}
