@@ -22,6 +22,7 @@ import {
 import {
   activeFolderIdAtom,
   expandedByFolderAtom,
+  loadingAtom,
   revealInTreeAtom,
   soleAtom,
   treeAtom,
@@ -325,6 +326,7 @@ const TreeItem = memo(function TreeItem({
 
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
+  const loading = useAtomValue(loadingAtom);
   // 作る口を出さない場面。下書きの置き場はアプリの持ち物で、1 枚だけ開いて
   // いるときの木はそのファイルしか持たない。どちらも作ったものが出てこない。
   const draftRoot = useAtomValue(draftRelAtom) !== null;
@@ -562,11 +564,15 @@ export function FileTree() {
           />
         )}
         {filtered.length === 0 && !creating ? (
-          <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
-            {filter
-              ? "一致するファイルがありません"
-              : "Markdown ファイルがありません"}
-          </div>
+          loading.active ? (
+            <TreeSkeleton />
+          ) : (
+            <div className="px-3 py-8 text-center text-xs text-[var(--mg-muted)]">
+              {filter
+                ? "一致するファイルがありません"
+                : "Markdown ファイルがありません"}
+            </div>
+          )
         ) : (
           filtered.map((n) => (
             <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />
@@ -583,6 +589,22 @@ export function FileTree() {
           onRename={(n) => setEditingPath(n.path)}
         />
       )}
+    </div>
+  );
+}
+
+// 走査のあいだ、一覧の場所に出す骨組み。空のまま字だけ出すと、まだ読んで
+// いるだけなのに「何も入っていないフォルダを開いた」ように見える。
+function TreeSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2 px-2 py-2" aria-hidden>
+      {[68, 84, 52, 76, 60, 88, 44, 72].map((width, i) => (
+        <div
+          key={i}
+          className="h-3 rounded-sm bg-[var(--mg-hover)]"
+          style={{ width: `${width}%`, marginLeft: i % 3 === 2 ? 16 : 0 }}
+        />
+      ))}
     </div>
   );
 }

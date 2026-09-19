@@ -1,5 +1,6 @@
 // Tauri ネイティブ FS 経由でローカルフォルダを走査・読込する。
 // ブラウザの File System Access API は使わない（許可プロンプト不要・絶対パス取得可）。
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   exists,
@@ -128,52 +129,89 @@ const SKIP_DIRS = new Set([
   "build",
 ]);
 
-// ディレクトリを再帰走査して md ファイルのツリーを構築する。
+// 走査へ渡す、拡張子だけの粗いふるい。only があればその拡張子だけ、skip が
+// あればその拡張子以外が返る。一覧に何を出すかの決めごとは呼び出し側が持つ。
+export interface Sieve {
+  only?: string[];
+  skip?: string[];
+}
+
+export const MARKDOWN_SIEVE: Sieve = {
+  only: MD_EXTENSIONS.map((ext) => ext.slice(1)),
+};
+
+interface ScanEntry {
+  path: string;
+  dir: boolean;
+}
+
+// ディレクトリを走査してツリーを構築する。
+//
+// 走査そのものは Rust に任せる。階層ごとに読み出しを投げると往復が階層の数だけ
+// 積み上がり、一覧に出さないファイルまで WebView へ渡ってメインスレッドが塞がる
+// （ビルド成果物を抱えたフォルダでは 4 万件のうち 9 割が捨てる分だった）。
 export async function buildTree(
   rootAbs: string,
   show: (name: string) => boolean = isMarkdown,
-  parentRel = "",
+  sieve: Sieve = MARKDOWN_SIEVE,
 ): Promise<TreeNode[]> {
-  const dirAbs = parentRel ? `${rootAbs}/${parentRel}` : rootAbs;
-  let entries: Awaited<ReturnType<typeof readDir>>;
+  const began = performance.now();
+  let entries: ScanEntry[];
   try {
-    entries = await readDir(dirAbs);
+    entries = await invoke<ScanEntry[]>("scan_tree", {
+      root: rootAbs,
+      only: sieve.only ?? [],
+      skip: sieve.skip ?? [],
+    });
   } catch {
     return [];
   }
-  const nodes: TreeNode[] = [];
-  const dirs: typeof entries = [];
-  for (const e of entries) {
-    const rel = parentRel ? `${parentRel}/${e.name}` : e.name;
-    const abs = `${rootAbs}/${rel}`;
-    if (e.isDirectory) {
-      if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
-      dirs.push(e);
-    } else if (e.isFile && show(e.name)) {
-      nodes.push({ name: e.name, path: rel, abs, kind: "file" });
-    }
+  const tree = nestEntries(entries, rootAbs, show);
+  const took = performance.now() - began;
+  if (import.meta.env.DEV && took > 200) {
+    console.info(`scan_tree ${Math.round(took)}ms`, {
+      root: rootAbs,
+      scanned: entries.length,
+    });
   }
-  // 同じ階層のフォルダは並べて読む。1 つずつ待つと、フォルダの数だけ
-  // 往復が直列に積み上がり、開くまでに何秒もかかる。
-  const walked = await Promise.all(
-    dirs.map(async (e) => {
-      const rel = parentRel ? `${parentRel}/${e.name}` : e.name;
-      // 空フォルダも表示する（新規作成フォルダや構成用フォルダのため）
-      return {
-        name: e.name,
-        path: rel,
-        abs: `${rootAbs}/${rel}`,
-        kind: "dir" as const,
-        children: await buildTree(rootAbs, show, rel),
-      };
-    }),
-  );
-  nodes.push(...walked);
+  return tree;
+}
+
+function sortNodes(nodes: TreeNode[]): void {
   nodes.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
     return a.name.localeCompare(b.name, "ja", { numeric: true });
   });
-  return nodes;
+  for (const node of nodes) if (node.children) sortNodes(node.children);
+}
+
+// 走査が返した平らな並びを木に組む。親は子より先に来るので、順に積める。
+// 設定で書いた除外（show）はここで当てる。
+export function nestEntries(
+  entries: ScanEntry[],
+  rootAbs: string,
+  show: (name: string) => boolean = isMarkdown,
+): TreeNode[] {
+  const roots: TreeNode[] = [];
+  const dirs = new Map<string, TreeNode>();
+  for (const entry of entries) {
+    const cut = entry.path.lastIndexOf("/");
+    const name = entry.path.slice(cut + 1);
+    if (!entry.dir && !show(name)) continue;
+    const node: TreeNode = {
+      name,
+      path: entry.path,
+      abs: `${rootAbs}/${entry.path}`,
+      kind: entry.dir ? "dir" : "file",
+      // 空フォルダも表示する（新規作成フォルダや構成用フォルダのため）
+      ...(entry.dir ? { children: [] } : {}),
+    };
+    if (entry.dir) dirs.set(entry.path, node);
+    const parent = cut === -1 ? null : dirs.get(entry.path.slice(0, cut));
+    (parent?.children ?? roots).push(node);
+  }
+  sortNodes(roots);
+  return roots;
 }
 
 export function flattenFiles(nodes: TreeNode[]): TreeNode[] {

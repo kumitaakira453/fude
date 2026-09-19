@@ -100,11 +100,12 @@ export function OpenPicker() {
 
   if (!open) return null;
 
-  const choose = async (entry: DocEntry | undefined) => {
+  // 開き終わるのを待たない。走査は後ろで進み、画面はその場で切り替わる。
+  const choose = (entry: DocEntry | undefined) => {
     if (!entry) return;
     setOpen(false);
-    if (side === "folders") await openFolder(entry.path);
-    else await openDoc(entry.path);
+    if (side === "folders") void openFolder(entry.path);
+    else openDoc(entry.path);
   };
 
   // 下書きのままなら、選ぶ前に行き先を決めさせる。OS のダイアログを開いてから
@@ -169,7 +170,7 @@ export function OpenPicker() {
                 setAt((i) => Math.max(i - 1, 0));
               } else if (e.key === "Enter") {
                 e.preventDefault();
-                void choose(rows[at]);
+                choose(rows[at]);
               } else if (e.key === "Escape") {
                 setOpen(false);
               }
@@ -244,7 +245,7 @@ export function OpenPicker() {
               key={entry.id}
               data-idx={i}
               onMouseMove={() => setAt(i)}
-              onClick={() => editingId !== entry.id && void choose(entry)}
+              onClick={() => editingId !== entry.id && choose(entry)}
               className={`mg-open-row${i === at ? " is-at" : ""}${
                 entry.id === activeId && side === "folders" ? " is-now" : ""
               }`}

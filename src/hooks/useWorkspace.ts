@@ -2,7 +2,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { useStore, type getDefaultStore } from "jotai";
 import { useCallback, useRef } from "react";
 import { withExcluded } from "../lib/exclude";
-import { isViewable, kindOf } from "../lib/kind";
+import { isViewable, kindOf, VIEWABLE_SIEVE } from "../lib/kind";
 import {
   buildTree,
   createDir,
@@ -11,6 +11,7 @@ import {
   folderMtimes,
   imageUrl,
   isMarkdown,
+  MARKDOWN_SIEVE,
   pathExists,
   peekImageUrl,
   readFile,
@@ -79,6 +80,10 @@ function joinRel(a: string, b: string): string {
 // バックグラウンド索引の世代。新しい構築が始まると古い構築は中断する。
 let indexGen = 0;
 
+// 木の走査の世代。走査は待たずに走らせるので、続けて開いたときに古い結果が
+// 新しい木を上書きしないよう、戻ってきた時点で自分が最後かを確かめる。
+let treeGen = 0;
+
 // 手が空いてから走らせる。requestIdleCallback が無ければ少し待つ。
 function whenIdle(run: () => void) {
   if (typeof requestIdleCallback === "function") {
@@ -98,6 +103,10 @@ const shownFiles = (store: Store) =>
     store.get(A.showOtherFilesAtom) ? isViewable : isMarkdown,
     store.get(A.excludeAtom),
   );
+
+// 走査へ渡す粗いふるい。設定で書いた除外は木へ組むときに当てる。
+const sieveOf = (store: Store) =>
+  store.get(A.showOtherFilesAtom) ? VIEWABLE_SIEVE : MARKDOWN_SIEVE;
 
 export function useWorkspace() {
   const store = useStore();
@@ -184,10 +193,13 @@ export function useWorkspace() {
       done: 0,
       total: 0,
     });
-    const tree = await buildTree(root, shownFiles(store));
+    const scan = ++treeGen;
+    const tree = await buildTree(root, shownFiles(store), sieveOf(store));
+    if (scan !== treeGen) return;
     const files = flattenFiles(tree);
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, files);
+    store.set(A.loadingAtom, { active: false, message: "", done: 0, total: 0 });
     // 更新時刻は並び順にしか使わないので、待たずに後から入れる。
     void folderMtimes(root).then(
       (m) => store.set(A.touchedAtom, m),
@@ -216,7 +228,9 @@ export function useWorkspace() {
       store.set(A.filesAtom, [node]);
       return;
     }
-    const tree = await buildTree(root, shownFiles(store));
+    const scan = ++treeGen;
+    const tree = await buildTree(root, shownFiles(store), sieveOf(store));
+    if (scan !== treeGen) return;
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, flattenFiles(tree));
   }, [store, getRootPath]);
@@ -422,10 +436,16 @@ export function useWorkspace() {
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化
       store.set(A.contentCacheAtom, new Map());
       store.set(A.mtimeCacheAtom, new Map());
+      // 前のフォルダの一覧は、ここで畳む。残したまま走査を待つと、押しても
+      // 何も起きていないように見える。
+      store.set(A.treeAtom, []);
+      store.set(A.filesAtom, []);
       // 保存レイアウトがあるとこの後それで置き換わるので、先出しは意味が無い
       if (opts.file && !saved) openFile(opts.file);
-      await refreshTree();
-      if (saved) {
+      // 走査は待たない。待っているあいだ、画面はどの操作も受け付けなくなる。
+      void refreshTree().then(() => {
+        // 走査のあいだに別のフォルダへ移っていたら、もう当てる先がない。
+        if (!saved || store.get(A.activeFolderIdAtom) !== activeId) return;
         const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
         const { layout, active } = reviveLayout(
           saved.layout,
@@ -435,7 +455,7 @@ export function useWorkspace() {
         store.set(A.layoutAtom, layout);
         store.set(A.activePaneIdAtom, active);
         revealTabs(activeId, layout);
-      }
+      });
     },
     [store, refreshTree, openFile, revealTabs],
   );

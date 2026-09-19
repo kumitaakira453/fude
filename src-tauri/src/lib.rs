@@ -219,13 +219,14 @@ struct FileStamp {
     mtime: u64,
 }
 
-const SKIP_DIRS: [&str; 6] = [
+const SKIP_DIRS: [&str; 7] = [
     "node_modules",
     ".obsidian",
     ".trash",
     ".vscode",
     ".idea",
     "dist",
+    "build",
 ];
 
 fn is_markdown(name: &str) -> bool {
@@ -276,6 +277,81 @@ async fn folder_mtimes(root: String) -> Vec<FileStamp> {
     .unwrap_or_default()
 }
 
+// フォルダ配下の木を、1 回の呼び出しでまとめて返す。階層ごとに読み出しを
+// 投げると往復が階層の数だけ積み上がり、一覧に出さないファイルまで WebView へ
+// 渡ることになる（ビルド成果物を抱えたフォルダでは 4 万件のうち 9 割が捨てる分）。
+#[derive(serde::Serialize)]
+struct ScanEntry {
+    // フォルダからの相対パス（/ 区切り）
+    path: String,
+    dir: bool,
+}
+
+// 拡張子だけの粗いふるい。only が空でなければその拡張子だけを、skip が空で
+// なければその拡張子以外を通す。何を一覧に出すかの決めごとは呼び出し側が持つ。
+struct Sieve {
+    only: std::collections::HashSet<String>,
+    skip: std::collections::HashSet<String>,
+}
+
+impl Sieve {
+    fn passes(&self, name: &str) -> bool {
+        let lower = name.to_ascii_lowercase();
+        let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+        if !self.only.is_empty() {
+            return !ext.is_empty() && self.only.contains(ext);
+        }
+        if !self.skip.is_empty() {
+            return ext.is_empty() || !self.skip.contains(ext);
+        }
+        true
+    }
+}
+
+// 親を子より先に積む。受け取った側はこの順のまま木へ組める。
+fn scan_in(dir: &std::path::Path, prefix: &str, sieve: &Sieve, out: &mut Vec<ScanEntry>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let rel = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let Ok(kind) = entry.file_type() else { continue };
+        if kind.is_dir() {
+            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+                continue;
+            }
+            // 空のフォルダも一覧に出す。新しく作った置き場が消えて見える。
+            out.push(ScanEntry {
+                path: rel.clone(),
+                dir: true,
+            });
+            scan_in(&entry.path(), &rel, sieve, out);
+        } else if kind.is_file() && sieve.passes(&name) {
+            out.push(ScanEntry { path: rel, dir: false });
+        }
+    }
+}
+
+#[tauri::command]
+async fn scan_tree(root: String, only: Vec<String>, skip: Vec<String>) -> Vec<ScanEntry> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let sieve = Sieve {
+            only: only.into_iter().collect(),
+            skip: skip.into_iter().collect(),
+        };
+        let mut out = Vec::new();
+        scan_in(std::path::Path::new(&root), "", &sieve, &mut out);
+        out
+    })
+    .await
+    .unwrap_or_default()
+}
+
 // 指定したアプリ名のうち、実際にインストールされているものを返す。
 // メニューに出す項目を実在するアプリだけに絞るために使う。
 #[tauri::command]
@@ -308,6 +384,7 @@ pub fn run() {
             open_in_app,
             installed_apps,
             folder_mtimes,
+            scan_tree,
             review_store_path,
             review_create_thread,
             review_version_text,
@@ -348,4 +425,77 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sieve(only: &[&str], skip: &[&str]) -> Sieve {
+        Sieve {
+            only: only.iter().map(|s| s.to_string()).collect(),
+            skip: skip.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn only_はその拡張子だけを通す() {
+        let s = sieve(&["md", "markdown"], &[]);
+        assert!(s.passes("はじめ.md"));
+        assert!(s.passes("大文字.MD"));
+        assert!(!s.passes("絵.png"));
+        // 拡張子の無い名前は通さない。
+        assert!(!s.passes("Makefile"));
+        // 点で始まる名前も、後ろが合えば通す。
+        assert!(s.passes(".md"));
+    }
+
+    #[test]
+    fn skip_はその拡張子以外を通す() {
+        let s = sieve(&[], &["zip", "png"]);
+        assert!(s.passes("はじめ.md"));
+        assert!(!s.passes("書庫.zip"));
+        assert!(!s.passes("絵.PNG"));
+        // 拡張子の無い名前は字として開けるので通す。
+        assert!(s.passes("Makefile"));
+        assert!(s.passes(".gitignore"));
+    }
+
+    #[test]
+    fn ふるいが空なら全部通す() {
+        let s = sieve(&[], &[]);
+        assert!(s.passes("書庫.zip"));
+        assert!(s.passes("Makefile"));
+    }
+
+    #[test]
+    fn 走査は親を先に積み_飛ばす置き場には降りない() {
+        let root = std::env::temp_dir().join(format!("fude-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("中/奥")).unwrap();
+        std::fs::create_dir_all(root.join("node_modules/何か")).unwrap();
+        std::fs::create_dir_all(root.join(".git/objects")).unwrap();
+        std::fs::create_dir_all(root.join("空")).unwrap();
+        std::fs::write(root.join("はじめ.md"), "").unwrap();
+        std::fs::write(root.join("中/奥/深い.md"), "").unwrap();
+        std::fs::write(root.join("中/絵.png"), "").unwrap();
+        std::fs::write(root.join("node_modules/何か/紛れ.md"), "").unwrap();
+        std::fs::write(root.join(".git/objects/紛れ.md"), "").unwrap();
+
+        let mut out = Vec::new();
+        scan_in(&root, "", &sieve(&["md"], &[]), &mut out);
+        let mut paths: Vec<String> = out.iter().map(|e| e.path.clone()).collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec!["はじめ.md", "中", "中/奥", "中/奥/深い.md", "空"]
+        );
+
+        // 親は必ず子より先に積まれている。
+        let at = |p: &str| out.iter().position(|e| e.path == p).unwrap();
+        assert!(at("中") < at("中/奥"));
+        assert!(at("中/奥") < at("中/奥/深い.md"));
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

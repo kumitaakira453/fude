@@ -1,5 +1,11 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { IMAGE_EXTENSIONS, isImage, isMarkdown, MD_EXTENSIONS } from "./fsAccess";
+import {
+  IMAGE_EXTENSIONS,
+  isImage,
+  isMarkdown,
+  MD_EXTENSIONS,
+  type Sieve,
+} from "./fsAccess";
 
 // ファイルの見せ方の別。開いたときに何で描くかを決める。
 //
@@ -42,6 +48,9 @@ const BINARY_EXTENSIONS = [
   // 控えと鍵
   "db", "sqlite", "sqlite3", "mdb", "realm", "p12", "pfx", "der", "keychain",
 ];
+
+// 走査へ渡すふるい。isViewable と同じ線引きを、拡張子の並びだけで表したもの。
+export const VIEWABLE_SIEVE: Sieve = { skip: BINARY_EXTENSIONS };
 
 const endsWithAny = (lower: string, exts: string[]) =>
   exts.some((ext) => lower.endsWith(`.${ext}`));

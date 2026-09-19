@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-// ファイル一覧に何を並べるか。Markdown だけの見え方と、開けるものが
-// すべて並ぶ見え方を切り替えられる。
+// ファイル一覧に何を並べるか。走査そのものは Rust 側で行い、ここでは返ってきた
+// 平らな並びを木へ組むところと、設定で書いた除外の当たり方を見る。
 
 const ENTRIES: Record<string, { name: string; isFile: boolean; isDirectory: boolean }[]> = {
   "/docs": [
@@ -34,8 +34,33 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: () => Promise.resolve(null) }));
 
-const { buildTree, isMarkdown, readLevel } = await import("./fsAccess");
-const { isViewable } = await import("./kind");
+// 走査が返す並び。親は子より先に来る。拡張子のふるいは Rust 側で当たるので、
+// ここでは通ったものがそのまま返ってくるものとして組む。
+const SCAN = [
+  { path: "はじめ.md", dir: false },
+  { path: "絵.png", dir: false },
+  { path: "頁.html", dir: false },
+  { path: "資料.pdf", dir: false },
+  { path: "控え.txt", dir: false },
+  { path: "章2.md", dir: false },
+  { path: "章10.md", dir: false },
+  { path: "中", dir: true },
+  { path: "中/奥.md", dir: false },
+  { path: "中/図.svg", dir: false },
+  { path: "空", dir: true },
+];
+
+const asked: { only: string[]; skip: string[] }[] = [];
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (_command: string, args: { only: string[]; skip: string[] }) => {
+    asked.push({ only: args.only, skip: args.skip });
+    return Promise.resolve(SCAN);
+  },
+}));
+
+const { buildTree, isMarkdown, readLevel, MARKDOWN_SIEVE } = await import("./fsAccess");
+const { isViewable, VIEWABLE_SIEVE } = await import("./kind");
+const { withExcluded } = await import("./exclude");
 
 const names = (nodes: { name: string }[]) => nodes.map((n) => n.name);
 
@@ -63,20 +88,53 @@ describe("1 階層だけ読む", () => {
 
 describe("木を作る", () => {
   it("絞り込みは下の階層にも効く", async () => {
-    const tree = await buildTree("/docs", isViewable);
+    const tree = await buildTree("/docs", isViewable, VIEWABLE_SIEVE);
     const inner = tree.find((n) => n.name === "中");
     expect(names(inner?.children ?? [])).toEqual(["奥.md", "図.svg"]);
   });
 
   it("Markdown だけなら下の階層も Markdown だけ", async () => {
-    const tree = await buildTree("/docs", isMarkdown);
+    const tree = await buildTree("/docs", isMarkdown, MARKDOWN_SIEVE);
     const inner = tree.find((n) => n.name === "中");
     expect(names(inner?.children ?? [])).toEqual(["奥.md"]);
   });
 
-  it("走査から外すフォルダは並べない", async () => {
-    const tree = await buildTree("/docs", isViewable);
-    expect(names(tree)).not.toContain("node_modules");
-    expect(names(tree)).not.toContain(".git");
+  it("フォルダが先、名前は数の大きさの順に並ぶ", async () => {
+    const tree = await buildTree("/docs", isMarkdown, MARKDOWN_SIEVE);
+    expect(names(tree)).toEqual(["空", "中", "はじめ.md", "章2.md", "章10.md"]);
+  });
+
+  it("中身の無いフォルダも並べる", async () => {
+    const tree = await buildTree("/docs", isMarkdown, MARKDOWN_SIEVE);
+    const empty = tree.find((n) => n.name === "空");
+    expect(empty?.kind).toBe("dir");
+    expect(empty?.children).toEqual([]);
+  });
+
+  it("絶対パスは根からの道筋で組む", async () => {
+    const tree = await buildTree("/docs", isMarkdown, MARKDOWN_SIEVE);
+    const inner = tree.find((n) => n.name === "中");
+    expect(inner?.children?.[0]?.abs).toBe("/docs/中/奥.md");
+  });
+
+  it("設定で書いた除外が当たる", async () => {
+    const tree = await buildTree(
+      "/docs",
+      withExcluded(isMarkdown, "章*.md"),
+      MARKDOWN_SIEVE,
+    );
+    expect(names(tree)).toEqual(["空", "中", "はじめ.md"]);
+  });
+
+  it("走査へ渡すふるいは拡張子の並びだけ", async () => {
+    asked.length = 0;
+    await buildTree("/docs", isMarkdown, MARKDOWN_SIEVE);
+    expect(asked.at(-1)).toEqual({
+      only: ["md", "markdown", "mdx", "mdown", "mkd"],
+      skip: [],
+    });
+    await buildTree("/docs", isViewable, VIEWABLE_SIEVE);
+    expect(asked.at(-1)?.only).toEqual([]);
+    expect(asked.at(-1)?.skip).toContain("zip");
   });
 });
