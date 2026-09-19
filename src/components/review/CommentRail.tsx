@@ -337,19 +337,22 @@ function RailCard({
   onReply: (body: string) => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
-  // 押して選ばれるのを待っている札。入力欄は選ばれてから描かれるので、焦点は
-  // 描き終わってから当てる。本文の印から選ばれたときは当てない（読んでいる手
-  // から焦点を奪わない）ので、押した側からだけ印を立てる。
-  const wants = useRef(false);
+  // 返信の口を開いているか。選ばれていること（＝本文の印と対になっていること）
+  // とは別に持つ。本文の印を押しただけで書く構えに入られると、読んでいる途中に
+  // 入力欄が割り込む。
+  const [writing, setWriting] = useState(false);
   const [text, setText] = useState("");
   const md = useMarkdownKeys(setText);
+  // 焦点を当てると既定でその要素が見える位置まで送られ、直前に始めた本文の
+  // 滑らかな送りを打ち消す。当てるだけにする。
   useEffect(() => {
-    if (!active || !wants.current) return;
-    wants.current = false;
-    // 焦点を当てると既定で見える位置まで送られ、直前に始めた本文の滑らかな
-    // 送りを打ち消す。当てるだけにする。
-    box.current?.focus({ preventScroll: true });
-  }, [active]);
+    if (writing) box.current?.focus({ preventScroll: true });
+  }, [writing]);
+
+  // 選びが自分から外れたら口を閉じる。書きかけがあるうちは残す。
+  useEffect(() => {
+    if (!active && !text.trim()) setWriting(false);
+  }, [active, text]);
 
   const send = () => {
     const body = text.trim();
@@ -368,10 +371,12 @@ function RailCard({
       // 読んだ流れが一度切れる。
       onClick={() => {
         onJump();
-        if (active) box.current?.focus({ preventScroll: true });
-        else wants.current = true;
+        setWriting(true);
+        box.current?.focus({ preventScroll: true });
       }}
-      className={`mg-rail-card${stray ? " is-stray" : ""}${done ? " is-done" : ""}`}
+      className={`mg-rail-card${active ? " is-on" : ""}${stray ? " is-stray" : ""}${
+        done ? " is-done" : ""
+      }`}
     >
       {/* 札の始末。入力欄の有無で場所が動かないよう、右上へ寄せて重ねる。 */}
       <div className="mg-rail-acts">
@@ -403,7 +408,7 @@ function RailCard({
         ))}
       </div>
       {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。 */}
-      {(active || text.trim()) && (
+      {(writing || text.trim()) && (
         // 入力欄を押したときまで箇所へ送ると、打っている最中に本文が動く。
         <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
           <AutoTextarea

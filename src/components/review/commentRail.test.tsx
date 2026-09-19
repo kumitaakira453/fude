@@ -98,6 +98,8 @@ function show(
     loose?: ReviewThread[];
     done?: ReviewThread[];
     content?: HTMLElement | null;
+    // 本文の印から選ばれた状態で出す。
+    active?: string;
   } = {},
 ) {
   picked = [];
@@ -113,7 +115,7 @@ function show(
   function Host() {
     const railRef = useRef<HTMLElement | null>(null);
     const [all, setAll] = useState(false);
-    const [active, setActive] = useState<string | null>(null);
+    const [active, setActive] = useState<string | null>(over.active ?? null);
     return (
       <CommentRail
         railRef={railRef}
@@ -273,6 +275,14 @@ describe("札の姿", () => {
   it("押していない札には返信の口を出さない", () => {
     talk();
     expect(box(cards()[0])).toBeNull();
+  });
+
+  it("本文の印から選ばれただけでは、返信の口を出さない", () => {
+    // 読んでいる途中に入力欄が割り込むと、印を押すのが書く操作になってしまう。
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { active: "t1" });
+    expect(box(cards()[0])).toBeNull();
+    // どれの話かは分かるようにする。
+    expect(cards()[0].classList.contains("is-on")).toBe(true);
   });
 
   it("押すとその指摘を選び、返信の口が出て焦点も入る", () => {

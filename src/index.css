@@ -3155,6 +3155,11 @@ svg[id^="mmd-"] foreignObject p {
   outline: 2px solid var(--mg-accent);
   outline-offset: 1px;
 }
+/* 本文の印と対になっている札。どれの話かが欄の側でも分かるようにする。 */
+.mg-rail-card.is-on {
+  border-color: var(--mg-accent);
+  background: color-mix(in srgb, var(--mg-accent) 7%, var(--mg-panel));
+}
 /* 片付いた指摘。読み返すために出しているだけなので、未解決より一段落とす。 */
 .mg-rail-card.is-done {
   opacity: 0.6;
