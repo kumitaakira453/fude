@@ -84,6 +84,7 @@ import { land as land0, landOn, type Section } from "../lib/anchors";
 import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import { CommentRail } from "./review/CommentRail";
+import { MenuButton } from "./MenuButton";
 import { SidebarGrip } from "./SidebarGrip";
 import {
   readingMarks,
@@ -1478,15 +1479,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>
         )}
-        {canCopy && (
-          <button
-            onClick={() => void copyAll()}
-            title="全文をコピー"
-            className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-          >
-            <Icon name="content_copy" size={15} />
-          </button>
-        )}
         {path && isDoc && (
           <>
             {isDraft ? (
@@ -1499,37 +1491,63 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 <Icon name="save" size={16} />
               </button>
             ) : (
-            <button
-              onClick={() => (naming === null ? startNaming() : setNaming(null))}
-              title="バージョンを保存 (⌘S)"
-              className={`grid h-6 w-6 place-items-center rounded transition ${
-                naming !== null
-                  ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
-                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              }`}
-            >
-              <Icon name="save_as" size={16} />
-            </button>
-            )}
-            {/* 下書きは版も指摘も持たない。行き先が決まってからのものなので、
-                履歴の口は出さない。 */}
-            {!isDraft && (
-              <button onClick={showVersions} title="バージョン履歴" className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]">
-                <Icon name="history" size={16} />
+              <button
+                onClick={() => (naming === null ? startNaming() : setNaming(null))}
+                title="バージョンを保存 (⌘S)"
+                className={`grid h-6 w-6 place-items-center rounded transition ${
+                  naming !== null
+                    ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
+                    : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+                }`}
+              >
+                <Icon name="save_as" size={16} />
               </button>
             )}
-            <button
-              onClick={() => setMetaPane(pane.id)}
-              title="メタ情報 (⌘⇧M)"
-              className={`grid h-6 w-6 place-items-center rounded transition ${
-                data || broken
-                  ? "text-[var(--mg-accent)] hover:bg-[var(--mg-hover)]"
-                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              }`}
-            >
-              <Icon name="list_alt" size={16} fill={!!data || broken} />
-            </button>
           </>
+        )}
+        {/* 毎分押すものではない操作は畳む。並べておくと、どれが何なのか絵だけ
+            では読み取れなくなる。 */}
+        {(canCopy || (path && isDoc)) && (
+          <MenuButton
+            icon="more_horiz"
+            title="そのほか"
+            size={16}
+            dot={!!data || broken}
+            className="relative grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+            items={[
+              ...(canCopy
+                ? [
+                    {
+                      icon: "content_copy",
+                      label: "全文をコピー",
+                      run: () => void copyAll(),
+                    },
+                  ]
+                : []),
+              // 下書きは版も指摘も持たない。行き先が決まってからのものなので、
+              // 履歴の口は出さない。
+              ...(path && isDoc && !isDraft
+                ? [
+                    {
+                      icon: "history",
+                      label: "バージョン履歴",
+                      run: showVersions,
+                    },
+                  ]
+                : []),
+              ...(path && isDoc
+                ? [
+                    {
+                      icon: "list_alt",
+                      label: "メタ情報",
+                      keys: "⌘⇧M",
+                      on: !!data || broken,
+                      run: () => setMetaPane(pane.id),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         )}
         {saving > 0 && (
           <span title="保存中" className="shrink-0 text-[var(--mg-muted)]">

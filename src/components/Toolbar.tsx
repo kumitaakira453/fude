@@ -1,9 +1,10 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { splitInto } from "../lib/ui";
+import { closePane, splitInto } from "../lib/ui";
 import {
   activeFolderIdAtom,
+  activePaneIdAtom,
   soleAtom,
   canBackAtom,
   canForwardAtom,
@@ -16,9 +17,22 @@ import {
 } from "../state/atoms";
 import { openTotalAtom, reviewScreenAtom } from "../state/review";
 import { AppIcon } from "./AppIcon";
+import { MenuButton } from "./MenuButton";
 import { Icon } from "./Icon";
 import { SettingsButton } from "./SettingsButton";
 import { draftRelAtom } from "../state/drafts";
+
+// 右の欄に出せるもの。択一なので、そのまま 1 つの入口の中身になる。
+const RAILS: { id: Rail; icon: string; label: string }[] = [
+  { id: "none", icon: "right_panel_close", label: "出さない" },
+  { id: "toc", icon: "toc", label: "目次" },
+  { id: "comments", icon: "chat", label: "コメント" },
+];
+const RAIL_ICON: Record<Rail, string> = {
+  none: "right_panel_close",
+  toc: "toc",
+  comments: "chat",
+};
 
 function IconButton({
   onClick,
@@ -77,8 +91,6 @@ export function Toolbar() {
   const isLg = useMediaQuery("(min-width: 1024px)");
   // 右の欄は lg 以上かつ単一ペインのときのみ表示可能
   const canRail = isLg && !isSplit;
-  // 押しているものをもう一度押したら何も出さない状態へ戻す。
-  const pickRail = (want: Rail) => setRail((now) => (now === want ? "none" : want));
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-0.5 border-b border-[var(--mg-border)] bg-[var(--mg-panel)] px-2">
@@ -118,46 +130,62 @@ export function Toolbar() {
 
       <div className="ml-auto flex items-center gap-0.5">
         <IconButton
-          onClick={() => {
-            setSidebarOpen(true);
-            setTab("search");
-          }}
-          title="全文検索 (⌘⇧F)"
-          icon="search"
-        />
-        <IconButton
           onClick={() => setPalette(true)}
           title="クイックオープン (⌘P)"
           icon="bolt"
         />
-        <IconButton
-          onClick={() => splitInto(store, "row")}
-          title="右に分割 (⌘\)"
+        {/* 目次とコメントは同じ場所を取り合うので、択一として 1 つの入口に置く。 */}
+        <MenuButton
+          icon={RAIL_ICON[canRail ? rail : "none"]}
+          title="右の欄"
+          active={canRail && rail !== "none"}
+          items={RAILS.map((it) => ({
+            icon: it.icon,
+            label: it.label,
+            on: canRail ? rail === it.id : it.id === "none",
+            disabled: !canRail && it.id !== "none",
+            why: canRail ? undefined : "画面幅が狭い / 分割中は出せません",
+            run: () => setRail(it.id),
+          }))}
+        />
+        <MenuButton
+          icon="splitscreen"
+          title="分割"
           active={isSplit}
-          icon="vertical_split"
+          items={[
+            {
+              icon: "vertical_split",
+              label: "右に分割",
+              keys: "⌘\\",
+              run: () => splitInto(store, "row"),
+            },
+            {
+              icon: "horizontal_split",
+              label: "下に分割",
+              run: () => splitInto(store, "col"),
+            },
+            {
+              icon: "close_fullscreen",
+              label: "分割を解除",
+              disabled: !isSplit,
+              run: () => closePane(store, store.get(activePaneIdAtom)),
+            },
+          ]}
         />
-        <IconButton
-          onClick={() => splitInto(store, "col")}
-          title="下に分割"
-          icon="horizontal_split"
-        />
-        <IconButton
-          onClick={() => pickRail("toc")}
-          title={canRail ? "目次" : "目次（画面幅が狭い / 分割中は非表示）"}
-          active={rail === "toc" && canRail}
-          disabled={!canRail}
-          icon="toc"
-        />
-        <IconButton
-          onClick={() => pickRail("comments")}
-          title={
-            canRail
-              ? "コメントを横に出す"
-              : "コメントを横に出す（画面幅が狭い / 分割中は非表示）"
-          }
-          active={rail === "comments" && canRail}
-          disabled={!canRail}
-          icon="chat"
+        <MenuButton
+          icon="more_horiz"
+          title="そのほか"
+          items={[
+            {
+              icon: "search",
+              label: "全文検索",
+              keys: "⌘⇧F",
+              run: () => {
+                setSidebarOpen(true);
+                setTab("search");
+              },
+            },
+          ]}
         />
         <div className="mx-1 h-5 w-px bg-[var(--mg-border)]" />
         {/* 下書きには指摘を付けない。行き先が決まってからのものなので、

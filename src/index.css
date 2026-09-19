@@ -1896,6 +1896,32 @@ button.mg-task-check:hover {
   color: var(--mg-danger, #e5484d);
 }
 
+/* 釦の足元に出す小さな一覧。役割の近い操作を 1 つの入口へ畳むのに使う。 */
+.mg-menu-pop {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.75rem;
+  background: var(--mg-panel);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 8%),
+    0 14px 34px -14px rgb(0 0 0 / 50%);
+}
+/* 畳んだ中に印いているものがあるときの点。中を開かずに気づけるようにする。 */
+.mg-menu-dot {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--mg-accent);
+}
+
 /* メニューのキー表示。押し方をその場で示す。 */
 .mg-menu-keys {
   margin-left: auto;
