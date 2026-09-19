@@ -18,6 +18,20 @@ import {
   unpadLines,
 } from "./htmlSpans";
 
+// 囲みのコード。この中のタグは字であって、組み替える相手ではない。記法の
+// 見本として `<callout>` を囲みに入れて書くと、そのまま組み替えられて囲みが
+// 壊れ、閉じの ``` が新しい囲みを開いて以降がすべてコードになる。
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+function fenceOf(line: string): string | null {
+  return FENCE.exec(line)?.[1] ?? null;
+}
+// 開いた囲みを閉じるか。同じ字で、開いたときと同じ数以上。後ろに字を置けない。
+function closesFence(line: string, open: string): boolean {
+  const mark = fenceOf(line);
+  if (!mark || mark[0] !== open[0] || mark.length < open.length) return false;
+  return line.trim().slice(mark.length).trim() === "";
+}
+
 const SUMMARY = /^<summary(\s[^>]*)?>.*<\/summary>$/;
 const CLOSE = "</summary>";
 const HEADING = /^\s*<h([1-6])(?:\s[^>]*)?>([\s\S]*)<\/h\1>\s*$/;
@@ -81,7 +95,21 @@ function open(src: string, back: Back): Row[] {
 
   const out: Row[] = [];
 
+  // 開いている囲みのコード。中は素通しする。
+  let fence: string | null = null;
+
   for (let i = 0; i < lines.length; i++) {
+    if (fence) {
+      if (closesFence(lines[i], fence)) fence = null;
+      out.push(row(i));
+      continue;
+    }
+    const mark = fenceOf(lines[i]);
+    if (mark) {
+      fence = mark;
+      out.push(row(i));
+      continue;
+    }
     const kind = kindOf(lines[i]);
     const close = kind ? closeLineOf(lines, i, kind) : -1;
     if (!kind || close < 0) {

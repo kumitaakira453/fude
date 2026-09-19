@@ -222,3 +222,32 @@ describe("setCalloutIcon", () => {
     expect(setCalloutIcon(src, "🔥").split("\n")[0]).toBe('  <callout icon="🔥">');
   });
 });
+
+// 記法の見本として、囲みのコードの中にタグを書くことがある。中は字なので、
+// 組み替えると囲みが壊れ、閉じの ``` が新しい囲みを開いて以降が全部コードになる。
+describe("囲みのコードの中は触らない", () => {
+  it("見本の callout を組み替えない", () => {
+    const src = [
+      "## callout",
+      "",
+      "```markdown",
+      '<callout icon="💡" color="gray_bg">',
+      "本文。",
+      "</callout>",
+      "```",
+      "",
+      "つづきの段落。",
+    ].join("\n");
+    expect(openHtmlContainers(src).text).toBe(src);
+  });
+
+  it("囲みの外の callout は今までどおり組み替える", () => {
+    const src = ['<callout icon="💡">', "本文。", "</callout>"].join("\n");
+    expect(openHtmlContainers(src).text).toContain("mg-callout");
+  });
+
+  it("~~~ の囲みも同じに扱う", () => {
+    const src = ["~~~", '<callout icon="💡">', "本文。", "</callout>", "~~~"].join("\n");
+    expect(openHtmlContainers(src).text).toBe(src);
+  });
+});
