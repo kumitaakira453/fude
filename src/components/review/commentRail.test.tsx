@@ -9,9 +9,8 @@ import { CommentRail } from "./CommentRail";
 
 // 本文の横に出すコメント。
 //
-// 見たいのは 2 つ。札が本文と同じ高さ・同じ順に並ぶことと、開くのが 1 枚だけで
-// あること。全部を開いたまま並べると、指摘が数件あるだけで欄が埋まり、いま見て
-// いる 1 件がどれなのか分からなくなる。
+// 見たいのは、札が本文と同じ高さ・同じ順に並ぶことと、押した流れのまま返信を
+// 書き始められること。
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -149,10 +148,10 @@ afterEach(() => {
 const cards = () => Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-card"));
 const flowed = () =>
   Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-flow > .mg-rail-card"));
-const peeks = () =>
-  Array.from(document.querySelectorAll(".mg-rail-peek")).map((el) => el.textContent);
-const opens = () =>
-  Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-card.is-open"));
+// 札は引用で見分ける。会話は全部出ているので、並びはこれで足りる。
+const quotes = () =>
+  Array.from(document.querySelectorAll(".mg-rail-quote")).map((el) => el.textContent);
+const box = (card: HTMLElement) => card.querySelector<HTMLTextAreaElement>("textarea")!;
 const click = (el: HTMLElement) => act(() => el.click());
 const openStray = () => click(document.querySelector<HTMLElement>(".mg-rail-stray-top")!);
 const picks = () =>
@@ -181,7 +180,7 @@ describe("並び", () => {
         ["t2", at(0)],
       ]),
     );
-    expect(peeks()).toEqual(["t2 の指摘", "t1 の指摘"]);
+    expect(quotes()).toEqual(["選んだ字 t2", "選んだ字 t1"]);
   });
 
   it("居場所を失った指摘は、流れる列に混ぜない", () => {
@@ -222,9 +221,9 @@ describe("絞り込み", () => {
 
   it("既定は未解決だけ。切り替えると片付いたものも本文の並び順で混ざる", () => {
     two({ done: [settled("d1")] });
-    expect(peeks()).toEqual(["t1 の指摘", "t2 の指摘"]);
+    expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2"]);
     click(picks()[1]);
-    expect(peeks()).toEqual(["t1 の指摘", "t2 の指摘", "d1 の指摘"]);
+    expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2", "選んだ字 d1"]);
   });
 
   it("片付いた札はそれと分かる", () => {
@@ -236,109 +235,58 @@ describe("絞り込み", () => {
   it("片付いた札の操作は、解決ではなく取り消し", () => {
     two({ done: [settled("d1")] });
     click(picks()[1]);
-    click(cards()[2]);
-    const acts = opens()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    const acts = cards()[2].querySelectorAll<HTMLElement>(".mg-rail-act");
     click(acts[0]);
     expect(reopened).toEqual(["d1"]);
     expect(resolved).toEqual([]);
   });
 });
 
-describe("畳んだ姿", () => {
-  it("最初の書き込みを 1 行で出し、引用も返信欄も出さない", () => {
-    show(
-      [
-        thread("t1", {
-          comments: [{ id: "c1", author: "you", body: "**ここ**直して", created_at: 0 }],
-        }),
-      ],
-      new Map<string, Resolution>([["t1", at(0)]]),
-    );
-    // 組版はしないので、記法の印は落として字にする。
-    expect(peeks()).toEqual(["ここ直して"]);
-    expect(document.querySelector(".mg-rail-quote")).toBeNull();
-    expect(document.querySelector(".mg-rail-reply-open")).toBeNull();
-  });
+describe("札の姿", () => {
+  const talk = (over: Partial<ReviewThread> = {}) =>
+    show([thread("t1", over)], new Map<string, Resolution>([["t1", at(0)]]));
 
-  it("返信の数と、返事が届いている印を出す", () => {
-    show(
-      [
-        thread("t1", {
-          comments: [
-            { id: "c1", author: "you", body: "ここ直して", created_at: 0 },
-            { id: "c2", author: "AI", body: "直しました", created_at: 1 },
-          ],
-        }),
+  it("最初から会話を全部出す", () => {
+    // 畳んでおくと、読むたびに開く操作が挟まるだけで出てくるものは同じ。
+    talk({
+      comments: [
+        { id: "c1", author: "you", body: "ここ直して", created_at: 0 },
+        { id: "c2", author: "AI", body: "直しました", created_at: 1 },
       ],
-      new Map<string, Resolution>([["t1", at(0)]]),
-    );
-    expect(document.querySelector(".mg-rail-chip.is-answered")).not.toBeNull();
-    expect(
-      document.querySelector(".mg-rail-chip:not(.is-answered)")?.textContent,
-    ).toContain("1");
-  });
-});
-
-describe("開いた姿", () => {
-  const two = () =>
-    show(
-      [thread("t1"), thread("t2")],
-      new Map<string, Resolution>([
-        ["t1", at(0)],
-        ["t2", at(1)],
-      ]),
-    );
-
-  it("押すと開いて、会話が全部出る", () => {
-    show(
-      [
-        thread("t1", {
-          comments: [
-            { id: "c1", author: "you", body: "ここ直して", created_at: 0 },
-            { id: "c2", author: "AI", body: "直しました", created_at: 1 },
-          ],
-        }),
-      ],
-      new Map<string, Resolution>([["t1", at(0)]]),
-    );
-    click(cards()[0]);
-    const text = opens()[0].textContent ?? "";
+    });
+    const text = cards()[0].textContent ?? "";
     expect(text).toContain("ここ直して");
     expect(text).toContain("直しました");
-    expect(document.querySelector(".mg-rail-quote")?.textContent).toBe("選んだ字 t1");
+    expect(quotes()).toEqual(["選んだ字 t1"]);
   });
 
-  it("開くのは 1 枚だけ", () => {
-    two();
-    click(cards()[0]);
-    click(cards()[1]);
-    expect(opens()).toHaveLength(1);
-    expect(picked).toEqual(["t1", "t2"]);
+  it("返信の口は最初から置いてある", () => {
+    // 釦で入力欄を生やすと、押した流れが一度切れる。
+    talk();
+    expect(box(cards()[0])).not.toBeNull();
+    expect(cards()[0].querySelector(".mg-rail-send")).toBeNull();
   });
 
-  it("開いている札を押しても畳まない", () => {
-    // 読んでいる途中に閉じると、戻す手立てが無い。
-    two();
+  it("押すとその指摘を選び、返信の口へ焦点が移る", () => {
+    talk();
     click(cards()[0]);
-    click(opens()[0]);
-    expect(opens()).toHaveLength(1);
-  });
-
-  it("一覧への口は、開いた札では隠さない", () => {
-    // ホバーしないと出ないと、事実上たどり着けない。
-    two();
-    click(cards()[0]);
-    expect(opens()[0].querySelector('[aria-label="一覧で開く"]')).not.toBeNull();
+    expect(picked).toEqual(["t1"]);
+    expect(document.activeElement).toBe(box(cards()[0]));
   });
 
   it("解決と一覧で開くは、札を押すのとは別に届く", () => {
-    two();
-    click(cards()[0]);
-    const acts = opens()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    talk();
+    const acts = cards()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
     click(acts[0]);
     click(acts[1]);
     expect(resolved).toEqual(["t1"]);
     expect(opened).toEqual(["t1"]);
+    expect(picked).toEqual([]);
+  });
+
+  it("一覧への口は隠さない", () => {
+    talk();
+    expect(cards()[0].querySelector('[aria-label="一覧で開く"]')).not.toBeNull();
   });
 });
 
@@ -365,8 +313,7 @@ describe("本文から外れた指摘", () => {
   it("一覧で開くのは、その釦を押したときだけ", () => {
     show([], new Map(), { loose });
     openStray();
-    click(cards()[0]);
-    const acts = opens()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
+    const acts = cards()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
     click(acts[acts.length - 1]);
     expect(opened).toEqual(["x1"]);
   });
@@ -379,36 +326,36 @@ describe("本文から外れた指摘", () => {
 });
 
 describe("返信", () => {
-  const one = () => {
+  const typed = (body: string) => {
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
-    click(cards()[0]);
-    click(opens()[0].querySelector<HTMLElement>(".mg-rail-reply-open")!);
-  };
-
-  it("書いて ⌘Enter で送ると、その本文が渡る", () => {
-    one();
-    const box = opens()[0].querySelector<HTMLTextAreaElement>("textarea")!;
+    const field = box(cards()[0]);
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(
         window.HTMLTextAreaElement.prototype,
         "value",
       )!.set!;
-      setter.call(box, "直しておきます");
-      box.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(field, body);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    return field;
+  };
+
+  it("書いて ⌘Enter で送ると、その本文が渡る", () => {
+    const field = typed("直しておきます");
     act(() => {
-      box.dispatchEvent(
+      field.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }),
       );
     });
     expect(replied).toEqual([{ id: "t1", body: "直しておきます" }]);
   });
 
-  it("空のまま送ろうとしたら、何も渡さずに畳む", () => {
-    one();
-    click(opens()[0].querySelector<HTMLElement>(".mg-rail-reply-send")!);
-    expect(replied).toEqual([]);
-    expect(opens()[0].querySelector("textarea")).toBeNull();
+  it("打ったものがあるときだけ、送る口を出す", () => {
+    const field = typed("直しておきます");
+    expect(cards()[0].querySelector(".mg-rail-send")).not.toBeNull();
+    click(cards()[0].querySelector<HTMLElement>(".mg-rail-reply-send")!);
+    expect(replied).toEqual([{ id: "t1", body: "直しておきます" }]);
+    expect(field.value).toBe("");
   });
 });
 
@@ -429,22 +376,21 @@ describe("箇所へ送る", () => {
     expect(sent).toEqual([{ block: "center", behavior: "smooth" }]);
   });
 
-  it("開いたあとも、引用を押せばその箇所へ戻せる", () => {
+  it("何度押しても、そのたびに送り直す", () => {
     const content = body({ 0: 100 });
     const sent = watch(content, 0);
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
     click(cards()[0]);
-    click(opens()[0].querySelector<HTMLElement>(".mg-rail-quote")!);
+    click(cards()[0]);
     expect(sent).toHaveLength(2);
   });
 
-  it("飛び先を持たない札からは送らない", () => {
-    show([], new Map(), { loose: [thread("x1")] });
-    openStray();
-    click(cards()[0]);
-    expect(opens()[0].querySelector<HTMLButtonElement>(".mg-rail-quote")!.disabled).toBe(
-      true,
-    );
+  it("入力欄を押したときは送らない（打っている最中に本文が動かない）", () => {
+    const content = body({ 0: 100 });
+    const sent = watch(content, 0);
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
+    click(box(cards()[0]));
+    expect(sent).toHaveLength(0);
   });
 });
 

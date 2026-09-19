@@ -1,12 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
-import {
-  answeredByAgent,
-  isOpen,
-  type ReviewComment,
-  type ReviewThread,
-} from "../../lib/review";
+import { isOpen, type ReviewComment, type ReviewThread } from "../../lib/review";
 import { ago } from "../../lib/when";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
@@ -18,14 +13,12 @@ import { CommentBody } from "./CommentMarkdown";
 // 送ったときに札だけが取り残されて、どの札がどこの話なのか分からなくなる。
 // 重なりそうなら下へ押し下げる——本文の順は保たれるので、読む向きは変わらない。
 //
-// 開くのは選んでいる 1 枚だけ。全部を開いたまま並べると、指摘が 3 件あるだけで
-// 欄が埋まり、いま見ている 1 件がどれなのか分からなくなる。畳んだ札は「そこに
-// 何かある」ことだけを伝える。
+// 札は最初から会話を出し切る。畳んでおくと、読むたびに開く操作が挟まるだけで、
+// 出てくるのは結局同じものになる。押した札だけ色を変えるのもやめ、どれの話かは
+// 本文が動くことと、本文の印が濃くなることで示す。
 
 // 札と札のあいだ。
 const GAP = 8;
-// 畳んだ姿に出す一言の長さ。狭い桁なので切って、続きは開いてから読ませる。
-const PEEK_LIMIT = 44;
 // 引用に出す長さ。
 const QUOTE_LIMIT = 80;
 // 答える側の顔。エージェントには機械らしい印を出す。
@@ -34,16 +27,6 @@ const AGENTS = new Set(["AI", "ai", "assistant", "claude"]);
 function oneLine(text: string, limit: number): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
-}
-
-// 畳んだ姿に出す一言。組版はしないので、記法の印だけ落として字にする。
-function plainish(body: string, limit = PEEK_LIMIT): string {
-  const bare = body
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/^\s{0,3}[#>|]+\s*/gm, "")
-    .replace(/^\s{0,3}[-*+]\s+/gm, "")
-    .replace(/[*_`~]/g, "");
-  return oneLine(bare, limit);
 }
 
 interface Card {
@@ -102,7 +85,9 @@ export function CommentRail({
   const cards = useMemo<Card[]>(() => {
     const out: Card[] = [];
     for (const thread of all ? [...threads, ...done] : threads) {
-      const head = headOf(resolutions.get(thread.id) ?? { state: "unknown", index: -1 });
+      const head = headOf(
+        resolutions.get(thread.id) ?? { state: "unknown", index: -1 },
+      );
       if (head) out.push({ thread, block: head.index, done: !isOpen(thread) });
     }
     return out.sort((a, b) => a.block - b.block);
@@ -126,7 +111,9 @@ export function CommentRail({
     let prev = -Infinity;
     for (const el of Array.from(flow.children) as HTMLElement[]) {
       const block = el.dataset.mgFor;
-      const at = block ? content.querySelector(`[data-mg-block="${block}"]`) : null;
+      const at = block
+        ? content.querySelector(`[data-mg-block="${block}"]`)
+        : null;
       if (!at) {
         // 漸進描画でまだ出ていないブロック。場所が決まらないうちは隠す。
         el.style.visibility = "hidden";
@@ -175,7 +162,6 @@ export function CommentRail({
       ?.querySelector(`[data-mg-block="${card.block}"]`)
       ?.scrollIntoView({ block: "center", behavior: "smooth" });
   };
-
 
   return (
     <nav
@@ -228,7 +214,6 @@ export function CommentRail({
             <RailCard
               key={thread.id}
               thread={thread}
-              open={active === thread.id}
               stray
               onJump={() => onPick(thread.id)}
               onOpen={() => onOpen(thread.id)}
@@ -243,16 +228,17 @@ export function CommentRail({
       {/* 本文を引けないとき（編集面は目印を持たない）は、絶対配置をやめて
           上から積む。行き先が決まらないまま絶対配置にすると、札がぜんぶ
           同じ場所へ重なる。 */}
-      <div ref={flowRef} className={`mg-rail-flow${content ? "" : " is-static"}`}>
+      <div
+        ref={flowRef}
+        className={`mg-rail-flow${content ? "" : " is-static"}`}
+      >
         {cards.map((card) => (
           <RailCard
             key={card.thread.id}
             thread={card.thread}
             block={card.block}
             done={card.done}
-            open={active === card.thread.id}
             onJump={() => jump(card)}
-            onBack={() => jump(card)}
             onOpen={() => onOpen(card.thread.id)}
             onResolve={() => onResolve(card.thread.id)}
             onReopen={() => onReopen(card.thread.id)}
@@ -273,11 +259,9 @@ export function CommentRail({
 function RailCard({
   thread,
   block,
-  open,
   stray,
   done,
   onJump,
-  onBack,
   onOpen,
   onResolve,
   onReopen,
@@ -286,87 +270,91 @@ function RailCard({
   thread: ReviewThread;
   // 流れる列に置くときの行き先。外れた指摘は持たない。
   block?: number;
-  open: boolean;
   stray?: boolean;
   // 片付いた指摘。字を落として、解決の釦は取り消しに替える。
   done?: boolean;
   onJump: () => void;
-  // 開いたまま、もう一度その箇所へ本文を送る。飛び先を持たない札は渡さない。
-  onBack?: () => void;
   onOpen: () => void;
   onResolve: () => void;
   onReopen: () => void;
   onReply: (body: string) => void;
 }) {
-  const [writing, setWriting] = useState(false);
-  const head = thread.comments[0];
-  const replies = Math.max(0, thread.comments.length - 1);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [text, setText] = useState("");
+  const md = useMarkdownKeys(setText);
+  const send = () => {
+    const body = text.trim();
+    if (!body) return;
+    setText("");
+    onReply(body);
+  };
 
   return (
     // 中に Markdown のリンクと入力欄が入るので、札そのものは button にしない
     // （押せるものの入れ子になる）。押下の伝播は中の釦の側で止める。
     <div
-      role="button"
-      tabIndex={0}
       data-mg-for={block}
-      // 開いている札を押しても畳まない。読んでいる途中に閉じると戻す手立てが無い。
-      onClick={() => !open && onJump()}
-      onKeyDown={(e) => {
-        if (!open && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onJump();
-        }
+      // 押したら箇所へ送り、そのまま書き始められるところまで運ぶ。釦を挟むと、
+      // 読んだ流れが一度切れる。
+      onClick={() => {
+        onJump();
+        box.current?.focus();
       }}
-      className={`mg-rail-card${open ? " is-open" : ""}${stray ? " is-stray" : ""}${
-        done ? " is-done" : ""
-      }`}
+      className={`mg-rail-card${stray ? " is-stray" : ""}${done ? " is-done" : ""}`}
     >
-      {open ? (
-        <>
-          {/* 引用は「その箇所」そのもの。押したら本文をそこへ送り直す。 */}
-          <button
-            type="button"
-            disabled={!onBack}
-            title={onBack ? "この箇所へ移動" : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              onBack?.();
+      {/* 引用は「その箇所」そのもの。押したら本文をそこへ送り直す。 */}
+      <div className="mg-rail-quote">
+        {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}
+      </div>
+      {stray && (
+        <div className="mg-rail-note">
+          <Icon name="link_off" size={12} />
+          本文から外れています
+        </div>
+      )}
+      {done && (
+        <div className="mg-rail-note">
+          <Icon name="done" size={12} />
+          解決済み
+        </div>
+      )}
+      <div className="mg-rail-talk">
+        {thread.comments.map((c) => (
+          <Said key={c.id} comment={c} />
+        ))}
+      </div>
+      {/* 入力欄を押したときまで箇所へ送ると、打っている最中に本文が動く。 */}
+      <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
+        <div className="mg-rail-reply-line">
+          <AutoTextarea
+            ref={box}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyUp={md.onKeyUp}
+            onCompositionStart={md.onCompositionStart}
+            onCompositionEnd={md.onCompositionEnd}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setText("");
+                box.current?.blur();
+                return;
+              }
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                send();
+                return;
+              }
+              md.onKeyDown(e);
             }}
-            className="mg-rail-quote"
-          >
-            {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}
-          </button>
-          {stray && (
-            <div className="mg-rail-note">
-              <Icon name="link_off" size={12} />
-              本文から外れています
-            </div>
-          )}
-          <div className="mg-rail-talk">
-            {thread.comments.map((c) => (
-              <Said key={c.id} comment={c} />
-            ))}
-          </div>
-          {writing ? (
-            <Reply
-              onSend={(text) => {
-                setWriting(false);
-                onReply(text);
-              }}
-              onCancel={() => setWriting(false)}
-            />
-          ) : (
-            <div className="mg-rail-foot">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setWriting(true);
-                }}
-                className="mg-rail-reply-open"
-              >
-                返信を書く
-              </button>
+            placeholder="返信…"
+            minRows={1}
+            maxRows={8}
+          />
+          {/* 空のあいだは札の始末を添える。打ち始めたら送る口へ場所を譲る。 */}
+          {!text.trim() && (
+            <div className="mg-rail-acts">
               {done ? (
                 <RailAct icon="undo" label="未解決に戻す" onPick={onReopen} />
               ) : (
@@ -375,35 +363,22 @@ function RailCard({
               <RailAct icon="open_in_full" label="一覧で開く" onPick={onOpen} />
             </div>
           )}
-        </>
-      ) : (
-        <>
-          <div className="mg-rail-who">
-            <Face author={head?.author ?? ""} />
-            <span className="mg-rail-name">{head?.author}</span>
-            <span>{head ? ago(head.created_at) : ""}</span>
-            <span className="mg-rail-chips">
-              {done && (
-                <span className="mg-rail-chip is-done" title="解決済み">
-                  <Icon name="done" size={10} />
-                </span>
-              )}
-              {answeredByAgent(thread) && (
-                <span className="mg-rail-chip is-answered" title="返事が届いています">
-                  <Icon name="auto_awesome" size={10} fill />
-                </span>
-              )}
-              {replies > 0 && (
-                <span className="mg-rail-chip" title={`返信 ${replies} 件`}>
-                  <Icon name="forum" size={10} />
-                  {replies}
-                </span>
-              )}
-            </span>
+        </div>
+        {text.trim() && (
+          <div className="mg-rail-send">
+            <button
+              type="button"
+              onClick={() => setText("")}
+              className="mg-rail-reply-off"
+            >
+              やめる
+            </button>
+            <button type="button" onClick={send} className="mg-rail-reply-send">
+              返信
+            </button>
           </div>
-          <div className="mg-rail-peek">{plainish(head?.body ?? "")}</div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -426,59 +401,6 @@ function Said({ comment }: { comment: ReviewComment }) {
         <span>{ago(comment.created_at)}</span>
       </div>
       <CommentBody body={comment.body} className="mg-rail-body" />
-    </div>
-  );
-}
-
-function Reply({
-  onSend,
-  onCancel,
-}: {
-  onSend: (body: string) => void;
-  onCancel: () => void;
-}) {
-  const [text, setText] = useState("");
-  const md = useMarkdownKeys(setText);
-  const send = () => {
-    const body = text.trim();
-    if (body) onSend(body);
-    else onCancel();
-  };
-  return (
-    <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
-      <AutoTextarea
-        autoFocus
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyUp={md.onKeyUp}
-        onCompositionStart={md.onCompositionStart}
-        onCompositionEnd={md.onCompositionEnd}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            onCancel();
-            return;
-          }
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-            e.preventDefault();
-            send();
-            return;
-          }
-          md.onKeyDown(e);
-        }}
-        placeholder="返信を書く…（⌘Enter で送る）"
-        minRows={2}
-        maxRows={8}
-      />
-      <div className="mg-rail-foot">
-        <button type="button" onClick={onCancel} className="mg-rail-reply-off">
-          やめる
-        </button>
-        <button type="button" onClick={send} className="mg-rail-reply-send">
-          返信
-        </button>
-      </div>
     </div>
   );
 }
