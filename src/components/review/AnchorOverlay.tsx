@@ -404,9 +404,7 @@ export function AnchorOverlay({
             {mark.areas.map((rc, i) => (
               <div
                 key={`a:${i}`}
-                className={`mg-review-mark mg-review-mark-area${
-                  mark.moved ? " mg-review-mark-moved" : ""
-                }${hot}`}
+                className={`mg-review-mark mg-review-mark-area${hot}`}
                 style={rc}
               />
             ))}

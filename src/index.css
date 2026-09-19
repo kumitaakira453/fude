@@ -32,10 +32,10 @@
   --mg-tail: 30vh;
 
   /* ブロックを丸ごと囲む箱が、文字から外へ広がる分。文字にぴったり付くと
-     窮屈で、どこまでが対象かも読み取りにくい。囲む箱（指摘の枠・下書きの枠・
-     メニューの対象）はすべてこの 2 つから出す。 */
-  --mg-box-out: -5px 0 0 -12px;
-  --mg-box-in: 5px 12px;
+     窮屈だが、広く取ると左のつまみにまで届いて重なる。囲む箱（指摘の枠・
+     下書きの枠・メニューの対象）はすべてこの 2 つから出す。 */
+  --mg-box-out: -2px 0 0 -3px;
+  --mg-box-in: 2px 3px;
 
   /* 追加と削除の色。
      色合いはテーマから採らず、差分の作法に倣う（緑が足された、赤が消された）。
@@ -3000,20 +3000,10 @@ svg[id^="mmd-"] foreignObject p {
   padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 0.2em;
-  background: color-mix(in srgb, var(--mg-accent) 11%, transparent);
+  /* 濃さは字の塗りと同じにする。指摘であることは変わらないのに濃淡が違うと、
+     別の何かが起きているように見える。 */
+  background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
   box-shadow: none;
-}
-.mg-review-mark-area:hover {
-  background: color-mix(in srgb, var(--mg-accent) 18%, transparent);
-}
-/* 指摘のあと本文が書き換わったブロック。まだ同じ場所を指してはいるので、
-   薄くしてそれと分かるようにする。 */
-.mg-review-mark-moved {
-  background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
-  box-shadow: none;
-}
-.mg-review-mark-moved:hover {
-  background: color-mix(in srgb, var(--mg-accent) 12%, transparent);
 }
 /* 箇所は分かっているが、指摘のあと本文が書き換わっている塗り。足元に破線を
    添えるだけにする。ブロックの外枠を重ねると、塗りと枠のどちらを指している
