@@ -12,6 +12,8 @@ export const activeFolderIdAtom = atom<string | null>(null);
 // 親フォルダが activeFolderId に入るが、履歴には登録しない。
 export const soleAtom = atom<string | null>(null);
 export const recentDocsAtom = atom<DocEntry[]>([]); // 1 枚で開いたファイル（履歴）
+// 開くものを選ぶ画面。フォルダも 1 枚のファイルも行き先はここひとつ。
+export const openPickerAtom = atom(false);
 export const treeAtom = atom<TreeNode[]>([]);
 export const filesAtom = atom<TreeNode[]>([]); // ツリーを平坦化したファイル一覧
 export const loadingAtom = atom<{ active: boolean; message: string; done: number; total: number }>({

@@ -7,6 +7,7 @@ import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
 import { SidebarGrip } from "./components/SidebarGrip";
+import { OpenPicker } from "./components/OpenPicker";
 import { ReviewScreen } from "./components/review/ReviewScreen";
 import { VersionScreen } from "./components/version/VersionScreen";
 import { Toolbar } from "./components/Toolbar";
@@ -265,6 +266,7 @@ export default function App() {
           )}
         </div>
       )}
+      <OpenPicker />
       <UpdateBanner />
       <Toast />
     </>

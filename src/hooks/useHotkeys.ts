@@ -43,7 +43,11 @@ export function useHotkeys() {
         e.preventDefault();
         return;
       }
-      if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {
+      if (mod && !e.shiftKey && (e.key === "o" || e.key === "O")) {
+        // ⌘O: 開くものを選ぶ画面。フォルダと 1 枚のファイルをここで選ぶ。
+        e.preventDefault();
+        store.set(A.openPickerAtom, !store.get(A.openPickerAtom));
+      } else if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         store.set(A.paletteOpenAtom, !store.get(A.paletteOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
