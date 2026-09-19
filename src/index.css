@@ -2991,32 +2991,29 @@ svg[id^="mmd-"] foreignObject p {
   opacity: 0.75;
 }
 
-/* 文字単位で特定できない指摘。ブロック全体に付くので、塗らずに外枠で示す。
-   塗ると「そこを選んだ」ように見えてしまう。
-   丸みは文字の塗りと同じだけにする。callout と同じ角丸で囲むと、指摘の印なのか
-   本文の囲みなのかが読み分けられない。 */
+/* 文字単位で特定できない指摘。ブロック全体に付くので、字の塗りをそのまま
+   ブロックの大きさまで広げたものとして出す。
+   縁に濃い線を回すと、それだけで「囲み」になって callout と読み分けられない。
+   線は持たせず、地の濃さと丸みで字の塗りと同じ仲間に見せる。 */
 .mg-review-mark-area {
   margin: var(--mg-box-out);
   padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 0.2em;
-  /* どのブロックへの指摘かが分かる程度に、ごく薄く敷く。 */
-  background: color-mix(in srgb, var(--mg-accent) 5%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--mg-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--mg-accent) 11%, transparent);
+  box-shadow: none;
 }
 .mg-review-mark-area:hover {
-  background: color-mix(in srgb, var(--mg-accent) 8%, transparent);
+  background: color-mix(in srgb, var(--mg-accent) 18%, transparent);
 }
-/* 指摘のあと本文が書き換わった箇所。実線と区別できるよう破線にする。 */
+/* 指摘のあと本文が書き換わったブロック。まだ同じ場所を指してはいるので、
+   薄くしてそれと分かるようにする。 */
 .mg-review-mark-moved {
+  background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
   box-shadow: none;
-  border-radius: 0.2em;
-  outline: 1px solid color-mix(in srgb, var(--mg-accent) 30%, transparent);
-  outline-offset: -1px;
 }
 .mg-review-mark-moved:hover {
-  background: color-mix(in srgb, var(--mg-accent) 8%, transparent);
+  background: color-mix(in srgb, var(--mg-accent) 12%, transparent);
 }
 /* 箇所は分かっているが、指摘のあと本文が書き換わっている塗り。足元に破線を
    添えるだけにする。ブロックの外枠を重ねると、塗りと枠のどちらを指している
