@@ -3270,8 +3270,8 @@ svg[id^="mmd-"] foreignObject p {
 .mg-rail-reply textarea::placeholder {
   color: var(--mg-muted);
 }
-/* 札の始末。触れているあいだだけ、小さな一組として札の上へ浮かせる。
-   流れの中に置くと、使わないあいだも場所を取って中身を押しのける。 */
+/* 札の始末。居るべき角へ指を運んだときだけ、小さな一組として札の上へ浮かせる。
+   札のどこに触れても出すと、読んでいるあいだじゅう操作が目に入る。 */
 .mg-rail-acts {
   position: absolute;
   z-index: 2;
@@ -3285,14 +3285,13 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-panel);
   box-shadow: 0 2px 10px -4px rgb(0 0 0 / 30%);
   opacity: 0;
-  pointer-events: none;
   transition: opacity 0.12s ease;
 }
-.mg-rail-card:hover .mg-rail-acts,
-.mg-rail-card:focus-within .mg-rail-acts {
+.mg-rail-acts:hover {
   opacity: 1;
-  pointer-events: auto;
 }
+/* 見えていないあいだは押させない。当たりは一組の側に残してあるので、角へ
+   指を運べば出てくるし、出る前の一押しは札そのものへ抜ける。 */
 .mg-rail-act {
   display: grid;
   place-items: center;
@@ -3300,9 +3299,13 @@ svg[id^="mmd-"] foreignObject p {
   height: 1.5rem;
   border-radius: 0.35rem;
   color: var(--mg-fg-dim);
+  pointer-events: none;
   transition:
     background 0.12s ease,
     color 0.12s ease;
+}
+.mg-rail-acts:hover .mg-rail-act {
+  pointer-events: auto;
 }
 .mg-rail-act:hover {
   background: var(--mg-hover);
