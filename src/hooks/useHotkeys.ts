@@ -1,6 +1,7 @@
 import { useStore } from "jotai";
 import { useEffect, useRef } from "react";
 import { closeAll, closeOthers, closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
+import { RAIL_ROOM } from "../lib/sidebar";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
@@ -20,6 +21,11 @@ function selectionText(): string {
   if (typing) return "";
   const s = window.getSelection?.()?.toString().trim() ?? "";
   return s.length > 0 && s.length <= 200 ? s : "";
+}
+
+// 右の欄は、窓が狭いときと分割中は出せない（本文と欄のどちらも読めなくなる）。
+function railRoom(panes: number): boolean {
+  return panes <= 1 && window.matchMedia?.(RAIL_ROOM).matches === true;
 }
 
 export function useHotkeys() {
@@ -87,6 +93,19 @@ export function useHotkeys() {
         // ときに太字のつもりで押してペインが動く）。
         e.preventDefault();
         store.set(A.sidebarOpenAtom, !store.get(A.sidebarOpenAtom));
+      } else if (mod && e.shiftKey && (e.key === "o" || e.key === "O")) {
+        // ⌘⇧O: 目次。出ているときにもう一度押すと畳む。
+        e.preventDefault();
+        if (!railRoom(store.get(A.panesAtom).length)) return;
+        store.set(A.railAtom, store.get(A.railAtom) === "toc" ? "none" : "toc");
+      } else if (mod && e.shiftKey && (e.key === "k" || e.key === "K")) {
+        // ⌘⇧K: コメントの欄。目次と同じ場所を取り合うので、置き換わる。
+        e.preventDefault();
+        if (!railRoom(store.get(A.panesAtom).length)) return;
+        store.set(
+          A.railAtom,
+          store.get(A.railAtom) === "comments" ? "none" : "comments",
+        );
       } else if (mod && e.shiftKey && (e.key === "r" || e.key === "R")) {
         e.preventDefault();
         // 下書きには指摘が付かないので、一覧も開かない。

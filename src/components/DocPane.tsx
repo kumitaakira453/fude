@@ -459,6 +459,37 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isActive, overlayOpen, onCmdS]);
+
+  // 畳んだメニューの中の操作も、キーから届くようにする。⌘Y は編集面の中では
+  // やり直しなので、入力欄にいるあいだは譲る。
+  useEffect(() => {
+    if (!isActive || overlayOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+      if (inEditable(e.target)) return;
+      // ⌥ を挟むと key は記号になるので code で見る。
+      if (e.altKey && e.code === "KeyC") {
+        if (!canCopy) return;
+        e.preventDefault();
+        void copyAll();
+      } else if (!e.altKey && (e.key === "y" || e.key === "Y")) {
+        if (!path || !isDoc || isDraft) return;
+        e.preventDefault();
+        showVersions();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    isActive,
+    overlayOpen,
+    canCopy,
+    copyAll,
+    path,
+    isDoc,
+    isDraft,
+    showVersions,
+  ]);
   const exitEdit = () => {
     // 書きかけを先に流す。流れた分は自動保存が書く。
     flushRef.current?.();
@@ -1520,6 +1551,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     {
                       icon: "content_copy",
                       label: "全文をコピー",
+                      keys: "⌘⌥C",
                       run: () => void copyAll(),
                     },
                   ]
@@ -1531,6 +1563,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     {
                       icon: "history",
                       label: "バージョン履歴",
+                      keys: "⌘Y",
                       run: showVersions,
                     },
                   ]

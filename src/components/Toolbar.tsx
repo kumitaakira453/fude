@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { RAIL_ROOM } from "../lib/sidebar";
 import { closePane, splitInto } from "../lib/ui";
 import {
   activeFolderIdAtom,
@@ -23,10 +24,10 @@ import { SettingsButton } from "./SettingsButton";
 import { draftRelAtom } from "../state/drafts";
 
 // 右の欄に出せるもの。択一なので、そのまま 1 つの入口の中身になる。
-const RAILS: { id: Rail; icon: string; label: string }[] = [
+const RAILS: { id: Rail; icon: string; label: string; keys?: string }[] = [
   { id: "none", icon: "right_panel_close", label: "出さない" },
-  { id: "toc", icon: "toc", label: "目次" },
-  { id: "comments", icon: "chat", label: "コメント" },
+  { id: "toc", icon: "toc", label: "目次", keys: "⌘⇧O" },
+  { id: "comments", icon: "chat", label: "コメント", keys: "⌘⇧K" },
 ];
 const RAIL_ICON: Record<Rail, string> = {
   none: "right_panel_close",
@@ -88,7 +89,7 @@ export function Toolbar() {
     setSole(null);
     setActiveFolderId(null);
   };
-  const isLg = useMediaQuery("(min-width: 1024px)");
+  const isLg = useMediaQuery(RAIL_ROOM);
   // 右の欄は lg 以上かつ単一ペインのときのみ表示可能
   const canRail = isLg && !isSplit;
 
@@ -142,6 +143,7 @@ export function Toolbar() {
           items={RAILS.map((it) => ({
             icon: it.icon,
             label: it.label,
+            keys: it.keys,
             on: canRail ? rail === it.id : it.id === "none",
             disabled: !canRail && it.id !== "none",
             why: canRail ? undefined : "画面幅が狭い / 分割中は出せません",

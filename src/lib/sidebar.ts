@@ -42,3 +42,6 @@ export const RAIL_MAX = RAIL_WIDTH * 2;
 export function fitRailWidth(w: number): number {
   return Math.min(Math.max(Math.round(w), RAIL_WIDTH), RAIL_MAX);
 }
+
+// 右の欄を出せる窓の広さ。これより狭いと、本文と欄が両方とも読めなくなる。
+export const RAIL_ROOM = "(min-width: 1024px)";

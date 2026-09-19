@@ -84,6 +84,17 @@ describe("右の欄", () => {
     click(row("コメント"));
     expect(store.get(railAtom)).toBe("comments");
   });
+
+  it("キーで届くものにはキーを添える", () => {
+    show();
+    click(button("右の欄"));
+    const keys = (label: string) =>
+      row(label).querySelector(".mg-menu-keys")?.textContent ?? null;
+    expect(keys("目次")).toBe("⌘⇧O");
+    expect(keys("コメント")).toBe("⌘⇧K");
+    // 「出さない」は出ている欄のキーをもう一度押して戻る。専用のキーは無い。
+    expect(keys("出さない")).toBe(null);
+  });
 });
 
 describe("そのほか", () => {
