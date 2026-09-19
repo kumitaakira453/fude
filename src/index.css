@@ -2853,7 +2853,7 @@ svg[id^="mmd-"] foreignObject p {
   margin: var(--mg-box-out);
   padding: var(--mg-box-in);
   box-sizing: content-box;
-  border-radius: 0.4rem;
+  border-radius: 0.2em;
   background: color-mix(in srgb, var(--mg-accent) 10%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
@@ -2992,12 +2992,14 @@ svg[id^="mmd-"] foreignObject p {
 }
 
 /* 文字単位で特定できない指摘。ブロック全体に付くので、塗らずに外枠で示す。
-   塗ると「そこを選んだ」ように見えてしまう。 */
+   塗ると「そこを選んだ」ように見えてしまう。
+   丸みは文字の塗りと同じだけにする。callout と同じ角丸で囲むと、指摘の印なのか
+   本文の囲みなのかが読み分けられない。 */
 .mg-review-mark-area {
   margin: var(--mg-box-out);
   padding: var(--mg-box-in);
   box-sizing: content-box;
-  border-radius: 0.4rem;
+  border-radius: 0.2em;
   /* どのブロックへの指摘かが分かる程度に、ごく薄く敷く。 */
   background: color-mix(in srgb, var(--mg-accent) 5%, transparent);
   box-shadow: inset 0 0 0 1px
@@ -3009,7 +3011,7 @@ svg[id^="mmd-"] foreignObject p {
 /* 指摘のあと本文が書き換わった箇所。実線と区別できるよう破線にする。 */
 .mg-review-mark-moved {
   box-shadow: none;
-  border-radius: 0.4rem;
+  border-radius: 0.2em;
   outline: 1px solid color-mix(in srgb, var(--mg-accent) 30%, transparent);
   outline-offset: -1px;
 }
