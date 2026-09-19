@@ -28,6 +28,8 @@ beforeAll(() => {
     return 0;
   }) as typeof requestAnimationFrame;
   globalThis.cancelAnimationFrame = () => {};
+  // jsdom は持っていない。送り先は当て木で見るので、素は何もしない口にする。
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 });
 
 // jsdom は描画を持たないので、矩形は当て木で置く。
@@ -86,6 +88,7 @@ let picked: (string | null)[] = [];
 let opened: string[] = [];
 let resolved: string[] = [];
 let reopened: string[] = [];
+let shown: string[] = [];
 let replied: { id: string; body: string }[] = [];
 
 function show(
@@ -101,6 +104,7 @@ function show(
   opened = [];
   resolved = [];
   reopened = [];
+  shown = [];
   replied = [];
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -126,6 +130,12 @@ function show(
         onPick={(id) => {
           picked.push(id);
           setActive(id);
+        }}
+        onShow={(id, block) => {
+          shown.push(id);
+          over.content
+            ?.querySelector(`[data-mg-block="${block}"]`)
+            ?.scrollIntoView({ block: "center", behavior: "smooth" });
         }}
         onOpen={(id) => opened.push(id)}
         onResolve={(id) => resolved.push(id)}
@@ -285,9 +295,9 @@ describe("札の姿", () => {
     expect(picked).toEqual([]);
   });
 
-  it("一覧への口は隠さない", () => {
+  it("別の画面への口を持つ", () => {
     talk();
-    expect(cards()[0].querySelector('[aria-label="一覧で開く"]')).not.toBeNull();
+    expect(cards()[0].querySelector('[aria-label="別の画面で開く"]')).not.toBeNull();
   });
 });
 
@@ -455,6 +465,27 @@ describe("札の置き場所", () => {
     const content = body({ 0: 100 });
     show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]), { content });
     expect(flowed()[0].style.top).toBe("");
+  });
+
+  it("選んだ札はその箇所に据え、ほかを上下へ逃がす", () => {
+    // 一律に下へ押し下げると、上に何枚か溜まっているだけで選んだ札が
+    // 箇所からずり落ちる。
+    const content = body({ 0: 0, 1: 0, 2: 0 });
+    show(
+      [thread("t1"), thread("t2"), thread("t3")],
+      new Map<string, Resolution>([
+        ["t1", at(0)],
+        ["t2", at(1)],
+        ["t3", at(2)],
+      ]),
+      { content },
+    );
+    measure(0);
+    expect(flowed().map((el) => el.style.top)).toEqual(["0px", "8px", "16px"]);
+    click(cards()[1]);
+    measure(0);
+    // jsdom では札の背丈が 0 なので、離れるのは間隔のぶんだけ。
+    expect(flowed().map((el) => el.style.top)).toEqual(["-8px", "0px", "8px"]);
   });
 
   it("まだ描かれていないブロックの札は隠す", () => {

@@ -55,6 +55,7 @@ export function CommentRail({
   width,
   active,
   onPick,
+  onShow,
   onOpen,
   onResolve,
   onReopen,
@@ -81,6 +82,8 @@ export function CommentRail({
   // 選んでいる 1 枚。本文の印と同じ合図を使う。
   active: string | null;
   onPick: (id: string | null) => void;
+  // その指摘の箇所まで本文を送る。読む面と編集面で引き方が違うので呼ぶ側に任せる。
+  onShow: (id: string, block: number) => void;
   onOpen: (id: string) => void;
   onResolve: (id: string) => void;
   onReopen: (id: string) => void;
@@ -117,23 +120,40 @@ export function CommentRail({
     // 大きさが変わって呼び直されるので、ここでは何も書かない。
     if (box.height === 0) return;
     const top0 = box.top;
-    let prev = -Infinity;
-    for (const el of Array.from(flow.children) as HTMLElement[]) {
+    const els = Array.from(flow.children) as HTMLElement[];
+    // まず行き先を測る。漸進描画でまだ出ていないブロックの札は隠す。
+    const tops = els.map((el) => {
       const block = el.dataset.mgFor;
-      const at = block
-        ? content.querySelector(`[data-mg-block="${block}"]`)
-        : null;
+      const at = block ? content.querySelector(`[data-mg-block="${block}"]`) : null;
       if (!at) {
-        // 漸進描画でまだ出ていないブロック。場所が決まらないうちは隠す。
         el.style.visibility = "hidden";
-        continue;
+        return null;
       }
-      const want = at.getBoundingClientRect().top - top0;
-      const top = Math.max(want, prev + GAP);
       el.style.visibility = "";
-      el.style.top = `${top}px`;
-      prev = top + el.offsetHeight;
+      return at.getBoundingClientRect().top - top0;
+    });
+
+    // 選んでいる札は、その箇所の真横に据える。全部を一律に下へ押し下げると、
+    // 上に何枚か溜まっているだけで、選んだ札が箇所からずり落ちる。
+    const pin = els.findIndex((el, i) => el.dataset.mgOn === "1" && tops[i] !== null);
+    let prev = pin < 0 ? -Infinity : tops[pin]! + els[pin].offsetHeight;
+    for (let i = pin + 1; i < els.length; i++) {
+      if (tops[i] === null) continue;
+      tops[i] = Math.max(tops[i]!, prev + GAP);
+      prev = tops[i]! + els[i].offsetHeight;
     }
+    // 選んだ札より上は、そこへぶつからないよう上へ逃がす。
+    if (pin >= 0) {
+      let next = tops[pin]!;
+      for (let i = pin - 1; i >= 0; i--) {
+        if (tops[i] === null) continue;
+        tops[i] = Math.min(tops[i]!, next - els[i].offsetHeight - GAP);
+        next = tops[i]!;
+      }
+    }
+    els.forEach((el, i) => {
+      if (tops[i] !== null) el.style.top = `${tops[i]}px`;
+    });
   }, [content]);
 
   useLayoutEffect(() => {
@@ -163,6 +183,15 @@ export function CommentRail({
     };
   }, [place, content, scroller, cards, openLoose, active]);
 
+  // 積んでいるとき（編集中）は、選ばれた札を欄の見えるところへ寄せる。流れる
+  // 列では札が箇所の真横に居るので要らない。
+  useEffect(() => {
+    if (content || !active) return;
+    flowRef.current
+      ?.querySelector('[data-mg-on="1"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [content, active]);
+
   // 札の外を押したら選びを外す。返信の口は選ばれた札にだけ出るので、これが
   // 無いと開きっぱなしになる。押下の段で外すので、本文の印を押したときは
   // そのあとの click で選び直される。
@@ -179,10 +208,9 @@ export function CommentRail({
   // 送った先でも札はついてくる。
   const jump = (card: Card) => {
     onPick(card.thread.id);
-    content
-      ?.querySelector(`[data-mg-block="${card.block}"]`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    onShow(card.thread.id, card.block);
   };
+
 
   return (
     <nav
@@ -318,7 +346,9 @@ function RailCard({
   useEffect(() => {
     if (!active || !wants.current) return;
     wants.current = false;
-    box.current?.focus();
+    // 焦点を当てると既定で見える位置まで送られ、直前に始めた本文の滑らかな
+    // 送りを打ち消す。当てるだけにする。
+    box.current?.focus({ preventScroll: true });
   }, [active]);
 
   const send = () => {
@@ -333,11 +363,12 @@ function RailCard({
     // （押せるものの入れ子になる）。押下の伝播は中の釦の側で止める。
     <div
       data-mg-for={block}
+      data-mg-on={active ? "1" : undefined}
       // 押したら箇所へ送り、そのまま書き始められるところまで運ぶ。釦を挟むと、
       // 読んだ流れが一度切れる。
       onClick={() => {
         onJump();
-        if (active) box.current?.focus();
+        if (active) box.current?.focus({ preventScroll: true });
         else wants.current = true;
       }}
       className={`mg-rail-card${stray ? " is-stray" : ""}${done ? " is-done" : ""}`}
@@ -349,7 +380,7 @@ function RailCard({
         ) : (
           <RailAct icon="done" label="解決にする" onPick={onResolve} />
         )}
-        <RailAct icon="rate_review" label="一覧で開く" onPick={onOpen} />
+        <RailAct icon="open_in_new" label="別の画面で開く" onPick={onOpen} />
       </div>
       <div className="mg-rail-quote">
         {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}

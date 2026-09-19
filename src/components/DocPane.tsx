@@ -1023,6 +1023,25 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     [pm, rail, review.threads, review.draft, anchorSeq],
   );
 
+  // その指摘の箇所まで本文を送る。読む面はブロックの目印で引けるが、編集面の
+  // DOM は ProseMirror のもので目印を持たないので、編集モデルの位置から引く。
+  const showThread = useCallback(
+    (id: string, block: number) => {
+      const go = (el: Element | null | undefined) =>
+        el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (!editing) {
+        go(content?.querySelector(`[data-mg-block="${block}"]`));
+        return;
+      }
+      if (!pm) return;
+      const at = (anchorsKey.getState(pm.view.state) ?? []).find((a) => a.id === id);
+      if (!at) return;
+      const dom = pm.view.nodeDOM(at.pos) ?? pm.view.domAtPos(at.pos).node;
+      go(dom instanceof HTMLElement ? dom : (dom as Node)?.parentElement);
+    },
+    [editing, content, pm],
+  );
+
   // 編集面で選んだところ。指摘の入口をここに出す。
   //
   // 読むのは DOM が今持っている選択。編集モデルの選択は selectionchange 経由で
@@ -1782,6 +1801,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             width={railWidth}
             active={picked}
             onPick={setPicked}
+            onShow={showThread}
             onOpen={review.open}
             onResolve={(id) => void review.resolve(id)}
             onReopen={(id) => void review.reopen(id)}
