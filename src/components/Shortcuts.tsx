@@ -129,6 +129,7 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
     rows: [
       ["⌘,", "設定"],
       ["⌘/", "この一覧"],
+      ["↑ ↓", "この一覧の面を移る"],
     ],
   },
 ];
@@ -137,14 +138,25 @@ export function Shortcuts() {
   const [open, setOpen] = useAtom(shortcutsOpenAtom);
   const [face, setFace] = useState<Face>("move");
 
+  // 探しにくる場所なので、開くたびに先頭の面から。
+  useEffect(() => {
+    if (open) setFace("move");
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    // 探しにくる場所なので、開くたびに先頭の面から。
-    setFace("move");
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+      // 面は上下で移る。
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const at = FACES.findIndex((f) => f.id === face);
+      const step = e.key === "ArrowDown" ? 1 : FACES.length - 1;
+      setFace(FACES[(at + step) % FACES.length].id);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, setOpen]);
+  }, [open, setOpen, face]);
 
   if (!open) return null;
 

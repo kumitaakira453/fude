@@ -52,6 +52,10 @@ const tab = (label: string) =>
     el.textContent?.includes(label),
   )!;
 const click = (el: HTMLElement) => act(() => el.click());
+const press = (key: string) =>
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+  });
 
 describe("場面で分ける", () => {
   it("はじめは開く・移動の面", () => {
@@ -91,6 +95,17 @@ describe("場面で分ける", () => {
     act(() => store.set(shortcutsOpenAtom, false));
     act(() => store.set(shortcutsOpenAtom, true));
     expect(titles()).toEqual(["開く・行き来する"]);
+  });
+
+  it("上下で面を移る（端はひと回りする）", () => {
+    open();
+    press("ArrowDown");
+    expect(titles()).toEqual(["読む"]);
+    press("ArrowUp");
+    expect(titles()).toEqual(["開く・行き来する"]);
+    // 先頭でさらに上へ押すと、最後の面へ回る。
+    press("ArrowUp");
+    expect(titles()).toContain("つまみ（本文の左に出る）");
   });
 
   it("Esc で閉じる", () => {
