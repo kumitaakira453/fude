@@ -1540,7 +1540,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             では読み取れなくなる。 */}
         {(canCopy || (path && isDoc)) && (
           <MenuButton
-            icon="more_horiz"
+            icon="more_vert"
             title="そのほか"
             size={16}
             dot={!!data || broken}

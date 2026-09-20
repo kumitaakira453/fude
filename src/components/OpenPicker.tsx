@@ -289,7 +289,7 @@ export function OpenPicker() {
                   </span>
                   <span className="mg-open-acts" onClick={(e) => e.stopPropagation()}>
                     <MenuButton
-                      icon="more_horiz"
+                      icon="more_vert"
                       title="この行の操作"
                       size={16}
                       className="mg-open-more"

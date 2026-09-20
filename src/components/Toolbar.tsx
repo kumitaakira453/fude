@@ -175,7 +175,7 @@ export function Toolbar() {
           ]}
         />
         <MenuButton
-          icon="more_horiz"
+          icon="more_vert"
           title="そのほか"
           items={[
             {
