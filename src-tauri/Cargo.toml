@@ -59,3 +59,8 @@ codegen-units = 256
 lto = false
 incremental = false
 strip = true
+
+# 依存だけ最適化する。走査と正規表現は最適化なしだと数倍遅く、開発中に触った
+# ときの手応えがそのまま変わる。自分のコードは debug のままなので組み直しは速い。
+[profile.dev.package."*"]
+opt-level = 3
