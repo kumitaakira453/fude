@@ -53,6 +53,21 @@ function linesOf(src: string): { text: string; at: number }[] {
   return out;
 }
 
+// 囲みのコード。この中のタグは字であって、囲みの開き閉じではない。記法の
+// 見本として `<callout>` を囲みに入れて書くと、そこで本文が切られてしまう。
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+export function fenceOf(line: string): string | null {
+  return FENCE.exec(line)?.[1] ?? null;
+}
+
+// 開いた囲みを閉じるか。同じ字で、開いたときと同じ数以上。後ろに字を置けない。
+export function closesFence(line: string, open: string): boolean {
+  const mark = fenceOf(line);
+  if (!mark || mark[0] !== open[0] || mark.length < open.length) return false;
+  return line.trim().slice(mark.length).trim() === "";
+}
+
 // 開きの行から、深さを数えて釣り合う閉じの行を探す。入れ子の囲みで外側が
 // 内側の閉じで閉じないようにする。見つからなければ -1。
 export function closeLineOf(
@@ -62,8 +77,18 @@ export function closeLineOf(
 ): number {
   const { open, close } = CONTAINERS[kind];
   let depth = 1;
+  let fence: string | null = null;
   for (let i = from + 1; i < lines.length; i++) {
     const text = lines[i].trim();
+    if (fence) {
+      if (closesFence(lines[i], fence)) fence = null;
+      continue;
+    }
+    const opened = fenceOf(lines[i]);
+    if (opened) {
+      fence = opened;
+      continue;
+    }
     if (open.test(text)) depth++;
     else if (text === close && --depth === 0) return i;
   }
@@ -85,8 +110,18 @@ export function containerSpans(src: string): ContainerSpan[] {
   const out: ContainerSpan[] = [];
 
   const texts = lines.map((l) => l.text);
+  let fence: string | null = null;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].text;
+    if (fence) {
+      if (closesFence(line, fence)) fence = null;
+      continue;
+    }
+    const opened = fenceOf(line);
+    if (opened) {
+      fence = opened;
+      continue;
+    }
     if (indentOf(line) !== "") continue;
     const kind = kindOf(line);
     if (!kind) continue;

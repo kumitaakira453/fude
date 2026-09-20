@@ -123,3 +123,59 @@ describe("commonIndent", () => {
     expect(commonIndent(["\t\t- a", "", "\t\t\t- b"])).toBe("\t\t");
   });
 });
+
+describe("囲みのコードの中は囲みとして読まない", () => {
+  // 記法の見本として `<callout>` を囲みのコードに入れて書くと、ここで本文が
+  // 切られてしまい、閉じの ``` から後ろがすべてコードとして描かれていた。
+  const sample = [
+    "## callout",
+    "",
+    "新記法を使う。",
+    "",
+    "```markdown",
+    '<callout icon="💡" color="gray_bg">',
+    "本文。",
+    "</callout>",
+    "```",
+    "",
+    "タグの中も **1 行 = 1 段落**。",
+  ].join("\n");
+
+  it("見本の callout は囲みにならない", () => {
+    expect(containerSpans(sample)).toEqual([]);
+  });
+
+  it("囲みの外にある callout は今までどおり拾う", () => {
+    const src = `${sample}\n\n<callout icon="⚠️">\n本物。\n</callout>\n`;
+    const spans = containerSpans(src);
+    expect(spans).toHaveLength(1);
+    expect(src.slice(spans[0].start, spans[0].end)).toBe(
+      '<callout icon="⚠️">\n本物。\n</callout>',
+    );
+  });
+
+  it("~~~ の囲みも同じ", () => {
+    const src = ["~~~", "<callout>", "見本。", "</callout>", "~~~"].join("\n");
+    expect(containerSpans(src)).toEqual([]);
+  });
+
+  it("囲みの中に書いたコードで、閉じを見失わない", () => {
+    const src = [
+      "<callout>",
+      "説明。",
+      "",
+      "```md",
+      "</callout>",
+      "```",
+      "",
+      "続き。",
+      "</callout>",
+      "あと。",
+    ].join("\n");
+    const spans = containerSpans(src);
+    expect(spans).toHaveLength(1);
+    expect(src.slice(spans[0].start, spans[0].end).endsWith("続き。\n</callout>")).toBe(
+      true,
+    );
+  });
+});
