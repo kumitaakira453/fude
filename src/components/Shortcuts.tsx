@@ -1,15 +1,29 @@
 import { useAtom } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { shortcutsOpenAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 // キー操作の一覧。⌘/ で開く。
 // 操作のそばに常に出しておくと本文の邪魔になるので、ここに集める。
+//
+// 場面で分ける。同じキーが場面で別のものを指すことがある（⌘I は読むときの
+// コメントで、書いている最中は斜体）ので、混ぜると読み違える。
 
-const GROUPS: { title: string; rows: [string, string][] }[] = [
+type Face = "move" | "read" | "write" | "review" | "misc";
+
+const FACES: { id: Face; label: string; icon: string }[] = [
+  { id: "move", label: "開く・移動", icon: "swap_horiz" },
+  { id: "read", label: "読む", icon: "menu_book" },
+  { id: "write", label: "書く", icon: "edit_note" },
+  { id: "review", label: "コメントと版", icon: "rate_review" },
+  { id: "misc", label: "そのほか", icon: "more_vert" },
+];
+
+const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
   {
     title: "開く・行き来する",
+    face: "move",
     rows: [
       ["⌘O", "開く（フォルダ・ファイル）"],
       ["⌘P", "ファイルを探して開く"],
@@ -25,6 +39,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "読む",
+    face: "read",
     rows: [
       ["⌘D", "ファイル一覧の開閉"],
       ["⌘⇧O", "目次（もう一度で畳む）"],
@@ -38,6 +53,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "書いている最中",
+    face: "write",
     rows: [
       ["⌘E", "選んだところを編集する"],
       ["⌘B", "太字"],
@@ -62,6 +78,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "コメントと版",
+    face: "review",
     rows: [
       ["⌘I", "選んだところにコメント"],
       ["⌘⇧I", "セル・項目・ブロックの全体にコメント"],
@@ -75,6 +92,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "画像・HTML を見る",
+    face: "misc",
     rows: [
       ["ピンチ", "指した場所を中心に拡大・縮小"],
       ["ドラッグ", "はみ出しているところを動かす"],
@@ -86,6 +104,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "メタ情報の小窓（⌘⇧M）",
+    face: "misc",
     rows: [
       ["Tab", "次の欄へ（⇧Tab で前の欄）"],
       ["↑ ↓", "上下の欄へ"],
@@ -97,6 +116,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "つまみ（本文の左に出る）",
+    face: "misc",
     rows: [
       ["ドラッグ", "ブロックを移動"],
       ["クリック", "ブロックのメニュー"],
@@ -105,6 +125,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   },
   {
     title: "そのほか",
+    face: "misc",
     rows: [
       ["⌘,", "設定"],
       ["⌘/", "この一覧"],
@@ -114,9 +135,12 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
 
 export function Shortcuts() {
   const [open, setOpen] = useAtom(shortcutsOpenAtom);
+  const [face, setFace] = useState<Face>("move");
 
   useEffect(() => {
     if (!open) return;
+    // 探しにくる場所なので、開くたびに先頭の面から。
+    setFace("move");
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -127,29 +151,44 @@ export function Shortcuts() {
   return createPortal(
     <div className="mg-keys-back" onClick={() => setOpen(false)}>
       <div className="mg-keys" onClick={(e) => e.stopPropagation()}>
-        <div className="mg-keys-head">
-          <span className="mg-keys-title">キー操作</span>
-          <button
-            type="button"
-            className="mg-set-close"
-            onClick={() => setOpen(false)}
-            title="閉じる（Esc）"
-          >
-            <Icon name="close" size={16} />
-          </button>
-        </div>
-        <div className="mg-keys-body">
-          {GROUPS.map((group) => (
-            <section key={group.title}>
-              <h3>{group.title}</h3>
-              {group.rows.map(([key, label]) => (
-                <div key={key + label} className="mg-keys-row">
-                  <kbd>{key}</kbd>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </section>
+        <nav className="mg-set-tabs">
+          {FACES.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFace(f.id)}
+              className={`mg-set-tab${f.id === face ? " is-on" : ""}`}
+            >
+              <Icon name={f.icon} size={16} />
+              {f.label}
+            </button>
           ))}
+        </nav>
+        <div className="mg-keys-main">
+          <div className="mg-keys-head">
+            <span className="mg-keys-title">キー操作</span>
+            <button
+              type="button"
+              className="mg-set-close"
+              onClick={() => setOpen(false)}
+              title="閉じる（Esc）"
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+          <div className="mg-keys-body">
+            {GROUPS.filter((group) => group.face === face).map((group) => (
+              <section key={group.title}>
+                <h3>{group.title}</h3>
+                {group.rows.map(([key, label]) => (
+                  <div key={key + label} className="mg-keys-row">
+                    <kbd>{key}</kbd>
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </div>
         </div>
       </div>
     </div>,
