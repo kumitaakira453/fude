@@ -108,4 +108,13 @@ describe("MenuButton", () => {
     click(rows()[0]);
     expect(ran).toEqual([]);
   });
+  it("操作の種別を添えると、その色が絵に乗る", () => {
+    show([item("削除", { tone: "drop" }), item("写す")]);
+    click(open());
+    const ico = (i: number) =>
+      rows()[i].querySelector<HTMLElement>(".material-symbols-rounded")!;
+    expect(ico(0).style.color).toBe("var(--mg-danger)");
+    // 種別を添えないものは、行の字の色のまま。
+    expect(ico(1).style.color).toBe("");
+  });
 });

@@ -34,6 +34,28 @@ import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
 
 
+// 行の操作の入口。右押しと同じ中身を出すので、覚えるものは増えない。
+//
+// 行ごとに並べる数が違うと右端が揃わない。フォルダにもファイルにも同じ幅で
+// 1 つだけ置く。数は札で常に見せ、操作はここへ畳む。
+function RowMenu({ node, ctx }: { node: TreeNode; ctx: ItemCtx }) {
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      title="この項目の操作"
+      aria-label="この項目の操作"
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx.onContext(e, node);
+      }}
+      className="ml-auto grid h-5 w-5 shrink-0 place-items-center rounded text-[var(--mg-muted)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+    >
+      <Icon name="more_horiz" size={15} />
+    </span>
+  );
+}
+
 interface Creating {
   parentPath: string;
   kind: "file" | "dir";
@@ -59,8 +81,6 @@ interface ItemCtx {
   dragOverPath: string | null;
   setDragOverPath: (p: string | null) => void;
   onMoveDrop: (destDir: string, e: React.DragEvent) => void;
-  onNewFile: (parentPath: string) => void;
-  onNewFolder: (parentPath: string) => void;
 }
 
 function NameInput({
@@ -189,7 +209,7 @@ const TreeItem = memo(function TreeItem({
             }}
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
-            className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none ${
+            className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none ${
               isDropTarget
                 ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]"
                 : "hover:bg-[var(--mg-hover)]"
@@ -207,33 +227,7 @@ const TreeItem = memo(function TreeItem({
               className="shrink-0 text-[var(--mg-accent2)]"
             />
             <span className="truncate font-medium">{node.name}</span>
-            {/* ホバー時に「このフォルダ内に作成」アクション */}
-            <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-              <span
-                role="button"
-                tabIndex={-1}
-                title="このフォルダに新規ファイル"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  ctx.onNewFile(node.path);
-                }}
-                className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                <Icon name="note_add" size={14} />
-              </span>
-              <span
-                role="button"
-                tabIndex={-1}
-                title="このフォルダに新規フォルダ"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  ctx.onNewFolder(node.path);
-                }}
-                className="grid h-5 w-5 place-items-center rounded text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                <Icon name="create_new_folder" size={14} />
-              </span>
-            </span>
+            <RowMenu node={node} ctx={ctx} />
           </div>
         )}
         {isOpen && (
@@ -320,6 +314,7 @@ const TreeItem = memo(function TreeItem({
           {reviewCount}
         </span>
       )}
+      <RowMenu node={node} ctx={ctx} />
     </button>
   );
 });
@@ -478,8 +473,6 @@ export function FileTree() {
           void moveEntry(payload.path, destDir);
         }
       },
-      onNewFile: (parentPath) => startCreate(parentPath, "file"),
-      onNewFolder: (parentPath) => startCreate(parentPath, "dir"),
     }),
     [
       expanded,

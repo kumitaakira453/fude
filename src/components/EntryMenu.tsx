@@ -10,6 +10,7 @@ import {
   revealInFinder,
 } from "../lib/external";
 import type { TreeNode } from "../lib/fsAccess";
+import { toneColor, type Tone } from "../lib/tone";
 import { openToSide } from "../lib/ui";
 import { Icon } from "./Icon";
 
@@ -87,7 +88,8 @@ export function EntryMenu({
         icon: string;
         label: string;
         action: () => void;
-        danger?: boolean;
+        // 操作の種別。絵の色になる。添えないものは控えめに出る。
+        tone?: Tone;
         keys?: string;
       }
     | "sep";
@@ -96,11 +98,13 @@ export function EntryMenu({
     {
       icon: "folder_open",
       label: "Finder で表示",
+      tone: "open",
       action: () => revealInFinder(absPath),
     },
     ...editors.map((a) => ({
       icon: a.icon,
       label: a.label,
+      tone: "open" as const,
       action: () => openWith(absPath, a.app),
     })),
   ];
@@ -121,13 +125,14 @@ export function EntryMenu({
     {
       icon: "drive_file_rename_outline",
       label: "名前を変更",
+      tone: "edit",
       action: () => onRename(node),
     },
     {
       icon: "delete",
       label: "削除",
+      tone: "drop",
       action: () => void askDelete(),
-      danger: true,
     },
     "sep",
     ...externalItems,
@@ -140,11 +145,13 @@ export function EntryMenu({
           {
             icon: "vertical_split",
             label: "横に開く",
+            tone: "open",
             action: () => openToSide(store, node.path),
           },
           {
             icon: "open_in_new",
             label: "新しいウィンドウで開く",
+            tone: "open",
             action: () => void openInNewWindow(node.path),
           },
           ...(onCloseOthers || onCloseAll ? ["sep" as const] : []),
@@ -176,6 +183,7 @@ export function EntryMenu({
                 {
                   icon: "note_add",
                   label: "新規ファイル",
+                  tone: "make",
                   action: () => onNewFile(node),
                 } satisfies MI,
               ]
@@ -185,6 +193,7 @@ export function EntryMenu({
                 {
                   icon: "create_new_folder",
                   label: "新規フォルダ",
+                  tone: "make",
                   action: () => onNewFolder(node),
                 } satisfies MI,
               ]
@@ -216,13 +225,14 @@ export function EntryMenu({
               onClose();
             }}
             className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
-              it.danger ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
+              it.tone === "drop" ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
             }`}
           >
             <Icon
               name={it.icon}
               size={16}
-              className={`shrink-0 ${it.danger ? "" : "text-[var(--mg-muted)]"}`}
+              className="shrink-0"
+              style={{ color: toneColor(it.tone) }}
             />
             <span className="min-w-0 flex-1 truncate">{it.label}</span>
             {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}

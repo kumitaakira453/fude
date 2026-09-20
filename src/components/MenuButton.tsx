@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toneColor, type Tone } from "../lib/tone";
 import { Icon } from "./Icon";
 
 // 押すとその足元に小さな一覧を出す釦。
@@ -19,6 +20,8 @@ export interface MenuItem {
   disabled?: boolean;
   // 選べない理由。押せない釦は、なぜ押せないのかをその場で出す。
   why?: string;
+  // 操作の種別。絵の色になる。添えないものは控えめに出る。
+  tone?: Tone;
   run: () => void;
 }
 
@@ -103,7 +106,12 @@ export function MenuButton({
                 it.disabled ? "cursor-default opacity-40" : "hover:bg-[var(--mg-hover)]"
               }`}
             >
-              <Icon name={it.icon} size={16} className="shrink-0" />
+              <Icon
+                name={it.icon}
+                size={16}
+                className="shrink-0"
+                style={it.tone ? { color: toneColor(it.tone) } : undefined}
+              />
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
               {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}
             </button>
