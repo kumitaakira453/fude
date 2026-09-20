@@ -1,3 +1,4 @@
+import { message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
@@ -12,6 +13,9 @@ import {
   setDragPayload,
 } from "../lib/dnd";
 import { setDragChip } from "../lib/dragImage";
+import { bringIn, INTAKE_LIMIT } from "../lib/intake";
+import { makeSpring } from "../lib/spring";
+import { dirOf } from "../lib/paths";
 import { iconOf } from "../lib/kind";
 import {
   ancestorPaths,
@@ -33,6 +37,10 @@ import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
 
+
+// 外（Finder など）から掴んできたものか。中で掴んだものは種別が違う。
+const hasFiles = (data: DataTransfer): boolean =>
+  data.types.includes("Files");
 
 interface Creating {
   parentPath: string;
@@ -57,8 +65,15 @@ interface ItemCtx {
   commitCreate: (name: string) => void;
   cancelCreate: () => void;
   dragOverPath: string | null;
-  setDragOverPath: (p: string | null) => void;
+  // 入れる先を印す。"" は根、null は外れたとき。
+  markOver: (dest: string | null) => void;
+  // 畳んだフォルダの上に留まったら開く（掴んだまま奥へ降りられる）。
+  springOver: (path: string | null) => void;
   onMoveDrop: (destDir: string, e: React.DragEvent) => void;
+  // 外から落とされたファイル・フォルダを、その場所へ取り込む。
+  onBringIn: (destDir: string, data: DataTransfer) => void;
+  // 取り込める場面か。1 枚だけ開いているとき・下書きのときは受けない。
+  canTake: boolean;
   onNewFile: (parentPath: string) => void;
   onNewFolder: (parentPath: string) => void;
 }
@@ -167,17 +182,29 @@ const TreeItem = memo(function TreeItem({
             data-path={node.path}
             onDragStart={startDrag}
             onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes(DND_MIME)) return;
+              const outside = hasFiles(e.dataTransfer);
+              if (outside && !ctx.canTake) return;
+              if (!outside && !e.dataTransfer.types.includes(DND_MIME)) return;
               e.preventDefault();
               e.stopPropagation();
-              e.dataTransfer.dropEffect = "move";
-              ctx.setDragOverPath(node.path);
+              // 外から来たものは写す、中で掴んだものは動かす。
+              e.dataTransfer.dropEffect = outside ? "copy" : "move";
+              ctx.markOver(node.path);
+              if (!isOpen) ctx.springOver(node.path);
             }}
-            onDragLeave={() =>
-              ctx.dragOverPath === node.path && ctx.setDragOverPath(null)
-            }
+            onDragLeave={() => {
+              if (ctx.dragOverPath === node.path) ctx.markOver(null);
+              ctx.springOver(null);
+            }}
             onDrop={(e) => {
               e.stopPropagation();
+              ctx.springOver(null);
+              if (hasFiles(e.dataTransfer)) {
+                e.preventDefault();
+                ctx.markOver(null);
+                ctx.onBringIn(node.path, e.dataTransfer);
+                return;
+              }
               ctx.onMoveDrop(node.path, e);
             }}
             onClick={() => ctx.toggle(node.path)}
@@ -279,6 +306,22 @@ const TreeItem = memo(function TreeItem({
       draggable
       data-path={node.path}
       onDragStart={startDrag}
+      // 外から落とされたものは、この行のあるフォルダへ入れる。
+      onDragOver={(e) => {
+        if (!hasFiles(e.dataTransfer) || !ctx.canTake) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        ctx.markOver(dirOf(node.path));
+      }}
+      onDragLeave={() => ctx.markOver(null)}
+      onDrop={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        ctx.markOver(null);
+        ctx.onBringIn(dirOf(node.path), e.dataTransfer);
+      }}
       // ウィンドウの外へ引き出したら、そのファイルで新しいウィンドウを開く
       onDragEnd={(e) => {
         if (droppedOutside(e)) ctx.openInNewWindow(node.path, dropPoint(e));
@@ -340,8 +383,15 @@ export function FileTree() {
   const [creating, setCreating] = useState<Creating | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
-  const { createFile, createFolder, renameEntry, moveEntry, openFile, openInNewWindow } =
-    useWorkspace();
+  const {
+    createFile,
+    createFolder,
+    renameEntry,
+    moveEntry,
+    intake,
+    openFile,
+    openInNewWindow,
+  } = useWorkspace();
   // コメントの数はここで 1 回だけ購読して下へ渡す。
   //
   // 「いま出しているファイル」は**渡さない**。ctx に入れると選択が変わる
@@ -364,6 +414,12 @@ export function FileTree() {
     [expandedByFolder, activeFolderId],
   );
 
+  // 入れる先の印。行に当たっていれば行を、枠に当たっていれば根を光らせる。
+  const markOver = useCallback((dest: string | null) => {
+    setDragOverPath(dest || null);
+    setRootDragOver(dest === "");
+  }, []);
+
   const setExpandedOpen = useCallback(
     (path: string) => {
       if (!activeFolderId) return;
@@ -374,6 +430,45 @@ export function FileTree() {
       });
     },
     [activeFolderId, setExpandedByFolder],
+  );
+
+  // 掴んだまま畳んだフォルダの上に留まったら開く。掴み直さずに奥の階層まで
+  // 降りられる。掴みものが外から来たものでも、中で掴んだものでも同じ。
+  const spring = useMemo(
+    () => makeSpring<string>((path) => setExpandedOpen(path)),
+    [setExpandedOpen],
+  );
+  useEffect(() => {
+    const stop = () => spring.stop();
+    window.addEventListener("dragend", stop, true);
+    window.addEventListener("drop", stop, true);
+    return () => {
+      stop();
+      window.removeEventListener("dragend", stop, true);
+      window.removeEventListener("drop", stop, true);
+    };
+  }, [spring]);
+
+  // 外から落とされたものを取り込む。読むのは落とされたその場で（DataTransfer は
+  // 待ちを挟むと読めなくなる）。
+  const onBringIn = useCallback(
+    (destDir: string, data: DataTransfer) => {
+      if (noAdd) return;
+      void (async () => {
+        const brought = await bringIn(data);
+        if (brought === "too-many") {
+          await message(
+            `一度に取り込めるのは ${INTAKE_LIMIT} 件までです。フォルダを分けて落としてください。`,
+            { title: "fude", kind: "warning" },
+          );
+          return;
+        }
+        if (brought.length === 0) return;
+        if (destDir) setExpandedOpen(destDir);
+        await intake(destDir, brought);
+      })();
+    },
+    [noAdd, intake, setExpandedOpen],
   );
 
   const toggle = useCallback(
@@ -468,11 +563,14 @@ export function FileTree() {
       },
       cancelCreate: () => setCreating(null),
       dragOverPath,
-      setDragOverPath,
+      markOver,
+      springOver: (path) => spring.over(path),
+      onBringIn,
+      canTake: !noAdd,
       onMoveDrop: (destDir, e) => {
         // タブを掴んだものはファイルの移動として扱わない
         const payload = readDragPayload(e.dataTransfer);
-        setDragOverPath(null);
+        markOver(null);
         if (payload && !payload.from) {
           e.preventDefault();
           void moveEntry(payload.path, destDir);
@@ -491,6 +589,10 @@ export function FileTree() {
       editingPath,
       creating,
       dragOverPath,
+      markOver,
+      spring,
+      onBringIn,
+      noAdd,
       renameEntry,
       createFile,
       createFolder,
@@ -500,7 +602,13 @@ export function FileTree() {
   );
 
   const onRootDrop = (e: React.DragEvent) => {
-    setRootDragOver(false);
+    markOver(null);
+    spring.stop();
+    if (hasFiles(e.dataTransfer)) {
+      e.preventDefault();
+      onBringIn("", e.dataTransfer);
+      return;
+    }
     if (!e.dataTransfer.types.includes(DND_MIME)) return;
     const payload = readDragPayload(e.dataTransfer);
     e.preventDefault();
@@ -537,14 +645,15 @@ export function FileTree() {
       <div
         ref={listRef}
         onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes(DND_MIME)) return;
+          const outside = hasFiles(e.dataTransfer);
+          if (outside && noAdd) return;
+          if (!outside && !e.dataTransfer.types.includes(DND_MIME)) return;
           e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          setRootDragOver(true);
+          e.dataTransfer.dropEffect = outside ? "copy" : "move";
+          markOver("");
         }}
         onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node))
-            setRootDragOver(false);
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) markOver(null);
         }}
         onDrop={onRootDrop}
         className={`min-h-full flex-1 rounded py-1 pl-1 ${

@@ -10,6 +10,7 @@ import {
   remove,
   rename,
   stat,
+  writeFile as writeBinaryFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 
@@ -269,6 +270,12 @@ export interface FileData {
 // ---- 書き込み系（編集・ファイル操作） ----
 export async function writeFile(abs: string, text: string): Promise<void> {
   await writeTextFile(abs, text);
+}
+export async function writeBytes(
+  abs: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  await writeBinaryFile(abs, bytes);
 }
 export async function createDir(abs: string): Promise<void> {
   await mkdir(abs, { recursive: true });

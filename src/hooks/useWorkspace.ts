@@ -18,9 +18,11 @@ import {
   removePath,
   renamePath,
   soleTree,
+  writeBytes,
   writeFile,
   type TreeNode,
 } from "../lib/fsAccess";
+import type { Brought } from "../lib/intake";
 import {
   folderDisplayName,
   loadDocs,
@@ -44,7 +46,7 @@ import {
 } from "../lib/drafts";
 import { splitHref } from "../lib/anchors";
 import { dirOf, resolvePath } from "../lib/paths";
-import { notify } from "../state/toast";
+import { notify, notifyBusy, settle } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import {
   remapLeafPaths,
@@ -74,6 +76,28 @@ function baseOf(path: string): string {
 
 function joinRel(a: string, b: string): string {
   return a ? `${a}/${b}` : b;
+}
+
+// 同時に走らせる本数。落としたフォルダの中身を一度に全部投げると、
+// 書き込みの往復が詰まって画面が止まる。
+const WRITE_AT_ONCE = 8;
+
+async function inTurn<T>(
+  list: T[],
+  width: number,
+  run: (item: T) => Promise<void>,
+): Promise<void> {
+  let at = 0;
+  const lane = async () => {
+    for (;;) {
+      const i = at++;
+      if (i >= list.length) return;
+      await run(list[i]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(width, list.length) }, () => lane()),
+  );
 }
 
 // バックグラウンド索引の世代。新しい構築が始まると古い構築は中断する。
@@ -766,6 +790,71 @@ export function useWorkspace() {
     [absOf, uniqueRel, applyPathRemap],
   );
 
+  // 外から落とされたものを、フォルダの中へ写す。元は動かさない。
+  //
+  // 空きを採り直すのは頭の名前だけ。中まで一つずつ採ると、落としたフォルダの
+  // 形が崩れる（中で重なるものは、そもそも新しい場所に入るので重ならない）。
+  const intake = useCallback(
+    async (destDirRel: string, brought: Brought[]) => {
+      if (brought.length === 0 || !getRootPath()) return;
+
+      const heads = new Map<string, string>();
+      for (const { rel } of brought) {
+        const head = rel.split("/")[0];
+        if (heads.has(head)) continue;
+        heads.set(head, baseOf(await uniqueRel(joinRel(destDirRel, head))));
+      }
+      const targets = brought.map(({ rel, file }) => {
+        const [head, ...rest] = rel.split("/");
+        return {
+          rel: joinRel(destDirRel, [heads.get(head) ?? head, ...rest].join("/")),
+          file,
+        };
+      });
+      const files = targets.filter((t) => t.file);
+
+      const at = notifyBusy(store, `${targets.length} 件を取り込んでいます…`);
+      try {
+        // 場所を先に作る。浅いものから作るので、親の無いところへは書かない。
+        const dirs = [
+          ...new Set(targets.map((t) => (t.file ? dirOf(t.rel) : t.rel))),
+        ]
+          .filter((dir) => dir !== "")
+          .sort();
+        for (const dir of dirs) {
+          const abs = absOf(dir);
+          if (abs) await createDir(abs);
+        }
+        await inTurn(files, WRITE_AT_ONCE, async (t) => {
+          const abs = absOf(t.rel);
+          if (!abs || !t.file) return;
+          await writeBytes(abs, new Uint8Array(await t.file.arrayBuffer()));
+        });
+        await refreshTreeStructure();
+
+        // 入れたのに一覧に出ないときは、そのわけを添える。落ちたのか弾かれた
+        // のか分からないまま終わるのがいちばん困る。
+        const shown = new Set(store.get(A.filesAtom).map((f) => f.path));
+        const buried =
+          files.length > 0 && !files.some((t) => shown.has(t.rel));
+        settle(
+          store,
+          at,
+          buried
+            ? `${targets.length} 件を取り込みました（設定の「Markdown 以外も並べる」を入にすると一覧に出ます）`
+            : `${targets.length} 件を取り込みました`,
+        );
+      } catch (e) {
+        settle(store, at, "取り込めませんでした");
+        void message(`取り込めませんでした。\n${String(e)}`, {
+          title: "fude",
+          kind: "error",
+        });
+      }
+    },
+    [getRootPath, absOf, uniqueRel, refreshTreeStructure, store],
+  );
+
   // 履歴を積まずにキャッシュ＋ディスクへ書く（undo/redo の実体）。
   const writeContent = useCallback(
     async (rel: string, text: string) => {
@@ -849,6 +938,7 @@ export function useWorkspace() {
     adoptRename,
     deleteEntry,
     moveEntry,
+    intake,
     saveFile,
     undoFile,
     redoFile,
