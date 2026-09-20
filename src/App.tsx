@@ -17,6 +17,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { useAfterPaint } from "./hooks/useAfterPaint";
 import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
+import { watchStalls } from "./lib/measure";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
 import { setNotionKeys } from "./lib/md/inputRules";
@@ -33,7 +34,7 @@ import {
   sidebarOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
-  excludeAtom,
+  activeIgnoreAtom,
   showOtherFilesAtom,
   fontAtom,
   themeAtom,
@@ -54,12 +55,13 @@ export default function App() {
   const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
   const showOther = useAtomValue(showOtherFilesAtom);
-  const exclude = useAtomValue(excludeAtom);
+  const ignore = useAtomValue(activeIgnoreAtom);
   const { refreshTreeStructure } = useWorkspace();
   const reviewOpen = useAtomValue(reviewScreenAtom);
   const versionFile = useAtomValue(versionScreenAtom);
 
   useHotkeys();
+  useEffect(watchStalls, []);
   useDragging();
   useWatcher();
   useUrlSync();
@@ -91,15 +93,15 @@ export default function App() {
 
   // 外すものを書き換えたときも並べ直す。打っている途中で走らせると 1 文字ごとに
   // 木を読み直すので、手が止まってから動かす。
-  const excludeWas = useRef(exclude);
+  const ignoreWas = useRef(ignore);
   useEffect(() => {
-    if (excludeWas.current === exclude) return;
+    if (ignoreWas.current === ignore) return;
     const wait = window.setTimeout(() => {
-      excludeWas.current = exclude;
+      ignoreWas.current = ignore;
       void refreshTreeStructure();
     }, EXCLUDE_WAIT);
     return () => window.clearTimeout(wait);
-  }, [exclude, refreshTreeStructure]);
+  }, [ignore, refreshTreeStructure]);
 
   // ドラッグ&ドロップの取りこぼしで WebView が既定動作（ドロップされたパスへ
   // ナビゲーション→リロード＝画面全体が真っ白）になるのを全域で抑止する。

@@ -219,15 +219,21 @@ struct FileStamp {
     mtime: u64,
 }
 
-const SKIP_DIRS: [&str; 7] = [
-    "node_modules",
-    ".obsidian",
-    ".trash",
-    ".vscode",
-    ".idea",
-    "dist",
-    "build",
-];
+// 一覧から外すもの。書き方は .gitignore と同じで、設定の本文をそのまま食わせる。
+// 壊れた行は効かないだけにする（打っている途中の行で走査が止まらないように）。
+fn ignore_of(root: &str, text: &str) -> ignore::gitignore::Gitignore {
+    let mut builder = ignore::gitignore::GitignoreBuilder::new(root);
+    for line in text.lines() {
+        let _ = builder.add_line(None, line);
+    }
+    builder
+        .build()
+        .unwrap_or_else(|_| ignore::gitignore::Gitignore::empty())
+}
+
+fn dropped(gi: &ignore::gitignore::Gitignore, rel: &str, dir: bool) -> bool {
+    gi.matched(rel, dir).is_ignore()
+}
 
 fn is_markdown(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
@@ -236,7 +242,12 @@ fn is_markdown(name: &str) -> bool {
         .any(|ext| lower.ends_with(ext))
 }
 
-fn stamps_in(dir: &std::path::Path, prefix: &str, out: &mut Vec<FileStamp>) {
+fn stamps_in(
+    dir: &std::path::Path,
+    prefix: &str,
+    gi: &ignore::gitignore::Gitignore,
+    out: &mut Vec<FileStamp>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -249,11 +260,11 @@ fn stamps_in(dir: &std::path::Path, prefix: &str, out: &mut Vec<FileStamp>) {
         };
         let Ok(kind) = entry.file_type() else { continue };
         if kind.is_dir() {
-            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+            if dropped(gi, &rel, true) {
                 continue;
             }
-            stamps_in(&entry.path(), &rel, out);
-        } else if kind.is_file() && is_markdown(&name) {
+            stamps_in(&entry.path(), &rel, gi, out);
+        } else if kind.is_file() && is_markdown(&name) && !dropped(gi, &rel, false) {
             let mtime = entry
                 .metadata()
                 .ok()
@@ -267,10 +278,11 @@ fn stamps_in(dir: &std::path::Path, prefix: &str, out: &mut Vec<FileStamp>) {
 }
 
 #[tauri::command]
-async fn folder_mtimes(root: String) -> Vec<FileStamp> {
+async fn folder_mtimes(root: String, ignore: String) -> Vec<FileStamp> {
     tauri::async_runtime::spawn_blocking(move || {
+        let gi = ignore_of(&root, &ignore);
         let mut out = Vec::new();
-        stamps_in(std::path::Path::new(&root), "", &mut out);
+        stamps_in(std::path::Path::new(&root), "", &gi, &mut out);
         out
     })
     .await
@@ -309,7 +321,15 @@ impl Sieve {
 }
 
 // 親を子より先に積む。受け取った側はこの順のまま木へ組める。
-fn scan_in(dir: &std::path::Path, prefix: &str, sieve: &Sieve, out: &mut Vec<ScanEntry>) {
+// depth は残りの階層で、1 ならその階層で止まる。0 は限りなし。
+fn scan_in(
+    dir: &std::path::Path,
+    prefix: &str,
+    sieve: &Sieve,
+    gi: &ignore::gitignore::Gitignore,
+    depth: u32,
+    out: &mut Vec<ScanEntry>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -322,7 +342,9 @@ fn scan_in(dir: &std::path::Path, prefix: &str, sieve: &Sieve, out: &mut Vec<Sca
         };
         let Ok(kind) = entry.file_type() else { continue };
         if kind.is_dir() {
-            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+            // 外した置き場には降りない。出さないものを読むためだけに、その下を
+            // 全部辿ることになる。
+            if dropped(gi, &rel, true) {
                 continue;
             }
             // 空のフォルダも一覧に出す。新しく作った置き場が消えて見える。
@@ -330,22 +352,38 @@ fn scan_in(dir: &std::path::Path, prefix: &str, sieve: &Sieve, out: &mut Vec<Sca
                 path: rel.clone(),
                 dir: true,
             });
-            scan_in(&entry.path(), &rel, sieve, out);
-        } else if kind.is_file() && sieve.passes(&name) {
+            if depth != 1 {
+                scan_in(
+                    &entry.path(),
+                    &rel,
+                    sieve,
+                    gi,
+                    depth.saturating_sub(1),
+                    out,
+                );
+            }
+        } else if kind.is_file() && sieve.passes(&name) && !dropped(gi, &rel, false) {
             out.push(ScanEntry { path: rel, dir: false });
         }
     }
 }
 
 #[tauri::command]
-async fn scan_tree(root: String, only: Vec<String>, skip: Vec<String>) -> Vec<ScanEntry> {
+async fn scan_tree(
+    root: String,
+    only: Vec<String>,
+    skip: Vec<String>,
+    ignore: String,
+    depth: u32,
+) -> Vec<ScanEntry> {
     tauri::async_runtime::spawn_blocking(move || {
         let sieve = Sieve {
             only: only.into_iter().collect(),
             skip: skip.into_iter().collect(),
         };
+        let gi = ignore_of(&root, &ignore);
         let mut out = Vec::new();
-        scan_in(std::path::Path::new(&root), "", &sieve, &mut out);
+        scan_in(std::path::Path::new(&root), "", &sieve, &gi, depth, &mut out);
         out
     })
     .await
@@ -468,34 +506,111 @@ mod tests {
         assert!(s.passes("Makefile"));
     }
 
+    // 走査の試し場。テストごとに別の置き場を作り、終わりに畳む。
+    struct Yard(std::path::PathBuf);
+
+    impl Yard {
+        fn new(tag: &str, files: &[&str]) -> Yard {
+            let root = std::env::temp_dir()
+                .join(format!("fude-{tag}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            for rel in files {
+                let at = root.join(rel);
+                if rel.ends_with('/') {
+                    std::fs::create_dir_all(&at).unwrap();
+                } else {
+                    std::fs::create_dir_all(at.parent().unwrap()).unwrap();
+                    std::fs::write(&at, "").unwrap();
+                }
+            }
+            Yard(root)
+        }
+
+        fn scan(&self, ignore: &str, depth: u32) -> Vec<String> {
+            let gi = ignore_of(&self.0.to_string_lossy(), ignore);
+            let mut out = Vec::new();
+            scan_in(&self.0, "", &sieve(&["md"], &[]), &gi, depth, &mut out);
+            let mut paths: Vec<String> = out.into_iter().map(|e| e.path).collect();
+            paths.sort();
+            paths
+        }
+    }
+
+    impl Drop for Yard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    const TREE: [&str; 7] = [
+        "はじめ.md",
+        "log/根の直下.md",
+        "中/奥.md",
+        "中/log/深い.md",
+        "中/残す.md",
+        "中/一時/x.md",
+        "node_modules/何か/紛れ.md",
+    ];
+
     #[test]
-    fn 走査は親を先に積み_飛ばす置き場には降りない() {
-        let root = std::env::temp_dir().join(format!("fude-scan-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("中/奥")).unwrap();
-        std::fs::create_dir_all(root.join("node_modules/何か")).unwrap();
-        std::fs::create_dir_all(root.join(".git/objects")).unwrap();
-        std::fs::create_dir_all(root.join("空")).unwrap();
-        std::fs::write(root.join("はじめ.md"), "").unwrap();
-        std::fs::write(root.join("中/奥/深い.md"), "").unwrap();
-        std::fs::write(root.join("中/絵.png"), "").unwrap();
-        std::fs::write(root.join("node_modules/何か/紛れ.md"), "").unwrap();
-        std::fs::write(root.join(".git/objects/紛れ.md"), "").unwrap();
-
+    fn 走査は親を先に積む() {
+        let yard = Yard::new("order", &["中/奥/深い.md"]);
+        let gi = ignore_of(&yard.0.to_string_lossy(), "");
         let mut out = Vec::new();
-        scan_in(&root, "", &sieve(&["md"], &[]), &mut out);
-        let mut paths: Vec<String> = out.iter().map(|e| e.path.clone()).collect();
-        paths.sort();
-        assert_eq!(
-            paths,
-            vec!["はじめ.md", "中", "中/奥", "中/奥/深い.md", "空"]
-        );
-
-        // 親は必ず子より先に積まれている。
+        scan_in(&yard.0, "", &sieve(&["md"], &[]), &gi, 0, &mut out);
         let at = |p: &str| out.iter().position(|e| e.path == p).unwrap();
         assert!(at("中") < at("中/奥"));
         assert!(at("中/奥") < at("中/奥/深い.md"));
+    }
 
-        std::fs::remove_dir_all(&root).unwrap();
+    #[test]
+    fn 末尾のスラッシュで置き場を丸ごと外す() {
+        let yard = Yard::new("dir", &TREE);
+        let got = yard.scan("node_modules/\n", 0);
+        assert!(!got.iter().any(|p| p.starts_with("node_modules")));
+        assert!(got.contains(&"はじめ.md".to_string()));
+    }
+
+    #[test]
+    fn 名前だけならどの階層でも_頭のスラッシュなら根の直下だけ() {
+        let yard = Yard::new("root", &TREE);
+        let anywhere = yard.scan("log/\n", 0);
+        assert!(!anywhere.iter().any(|p| p.contains("log")));
+
+        let only_top = yard.scan("/log/\n", 0);
+        assert!(!only_top.contains(&"log".to_string()));
+        assert!(only_top.contains(&"中/log/深い.md".to_string()));
+    }
+
+    #[test]
+    fn 感嘆符で戻せる_ただし外した置き場の中は戻らない() {
+        let yard = Yard::new("negate", &TREE);
+        let got = yard.scan("中/*.md\n!中/残す.md\n", 0);
+        assert!(!got.contains(&"中/奥.md".to_string()));
+        assert!(got.contains(&"中/残す.md".to_string()));
+
+        // 置き場ごと外したときは、中のものを名指しで戻しても出てこない。
+        let dropped = yard.scan("node_modules/\n!node_modules/何か/紛れ.md\n", 0);
+        assert!(!dropped.iter().any(|p| p.starts_with("node_modules")));
+    }
+
+    #[test]
+    fn 星は区切りをまたがず_二つ重ねるとまたぐ() {
+        let yard = Yard::new("star", &TREE);
+        // * は 1 階層ぶん。中/一時 には当たらない。
+        let shallow = yard.scan("/*時/\n", 0);
+        assert!(shallow.contains(&"中/一時".to_string()));
+
+        let deep = yard.scan("**/一時/\n", 0);
+        assert!(!deep.contains(&"中/一時".to_string()));
+    }
+
+    #[test]
+    fn 深さ_1_はその階層だけ返す() {
+        let yard = Yard::new("depth", &TREE);
+        assert_eq!(
+            yard.scan("", 1),
+            vec!["log", "node_modules", "はじめ.md", "中"]
+        );
     }
 }

@@ -124,8 +124,35 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 // Markdown 以外もツリーに出すか。画像・HTML・PDF が並ぶ。切ると読み物だけの
 // 見え方になる（開ける・開けないは変わらない。1 枚だけ開く経路は常に通る）。
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
-// 一覧から外す名前。1 行に 1 つ、しるし付き（glob）で書く。書き方は lib/exclude。
-export const excludeAtom = atomWithStorage<string>("mdglow:exclude", "");
+// 一覧から外すもの。書き方は .gitignore と同じで、そのまま走査へ渡す。外した
+// ものは走査に入らないので、索引にも検索にも載らない。
+//
+// 既定もここに置く。隠す相手が設定に出ていないと、何を飛ばしているのかが
+// 画面のどこにも現れず、出し直す手立ても無くなる。
+export const DEFAULT_IGNORE = [
+  "node_modules/",
+  "dist/",
+  "build/",
+  "target/",
+  ".*/",
+  ".DS_Store",
+].join("\n");
+export const ignoreAtom = atomWithStorage<string>("mdglow:ignore", DEFAULT_IGNORE);
+
+// フォルダごとの決まり。鍵はフォルダの絶対パス。決まりがあるフォルダでは共通を
+// 見ない。重ねる形にすると、共通に書いたものをそのフォルダだけ外す手立てが無い。
+export const folderIgnoresAtom = atomWithStorage<Record<string, string>>(
+  "mdglow:ignore-by-folder",
+  {},
+);
+
+// いま効いている決まり。決まりが無いことと、空（何も外さない）は別物なので、
+// 鍵があるかどうかで見る。
+export const activeIgnoreAtom = atom((get) => {
+  const id = get(activeFolderIdAtom);
+  const own = id === null ? undefined : get(folderIgnoresAtom)[id];
+  return own ?? get(ignoreAtom);
+});
 // 取り込んだ画像の置き場所。文書と同じところに、この名前のフォルダを作る。
 export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images");
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方

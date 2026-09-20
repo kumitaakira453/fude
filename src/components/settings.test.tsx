@@ -4,6 +4,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  activeFolderIdAtom,
+  folderIgnoresAtom,
+  ignoreAtom,
   imageDirAtom,
   liveEditAtom,
   settingsOpenAtom,
@@ -26,9 +29,10 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 let store: ReturnType<typeof createStore>;
 
-function open() {
+function open(before?: (s: ReturnType<typeof createStore>) => void) {
   store = createStore();
   store.set(settingsOpenAtom, true);
+  before?.(store);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -47,6 +51,8 @@ afterEach(() => {
   host?.remove();
   host = null;
   document.body.innerHTML = "";
+  // 控えは窓ごとに残る。次の試しへ持ち越すと、書いていない値が入っている。
+  localStorage.clear();
 });
 
 const box = () => document.querySelector<HTMLElement>(".mg-set")!;
@@ -190,5 +196,80 @@ describe("触ったら効く", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(store.get(settingsOpenAtom)).toBe(false);
+  });
+});
+
+describe("一覧から外すもの", () => {
+  const side = (label: string) =>
+    Array.from(box().querySelectorAll<HTMLElement>(".mg-set-sides button")).find(
+      (el) => el.textContent === label,
+    )!;
+  const field = () => box().querySelector<HTMLTextAreaElement>(".mg-set-drop textarea")!;
+  const foot = () => box().querySelector<HTMLElement>(".mg-set-sides-foot")!;
+  const act_ = (label: string) =>
+    Array.from(foot().querySelectorAll<HTMLElement>("button")).find(
+      (el) => el.textContent === label,
+    )!;
+  const write = (value: string) =>
+    act(() => {
+      const el = field();
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const toFiles = () => act(() => face("ファイル").click());
+
+  it("フォルダを開いていなければ、そのフォルダだけの決まりは選べない", () => {
+    open((s) => s.set(activeFolderIdAtom, null));
+    toFiles();
+    expect(side("いまのフォルダ").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("決まりが無いフォルダでは共通を読むだけにする", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(ignoreAtom, "node_modules/");
+    });
+    toFiles();
+    act(() => side("いまのフォルダ").click());
+    expect(field().value).toBe("node_modules/");
+    expect(field().readOnly).toBe(true);
+    expect(foot().textContent).toContain("共通の決まりで外しています");
+  });
+
+  it("決まりを作ると、そのフォルダにだけ入る", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(ignoreAtom, "node_modules/");
+    });
+    toFiles();
+    act(() => side("いまのフォルダ").click());
+    act(() => act_("このフォルダだけの決まりを作る").click());
+    write("target/");
+    expect(store.get(folderIgnoresAtom)).toEqual({ "/work/ark": "target/" });
+    // 共通は動かさない。
+    expect(store.get(ignoreAtom)).toBe("node_modules/");
+  });
+
+  it("共通に戻すと、そのフォルダの決まりが消える", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(folderIgnoresAtom, { "/work/ark": "target/", "/work/other": "*.bak" });
+    });
+    toFiles();
+    act(() => side("いまのフォルダ").click());
+    act(() => act_("共通に戻す").click());
+    expect(store.get(folderIgnoresAtom)).toEqual({ "/work/other": "*.bak" });
+  });
+
+  it("共通の面では共通を書く", () => {
+    open((s) => s.set(activeFolderIdAtom, "/work/ark"));
+    toFiles();
+    write("*.lock");
+    expect(store.get(ignoreAtom)).toBe("*.lock");
+    expect(store.get(folderIgnoresAtom)).toEqual({});
   });
 });

@@ -6,7 +6,6 @@ import {
   exists,
   mkdir,
   readFile as readBinaryFile,
-  readDir,
   readTextFile,
   remove,
   rename,
@@ -83,29 +82,19 @@ export function crumbsOf(path: string, keep = Infinity): Crumb[] {
 // 道筋のプルダウンでその場の中身を出すために使う。道筋は絶対パスで持つ。
 export async function readLevel(
   dirAbs: string,
-  show: (name: string) => boolean = isMarkdown,
+  sieve: Sieve = MARKDOWN_SIEVE,
+  ignore = "",
 ): Promise<TreeNode[]> {
-  let entries: Awaited<ReturnType<typeof readDir>>;
-  try {
-    entries = await readDir(dirAbs);
-  } catch {
-    return [];
-  }
   const base = dirAbs === "/" ? "" : dirAbs;
-  const out: TreeNode[] = [];
-  for (const e of entries) {
-    const abs = `${base}/${e.name}`;
-    if (e.isDirectory) {
-      if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
-      out.push({ name: e.name, path: abs, abs, kind: "dir", children: [] });
-    } else if (e.isFile && show(e.name)) {
-      out.push({ name: e.name, path: abs, abs, kind: "file" });
-    }
-  }
-  out.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
-    return a.name.localeCompare(b.name, "ja");
-  });
+  const nodes = await scan(dirAbs, sieve, ignore, 1);
+  const out = nodes.map((entry) => ({
+    name: entry.path.slice(entry.path.lastIndexOf("/") + 1),
+    path: `${base}/${entry.path}`,
+    abs: `${base}/${entry.path}`,
+    kind: entry.dir ? ("dir" as const) : ("file" as const),
+    ...(entry.dir ? { children: [] } : {}),
+  }));
+  sortNodes(out);
   return out;
 }
 
@@ -117,17 +106,6 @@ export function soleTree(abs: string): { root: string; node: TreeNode } {
   const name = abs.slice(cut + 1);
   return { root, node: { name, path: name, abs, kind: "file" } };
 }
-
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  ".obsidian",
-  ".trash",
-  ".vscode",
-  ".idea",
-  "dist",
-  "build",
-]);
 
 // 走査へ渡す、拡張子だけの粗いふるい。only があればその拡張子だけ、skip が
 // あればその拡張子以外が返る。一覧に何を出すかの決めごとは呼び出し側が持つ。
@@ -145,28 +123,38 @@ interface ScanEntry {
   dir: boolean;
 }
 
-// ディレクトリを走査してツリーを構築する。
-//
-// 走査そのものは Rust に任せる。階層ごとに読み出しを投げると往復が階層の数だけ
-// 積み上がり、一覧に出さないファイルまで WebView へ渡ってメインスレッドが塞がる
-// （ビルド成果物を抱えたフォルダでは 4 万件のうち 9 割が捨てる分だった）。
-export async function buildTree(
+// 走査は Rust に任せる。階層ごとに読み出しを投げると往復が階層の数だけ積み上がり、
+// 一覧に出さないファイルまで WebView へ渡ってメインスレッドが塞がる（ビルド成果物を
+// 抱えたフォルダでは 4 万件のうち 9 割が捨てる分になる）。一覧から外したものは
+// 走査にも入らないので、索引にも載らない。
+async function scan(
   rootAbs: string,
-  show: (name: string) => boolean = isMarkdown,
-  sieve: Sieve = MARKDOWN_SIEVE,
-): Promise<TreeNode[]> {
-  const began = performance.now();
-  let entries: ScanEntry[];
+  sieve: Sieve,
+  ignore: string,
+  depth: number,
+): Promise<ScanEntry[]> {
   try {
-    entries = await invoke<ScanEntry[]>("scan_tree", {
+    return await invoke<ScanEntry[]>("scan_tree", {
       root: rootAbs,
       only: sieve.only ?? [],
       skip: sieve.skip ?? [],
+      ignore,
+      depth,
     });
   } catch {
     return [];
   }
-  const tree = nestEntries(entries, rootAbs, show);
+}
+
+// ディレクトリを走査してツリーを構築する。
+export async function buildTree(
+  rootAbs: string,
+  sieve: Sieve = MARKDOWN_SIEVE,
+  ignore = "",
+): Promise<TreeNode[]> {
+  const began = performance.now();
+  const entries = await scan(rootAbs, sieve, ignore, 0);
+  const tree = nestEntries(entries, rootAbs);
   const took = performance.now() - began;
   if (import.meta.env.DEV && took > 200) {
     console.info(`scan_tree ${Math.round(took)}ms`, {
@@ -186,20 +174,13 @@ function sortNodes(nodes: TreeNode[]): void {
 }
 
 // 走査が返した平らな並びを木に組む。親は子より先に来るので、順に積める。
-// 設定で書いた除外（show）はここで当てる。
-export function nestEntries(
-  entries: ScanEntry[],
-  rootAbs: string,
-  show: (name: string) => boolean = isMarkdown,
-): TreeNode[] {
+export function nestEntries(entries: ScanEntry[], rootAbs: string): TreeNode[] {
   const roots: TreeNode[] = [];
   const dirs = new Map<string, TreeNode>();
   for (const entry of entries) {
     const cut = entry.path.lastIndexOf("/");
-    const name = entry.path.slice(cut + 1);
-    if (!entry.dir && !show(name)) continue;
     const node: TreeNode = {
-      name,
+      name: entry.path.slice(cut + 1),
       path: entry.path,
       abs: `${rootAbs}/${entry.path}`,
       kind: entry.dir ? "dir" : "file",
@@ -314,10 +295,13 @@ export async function pathExists(abs: string): Promise<boolean> {
 
 // フォルダ配下の Markdown の更新時刻。走査は Rust 側で完結し、1 回の呼び出しで
 // 全部返る。ファイルごとに stat を投げると、数百ファイルで往復が積み上がる。
-export async function folderMtimes(rootAbs: string): Promise<Map<string, number>> {
-  const { invoke } = await import("@tauri-apps/api/core");
+export async function folderMtimes(
+  rootAbs: string,
+  ignore = "",
+): Promise<Map<string, number>> {
   const list = await invoke<{ path: string; mtime: number }[]>("folder_mtimes", {
     root: rootAbs,
+    ignore,
   });
   return new Map(list.map((f) => [f.path, f.mtime]));
 }

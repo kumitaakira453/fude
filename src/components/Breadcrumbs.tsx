@@ -8,15 +8,14 @@ import {
   crumbsOf,
   displayName,
   filterTree,
-  isMarkdown,
+  MARKDOWN_SIEVE,
   parentPath,
   readLevel,
   type TreeNode,
 } from "../lib/fsAccess";
-import { withExcluded } from "../lib/exclude";
-import { isViewable } from "../lib/kind";
+import { VIEWABLE_SIEVE } from "../lib/kind";
 import { revealInTree } from "../lib/ui";
-import { excludeAtom, showOtherFilesAtom, treeAtom } from "../state/atoms";
+import { activeIgnoreAtom, showOtherFilesAtom, treeAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 // ヘッダーの道筋。区切りを押すと、その階層がツリーとして開く。
@@ -66,11 +65,8 @@ export function Breadcrumbs({
   const { openFile, openDoc } = useWorkspace();
   // 一覧に出すものは設定に合わせる。木と同じ見え方にする。
   const other = useAtomValue(showOtherFilesAtom);
-  const exclude = useAtomValue(excludeAtom);
-  const show = useMemo(
-    () => withExcluded(other ? isViewable : isMarkdown, exclude),
-    [other, exclude],
-  );
+  const ignore = useAtomValue(activeIgnoreAtom);
+  const sieve = other ? VIEWABLE_SIEVE : MARKDOWN_SIEVE;
   // 1 枚だけのときに読み込んだ階層。道筋（絶対パス）から引く。
   const [level, setLevel] = useState<Map<string, TreeNode[]>>(new Map());
   const navRef = useRef<HTMLDivElement>(null);
@@ -116,7 +112,7 @@ export function Breadcrumbs({
     if (want.length === 0) return;
     let dead = false;
     void Promise.all(
-      want.map(async (dir) => [dir, await readLevel(dir, show)] as const),
+      want.map(async (dir) => [dir, await readLevel(dir, sieve, ignore)] as const),
     ).then((pairs) => {
       if (dead) return;
       setLevel((prev) => {

@@ -1,5 +1,8 @@
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
+import { useState } from "react";
 import { useOptimisticSetting } from "../../hooks/useOptimisticSetting";
+import { ignoreLines } from "../../lib/ignore";
+import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import type { SwitchRow, WordsRow } from "./rows";
@@ -67,6 +70,92 @@ export function Words({
         />
       )}
         {foot && <span className="mg-set-note">{foot}</span>}
+      </div>
+    </div>
+  );
+}
+
+// 一覧から外すもの。共通とフォルダごとを切り替えて書く。
+//
+// 決まりがあるフォルダでは共通を見ない。重ねる形にすると、共通に書いたものを
+// そのフォルダだけ外す手立てが無くなる。
+export function IgnoreWords({ row }: { row: WordsRow }) {
+  const [shared, setShared] = useAtom(row.atom);
+  const [byFolder, setByFolder] = useAtom(folderIgnoresAtom);
+  const folderId = useAtomValue(activeFolderIdAtom);
+  const [side, setSide] = useState<"shared" | "folder">("shared");
+
+  const here = side === "folder" && folderId !== null;
+  const own = folderId === null ? undefined : byFolder[folderId];
+  const value = here ? (own ?? shared) : shared;
+  const reading = here && own === undefined;
+
+  const write = (next: string) => {
+    if (here) setByFolder({ ...byFolder, [folderId!]: next });
+    else setShared(next);
+  };
+
+  const start = () => setByFolder({ ...byFolder, [folderId!]: shared });
+  const drop = () => {
+    const next = { ...byFolder };
+    delete next[folderId!];
+    setByFolder(next);
+  };
+
+  const count = ignoreLines(value).length;
+
+  return (
+    <div className="mg-set-drop">
+      <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
+      <div className="mg-set-drop-main">
+        <span className="mg-set-row-name">{row.name}</span>
+        <span className="mg-set-note">{row.note}</span>
+        <div className="mg-rail-pick mg-set-sides">
+          <button
+            type="button"
+            onClick={() => setSide("shared")}
+            className={side === "shared" ? "is-on" : ""}
+          >
+            すべてのフォルダ
+          </button>
+          <button
+            type="button"
+            onClick={() => setSide("folder")}
+            disabled={folderId === null}
+            title={folderId === null ? "フォルダを開いてから" : undefined}
+            className={side === "folder" ? "is-on" : ""}
+          >
+            いまのフォルダ
+          </button>
+        </div>
+        <AutoTextarea
+          value={value}
+          onChange={(e) => write(e.target.value)}
+          placeholder={row.placeholder}
+          minRows={3}
+          maxRows={10}
+          spellCheck={false}
+          readOnly={reading}
+        />
+        <span className="mg-set-note mg-set-sides-foot">
+          {reading ? (
+            <>
+              このフォルダは共通の決まりで外しています
+              <button type="button" onClick={start}>
+                このフォルダだけの決まりを作る
+              </button>
+            </>
+          ) : (
+            <>
+              {count > 0 ? `${count} 件で外しています` : "いまは何も外していません"}
+              {here && (
+                <button type="button" onClick={drop}>
+                  共通に戻す
+                </button>
+              )}
+            </>
+          )}
+        </span>
       </div>
     </div>
   );

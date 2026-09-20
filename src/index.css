@@ -1743,6 +1743,29 @@ button.mg-task-check:hover {
   background: var(--mg-hover);
   font-family: var(--mg-font-mono);
 }
+.mg-set-drop textarea[readonly] {
+  color: var(--mg-muted);
+  background: transparent;
+}
+
+/* 一覧から外すものの、共通 / このフォルダの切り替え。 */
+.mg-set-sides {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+.mg-set-sides-foot {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+}
+.mg-set-sides-foot button {
+  color: var(--mg-accent);
+  font-weight: 500;
+  transition: opacity 0.12s ease;
+}
+.mg-set-sides-foot button:hover {
+  opacity: 0.75;
+}
 
 .mg-set-beta {
   padding: 0 0.25rem;

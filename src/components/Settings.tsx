@@ -3,14 +3,13 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useOptimisticSetting } from "../hooks/useOptimisticSetting";
-import { excludeRules } from "../lib/exclude";
 import { FONTS } from "../lib/fonts";
 import { cleanDir, DEFAULT_DIR } from "../lib/images";
 import { THEMES } from "../lib/themes";
 import {
   editorialAtom,
-  excludeAtom,
   fontAtom,
+  ignoreAtom,
   imageDirAtom,
   liveEditAtom,
   notionKeysAtom,
@@ -24,7 +23,7 @@ import {
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
-import { Switch, Words } from "./settings/SettingRow";
+import { IgnoreWords, Switch, Words } from "./settings/SettingRow";
 import { FACES, matches, type Face, type Row } from "./settings/rows";
 
 // 設定。⌘, で開く。
@@ -125,13 +124,13 @@ const ROWS: Row[] = [
   {
     kind: "words",
     icon: "filter_alt_off",
-    id: "exclude",
+    id: "ignore",
     face: "files",
     lines: "many",
-    atom: excludeAtom,
-    placeholder: "*.lock\nlog\n.DS_Store",
+    atom: ignoreAtom,
+    placeholder: "node_modules/\n*.lock\n.DS_Store",
     name: "一覧から外すもの",
-    note: "1 行に 1 つ。拡張子だけでも、* （任意の並び）と ? （1 文字）でも書ける。# で始まる行は覚書",
+    note: ".gitignore と同じ書き方。node_modules/ で置き場ごと、/log で根の直下だけ、!残す.md で戻せる。外したものは検索にも出ない",
     aliases: ["exclude", "ignore", "除外", "隠す"],
   },
   {
@@ -167,10 +166,7 @@ export function Settings() {
   const [font, setFont] = useOptimisticSetting(fontValue, setFontValue);
   const [width, setWidth] = useOptimisticSetting(widthValue, setWidthValue);
 
-  const exclude = useAtomValue(excludeAtom);
   const imageDir = useAtomValue(imageDirAtom);
-  // いま効いている数。書き方を間違えた行（空・覚書）が落ちるので、数で分かる。
-  const dropCount = useMemo(() => excludeRules(exclude).length, [exclude]);
 
   const setShortcuts = useSetAtom(shortcutsOpenAtom);
   const setUpdateNonce = useSetAtom(updateCheckNonceAtom);
@@ -250,16 +246,12 @@ export function Settings() {
       case "switch":
         return <Switch row={row} />;
       case "words":
+        // 一覧から外すものは、共通とフォルダごとを切り替えて書く。
+        if (row.id === "ignore") return <IgnoreWords row={row} />;
         return (
           <Words
             row={row}
-            foot={
-              row.id === "exclude"
-                ? dropCount > 0
-                  ? `${dropCount} 件で外しています`
-                  : "いまは何も外していません"
-                : `本文には ./${cleanDir(imageDir)}/… として書かれる`
-            }
+            foot={`本文には ./${cleanDir(imageDir)}/… として書かれる`}
           />
         );
       case "pick":

@@ -38,6 +38,9 @@ flate2 = "1"
 # 指摘の位置を基準版から今の本文へ移すための行差分。
 similar = "2"
 tauri-plugin-clipboard-manager = "2.3.3"
+# 一覧から外すものの判定。書き方を .gitignore に合わせるので、否定・根からの
+# 道筋・** の扱いまで揃っている ripgrep の実装をそのまま使う。
+ignore = "0.4"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
