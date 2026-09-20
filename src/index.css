@@ -2000,21 +2000,36 @@ button.mg-task-check:hover {
 .mg-open-acts {
   display: flex;
   flex: none;
-  gap: 0.1rem;
   opacity: 0;
   transition: opacity 0.12s ease;
 }
+/* 出ていない間も場所は取る。触ったときに時刻がずれて見えないように。 */
+.mg-open-more {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 0.375rem;
+  color: var(--mg-muted);
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+.mg-open-more:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
 .mg-open-row:hover .mg-open-acts,
-.mg-open-row:focus-within .mg-open-acts {
+.mg-open-row:focus-within .mg-open-acts,
+/* 一覧を開いているあいだは、行から手を離しても出したままにする。 */
+.mg-open-acts:has(button[aria-expanded="true"]) {
   opacity: 1;
 }
 
 /* 釦の足元に出す小さな一覧。役割の近い操作を 1 つの入口へ畳むのに使う。 */
 .mg-menu-pop {
-  position: absolute;
+  position: fixed;
   z-index: 60;
-  top: calc(100% + 0.3rem);
-  right: 0;
   min-width: 11rem;
   padding: 0.35rem;
   border: 1px solid var(--mg-border);

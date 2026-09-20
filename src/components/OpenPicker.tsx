@@ -21,6 +21,7 @@ import {
 } from "../state/atoms";
 import { draftNameAtom } from "../state/drafts";
 import { Icon } from "./Icon";
+import { MenuButton } from "./MenuButton";
 
 // 開くものを選ぶ画面。
 //
@@ -286,30 +287,44 @@ export function OpenPicker() {
                   <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
                     {ago(entry.lastOpened)}
                   </span>
-                  <span className="mg-open-acts">
-                    {side === "folders" && (
-                      <>
-                        <Act
-                          icon="open_in_new"
-                          label="新しいウィンドウで開く"
-                          run={() => {
-                            void openFolderInNewWindow(entry.id, folderDisplayName(entry));
-                          }}
-                        />
-                        <Act
-                          icon="edit"
-                          label="表示名を変更"
-                          run={() => {
-                            setEditingId(entry.id);
-                            setAlias(folderDisplayName(entry));
-                          }}
-                        />
-                      </>
-                    )}
-                    <Act
-                      icon="close"
-                      label="履歴から削除"
-                      run={() => void forget(entry)}
+                  <span className="mg-open-acts" onClick={(e) => e.stopPropagation()}>
+                    <MenuButton
+                      icon="more_horiz"
+                      title="この行の操作"
+                      size={16}
+                      className="mg-open-more"
+                      items={[
+                        ...(side === "folders"
+                          ? [
+                              {
+                                icon: "open_in_new",
+                                label: "新しいウィンドウで開く",
+                                tone: "open" as const,
+                                run: () => {
+                                  void openFolderInNewWindow(
+                                    entry.id,
+                                    folderDisplayName(entry),
+                                  );
+                                },
+                              },
+                              {
+                                icon: "edit",
+                                label: "表示名を変更",
+                                tone: "edit" as const,
+                                run: () => {
+                                  setEditingId(entry.id);
+                                  setAlias(folderDisplayName(entry));
+                                },
+                              },
+                            ]
+                          : []),
+                        {
+                          icon: "close",
+                          label: "履歴から削除",
+                          tone: "drop" as const,
+                          run: () => void forget(entry),
+                        },
+                      ]}
                     />
                   </span>
                 </>
@@ -339,30 +354,5 @@ export function OpenPicker() {
         </div>
       </div>
     </div>
-  );
-}
-
-function Act({
-  icon,
-  label,
-  run,
-}: {
-  icon: string;
-  label: string;
-  run: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        run();
-      }}
-      className="grid h-7 w-7 place-items-center rounded-md text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-accent)]"
-    >
-      <Icon name={icon} size={17} />
-    </button>
   );
 }

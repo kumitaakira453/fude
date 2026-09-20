@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toneColor, type Tone } from "../lib/tone";
 import { Icon } from "./Icon";
 
@@ -46,24 +47,46 @@ export function MenuButton({
   size?: number;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  // 一覧は body へ出す。送りの効く枠や、ぼかしを掛けた枠の中に置くと、そこで
+  // 切られたり潜ったりする。出す場所は釦を測ってから決める。
+  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const open = at !== null;
+
+  const setOpen = (next: boolean) => {
+    if (!next) {
+      setAt(null);
+      return;
+    }
+    const seat = box.current?.getBoundingClientRect();
+    if (!seat) return;
+    setAt({ top: seat.bottom + 5, right: window.innerWidth - seat.right });
+  };
 
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (box.current?.contains(target) || pop.current?.contains(target)) return;
+      setAt(null);
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation();
       setOpen(false);
     };
+    // 送ると足元からずれる。掴み直せるように閉じる。
+    const move = () => setAt(null);
     window.addEventListener("pointerdown", away, true);
     window.addEventListener("keydown", esc, true);
+    window.addEventListener("scroll", move, true);
+    window.addEventListener("resize", move);
     return () => {
       window.removeEventListener("pointerdown", away, true);
       window.removeEventListener("keydown", esc, true);
+      window.removeEventListener("scroll", move, true);
+      window.removeEventListener("resize", move);
     };
   }, [open]);
 
@@ -71,7 +94,7 @@ export function MenuButton({
     <div ref={box} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         disabled={disabled}
         title={title}
         aria-label={title}
@@ -89,8 +112,14 @@ export function MenuButton({
         <Icon name={icon} size={size} />
         {dot && <span className="mg-menu-dot" />}
       </button>
-      {open && (
-        <div role="menu" className="mg-menu-pop">
+      {at &&
+        createPortal(
+          <div
+            ref={pop}
+            role="menu"
+            className="mg-menu-pop"
+            style={{ top: at.top, right: at.right }}
+          >
           {items.map((it) => (
             <button
               key={it.label}
@@ -115,9 +144,10 @@ export function MenuButton({
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
               {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}
             </button>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

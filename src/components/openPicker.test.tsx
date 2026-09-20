@@ -193,10 +193,44 @@ describe("選ぶ", () => {
   });
 });
 
-describe("履歴から削除", () => {
-  it("行の操作から届く（開くのとは別）", () => {
+describe("行の操作", () => {
+  // 行ごとに並べる数が違うと右端が揃わない。フォルダにもファイルにも ⋯ を
+  // 1 つだけ置き、中身はその行に応じて変える。
+  const more = (i: number) =>
+    rows()[i].querySelector<HTMLElement>('[aria-label="この行の操作"]')!;
+  const menu = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>('[role="menuitem"] span.flex-1'),
+    ).map((el) => el.textContent ?? "");
+  const pick = (label: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
+      (el) => el.querySelector("span.flex-1")?.textContent === label,
+    )!;
+
+  it("フォルダの行にもファイルの行にも、1 つだけ置く", () => {
     show(FOLDERS, DOCS);
-    click(rows()[0].querySelector<HTMLElement>('[aria-label="履歴から削除"]')!);
+    expect(rows().every((row) => row.querySelectorAll('[aria-label="この行の操作"]').length === 1)).toBe(true);
+    click(tab("ファイル"));
+    expect(rows().every((row) => row.querySelectorAll('[aria-label="この行の操作"]').length === 1)).toBe(true);
+  });
+
+  it("フォルダには開き方と名前、ファイルには履歴の始末だけ", () => {
+    show(FOLDERS, DOCS);
+    click(more(0));
+    expect(menu()).toEqual([
+      "新しいウィンドウで開く",
+      "表示名を変更",
+      "履歴から削除",
+    ]);
+    click(tab("ファイル"));
+    click(more(0));
+    expect(menu()).toEqual(["履歴から削除"]);
+  });
+
+  it("履歴から削除は、開くのとは別に届く", () => {
+    show(FOLDERS, DOCS);
+    click(more(0));
+    click(pick("履歴から削除"));
     expect(forgotten).toEqual(["/work/monorepo"]);
     expect(opened).toEqual([]);
   });
