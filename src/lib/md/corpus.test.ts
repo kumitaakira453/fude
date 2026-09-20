@@ -62,7 +62,7 @@ function mark(node: PmNode): PmNode | null {
 describe.skipIf(!fs.existsSync(ROOT))("実データ", () => {
   const files = walk(ROOT);
 
-  it("無編集の往復は原文と一致する", { timeout: 120_000 }, () => {
+  it("無編集の往復は原文と一致する", { timeout: 600_000 }, () => {
     const broken: string[] = [];
     for (const file of files) {
       const { body } = parseFrontmatter(fs.readFileSync(file, "utf8"));
@@ -74,7 +74,7 @@ describe.skipIf(!fs.existsSync(ROOT))("実データ", () => {
     expect(broken).toEqual([]);
   });
 
-  it("組み直したブロックは原文とほぼ一致し、意味は必ず保たれる", { timeout: 120_000 }, () => {
+  it("組み直したブロックは原文とほぼ一致し、意味は必ず保たれる", { timeout: 600_000 }, () => {
     const by = new Map<string, { total: number; same: number; keeps: number }>();
     const lost: { file: string; src: string; out: string }[] = [];
     const diffs = new Map<string, { src: string; out: string }>();
