@@ -454,6 +454,9 @@ export function FileTree() {
   const onBringIn = useCallback(
     (destDir: string, data: DataTransfer) => {
       if (noAdd) return;
+      // 何が来たかは、読めなかったときの切り分けに要る。掴んだ瞬間にしか
+      // 読めないので、待ちに入る前に控えておく。
+      const shape = `${[...data.types].join(", ")} / items ${data.items?.length ?? 0} / files ${data.files?.length ?? 0}`;
       void (async () => {
         const brought = await bringIn(data);
         if (brought === "too-many") {
@@ -463,7 +466,14 @@ export function FileTree() {
           );
           return;
         }
-        if (brought.length === 0) return;
+        if (brought.length === 0) {
+          if (import.meta.env.DEV) console.warn("[取り込み] 読めない持ち込み", shape);
+          await message("落としたものを読めませんでした。", {
+            title: "fude",
+            kind: "warning",
+          });
+          return;
+        }
         if (destDir) setExpandedOpen(destDir);
         await intake(destDir, brought);
       })();

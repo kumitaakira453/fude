@@ -13,6 +13,13 @@ import { FileTree } from "./FileTree";
 // もう 1 つは外から落とされたものの行き先。落とした行によって入る場所が変わる。
 
 const brought: { dest: string; rels: string[] }[] = [];
+const said: string[] = [];
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  message: async (text: string) => {
+    said.push(text);
+  },
+}));
 
 vi.mock("../hooks/useWorkspace", () => ({
   useWorkspace: () => ({
@@ -98,6 +105,7 @@ afterEach(() => {
   root = null;
   host = null;
   brought.length = 0;
+  said.length = 0;
 });
 
 describe("木の上の作る口", () => {
@@ -137,6 +145,15 @@ describe("外から落とされたもの", () => {
       fire(rowOf(el, "読み物.md").parentElement!, "drop", held(["a.md"]));
     });
     expect(brought).toEqual([{ dest: "", rels: ["a.md"] }]);
+  });
+
+  it("1 件も読めなければ、黙って終わらせない", async () => {
+    const el = show(null);
+    await act(async () => {
+      fire(rowOf(el, "読み物.md").parentElement!, "drop", held([]));
+    });
+    expect(brought).toEqual([]);
+    expect(said[0]).toContain("読めませんでした");
   });
 
   it("1 枚だけ開いているときは取り込まない", async () => {
