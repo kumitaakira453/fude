@@ -1765,6 +1765,24 @@ button.mg-task-check:hover {
 .mg-set-sides {
   align-self: flex-start;
   margin-top: 0.15rem;
+  font-size: 11px;
+}
+/* 帯は本来 --mg-bg の面に置く部品で、設定の面（--mg-panel）に持ち込むと
+   選ばれている側の塗りが地色と同じになって見分けが付かない。ここだけ返す。 */
+.mg-set-sides > button {
+  padding: 0.15rem 0.6rem;
+  font-size: 11px;
+}
+.mg-set-sides > button.is-on {
+  background: var(--mg-bg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
+}
+.mg-set-sides > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.mg-set-sides > button:disabled:hover {
+  color: var(--mg-muted);
 }
 .mg-set-sides-foot {
   display: flex;
@@ -3196,6 +3214,9 @@ svg[id^="mmd-"] foreignObject p {
   padding: 0.1rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--mg-fg) 6%, transparent);
+}
+.mg-rail-pick > button:not(:disabled) {
+  cursor: pointer;
 }
 .mg-rail-pick > button {
   padding: 0.1rem 0.45rem;

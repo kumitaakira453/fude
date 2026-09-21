@@ -583,8 +583,12 @@ mod tests {
         }
 
         fn scan(&self, ignore: &str, depth: u32) -> Vec<String> {
+            self.scan_as(ignore, &["md"], depth)
+        }
+
+        fn scan_as(&self, ignore: &str, only: &[&str], depth: u32) -> Vec<String> {
             let gi = std::sync::Arc::new(ignore_of(&self.0.to_string_lossy(), ignore));
-            scan_in(&self.0, &sieve(&["md"], &[]), gi, depth)
+            scan_in(&self.0, &sieve(only, &[]), gi, depth)
                 .into_iter()
                 .map(|e| e.path)
                 .collect()
@@ -657,6 +661,46 @@ mod tests {
 
         let deep = yard.scan("**/一時/\n", 0);
         assert!(!deep.contains(&"中/一時".to_string()));
+    }
+
+    #[test]
+    fn 点で始まる置き場も_深さを問わない拡張子も外せる() {
+        let yard = Yard::new(
+            "dots",
+            &[
+                ".claude/決まり.md",
+                "中/.git/覚え.md",
+                "覚え.notion.json",
+                "中/奥/覚え.notion.json",
+                "はじめ.md",
+            ],
+        );
+        let got = yard.scan_as(".*/\n*.notion.json\n", &["md", "json"], 0);
+        assert_eq!(got, vec!["はじめ.md", "中", "中/奥"]);
+    }
+
+    #[test]
+    fn 星ひとつの置き場は中身だけ外し_箱は残る() {
+        let yard = Yard::new("keep-box", &["worktrees/枝/覚え.md", "はじめ.md"]);
+        let got = yard.scan("worktrees/*\n", 0);
+        assert!(got.contains(&"worktrees".to_string()));
+        assert!(!got.iter().any(|p| p.starts_with("worktrees/")));
+
+        // 箱ごと消すなら末尾の / を付ける。
+        let gone = yard.scan("worktrees/\n", 0);
+        assert!(!gone.iter().any(|p| p.starts_with("worktrees")));
+    }
+
+    #[test]
+    fn 途中にスラッシュがあれば根からの道筋になる() {
+        let yard = Yard::new("anchored", &["前.md.prev", "中/奥/後.md.prev"]);
+        let anchored = yard.scan_as("*/**/*.md.prev\n", &["prev"], 0);
+        assert!(anchored.contains(&"前.md.prev".to_string()));
+        assert!(!anchored.contains(&"中/奥/後.md.prev".to_string()));
+
+        // 名前だけならどの階層でも当たる。
+        let anywhere = yard.scan_as("*.md.prev\n", &["prev"], 0);
+        assert!(!anywhere.iter().any(|p| p.ends_with(".md.prev")));
     }
 
     #[test]

@@ -130,7 +130,7 @@ const ROWS: Row[] = [
     atom: ignoreAtom,
     placeholder: "node_modules/\n*.lock\n.DS_Store",
     name: "一覧から外すもの",
-    note: ".gitignore と同じ書き方。node_modules/ で置き場ごと、/log で根の直下だけ、!残す.md で戻せる。外したものは検索にも出ない",
+    note: ".gitignore と同じ書き方。末尾の / は置き場ごと（worktrees/ なら中身も箱も）、途中に / があれば根からの道筋、!残す.md で戻せる。外したものは検索にも出ない",
     aliases: ["exclude", "ignore", "除外", "隠す"],
   },
   {

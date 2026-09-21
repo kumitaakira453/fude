@@ -83,12 +83,18 @@ export function IgnoreWords({ row }: { row: WordsRow }) {
   const [shared, setShared] = useAtom(row.atom);
   const [byFolder, setByFolder] = useAtom(folderIgnoresAtom);
   const folderId = useAtomValue(activeFolderIdAtom);
-  const [side, setSide] = useState<"shared" | "folder">("shared");
+  const own = folderId === null ? undefined : byFolder[folderId];
+  // 効いている側で開く。共通を書いても届かないフォルダで、共通の面から
+  // 始めると、書いたものが効いていないことに気づけない。
+  const [side, setSide] = useState<"shared" | "folder">(
+    own === undefined ? "shared" : "folder",
+  );
 
   const here = side === "folder" && folderId !== null;
-  const own = folderId === null ? undefined : byFolder[folderId];
   const value = here ? (own ?? shared) : shared;
   const reading = here && own === undefined;
+  // 共通の面を見ているが、このフォルダは自分の決まりで動いている。
+  const bypassed = !here && own !== undefined;
 
   const write = (next: string) => {
     if (here) setByFolder({ ...byFolder, [folderId!]: next });
@@ -143,6 +149,14 @@ export function IgnoreWords({ row }: { row: WordsRow }) {
               このフォルダは共通の決まりで外しています
               <button type="button" onClick={start}>
                 このフォルダだけの決まりを作る
+              </button>
+            </>
+          ) : bypassed ? (
+            <>
+              いまのフォルダは別の決まりで動いています（
+              {ignoreLines(own).length} 件）
+              <button type="button" onClick={() => setSide("folder")}>
+                いまのフォルダの決まりを見る
               </button>
             </>
           ) : (

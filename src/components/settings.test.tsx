@@ -265,6 +265,43 @@ describe("一覧から外すもの", () => {
     expect(store.get(folderIgnoresAtom)).toEqual({ "/work/other": "*.bak" });
   });
 
+  it("そのフォルダに決まりがあれば、その面で開く", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(ignoreAtom, "node_modules/\n*.lock");
+      s.set(folderIgnoresAtom, { "/work/ark": "target/" });
+    });
+    toFiles();
+    expect(side("いまのフォルダ").className).toContain("is-on");
+    expect(field().value).toBe("target/");
+    expect(field().readOnly).toBe(false);
+  });
+
+  it("決まりが無ければ共通の面で開く", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(ignoreAtom, "node_modules/");
+    });
+    toFiles();
+    expect(side("すべてのフォルダ").className).toContain("is-on");
+    expect(field().value).toBe("node_modules/");
+  });
+
+  it("共通の面では、そのフォルダが別の決まりで動いていることを出す", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(ignoreAtom, "node_modules/\n*.lock");
+      s.set(folderIgnoresAtom, { "/work/ark": "target/" });
+    });
+    toFiles();
+    act(() => side("すべてのフォルダ").click());
+    expect(foot().textContent).toContain("別の決まりで動いています");
+    // 共通の本文の数（2 件）を、効いている数として言い切らない。
+    expect(foot().textContent).not.toContain("2 件で外しています");
+    act(() => act_("いまのフォルダの決まりを見る").click());
+    expect(field().value).toBe("target/");
+  });
+
   it("共通の面では共通を書く", () => {
     open((s) => s.set(activeFolderIdAtom, "/work/ark"));
     toFiles();
