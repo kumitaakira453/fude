@@ -41,7 +41,11 @@ const DROP = [
   ".mg-cells", // 表のセルの選択
   ".mg-codeblock button", // 「コピー」
   ".mg-mermaid-zoom", // 拡げるつまみ
+  ".ProseMirror-gapcursor", // 塊のあいだに出る棒
 ];
+
+// 編集面が状態として付ける名前。写した先では意味を持たないのに、枠を描く。
+const EDIT_STATES = ["ProseMirror-selectednode", "ProseMirror-focused", "is-focused"];
 
 // 編集面の名残。付いたままだと、渡した先で読み手が困る指定まで効く
 // （.mg-pm ::selection は帯を透明にする。自前で描く帯は渡す 1 枚には無い）。
@@ -61,8 +65,12 @@ const MARKS = ["data-mg-block", "data-mg-item", "data-mg-cell", "contenteditable
 export function tidy(article: HTMLElement): HTMLElement {
   const out = article.cloneNode(true) as HTMLElement;
   // 書いている最中の面から写したときは、読む面に戻してから均す。
-  out.classList.remove(...EDIT_CLASSES);
+  out.classList.remove(...EDIT_CLASSES, ...EDIT_STATES);
   for (const name of EDIT_MARKS) out.removeAttribute(name);
+  // 中にも同じ状態が残る（選んでいた塊、触っていたセル）。青い枠になって出る。
+  for (const state of EDIT_STATES) {
+    out.querySelectorAll(`.${state}`).forEach((el) => el.classList.remove(state));
+  }
   for (const sel of DROP) out.querySelectorAll(sel).forEach((el) => el.remove());
   for (const name of MARKS) {
     out.querySelectorAll(`[${name}]`).forEach((el) => el.removeAttribute(name));
