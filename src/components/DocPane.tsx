@@ -123,7 +123,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const theme = useAtomValue(themeAtom);
   const dark = DARK_THEME_IDS.has(theme);
-  const [rail, setRail] = useAtom(railAtom);
+  const rail = useAtomValue(railAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   // 重ねた画面が出ているか。本文向けのキー操作をそこへ効かせないための判定。
@@ -703,12 +703,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     },
     [rail, review],
   );
-
-  // 指摘を書き始めたらコメントの面へ移る。印を引っ込めたまま書かせると、
-  // いま何に対して書いているのかが本文から読み取れない。
-  useEffect(() => {
-    if (review.draft) setRail((now) => (now === "comments" ? now : "comments"));
-  }, [review.draft, setRail]);
 
   // 最新の raw/body/path を ref で参照し、saveBody を安定な関数に保つ。
   // （背景索引などで再レンダーしても Markdown のメモ化が壊れず、Mermaid の
