@@ -162,7 +162,7 @@ describe("変換の確定のあと", () => {
     send(view, "compositionend");
     const item = view.state.doc.child(0).child(0);
     expect(item.type.name).toBe("listItem");
-    expect(item.attrs.checked).toBe(false);
+    expect(item.attrs.box).toBe(" ");
     expect(item.textContent).toBe("やる");
   });
 

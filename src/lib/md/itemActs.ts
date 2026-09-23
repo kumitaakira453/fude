@@ -1,6 +1,7 @@
 import type { Node as PmNode } from "prosemirror-model";
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
 import { schema } from "./schema";
+import { BLANK } from "./taskMarks";
 
 // 編集面の箇条書きの項目の操作。足す・複製する・消す。
 //
@@ -45,10 +46,10 @@ export function itemSpotAt(doc: PmNode, pos: number): Spot | null {
   return { list, listPos: $at.before($at.depth), index, item: list.child(index) };
 }
 
-// 空の項目。チェックリストの中ではチェックの付いた項目にする。
+// 空の項目。チェックリストの中では印の付いた項目にする。
 const blankItem = (like: PmNode) =>
   schema.nodes.listItem.create(
-    { checked: like.attrs.checked === null ? null : false },
+    { box: like.attrs.box === null ? null : BLANK },
     schema.nodes.paragraph.create(),
   );
 
@@ -60,6 +61,18 @@ function caretInto(tr: Transaction, listPos: number, index: number): Transaction
   for (let i = 0; i < index; i++) at += list.child(i).nodeSize;
   const $at = tr.doc.resolve(Math.min(at + 2, tr.doc.content.size));
   return tr.setSelection(TextSelection.near($at));
+}
+
+// 項目に印を書き入れる。印の無い項目に選べば、そのままタスクになる。
+export function itemBoxTr(
+  state: EditorState,
+  pos: number,
+  box: string,
+): Transaction | null {
+  const node = state.doc.nodeAt(pos);
+  if (!node || node.type !== schema.nodes.listItem) return null;
+  if (node.attrs.box === box) return null;
+  return state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, box });
 }
 
 export function itemActTr(

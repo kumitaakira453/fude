@@ -8,6 +8,7 @@ import {
   unpadLines,
   type ContainerKind,
 } from "./htmlSpans";
+import { DONE, flipped, taskMarks } from "./md/taskMarks";
 import {
   buildProjection,
   findPlain,
@@ -751,7 +752,7 @@ export function insertListItem(
   const marker = lines[item.from].slice(0, head[0].length);
   // チェックリストならチェックの空欄も引き継ぐ。続けて足すときに毎回
   // 書き直さなくていい。
-  const task = /^\[[ xX]\]\s/.test(lines[item.from].slice(head[0].length));
+  const task = isTaskLine(lines[item.from]);
   const line = side === "after" ? item.to : item.from;
   lines.splice(line, 0, task ? `${marker}[ ] ` : marker);
   return { src: lines.join("\n"), line };
@@ -774,7 +775,7 @@ export function itemTextStart(src: string, line: number): number | null {
   const lines = src.split("\n");
   if (line < 0 || line >= lines.length) return null;
   // チェックリストではチェックの後ろから書き始める。
-  const head = ITEM_MARKER_RE.exec(lines[line]);
+  const head = itemMarkerRe().exec(lines[line]);
   if (!head) return null;
   let at = 0;
   for (let i = 0; i < line; i++) at += lines[i].length + 1;
@@ -783,12 +784,38 @@ export function itemTextStart(src: string, line: number): number | null {
 
 // ---- タスクの印の入れ替え ----
 
-const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
-
-const flip = (line: string): string =>
-  line.replace(TASK_RE, (_m, head: string, mark: string, close: string) =>
-    head + (mark === " " ? "x" : " ") + close,
+// 印は設定で増える（`[/]` 進行中・`[-]` 取りやめ など）。有効なものだけを
+// 見るので、切ってある印の行は今までどおり素の字として扱う。
+const taskRe = (): RegExp =>
+  new RegExp(
+    `^(\\s*(?:[-*+]|\\d+[.)])\\s+\\[)([${taskMarks()
+      .concat("X")
+      .map((c) => c.replace(/[\\\]^-]/g, "\\$&"))
+      .join("")}])(\\](?=[ \\t]|$))`,
   );
+
+// 印のある行か。中身の無い項目（`- [ ]` だけの行）も含む。
+export const isTaskLine = (line: string): boolean => taskRe().test(line);
+
+const put = (line: string, mark: string): string => {
+  const re = taskRe();
+  if (re.test(line)) {
+    return line.replace(re, (_m, head: string, _mark: string, close: string) =>
+      head + mark + close,
+    );
+  }
+  // 印の無い項目に選んだときは書き足す。素の点からタスクへ、一手で移れる。
+  const head = MARKER.exec(line);
+  return head
+    ? `${line.slice(0, head[0].length)}[${mark}] ${line.slice(head[0].length)}`
+    : line;
+};
+
+const flip = (line: string): string => {
+  const mark = taskRe().exec(line)?.[2];
+  if (mark === undefined) return line;
+  return put(line, flipped(mark === "X" ? DONE : mark));
+};
 
 // 指定した位置を含む行のタスクの印を入れ替える。その行にタスクが無ければ null。
 //
@@ -797,13 +824,27 @@ const flip = (line: string): string =>
 // （コード例の中の行や、"]" の後ろに空白が無い行）を 1 つ数えた時点で、
 // 以降の項目がまとめてずれる。
 export function toggleTaskAt(src: string, at: number): string | null {
+  return rewriteTaskAt(src, at, flip);
+}
+
+// 指定した位置の項目に、選んだ印を書き入れる。同じ印なら何も変わらないので
+// null を返す（呼び出し側は書き込みを起こさない）。
+export function setTaskAt(src: string, at: number, mark: string): string | null {
+  return rewriteTaskAt(src, at, (line) => put(line, mark));
+}
+
+function rewriteTaskAt(
+  src: string,
+  at: number,
+  change: (line: string) => string,
+): string | null {
   if (at < 0 || at > src.length) return null;
   const lines = src.split("\n");
   let start = 0;
   for (const line of lines) {
     const end = start + line.length;
     if (at <= end) {
-      const next = flip(line);
+      const next = change(line);
       if (next === line) return null;
       return src.slice(0, start) + next + src.slice(end);
     }
@@ -901,7 +942,13 @@ export function partIndexOf(line: string, colIndex: number): number {
 }
 
 // 箇条書き項目のマーカー（インデント + - / 1. + 任意の [ ] チェックボックス）
-const ITEM_MARKER_RE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/;
+const itemMarkerRe = (): RegExp =>
+  new RegExp(
+    `^\\s*(?:[-*+]|\\d+[.)])\\s+(?:\\[[${taskMarks()
+      .concat("X")
+      .map((c) => c.replace(/[\\\]^-]/g, "\\$&"))
+      .join("")}]\\]\\s+)?`,
+  );
 
 // offset を含む 1 行から、マーカーを除いた「項目の本文」の範囲を求める。
 // 子リストは別の行なので範囲に入らず、マーカーも保たれる。
@@ -912,7 +959,7 @@ export function itemTextRange(
   const at = clampOffset(src, offset);
   const { lineStart, lineEnd } = lineRangeAt(src, at);
   const line = src.slice(lineStart, lineEnd);
-  const marker = ITEM_MARKER_RE.exec(line);
+  const marker = itemMarkerRe().exec(line);
   if (!marker) return null;
   const start = lineStart + marker[0].length;
   let end = lineEnd;

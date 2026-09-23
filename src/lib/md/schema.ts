@@ -165,26 +165,26 @@ export const schema = new Schema({
         ] as DOMOutputSpec,
     },
 
-    // checked が null なら普通の項目、true / false ならタスク。
+    // box が null なら普通の項目。角括弧の中の 1 字（" " "x" "/" ...）を
+    // 持っていればタスク。真偽ではなく字で持つのは、GFM の 2 つのほかに
+    // 進行中・取りやめのような印を同じ場所で扱うため（lib/md/taskMarks.ts）。
     //
     // 印は DOM からも読み返す。編集面が DOM の差分を読み直したときや、項目を
     // コピーして貼ったときに、書いた印をそのまま拾えないと素の項目に戻る。
     listItem: {
       content: "block+",
       defining: true,
-      attrs: { checked: { default: null as boolean | null } },
+      attrs: { box: { default: null as string | null } },
       parseDOM: [
         {
           tag: "li",
-          getAttrs: (dom: HTMLElement) => ({
-            checked: dom.dataset.checked === undefined ? null : dom.dataset.checked === "true",
-          }),
+          getAttrs: (dom: HTMLElement) => ({ box: dom.dataset.box ?? null }),
         },
       ],
       toDOM: (node) =>
         [
           "li",
-          node.attrs.checked === null ? {} : { "data-checked": String(node.attrs.checked) },
+          node.attrs.box === null ? {} : { "data-box": String(node.attrs.box) },
           0,
         ] as DOMOutputSpec,
     },

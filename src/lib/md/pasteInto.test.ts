@@ -98,17 +98,17 @@ describe("DOM から読み返す", () => {
   };
 
   it("項目の印を拾う", () => {
-    const list = read('<ul><li data-checked="true"><p>済み</p></li></ul>').child(0);
-    expect(list.child(0).attrs.checked).toBe(true);
+    const list = read('<ul><li data-box="x"><p>済み</p></li></ul>').child(0);
+    expect(list.child(0).attrs.box).toBe("x");
   });
 
   it("まだの項目も印として拾う", () => {
-    const list = read('<ul><li data-checked="false"><p>まだ</p></li></ul>').child(0);
-    expect(list.child(0).attrs.checked).toBe(false);
+    const list = read('<ul><li data-box=" "><p>まだ</p></li></ul>').child(0);
+    expect(list.child(0).attrs.box).toBe(" ");
   });
 
   it("印の無い項目は素のまま", () => {
     const list = read("<ul><li><p>点</p></li></ul>").child(0);
-    expect(list.child(0).attrs.checked).toBeNull();
+    expect(list.child(0).attrs.box).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ import { watchStalls } from "./lib/measure";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
 import { setNotionKeys } from "./lib/md/inputRules";
+import { setTaskMarks } from "./lib/md/taskMarks";
 import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useWorkspace } from "./hooks/useWorkspace";
@@ -35,6 +36,7 @@ import {
   sidebarOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
+  taskMarksAtom,
   activeIgnoreAtom,
   showOtherFilesAtom,
   fontAtom,
@@ -55,6 +57,7 @@ export default function App() {
   const theme = useAtomValue(themeAtom);
   const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
+  const marks = useAtomValue(taskMarksAtom);
   const showOther = useAtomValue(showOtherFilesAtom);
   const ignore = useAtomValue(activeIgnoreAtom);
   const { refreshTreeStructure } = useWorkspace();
@@ -83,6 +86,11 @@ export default function App() {
   useEffect(() => {
     setNotionKeys(notionKeys);
   }, [notionKeys]);
+
+  // タスクの印も同じ。読み書きの両方が見るので、木を組む前に渡しておく。
+  useEffect(() => {
+    setTaskMarks(marks);
+  }, [marks]);
 
   // 出すものを切り替えたら木を並べ直す。開いた直後は既に並んでいるので走らせない。
   const filterWas = useRef(showOther);

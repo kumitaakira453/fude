@@ -63,11 +63,11 @@ describe("タスクのチェック", () => {
   it("押したら項目の印も入れ替わる。済みの見た目はこれに当たっている", () => {
     const view = editor("- [ ] やる\n");
     const li = () => view.dom.querySelector<HTMLElement>("li.task-list-item")!;
-    expect(li().dataset.checked).toBe("false");
+    expect(li().dataset.box).toBe(" ");
     click(view.dom.querySelector(".mg-task-check")!);
-    expect(li().dataset.checked).toBe("true");
+    expect(li().dataset.box).toBe("x");
     click(view.dom.querySelector(".mg-task-check")!);
-    expect(li().dataset.checked).toBe("false");
+    expect(li().dataset.box).toBe(" ");
   });
 
   it("押した項目だけが入れ替わる", () => {
@@ -100,8 +100,8 @@ describe("タスクのチェック", () => {
       expect(items[at].querySelector(":scope > .mg-task-check")).not.toBeNull();
       expect(items[at].querySelector(":scope > .mg-task-body > p")).not.toBeNull();
     }
-    expect(items[1].dataset.checked).toBe("false");
-    expect(items[2].dataset.checked).toBe("true");
+    expect(items[1].dataset.box).toBe(" ");
+    expect(items[2].dataset.box).toBe("x");
   });
 
   it("入れ子は項目の中に入り、外側の項目にチェックの要素を足さない", () => {

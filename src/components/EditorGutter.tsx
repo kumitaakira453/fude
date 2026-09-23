@@ -10,8 +10,10 @@ import {
   blockMoveTr,
   type BlockAct,
 } from "../lib/md/blockActs";
+import type { Node as PmNode } from "prosemirror-model";
 import {
   itemActTr,
+  itemBoxTr,
   itemSpotAt,
   type ItemAct,
 } from "../lib/md/itemActs";
@@ -68,6 +70,7 @@ import {
   type Box,
   type TableGeometry,
 } from "../lib/gutterGeom";
+import { iconOfMark, markOf, taskMarks } from "../lib/md/taskMarks";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 
@@ -964,11 +967,28 @@ export function EditorGutter({
     return [
       ...comment,
       typeMenu(at.pos),
+      markMenu(at.pos, node),
       { icon: "arrow_upward", label: "上に挿入", run: run("insertBefore") },
       { icon: "arrow_downward", label: "下に挿入", run: run("insertAfter") },
       { icon: "content_copy", label: "複製", run: run("duplicate") },
       { icon: "delete", label: "削除", run: run("delete"), danger: true },
     ];
+  };
+
+  // タスクの印。押して入れ替わるのは未完了と完了だけなので、それ以外の印は
+  // ここから選ぶ。印の無い項目に選べば、そのままタスクになる。
+  const markMenu = (pos: number, node: PmNode | null | undefined): MenuItem => {
+    const now = (node?.attrs.box as string | null) ?? null;
+    return {
+      icon: "checklist",
+      label: "タスクの印",
+      items: taskMarks().map((ch) => ({
+        icon: iconOfMark(ch),
+        label: markOf(ch)?.name ?? ch,
+        on: now === ch,
+        run: () => after(itemBoxTr(view.state, pos, ch)),
+      })),
+    };
   };
 
   // ブロックの種別を変える一覧。相手はつまみを出しているブロックなので、

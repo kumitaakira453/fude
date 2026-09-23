@@ -174,16 +174,16 @@ describe("TODO の印", () => {
   };
 
   it("[] とスペースでタスクになる", () => {
-    expect(item("[] ").attrs.checked).toBe(false);
+    expect(item("[] ").attrs.box).toBe(" ");
   });
 
   it("中の空白は有っても無くても同じ", () => {
-    expect(item("[ ] ").attrs.checked).toBe(false);
+    expect(item("[ ] ").attrs.box).toBe(" ");
   });
 
   it("[x] なら済みで始まる", () => {
-    expect(item("[x] ").attrs.checked).toBe(true);
-    expect(item("[X] ").attrs.checked).toBe(true);
+    expect(item("[x] ").attrs.box).toBe("x");
+    expect(item("[X] ").attrs.box).toBe("x");
   });
 
   it("行の途中では効かない", () => {

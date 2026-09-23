@@ -17,13 +17,14 @@ import {
   settingsOpenAtom,
   showOtherFilesAtom,
   shortcutsOpenAtom,
+  taskMarksAtom,
   themeAtom,
   updateCheckNonceAtom,
   updateStatusAtom,
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
-import { IgnoreWords, Switch, Words } from "./settings/SettingRow";
+import { IgnoreWords, Marks, Switch, Words } from "./settings/SettingRow";
 import { FACES, matches, type Face, type Row } from "./settings/rows";
 
 // 設定。⌘, で開く。
@@ -98,6 +99,17 @@ const ROWS: Row[] = [
     name: "Notion 風の打ち込み",
     note: "`>` でトグル、`|` で引用を作る。切ると Markdown どおり `>` が引用",
     aliases: ["notion", "打鍵", "shortcut"],
+  },
+  {
+    kind: "marks",
+    icon: "checklist",
+    id: "taskmarks",
+    face: "write",
+    beta: true,
+    atom: taskMarksAtom,
+    name: "タスクの特殊な印",
+    note: "`- [/] ` のように書いた印を、チェックの代わりに出す。入れた印だけが読まれ、切ってあるものは今までどおり字のまま",
+    aliases: ["task", "todo", "タスク", "チェック", "印", "進行中", "取りやめ"],
   },
   {
     kind: "words",
@@ -254,6 +266,8 @@ export function Settings() {
             foot={`本文には ./${cleanDir(imageDir)}/… として書かれる`}
           />
         );
+      case "marks":
+        return <Marks row={row} />;
       case "pick":
         if (row.pick === "theme") {
           return (

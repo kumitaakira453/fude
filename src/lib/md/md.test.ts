@@ -259,7 +259,7 @@ describe("項目の中の囲み", () => {
   const list = (items: PmNode[][]) =>
     schema.nodes.bulletList.create(
       { tight: true },
-      items.map((kids) => schema.nodes.listItem.create({ checked: null }, kids)),
+      items.map((kids) => schema.nodes.listItem.create({ box: null }, kids)),
     );
   const wrote = (...blocks: PmNode[]) =>
     toMarkdown(schema.nodes.doc.create(null, blocks), fromMarkdown(""));

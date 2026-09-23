@@ -15,6 +15,7 @@ import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import type { ImageGoes } from "./imageDrop";
+import { DONE, flipped, iconOfMark, markDone, markOf } from "./taskMarks";
 import { schema } from "./schema";
 
 // 編集面の専用の描画。
@@ -780,13 +781,13 @@ class ListItemView implements NodeView {
     this.getPos = getPos;
 
     this.dom = document.createElement("li");
-    const checked = node.attrs.checked as boolean | null;
-    if (checked === null) {
+    const box = node.attrs.box as string | null;
+    if (box === null) {
       this.contentDOM = this.dom;
       return;
     }
 
-    this.dom.dataset.checked = String(checked);
+    this.dom.dataset.box = box;
     // 読むときと同じ印。点を落とす指定がこの印に当たっている。
     this.dom.className = "task-list-item";
 
@@ -805,40 +806,43 @@ class ListItemView implements NodeView {
     this.contentDOM = document.createElement("div");
     this.contentDOM.className = "mg-task-body";
     this.dom.appendChild(this.contentDOM);
-    this.paint(checked);
+    this.paint(box);
   }
 
-  private paint(checked: boolean) {
+  private paint(box: string) {
     if (!this.check) return;
-    const label = checked ? "未完了に戻す" : "完了にする";
-    this.check.setAttribute("aria-label", label);
-    this.check.replaceChildren(
-      icon(checked ? "check_box" : "check_box_outline_blank", 20, checked),
-    );
+    const mark = markOf(box);
+    this.check.setAttribute("aria-label", box === DONE ? "未完了に戻す" : "完了にする");
+    this.check.setAttribute("title", mark?.name ?? "");
+    this.check.replaceChildren(icon(iconOfMark(box), 20, markDone(box)));
+    // 済み・取りやめは字を薄くして線を引く（index.css がこの印に当たる）。
+    if (markDone(box)) this.dom.dataset.done = "";
+    else delete this.dom.dataset.done;
   }
 
-  // 原文の "- [ ] " と "- [x] " を入れ替える。
+  // 原文の印を入れ替える。完了なら未完了へ、それ以外は完了へ。
   private flip() {
+    this.put(flipped(this.node.attrs.box as string));
+  }
+
+  put(box: string) {
     const at = this.getPos();
     if (at === undefined) return;
     this.view.dispatch(
-      this.view.state.tr.setNodeMarkup(at, undefined, {
-        ...this.node.attrs,
-        checked: !(this.node.attrs.checked as boolean),
-      }),
+      this.view.state.tr.setNodeMarkup(at, undefined, { ...this.node.attrs, box }),
     );
   }
 
   update(node: PmNode): boolean {
     if (node.type !== this.node.type) return false;
-    const was = this.node.attrs.checked as boolean | null;
-    const now = node.attrs.checked as boolean | null;
+    const was = this.node.attrs.box as string | null;
+    const now = node.attrs.box as string | null;
     // 印が付いた・外れたときは作りが変わる。組み直させる。
     if ((was === null) !== (now === null)) return false;
     this.node = node;
     if (now !== null && now !== was) {
       // 印は li に載せる。済みの項目を薄くして線を引くのがここに当たっている。
-      this.dom.dataset.checked = String(now);
+      this.dom.dataset.box = now;
       this.paint(now);
     }
     return true;

@@ -7,6 +7,7 @@ import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { schema } from "./schema";
 import { splitRow } from "../blocks";
+import { boxOf, readTaskMarks } from "./taskMarks";
 import {
   CONTAINERS,
   commonIndent,
@@ -33,7 +34,12 @@ const processor = unified()
   .use(remarkMath);
 
 // 直列化した結果を読み直して確かめる側からも使う。
-export const parseTree = (text: string): Root => processor.parse(text) as Root;
+export const parseTree = (text: string): Root => {
+  const tree = processor.parse(text) as Root;
+  // 字として残っている印（`- [/] `・`- [ ]` だけの行）を項目へ移す。
+  readTaskMarks(tree);
+  return tree;
+};
 
 // ノードと同じ形をした、原文の範囲の木。children はノードの子と 1 対 1。
 export interface Span {
@@ -270,21 +276,6 @@ export function fromMarkdown(source: string): Loaded {
 
   const doc = schema.nodes.doc.create(null, blocks.length ? blocks : [empty().node]);
   return { doc, source, ranges, originals, spans };
-}
-
-// 項目に書かれているのが「[ ]」「[x]」だけかどうか。だけなら、それは
-// 中身の無いタスク項目のつもり（GFM では印として書けないので字で残る）。
-function loneBox(item: { checked?: boolean | null; children: unknown[] }):
-  | boolean
-  | null {
-  if (item.checked != null || item.children.length !== 1) return null;
-  const only = item.children[0] as { type?: string; children?: unknown[] };
-  if (only.type !== "paragraph" || only.children?.length !== 1) return null;
-  const text = only.children[0] as { type?: string; value?: string };
-  if (text.type !== "text") return null;
-  const mark = (text.value ?? "").trim();
-  if (mark === "[ ]") return false;
-  return mark === "[x]" || mark === "[X]" ? true : null;
 }
 
 // トグルの題。開きタグの行と、<summary> の中身に分ける。
@@ -558,24 +549,19 @@ function blockOf(
       const itemSpans: Span[] = [];
       for (const item of node.children) {
         const [s, e] = at(item, base);
-        // 中身の無いタスク項目は GFM の印では書けない（`- [ ]` は印ではなく
-        // 「[ ]」という字として読まれる）。書き出す側はその字で残すので、
-        // 読むときに空のタスク項目へ戻す。往復して同じものになる。
-        const lone = loneBox(item);
-        if (lone !== null) {
-          items.push(
-            schema.nodes.listItem.create({ checked: lone }, [
-              schema.nodes.paragraph.create(),
-            ]),
-          );
-          itemSpans.push(span(s, e, [span(s, e)]));
-          continue;
-        }
+        // 印は readTaskMarks が項目へ移してある。中身の無いタスク項目
+        // （`- [ ]` だけの行）も、GFM では字として読まれるのでそこで拾う。
+        const box = boxOf(item);
         const inner = blocksOf(item.children, source, base);
+        // 印だけの項目は中身が空になる。空の項目は持てないので段落を 1 つ置く。
+        const full = inner.nodes.length > 0;
         items.push(
-          schema.nodes.listItem.create({ checked: item.checked ?? null }, inner.nodes),
+          schema.nodes.listItem.create(
+            { box },
+            full ? inner.nodes : [schema.nodes.paragraph.create()],
+          ),
         );
-        itemSpans.push(span(s, e, inner.spans));
+        itemSpans.push(span(s, e, full ? inner.spans : [span(s, e)]));
       }
       const tight = !node.spread;
       if (node.ordered) {

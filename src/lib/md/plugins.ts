@@ -34,6 +34,7 @@ import { lifted } from "./lifted";
 import { composingKeys } from "./ime";
 import { insideBlock } from "./nodeViews";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
+import { BLANK, flipped } from "./taskMarks";
 import { slashMenu } from "./slash";
 import {
   cellDown,
@@ -137,17 +138,17 @@ function undoRule(kept: Plugin<Undone | null>): Command {
 // 素の splitListItem は既定の attrs で作るので、タスクの続きが素の項目になる。
 export const splitItem: Command = (state, dispatch, view) => {
   const { $from } = state.selection;
-  let checked: boolean | null = null;
+  let box: string | null = null;
   for (let d = $from.depth; d > 0; d--) {
     if ($from.node(d).type === schema.nodes.listItem) {
-      checked = $from.node(d).attrs.checked as boolean | null;
+      box = $from.node(d).attrs.box as string | null;
       break;
     }
   }
   return splitListItem(
     schema.nodes.listItem,
-    // チェックの入った項目を割ったら、続きは未了から始める。
-    checked === null ? undefined : { checked: false },
+    // 印の付いた項目を割ったら、続きは未了から始める。
+    box === null ? undefined : { box: BLANK },
   )(state, dispatch, view);
 };
 
@@ -160,13 +161,13 @@ export const toggleTask: Command = (state, dispatch) => {
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d);
     if (node.type !== schema.nodes.listItem) continue;
-    const checked = node.attrs.checked as boolean | null;
-    if (checked === null) return false;
+    const box = node.attrs.box as string | null;
+    if (box === null) return false;
     if (dispatch) {
       dispatch(
         state.tr.setNodeMarkup($from.before(d), undefined, {
           ...node.attrs,
-          checked: !checked,
+          box: flipped(box),
         }),
       );
     }
@@ -846,24 +847,24 @@ export const linkOnPaste =
 //
 // TODO の中に素の箇条書きを貼ると、チェックと点が混ざって階層が読めなくなる。
 // 貼り先がタスクなら貼る側にも印を付け、素の項目なら印を外す。階層はそのまま。
-function sameMark(node: PmNode, checked: boolean | null): PmNode {
+function sameMark(node: PmNode, box: string | null): PmNode {
   const item = node.type === schema.nodes.listItem;
   if (node.isText || !node.content.size) {
-    return item ? node.type.create({ ...node.attrs, checked }, node.content, node.marks) : node;
+    return item ? node.type.create({ ...node.attrs, box }, node.content, node.marks) : node;
   }
   const kids: PmNode[] = [];
-  node.forEach((child) => kids.push(sameMark(child, checked)));
+  node.forEach((child) => kids.push(sameMark(child, box)));
   const content = Fragment.fromArray(kids);
   return item
-    ? node.type.create({ ...node.attrs, checked }, content, node.marks)
+    ? node.type.create({ ...node.attrs, box }, content, node.marks)
     : node.copy(content);
 }
 
 // カーソルの居る項目の印。項目の外なら undefined。
-function markAt($at: ResolvedPos): boolean | null | undefined {
+function markAt($at: ResolvedPos): string | null | undefined {
   for (let d = $at.depth; d > 0; d--) {
     if ($at.node(d).type === schema.nodes.listItem) {
-      return $at.node(d).attrs.checked as boolean | null;
+      return $at.node(d).attrs.box as string | null;
     }
   }
   return undefined;
@@ -872,10 +873,10 @@ function markAt($at: ResolvedPos): boolean | null | undefined {
 const pasteInto = new Plugin({
   props: {
     transformPasted(slice, view) {
-      const checked = markAt(view.state.selection.$from);
-      if (checked === undefined) return slice;
+      const box = markAt(view.state.selection.$from);
+      if (box === undefined) return slice;
       const kids: PmNode[] = [];
-      slice.content.forEach((child) => kids.push(sameMark(child, checked)));
+      slice.content.forEach((child) => kids.push(sameMark(child, box)));
       return new Slice(Fragment.fromArray(kids), slice.openStart, slice.openEnd);
     },
   },

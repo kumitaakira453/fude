@@ -32,6 +32,7 @@ import {
   onLine,
   roomBelow,
 } from "../lib/gutterGeom";
+import { iconOfMark, markOf, taskMarks } from "../lib/md/taskMarks";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 
@@ -183,6 +184,7 @@ export function BlockGutter({
   onItemMove,
   onItemOut,
   onItemAct,
+  onItemMark,
   onItemEdit,
   onItemComment,
   onCellEdit,
@@ -213,6 +215,8 @@ export function BlockGutter({
   // 項目を並びの外へ出す。to は何番目の塊の前か。
   onItemOut: (index: number, from: number, to: number) => void;
   onItemAct: (index: number, at: number, act: TableAct) => void;
+  // 項目に印を書き入れる（タスクの印を選んだとき）。
+  onItemMark: (index: number, at: number, mark: string) => void;
   // 項目の中身をその場で編集する。
   onItemEdit: (index: number, at: number) => void;
   // 項目そのものへの指摘。
@@ -715,6 +719,28 @@ export function BlockGutter({
     show(null);
   };
 
+  // タスクの印。押して入れ替わるのは未完了と完了だけなので、それ以外の印は
+  // ここから選ぶ。印の無い項目に選べば、そのままタスクになる。
+  const markMenu = (index: number, at: number) => {
+    const now = boxAt(index, at);
+    return {
+      icon: "checklist",
+      label: "タスクの印",
+      items: taskMarks().map((ch) => ({
+        icon: iconOfMark(ch),
+        label: markOf(ch)?.name ?? ch,
+        on: now === ch,
+        run: () => onItemMark(index, at, ch),
+      })),
+    };
+  };
+
+  // その項目に今ついている印。描いたものから読む（原文を持たないので）。
+  const boxAt = (index: number, at: number): string | null =>
+    content
+      .querySelector(`[data-mg-block="${index}"]`)
+      ?.querySelector<HTMLElement>(`[data-mg-item="${at}"]`)?.dataset.box ?? null;
+
   // 行・列のメニュー。並びは Notion に合わせる。
   const partItems = (kind: Part, index: number, at: number) => {
     const act = (a: TableAct) => () => onTableAct(index, kind, at, a);
@@ -746,6 +772,7 @@ export function BlockGutter({
         keys: "⌘⇧I",
         run: () => onItemComment(index, at),
       },
+      markMenu(index, at),
       {
         icon: "edit",
         label: "編集する",

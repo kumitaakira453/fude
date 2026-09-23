@@ -104,13 +104,14 @@ describe("toggleTaskAt", () => {
     );
   });
 
-  it("\"]\" の後ろに空白が無い行でもずれない", () => {
-    // GFM は "- [ ]あ" をタスクとして描かない。数え上げはこれを数える。
+  it("\"]\" の後ろに空白が無い行は数えない", () => {
+    // GFM は "- [ ]あ" をタスクとして描かない。描かないものは数えない
+    // （数えると、画面で押した印と書き換わる行がずれる）。
     const typo = ["- [ ]あ", "- [ ] い"].join("\n");
     expect(toggleTaskAt(typo, anchorOf(typo, 0))).toBe(
       ["- [ ]あ", "- [x] い"].join("\n"),
     );
-    expect(toggleTaskNth(typo, 0)).toBe(["- [x]あ", "- [ ] い"].join("\n"));
+    expect(toggleTaskNth(typo, 0)).toBe(["- [ ]あ", "- [x] い"].join("\n"));
   });
 });
 

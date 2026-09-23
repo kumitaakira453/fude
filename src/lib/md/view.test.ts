@@ -223,9 +223,9 @@ describe("変換した直後の Backspace で記号へ戻す", () => {
     press(view, "Enter");
     type(view, "[ ] ");
     const item = () => view.state.doc.lastChild?.lastChild;
-    expect(item()?.attrs.checked).toBe(false);
+    expect(item()?.attrs.box).toBe(" ");
     expect(press(view, "Backspace")).toBe(true);
-    expect(item()?.attrs.checked).toBe(null);
+    expect(item()?.attrs.box).toBe(null);
     expect(item()?.textContent).toBe("[ ] ");
   });
 

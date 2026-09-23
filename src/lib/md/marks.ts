@@ -255,7 +255,7 @@ function kindOf(
       return "rule";
     case n.listItem:
       // TODO の箇条書きは項目に印が付く。
-      if (node.attrs.checked !== null) return "todo";
+      if (node.attrs.box !== null) return "todo";
       return parent.type === n.orderedList ? "ordered" : "bullet";
     case n.paragraph:
       return parent.type === n.doc ? "text" : null;

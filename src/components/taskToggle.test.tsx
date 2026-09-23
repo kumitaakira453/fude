@@ -96,23 +96,38 @@ describe("読むときのタスクの入れ替え", () => {
   });
 });
 
+describe("特殊な印", () => {
+  it("設定で入れてある印は、チェックの代わりに出る", () => {
+    const at = render(["- [/] 進行中", "- [-] 取りやめ"].join("\n"));
+    const items = [...at.querySelectorAll("li")];
+    expect(items.map((li) => li.dataset.box)).toEqual(["/", "-"]);
+    // 印は本文から落ちる（字として残らない）。
+    expect(items[0].textContent).toContain("進行中");
+    expect(items[0].textContent).not.toContain("[/]");
+    // 取りやめは済みと同じ薄さで出す。
+    expect(items[0].dataset.done).toBeUndefined();
+    expect(items[1].dataset.done).toBe("");
+  });
+
+  it("印から押したら完了になる", () => {
+    const body = "- [/] 進行中\n";
+    const at = render(body);
+    expect(toggleTaskAt(body, anchors(at)[0])).toBe("- [x] 進行中\n");
+  });
+});
+
 describe("済みの項目の見た目", () => {
   const BODY = ["- [x] 済んだ親", "  - [ ] まだの子", "- [ ] まだの親", "- ただの点"].join("\n");
 
   it("済み・未済の札が項目に載る。点だけの項目には載らない", () => {
     const at = render(BODY);
     const items = [...at.querySelectorAll("li")];
-    expect(items.map((li) => li.dataset.checked)).toEqual([
-      "true",
-      "false",
-      "false",
-      undefined,
-    ]);
+    expect(items.map((li) => li.dataset.box)).toEqual(["x", " ", " ", undefined]);
   });
 
   it("項目の字だけを包む。入れ子の並びは包みの外に出す", () => {
     const at = render(BODY);
-    const done = at.querySelector<HTMLElement>('li[data-checked="true"]')!;
+    const done = at.querySelector<HTMLElement>('li[data-box="x"]')!;
     const line = done.querySelector<HTMLElement>(":scope > .mg-task-line")!;
     expect(line.textContent).toContain("済んだ親");
     expect(line.querySelector("ul")).toBeNull();

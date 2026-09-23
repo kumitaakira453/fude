@@ -79,14 +79,15 @@ describe("均す", () => {
     const out = tidy(
       article(`
         <div class="mg-block" data-mg-block="0" contenteditable="true">
-          <li data-mg-item="1" data-checked="true">済み</li>
+          <li data-mg-item="1" data-box="x" data-done="">済み</li>
         </div>
         <details open><summary>畳み</summary><p>中</p></details>`),
     );
     expect(out.querySelector("[data-mg-block]")).toBeNull();
     expect(out.querySelector("[data-mg-item]")).toBeNull();
     expect(out.querySelector("[contenteditable]")).toBeNull();
-    expect(out.querySelector("li")?.getAttribute("data-checked")).toBe("true");
+    expect(out.querySelector("li")?.getAttribute("data-box")).toBe("x");
+    expect(out.querySelector("li")?.hasAttribute("data-done")).toBe(true);
     expect(out.querySelector("details")?.hasAttribute("open")).toBe(true);
   });
 

@@ -21,6 +21,7 @@ import { openEmojiBoard } from "./emoji";
 import { openImagePick } from "./imagePick";
 import { openMath } from "./math";
 import { DETAILS_HEAD, schema } from "./schema";
+import { BLANK } from "./taskMarks";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
 //
@@ -85,7 +86,7 @@ function outerList($from: ResolvedPos): { node: PmNode; pos: number } | null {
 //
 // wrapInList は、同じ中身を持てる並びの中では何もしない（prosemirror が false
 // を返す）。点の並びを番号や TODO に変える道がそこには無いので、ここで受ける。
-function retype(type: NodeType, attrs: Attrs, checked: boolean | null): Command {
+function retype(type: NodeType, attrs: Attrs, box: string | null): Command {
   return (state, dispatch) => {
     const here = outerList(state.selection.$from);
     if (!here) return false;
@@ -103,7 +104,7 @@ function retype(type: NodeType, attrs: Attrs, checked: boolean | null): Command 
 
     const sameKind = lists.every((one) => one.node.type === type);
     const sameMark = items.every(
-      (one) => (one.node.attrs.checked === null) === (checked === null),
+      (one) => (one.node.attrs.box === null) === (box === null),
     );
     if (sameKind && sameMark) return false;
 
@@ -121,9 +122,9 @@ function retype(type: NodeType, attrs: Attrs, checked: boolean | null): Command 
         );
       }
       for (const one of items) {
-        const now = checked === null ? null : (one.node.attrs.checked ?? false);
-        if (one.node.attrs.checked !== now) {
-          tr.setNodeMarkup(one.at, undefined, { ...one.node.attrs, checked: now });
+        const now = box === null ? null : (one.node.attrs.box ?? BLANK);
+        if (one.node.attrs.box !== now) {
+          tr.setNodeMarkup(one.at, undefined, { ...one.node.attrs, box: now });
         }
       }
       dispatch(tr);
@@ -142,7 +143,7 @@ const toOrdered = chainCommands(
 
 // タスクの箇条書き。並びの中なら項目に印を付け、外なら包んでから印を付ける。
 const toTodo = chainCommands(
-  retype(schema.nodes.bulletList, BULLET, false),
+  retype(schema.nodes.bulletList, BULLET, BLANK),
   (state, dispatch, view) =>
     wrapBullet(
       state,
@@ -151,7 +152,7 @@ const toTodo = chainCommands(
           const { $from } = tr.selection;
           for (let d = $from.depth; d > 0; d--) {
             if ($from.node(d).type !== listItem) continue;
-            tr.setNodeMarkup($from.before(d), undefined, { checked: false });
+            tr.setNodeMarkup($from.before(d), undefined, { box: BLANK });
             break;
           }
           dispatch(tr);

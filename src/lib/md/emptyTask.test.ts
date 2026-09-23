@@ -17,9 +17,9 @@ const trip = (src: string) => {
 };
 
 const boxes = (src: string) => {
-  const out: (boolean | null)[] = [];
+  const out: (string | null)[] = [];
   fromMarkdown(src).doc.descendants((node) => {
-    if (node.type.name === "listItem") out.push(node.attrs.checked);
+    if (node.type.name === "listItem") out.push(node.attrs.box);
     return true;
   });
   return out;
@@ -81,8 +81,8 @@ describe("中身の無いタスク項目", () => {
   });
 
   it("印だけの項目は、空のタスク項目として読む", () => {
-    expect(boxes("- [ ] a\n- [ ]\n- [x] b\n")).toEqual([false, false, true]);
-    expect(boxes("- [x]\n")).toEqual([true]);
+    expect(boxes("- [ ] a\n- [ ]\n- [x] b\n")).toEqual([" ", " ", "x"]);
+    expect(boxes("- [x]\n")).toEqual(["x"]);
   });
 
   it("往復して同じものになる", () => {

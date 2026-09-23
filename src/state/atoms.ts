@@ -3,6 +3,7 @@ import { atomFamily, atomWithStorage } from "jotai/utils";
 import type { TreeNode } from "../lib/fsAccess";
 import type { DocEntry, FolderEntry } from "../lib/idb";
 import { RAIL_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
+import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
 
 // ---- ワークスペース ----
@@ -158,6 +159,10 @@ export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images")
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
 // （`>` は引用）から外れるので、入れた人にだけ効かせる。
 export const notionKeysAtom = atomWithStorage<boolean>("mdglow:notionkeys", false);
+// タスクの特殊な印（ベータ）。`[/]` 進行中・`[-]` 取りやめ など、GFM に無い
+// 印を読み取るかどうかを選ぶ。切ってあるものは今までどおり字として出るので、
+// 文章の中で `[?]` と書く人を巻き込まない。
+export const taskMarksAtom = atomWithStorage<string[]>("fude:taskmarks", DEFAULT_MARKS);
 // 図のソース欄の幅。図の記述は 1 行が長くなりやすいので掴んで広げられる。
 // 0 は「まだ動かしていない」で、窓の広さから決める。
 export const mermaidPaneAtom = atomWithStorage<number>("mdglow:mmdpane", 0);

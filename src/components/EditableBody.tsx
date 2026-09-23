@@ -48,6 +48,7 @@ import {
   replaceBlock,
   setCellValue,
   splitRow,
+  setTaskAt,
   toggleTaskAt,
   toggleTaskNth,
 } from "../lib/blocks";
@@ -336,6 +337,20 @@ export function EditableBody({
     if (next === null) return;
     apply(replaceBlock(body, block, next), keep);
   }, []);
+
+  // 項目に印を書き入れる（メニューから選んだとき）。押して入れ替えるのは
+  // 未完了と完了の行き来だけなので、それ以外の印はここを通る。
+  const markItem = useCallback(
+    (index: number, at: number, mark: string) => {
+      const { blocks, body, apply } = latest.current;
+      const block = blocks[index];
+      if (!block) return;
+      const next = setTaskAt(block.src, at, mark);
+      if (next === null) return;
+      apply(replaceBlock(body, block, next), keep);
+    },
+    [],
+  );
 
   // 外からの頼みを受けて編集を始める。どの単位で開くかは選択された位置から
   // 決める（表ならセル、箇条書きなら項目、それ以外はブロック全体）。
@@ -812,6 +827,7 @@ export function EditableBody({
         onItemOut={outItem}
         itemDrop={itemDrop}
         onItemAct={actOnItem}
+        onItemMark={markItem}
         onItemEdit={editItem}
         onItemComment={commentItem}
         onCellEdit={editCellAt}

@@ -89,7 +89,7 @@ const state = (view: EditorView) => slashKey.getState(view.state);
 // 作った表は覚えておらず、読み直したものは原文から拾う。
 const KEYS = [
   "level",
-  "checked",
+  "box",
   "icon",
   "color",
   "head",

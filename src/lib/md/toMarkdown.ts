@@ -13,6 +13,7 @@ import { fromMarkdown, parseTree, type Loaded, type Span } from "./fromMarkdown"
 import { nestOf, schema } from "./schema";
 import { splitRow } from "../blocks";
 import { plainEdit, sameShape, spliceNode } from "./splice";
+import { BLANK, DONE } from "./taskMarks";
 
 // 編集モデルを Markdown へ戻す。
 //
@@ -240,7 +241,7 @@ function toMdast(node: PmNode): RootContent {
         start: ordered ? node.attrs.start : null,
         spread: !node.attrs.tight,
         children: mapChildren(node, (item) => {
-          const box = item.attrs.checked as boolean | null;
+          const box = item.attrs.box as string | null;
           // 中身の無いタスク項目は GFM の印では書けない（印だけを書くと
           // 「[ ]」という字として読まれ、素の項目になって点が出る）。
           // 印を字として残し、読む側で空のタスク項目へ戻す。
@@ -252,16 +253,24 @@ function toMdast(node: PmNode): RootContent {
               children: [
                 {
                   type: "paragraph" as const,
-                  children: [
-                    { type: "text" as const, value: box ? "[x]" : "[ ]" },
-                  ],
+                  children: [{ type: "text" as const, value: `[${box}]` }],
                 },
               ],
             };
           }
+          // GFM が持つのは 2 つだけ。ほかの印は字として書き、読む側で
+          // 印へ戻す（lib/md/taskMarks.ts）。
+          if (box !== null && box !== BLANK && box !== DONE) {
+            return {
+              type: "listItem" as const,
+              checked: null,
+              spread: heldCallout(item),
+              children: withMark(box, childBlocks(item)),
+            };
+          }
           return {
             type: "listItem" as const,
-            checked: box,
+            checked: box === null ? null : box === DONE,
             // callout は Markdown に無いタグなので、HTML ブロックとして読ませる
             // には前に空行が要る（未知タグの塊は段落の途中に割り込めない）。
             // 空行なしで書くと、読み直したときタグが字になって囲みが消える。
@@ -351,6 +360,22 @@ function heldCallout(item: PmNode): boolean {
     if (item.child(i).type.name === "callout") return true;
   }
   return false;
+}
+
+// GFM に無い印を、項目の頭に字として書き足す。
+//
+// 素の字として渡すと `[` が逃がされる（`\[/\]` になり、読み直しても印に
+// 戻らない）。行内の生として渡し、書いたとおりに出す。
+function withMark(
+  box: string,
+  blocks: (BlockContent | DefinitionContent)[],
+): (BlockContent | DefinitionContent)[] {
+  const mark = { type: "html" as const, value: `[${box}] ` };
+  const head = blocks[0];
+  if (head?.type === "paragraph") {
+    return [{ ...head, children: [mark, ...head.children] }, ...blocks.slice(1)];
+  }
+  return [{ type: "paragraph" as const, children: [mark] }, ...blocks];
 }
 
 // 中身が空っぽの項目か。段落 1 つだけを持ち、その段落に何も無いもの。

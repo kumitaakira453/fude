@@ -723,6 +723,12 @@ body {
 button.mg-task-check {
   cursor: pointer;
 }
+/* 済み・取りやめの印は、字と同じだけ引く。印だけが濃く残ると、片付いた行が
+   一覧の中で目立ち続ける。 */
+:is(.mg-prose, .mg-pm) li[data-done] > .mg-task-check,
+:is(.mg-prose, .mg-pm) li[data-done] > .mg-task-line > .mg-task-check {
+  color: var(--mg-muted);
+}
 button.mg-task-check:hover {
   color: color-mix(in srgb, var(--mg-accent) 70%, var(--mg-fg));
 }
@@ -730,8 +736,8 @@ button.mg-task-check:hover {
    相手はその項目の字だけ。入れ子の並びは外に置く（読むときは .mg-task-line の
    外、編集面は .mg-task-body の中の並び）。子は子で済み・未済を持つので、
    親に引きずられると読み違える。 */
-.mg-prose li.task-list-item[data-checked="true"] > .mg-task-line,
-.mg-pm li.task-list-item[data-checked="true"] > .mg-task-body > :not(ul, ol) {
+.mg-prose li.task-list-item[data-done] > .mg-task-line,
+.mg-pm li.task-list-item[data-done] > .mg-task-body > :not(ul, ol) {
   color: var(--mg-muted);
   text-decoration: line-through;
   text-decoration-thickness: from-font;
@@ -1508,6 +1514,7 @@ button.mg-task-check:hover {
 .mg-set-theme,
 .mg-set-font,
 .mg-set-width,
+.mg-set-mark,
 .mg-set-row {
   border: 1px solid transparent;
   border-radius: 0.6rem;
@@ -1520,12 +1527,14 @@ button.mg-task-check:hover {
 .mg-set-theme:hover,
 .mg-set-font:hover,
 .mg-set-width:hover,
+.mg-set-mark:hover,
 .mg-set-row:not(.is-static):hover {
   background: var(--mg-hover);
 }
 .mg-set-theme.is-on,
 .mg-set-font.is-on,
-.mg-set-width.is-on {
+.mg-set-width.is-on,
+.mg-set-mark.is-on {
   border-color: color-mix(in srgb, var(--mg-accent) 45%, transparent);
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
@@ -1620,6 +1629,34 @@ button.mg-task-check:hover {
   color: var(--mg-fg);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* タスクの印。入れてあるものだけが印として読まれる。 */
+.mg-set-marks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+.mg-set-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--mg-muted);
+}
+.mg-set-mark-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--mg-fg);
+}
+.mg-set-mark.is-on .mg-set-mark-name {
+  color: var(--mg-accent);
+}
+.mg-set-mark code {
+  font-size: 11px;
+  color: var(--mg-muted);
 }
 
 .mg-set-widths {

@@ -6,6 +6,7 @@ import {
 import type { MarkType } from "prosemirror-model";
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state";
 import { DETAILS_HEAD, schema } from "./schema";
+import { BLANK, DONE, taskMarks } from "./taskMarks";
 
 // 打った記号から構造を作る。
 //
@@ -75,35 +76,46 @@ const ruleRule = new InputRule(/^(-{3,}|\*{3,}|_{3,})$/, (state, match, start, e
 );
 
 // 行の頭で [] / [ ] / [x] を打ったらタスクにする。中の空白は有っても無くても良い。
+// 設定で入れてある印（[/] 進行中・[-] 取りやめ など）も同じ一手で作れる。
 //
 // 項目の中なら印を付けるだけ。素の段落なら箇条書きに包んでから印を付ける
 // （"- " を打ってから "[] " を打つ二手を、一手で通す）。
-const TASK = /^\[([ xX]?)\]\s$/;
+//
+// 規則の当たりは広めに取り、切ってある印かどうかは手の中で見る（正規表現は
+// 作るときに 1 度決まるので、設定を変えても作り直されない）。
+const TASK = /^\[([ xX/>?!-]?)\]\s$/;
+
+// 打たれた字を印に直す。切ってある印なら null。
+function markTyped(typed: string): string | null {
+  const ch = typed === "" ? BLANK : typed === "X" ? DONE : typed;
+  return taskMarks().includes(ch) ? ch : null;
+}
 
 // 包むところは既製の規則に任せる。直前が箇条書きなら繋ぐところまで同じ。
 const wrapTask = wrappingInputRule(TASK, schema.nodes.bulletList, { marker: "-" });
 
 // カーソルの居る項目に印を付ける。
-function markItem(tr: Transaction, checked: boolean): void {
+function markItem(tr: Transaction, box: string): void {
   const $at = tr.selection.$from;
   for (let d = $at.depth; d > 0; d--) {
     if ($at.node(d).type !== schema.nodes.listItem) continue;
-    tr.setNodeMarkup($at.before(d), undefined, { checked });
+    tr.setNodeMarkup($at.before(d), undefined, { box });
     return;
   }
 }
 
 const taskRule = new InputRule(TASK, (state, match, start, end) => {
-  const checked = match[1].toLowerCase() === "x";
+  const box = markTyped(match[1]);
+  if (box === null) return null;
   const $start = state.doc.resolve(start);
   for (let depth = $start.depth; depth > 0; depth--) {
     if ($start.node(depth).type !== schema.nodes.listItem) continue;
     return state.tr
       .delete(start, end)
-      .setNodeMarkup($start.before(depth), undefined, { checked });
+      .setNodeMarkup($start.before(depth), undefined, { box });
   }
   const tr = wrapTask.handler(state, match, start, end);
-  if (tr) markItem(tr, checked);
+  if (tr) markItem(tr, box);
   return tr;
 });
 

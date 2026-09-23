@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import { readTaskMarks } from "./md/taskMarks";
 
 // ブロックの生 Markdown と、画面に出るプレーンテキストの対応表を作る。
 // 画面で選択された範囲からソース上の位置を割り出すために使う。
@@ -51,6 +52,9 @@ interface MdastNode {
 
 export function buildProjection(src: string): Projection {
   const tree = processor.parse(src) as MdastNode;
+  // 字として残っている印（`- [/] `）は画面に出ない。落としてから数えないと、
+  // 選んだ字から割り出す原文の位置が印の分だけずれる。
+  readTaskMarks(tree);
   const chunks: string[] = [];
   const srcOffsets: number[] = [];
   let exact = true;

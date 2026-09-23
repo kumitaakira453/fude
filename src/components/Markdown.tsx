@@ -29,6 +29,18 @@ import { markdownContext } from "./MarkdownContext";
 import { CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
 import { remarkSoftBreaks } from "../lib/md/softBreaks";
+import {
+  BLANK,
+  DONE,
+  flipped,
+  iconOfMark,
+  markDone,
+  markOf,
+  marksOf,
+  remarkTaskMarks,
+} from "../lib/md/taskMarks";
+import { taskMarksAtom } from "../state/atoms";
+import { useAtomValue } from "jotai";
 import { rehypeSummaryInline } from "../lib/md/summaryInline";
 import { foldKey, recallFold, rememberFold } from "../lib/folds";
 import { MdImage } from "./MdImage";
@@ -154,26 +166,27 @@ function stripCalloutMarker(children: ReactNode): ReactNode {
   });
 }
 
-// タスクのチェックボックス。クリック直後に見た目を反転させ（楽観的更新）、
-// 保存 → 再パースの往復を待たせない。markdown 側が更新されるとブロックごと
-// 再マウントされるため、このローカル状態は自然に破棄される。
+// タスクの印。押した直後に見た目を進め（楽観的更新）、保存 → 再パースの
+// 往復を待たせない。markdown 側が更新されるとブロックごと再マウントされる
+// ため、このローカル状態は自然に破棄される。
 function TaskCheck({
-  checked,
+  box,
   onToggle,
 }: {
-  checked: boolean;
+  // 角括弧の中の 1 字（lib/md/taskMarks.ts）。
+  box: string;
   // 押されたボタンを渡す。どのブロックのタスクかは、呼ばれた側が
   // この要素から辿る（ブロック番号を props で配ると、番号がずれるたびに
   // 全ブロックの再描画になる）。
   onToggle?: (el: HTMLElement) => void;
 }) {
-  const [optimistic, setOptimistic] = useState<boolean | null>(null);
-  const on = optimistic ?? checked;
-  const icon = on ? "check_box" : "check_box_outline_blank";
+  const [optimistic, setOptimistic] = useState<string | null>(null);
+  const now = optimistic ?? box;
+  const glyph = <Icon name={iconOfMark(now)} size={20} fill={markDone(now)} />;
   if (!onToggle) {
     return (
       <span className="mg-task-check" aria-hidden>
-        <Icon name={icon} size={20} fill={on} />
+        {glyph}
       </span>
     );
   }
@@ -181,16 +194,21 @@ function TaskCheck({
     <button
       type="button"
       className="mg-task-check"
-      aria-label={on ? "未完了に戻す" : "完了にする"}
+      title={markOf(now)?.name}
+      aria-label={now === DONE ? "未完了に戻す" : "完了にする"}
       onClick={(e) => {
-        setOptimistic(!on);
+        const next = flipped(now);
+        setOptimistic(next);
         // 線と色は項目に付くので、そちらも押した瞬間に進める。本文を組み
         // 直したときに同じ値が入り直る。
-        e.currentTarget.closest("li")?.setAttribute("data-checked", String(!on));
+        const li = e.currentTarget.closest("li");
+        li?.setAttribute("data-box", next);
+        if (markDone(next)) li?.setAttribute("data-done", "");
+        else li?.removeAttribute("data-done");
         onToggle(e.currentTarget);
       }}
     >
-      <Icon name={icon} size={20} fill={on} />
+      {glyph}
     </button>
   );
 }
@@ -276,7 +294,7 @@ interface HastChild {
   type?: string;
   tagName?: string;
   value?: string;
-  properties?: { checked?: boolean };
+  properties?: Record<string, unknown>;
   children?: HastChild[];
   // 合成ノードでは position ごと、あるいは start / end が欠けることがある
   position?: { start?: { offset?: number }; end?: { offset?: number } };
@@ -291,13 +309,13 @@ function isNestedList(kid: ReactNode): boolean {
   return tag === "ul" || tag === "ol";
 }
 
-// タスクの項目か。そうならチェックの状態を返す。組んだあとの子からは
-// 見分けが付かないので、元の節点に残っている checkbox から拾う。
-function itemChecked(node: unknown): boolean | null {
-  const box = (node as HastChild | null)?.children?.find(
-    (c) => c.type === "element" && c.tagName === "input",
-  );
-  return box ? !!box.properties?.checked : null;
+// タスクの項目か。そうなら印（角括弧の中の 1 字）を返す。
+// GFM の `[ ]` `[x]` も特殊な印も、remark の段で項目へ移してある
+// （lib/md/taskMarks.ts の readTaskMarks）。
+function itemBox(node: unknown): string | null {
+  // 名前は react-markdown が渡す形（data-box → dataBox）で引く。
+  const box = (node as HastChild | null)?.properties?.dataBox;
+  return typeof box === "string" ? box : null;
 }
 
 // 項目の開始オフセット。実際に編集する範囲は EditableBody 側がソースの行から
@@ -340,8 +358,19 @@ export const Markdown = memo(function Markdown({
   onItemCancel?: () => void;
 }) {
   const ctx = useContext(markdownContext);
-  // レンダーごとにリセットされるチェックボックスの通し番号
+  // レンダーごとにリセットされるタスクの通し番号
   const taskSeq = { n: 0 };
+
+  // 有効な印は設定から。切り替えたその場で印が出る・字に戻るよう、並びを
+  // 作り直して react-markdown に組み直させる。
+  const extra = useAtomValue(taskMarksAtom);
+  const remarks = useMemo(
+    () => [
+      ...(breaks ? remarkPluginsWithBreaks : remarkPlugins),
+      [remarkTaskMarks, marksOf(extra)] as const,
+    ],
+    [breaks, extra],
+  );
 
   // 行だけのタグで囲まれた塊は、そのままでは中の markdown が読まれない。
   // 描画にはほどいた文字列を渡す。
@@ -386,7 +415,7 @@ export const Markdown = memo(function Markdown({
   return (
     <ReactMarkdown
       // @ts-expect-error remark/rehype プラグインのタプル型は緩めに扱う
-      remarkPlugins={breaks ? remarkPluginsWithBreaks : remarkPlugins}
+      remarkPlugins={remarks}
       // @ts-expect-error 同上
       rehypePlugins={rehypePlugins}
       components={{
@@ -455,36 +484,30 @@ export const Markdown = memo(function Markdown({
         // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
         li({ node, children, ...rest }) {
           const anchor = itemAnchor(node, back);
-          const checked = itemChecked(node);
-          // 済みの項目は字を薄くして線を引く（index.css）。
-          const done = checked === null ? undefined : String(checked);
+          const box = itemBox(node);
+          // 済み・取りやめの項目は字を薄くして線を引く（index.css）。
+          const done = markDone(box) ? "" : undefined;
+          // 点を出さない指定がこの印に当たっている。印は remark の段で項目へ
+          // 移してあるので、GFM が付ける class は当てにしない。
+          const klass = (...more: (string | null)[]) =>
+            [rest.className, box !== null ? "task-list-item" : null, ...more]
+              .filter(Boolean)
+              .join(" ") || undefined;
           if (editItem && anchor !== null && editItem.anchor === anchor) {
-            // チェックは編集の対象ではないが、消さずに残す。消えると、
-            // どの項目を直しているのか分からなくなる。押せる状態のまま
-            // 残すと、押した拍子に確定が走るので飾りとして描き直す。
-            // 子は描画済みの要素で、チェックは input の上書きが作ったもの。
-            // 型では見分けられないので props で拾う。
-            const box = Children.toArray(children).find(
-              (c) =>
-                isValidElement<{ type?: string }>(c) &&
-                c.props.type === "checkbox",
-            );
-            const checked =
-              isValidElement<{ checked?: boolean }>(box) && !!box.props.checked;
+            // 印は編集の対象ではないが、消さずに残す。消えると、どの項目を
+            // 直しているのか分からなくなる。押せる状態のまま残すと、押した
+            // 拍子に確定が走るので飾りとして描き直す。
             return (
-              // 横に並べる指定はチェックがある行だけ（has-check）。箇条書きの
-              // 行に付けると list-item でなくなり、記号（•）が消える。チェックの
+              // 横に並べる指定は印がある行だけ（has-check）。箇条書きの
+              // 行に付けると list-item でなくなり、記号（•）が消える。印の
               // 行はもともと記号を出さないので、付けても失うものが無い。
               <li
                 {...rest}
-                data-checked={done}
-                className={
-                  [rest.className, "mg-item-editing", box ? "has-check" : null]
-                    .filter(Boolean)
-                    .join(" ") || undefined
-                }
+                data-box={box ?? undefined}
+                data-done={done}
+                className={klass("mg-item-editing", box !== null ? "has-check" : null)}
               >
-                {box ? <TaskCheck checked={checked} /> : null}
+                {box !== null ? <TaskCheck box={box} /> : null}
                 <CellEditor
                   value={editItem.value}
                   onCommit={(v) => onItemCommit?.(v)}
@@ -493,15 +516,28 @@ export const Markdown = memo(function Markdown({
               </li>
             );
           }
-          if (checked !== null) {
+          if (box !== null) {
             // 済みの印は項目自身の字にだけ掛ける（index.css）。入れ子の並びは
             // 包みの外に置く。中に入れると飾りがそこまで届き、子の済み・未済と
             // 食い違って見える。
             const kids = Children.toArray(children);
             const cut = kids.findIndex(isNestedList);
+            const ordinal = taskSeq.n++;
             return (
-              <li {...rest} data-checked={done} data-mg-item={anchor ?? undefined}>
+              <li
+                {...rest}
+                data-box={box}
+                data-done={done}
+                data-mg-item={anchor ?? undefined}
+                className={klass()}
+              >
                 <span className="mg-task-line">
+                  <TaskCheck
+                    box={box}
+                    onToggle={
+                      onToggleTask ? (el) => onToggleTask(ordinal, el) : undefined
+                    }
+                  />
                   {cut < 0 ? kids : kids.slice(0, cut)}
                 </span>
                 {cut < 0 ? null : kids.slice(cut)}
@@ -519,16 +555,9 @@ export const Markdown = memo(function Markdown({
           if (type !== "checkbox") {
             return <input type={type} checked={checked} readOnly />;
           }
-          // ネイティブ checkbox を Material アイコンに統一。クリックでトグル。
-          const ordinal = taskSeq.n++;
-          return (
-            <TaskCheck
-              checked={!!checked}
-              onToggle={
-                onToggleTask ? (el) => onToggleTask(ordinal, el) : undefined
-              }
-            />
-          );
+          // 本文に直に書かれたチェック（生の HTML）。項目の印は li が描くので、
+          // ここへは来ない。押せない飾りとして、同じ形で出す。
+          return <TaskCheck box={checked ? DONE : BLANK} />;
         },
         a({ href, children, ...props }) {
           const h = href ?? "";

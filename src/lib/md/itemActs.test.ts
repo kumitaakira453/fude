@@ -92,7 +92,7 @@ describe("項目を足す", () => {
     const got = act(3, 0, "insertAfter");
     // 中身が空のあいだ原文にはチェックが出ない（空のタスク項目は
     // Markdown で書けない）。編集モデルには残るので、字を入れれば出る。
-    expect(got!.state.doc.child(3).child(1).attrs.checked).toBe(false);
+    expect(got!.state.doc.child(3).child(1).attrs.box).toBe(" ");
     const state = got!.state;
     const typed = state.apply(state.tr.insertText("あ", state.selection.from));
     const { loaded } = opened(SRC);

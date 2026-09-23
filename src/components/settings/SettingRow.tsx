@@ -5,7 +5,8 @@ import { ignoreLines } from "../../lib/ignore";
 import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
-import type { SwitchRow, WordsRow } from "./rows";
+import { EXTRA_MARKS, markOf } from "../../lib/md/taskMarks";
+import type { MarksRow, SwitchRow, WordsRow } from "./rows";
 
 // 設定の 1 行。切り替えと打ち込みの 2 つだけをここで描く。
 // 見本を出して選ぶもの（テーマ・書体・幅）と、このアプリの欄は形が違うので
@@ -34,6 +35,40 @@ export function Switch({ row }: { row: SwitchRow }) {
         <i />
       </span>
     </button>
+  );
+}
+
+// 使う印を選ぶ。一覧は決まっていて、入っているものだけが印として読まれる。
+// 切ってあるものは今までどおり字として出る。
+export function Marks({ row }: { row: MarksRow }) {
+  const [on, set] = useAtom(row.atom);
+  const toggle = (ch: string) =>
+    set(on.includes(ch) ? on.filter((c) => c !== ch) : [...on, ch]);
+  return (
+    <div className="mg-set-drop">
+      <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
+      <div className="mg-set-drop-main">
+        <span className="mg-set-row-name">
+          {row.name}
+          {row.beta && <span className="mg-set-beta">Beta</span>}
+        </span>
+        <span className="mg-set-note">{row.note}</span>
+        <div className="mg-set-marks">
+          {EXTRA_MARKS.map((mark) => (
+            <button
+              key={mark.ch}
+              type="button"
+              onClick={() => toggle(mark.ch)}
+              className={`mg-set-mark${on.includes(mark.ch) ? " is-on" : ""}`}
+            >
+              <Icon name={markOf(mark.ch)!.icon} size={18} />
+              <span className="mg-set-mark-name">{mark.name}</span>
+              <code>[{mark.ch}]</code>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

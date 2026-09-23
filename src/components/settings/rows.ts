@@ -18,6 +18,7 @@ export const FACES: { id: Face; label: string; icon: string }[] = [
 // 切り替えできる設定。読み書きは atom に委ねる。
 export type Flag = WritableAtom<boolean, [boolean], void>;
 export type Words = WritableAtom<string, [string], void>;
+export type Chars = WritableAtom<string[], [string[]], void>;
 
 interface Base {
   id: string;
@@ -45,6 +46,14 @@ export interface WordsRow extends Base {
   placeholder: string;
 }
 
+// 決まった一覧から、使うものを選ぶもの（タスクの印）。
+export interface MarksRow extends Base {
+  kind: "marks";
+  icon: string;
+  beta?: boolean;
+  atom: Chars;
+}
+
 // 見本を出して選ぶもの（テーマ・書体・本文幅）。描き方がそれぞれ違うので、
 // 中身は Settings の側で組む。ここでは面と当て方だけを持つ。
 export interface PickRow extends Base {
@@ -64,7 +73,7 @@ export interface AboutRow extends Base {
   kind: "about";
 }
 
-export type Row = SwitchRow | WordsRow | PickRow | DoRow | AboutRow;
+export type Row = SwitchRow | WordsRow | MarksRow | PickRow | DoRow | AboutRow;
 
 // 絞り込みの当て方。名前・説明・別名・面の名前を見る。
 export function matches(row: Row, query: string): boolean {
