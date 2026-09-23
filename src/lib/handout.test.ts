@@ -43,9 +43,9 @@ describe("均す", () => {
     expect(out.querySelector(".mg-review-layer")).toBeNull();
     expect(out.querySelector(".mg-hl-layer")).toBeNull();
     expect(out.querySelector(".mg-codeblock button")).toBeNull();
-    expect(out.querySelector(".mg-mermaid-zoom")).toBeNull();
-    expect(out.querySelector(".mg-mermaid")?.hasAttribute("role")).toBe(false);
-    // 図そのものは残る。
+    // 図だけは渡した先でも拡げられる。押せる目印と印は残す。
+    expect(out.querySelector(".mg-mermaid-zoom")).not.toBeNull();
+    expect(out.querySelector(".mg-mermaid")?.getAttribute("role")).toBe("button");
     expect(out.querySelector(".mg-mermaid svg")).not.toBeNull();
   });
 
@@ -182,20 +182,39 @@ describe("枠", () => {
       title: "覚え書き",
       theme: "midnight",
       font: "mincho",
+      wide: true,
     });
-    expect(html).toContain('<html lang="ja" data-theme="midnight" data-font="mincho">');
+    expect(html).toContain('<html lang="ja" data-theme="midnight" data-font="mincho"');
     expect(html).toContain("<title>覚え書き</title>");
     expect(html).toContain("background: var(--mg-bg)");
     expect(html).toContain("<article>本文</article>");
   });
 
   it("渡した先で字を選べる", () => {
-    const html = frame("", "", { title: "x", theme: "daylight", font: "sans" });
+    const html = frame("", "", { title: "x", theme: "daylight", font: "sans", wide: true });
     expect(html).toContain("user-select: text");
   });
 
+  it("図を拡げる手を添える", () => {
+    const html = frame("", "", {
+      title: "x",
+      theme: "daylight",
+      font: "sans",
+      wide: true,
+    });
+    expect(html).toContain(".mg-zoombox");
+    expect(html).toContain("querySelectorAll('.mg-mermaid')");
+  });
+
+  it("幅の長い表の手当てを引き継ぐ", () => {
+    const on = frame("", "", { title: "x", theme: "daylight", font: "sans", wide: true });
+    expect(on).toContain('data-widetable="on"');
+    const off = frame("", "", { title: "x", theme: "daylight", font: "sans", wide: false });
+    expect(off).toContain('data-widetable="off"');
+  });
+
   it("題の中の記号を逃がす", () => {
-    expect(frame("", "", { title: "<script>", theme: "daylight", font: "sans" })).toContain(
+    expect(frame("", "", { title: "<script>", theme: "daylight", font: "sans", wide: true })).toContain(
       "<title>&lt;script&gt;</title>",
     );
   });

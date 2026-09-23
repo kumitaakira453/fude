@@ -10,6 +10,8 @@ export interface Look {
   title: string;
   theme: string;
   font: string;
+  // 幅の長い表の手当て。渡した先でも先頭の列を置いていく。
+  wide: boolean;
 }
 
 // 読む面に出る絵。同梱の書体は 5.3MB あり、合字で描いているので書体が無いと
@@ -29,6 +31,9 @@ const GLYPH: Record<string, string> = {
   check_box_outline_blank:
     "M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v14h14V5z",
   link: "M8.6 7H11v2H8.6a3 3 0 000 6H11v2H8.6a5 5 0 010-10zm4.4 0h2.4a5 5 0 010 10H13v-2h2.4a3 3 0 000-6H13zM8 11h8v2H8z",
+  // 図の右上に出る「拡げる」の印。渡した先でも押せるので形を持たせる。
+  zoom_out_map:
+    "M14 4h6v6h-2V7.4l-3.3 3.3-1.4-1.4L16.6 6H14zm-4 0v2H7.4l3.3 3.3-1.4 1.4L6 7.4V10H4V4zm4.7 9.3 1.4-1.4 3.3 3.3V14h2v6h-6v-2h2.6zM9.3 11.9l1.4 1.4L7.4 16.6H10v2H4v-6h2v2.6z",
 };
 
 // 押せるもの・編集のための目印を落とす。渡した先で動かないものを残すと壊れて見える。
@@ -40,7 +45,6 @@ const DROP = [
   ".mg-caret", // 同じく棒
   ".mg-cells", // 表のセルの選択
   ".mg-codeblock button", // 「コピー」
-  ".mg-mermaid-zoom", // 拡げるつまみ
   ".mg-table-zoom", // 表を大きく開くつまみ
   ".ProseMirror-gapcursor", // 塊のあいだに出る棒
 ];
@@ -79,10 +83,11 @@ export function tidy(article: HTMLElement): HTMLElement {
     el.classList.remove(...EDIT_CLASSES, ...EDIT_STATES);
     for (const name of [...MARKS, ...EDIT_MARKS]) el.removeAttribute(name);
   }
-  // 押せる見かけだけ外す。印そのもの（済みの線・色）は data-box と data-done が持つ。
+  // 図だけは渡した先でも拡げられるようにする（frame が小さな手を添える）。
+  // 押せる目印は上の掃除で落ちているので、ここで付け直す。
   out.querySelectorAll(".mg-mermaid").forEach((el) => {
-    el.removeAttribute("role");
-    el.removeAttribute("title");
+    el.setAttribute("role", "button");
+    el.setAttribute("title", "クリックで拡大");
   });
   swapGlyphs(out);
   cutDeadLinks(out);
@@ -222,10 +227,67 @@ export async function bakeFonts(css: string): Promise<string> {
 const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// 図を拡げて見る手。渡した先でやることは読むことなので、これだけを添える。
+// 中身は写した SVG で、通信も外の道具も要らない。
+const ZOOM_SCRIPT = [
+  "(function () {",
+  "  var open = function (svg) {",
+  "    var box = document.createElement('div');",
+  "    box.className = 'mg-zoombox';",
+  "    var stage = document.createElement('div');",
+  "    stage.className = 'mg-zoombox-stage';",
+  "    stage.appendChild(svg.cloneNode(true));",
+  "    box.appendChild(stage);",
+  "    var k = 1, x = 0, y = 0, held = null, moved = false;",
+  "    var put = function () {",
+  "      stage.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';",
+  "    };",
+  "    var close = function () {",
+  "      box.remove();",
+  "      window.removeEventListener('keydown', onKey);",
+  "      window.removeEventListener('mousemove', onMove);",
+  "      window.removeEventListener('mouseup', onUp);",
+  "    };",
+  "    var onKey = function (e) { if (e.key === 'Escape') close(); };",
+  "    var onMove = function (e) {",
+  "      if (!held) return;",
+  "      moved = true;",
+  "      x = e.clientX - held.x;",
+  "      y = e.clientY - held.y;",
+  "      put();",
+  "    };",
+  "    var onUp = function () { held = null; };",
+  "    box.addEventListener('wheel', function (e) {",
+  "      e.preventDefault();",
+  "      k = Math.min(8, Math.max(0.3, k * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));",
+  "      put();",
+  "    }, { passive: false });",
+  "    box.addEventListener('mousedown', function (e) {",
+  "      moved = false;",
+  "      held = { x: e.clientX - x, y: e.clientY - y };",
+  "    });",
+  "    box.addEventListener('click', function () { if (!moved) close(); });",
+  "    window.addEventListener('keydown', onKey);",
+  "    window.addEventListener('mousemove', onMove);",
+  "    window.addEventListener('mouseup', onUp);",
+  "    document.body.appendChild(box);",
+  "  };",
+  "  var all = document.querySelectorAll('.mg-mermaid');",
+  "  for (var i = 0; i < all.length; i++) {",
+  "    (function (el) {",
+  "      el.addEventListener('click', function () {",
+  "        var svg = el.querySelector('svg');",
+  "        if (svg) open(svg);",
+  "      });",
+  "    })(all[i]);",
+  "  }",
+  "})();",
+].join("\n");
+
 // 渡す 1 枚の枠。テーマと書体は html に載っているので、そこを写し取る。
 export function frame(body: string, css: string, look: Look): string {
   return `<!doctype html>
-<html lang="ja" data-theme="${escape(look.theme)}" data-font="${escape(look.font)}">
+<html lang="ja" data-theme="${escape(look.theme)}" data-font="${escape(look.font)}" data-widetable="${look.wide ? "on" : "off"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -244,12 +306,29 @@ body { margin: 0; background: var(--mg-bg); color: var(--mg-fg); }
   cursor: auto;
 }
 .mg-sheet a { cursor: pointer; }
+/* 図は押すと拡がる。読むだけの 1 枚で、唯一動くところ。 */
+.mg-sheet .mg-mermaid { cursor: zoom-in; }
+.mg-zoombox {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  inset: 0;
+  place-items: center;
+  background: rgb(0 0 0 / 72%);
+  cursor: zoom-out;
+  overflow: hidden;
+}
+.mg-zoombox-stage { transform-origin: center; }
+.mg-zoombox svg { max-width: 92vw; max-height: 88vh; height: auto; }
 </style>
 </head>
 <body>
 <div class="mg-sheet">
 ${body}
 </div>
+<script>
+${ZOOM_SCRIPT}
+</script>
 </body>
 </html>
 `;

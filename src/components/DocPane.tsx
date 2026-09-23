@@ -56,6 +56,7 @@ import {
   shortcutsOpenAtom,
   soleAtom,
   themeAtom,
+  wideTableAtom,
   railAtom,
   railWidthAtom,
   watchModeAtom,
@@ -122,6 +123,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   liveRef.current = live;
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const theme = useAtomValue(themeAtom);
+  const wide = useAtomValue(wideTableAtom);
   const dark = DARK_THEME_IDS.has(theme);
   const rail = useAtomValue(railAtom);
   const watchMode = useAtomValue(watchModeAtom);
@@ -433,7 +435,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       });
       if (!dest) return;
       at = notifyBusy(store, "書き出しています…");
-      const html = await makeHandout(face, { title: name, theme, font });
+      const html = await makeHandout(face, { title: name, theme, font, wide });
       await writeFile(/\.html?$/i.test(dest) ? dest : `${dest}.html`, html);
       settle(store, at, "HTML で書き出しました");
     } catch (e) {

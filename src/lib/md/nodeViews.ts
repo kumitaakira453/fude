@@ -15,7 +15,7 @@ import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import type { ImageGoes } from "./imageDrop";
-import { DONE, flipped, markDone, markOf, markShapes } from "./taskMarks";
+import { DONE, flipped, markDone, markShapes } from "./taskMarks";
 import { schema } from "./schema";
 
 // 編集面の専用の描画。
@@ -848,9 +848,8 @@ class ListItemView implements NodeView {
 
   private paint(box: string) {
     if (!this.check) return;
-    const mark = markOf(box);
+    // 名前は札として出さない。重ねるたびに出る素の吹き出しは、下の行を覆う。
     this.check.setAttribute("aria-label", box === DONE ? "未完了に戻す" : "完了にする");
-    this.check.setAttribute("title", mark?.name ?? "");
     this.check.replaceChildren(taskBox(box));
     // 済み・取りやめは字を薄くして線を引く（index.css がこの印に当たる）。
     if (markDone(box)) this.dom.dataset.done = "";

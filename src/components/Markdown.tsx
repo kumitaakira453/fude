@@ -38,7 +38,6 @@ import {
   DONE,
   flipped,
   markDone,
-  markOf,
   marksOf,
   remarkTaskMarks,
 } from "../lib/md/taskMarks";
@@ -197,7 +196,6 @@ function TaskCheck({
     <button
       type="button"
       className="mg-task-check"
-      title={markOf(now)?.name}
       aria-label={now === DONE ? "未完了に戻す" : "完了にする"}
       onClick={(e) => {
         const next = flipped(now);
