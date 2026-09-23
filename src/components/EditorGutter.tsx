@@ -1090,6 +1090,20 @@ export function EditorGutter({
 
   // ブロックのメニュー。読むとき側にある「編集する」は入れない
   // （編集は編集面そのもの）。
+  // 表なら「大きく開く」。溢れていなくても出す（一覧から消えると、どこに
+  // あったのか探し直すことになる）。
+  const zoomItems = (pos: number): MenuItem[] => {
+    const table = tableOf(pos);
+    if (!table) return [];
+    return [
+      {
+        icon: "zoom_out_map",
+        label: "大きく開く",
+        run: () => setZoomed(tablePlain(table)),
+      },
+    ];
+  };
+
   const blockItems = (where: Spot): MenuItem[] => {
     const act = (a: BlockAct) => () => runBlock(where.pos, a);
     const comment: MenuItem[] = onComment
@@ -1114,6 +1128,7 @@ export function EditorGutter({
       ...comment,
       ...link,
       ...imageItems(where.pos),
+      ...zoomItems(where.pos),
       typeMenu(where.pos),
       { icon: "vertical_align_top", label: "上に挿入", run: act("insertBefore") },
       { icon: "vertical_align_bottom", label: "下に挿入", run: act("insertAfter") },
@@ -1166,9 +1181,7 @@ export function EditorGutter({
                 left: spot.zoom.left + spot.zoom.width - ZOOM_EDGE - ZOOM_SIZE,
               }}
               onClick={() => {
-                const dom = view.nodeDOM(spot.pos);
-                const table =
-                  dom instanceof HTMLElement ? dom.querySelector("table") : null;
+                const table = tableOf(spot.pos);
                 if (table) setZoomed(tablePlain(table));
               }}
             >

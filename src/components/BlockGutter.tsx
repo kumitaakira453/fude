@@ -35,6 +35,7 @@ import {
 } from "../lib/gutterGeom";
 import { markOf, taskMarks } from "../lib/md/taskMarks";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
+import { TableModal, tablePlain } from "./TableModal";
 import { Icon } from "./Icon";
 
 // ブロックを掴んで動かすための層。表のときは行と列のつまみも出す。
@@ -244,6 +245,8 @@ export function BlockGutter({
   const layerRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
   const [guide, setGuide] = useState<Guide | null>(null);
+  // 大きく開いて見ている表（描き上がった姿を写したもの）。
+  const [zoomed, setZoomed] = useState<string | null>(null);
   // 何のメニューか。ブロックのつまみは項目一式、行・列は削除だけ。
   const [menu, setMenu] = useState<{
     kind: Kind | "cell";
@@ -806,6 +809,22 @@ export function BlockGutter({
     },
   ];
 
+  // 表なら「大きく開く」。溢れていなくても出す（一覧から消えると、どこに
+  // あったのか探し直すことになる）。
+  const zoomItems = (index: number): MenuItem[] => {
+    const table = content
+      ?.querySelector(`[data-mg-block="${index}"]`)
+      ?.querySelector("table");
+    if (!table) return [];
+    return [
+      {
+        icon: "zoom_out_map",
+        label: "大きく開く",
+        run: () => setZoomed(tablePlain(table)),
+      },
+    ];
+  };
+
   // メニューが隠してはいけない相手。塗っているのと同じ箱を画面の座標で渡す。
   const avoidBox = (): { top: number; bottom: number } | undefined => {
     if (!menu || !content) return undefined;
@@ -832,6 +851,7 @@ export function BlockGutter({
               keys: "⌘⇧I",
               run: () => onComment(menu.index),
             },
+            ...zoomItems(menu.index),
             {
               icon: "edit",
               label: "編集する",
@@ -1183,6 +1203,9 @@ export function BlockGutter({
           items={items}
           onClose={() => setMenu(null)}
         />
+      )}
+      {zoomed !== null && (
+        <TableModal html={zoomed} onClose={() => setZoomed(null)} />
       )}
     </>
   );

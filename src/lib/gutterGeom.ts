@@ -262,7 +262,19 @@ export function tableBands(
   const rowEl = want.row === null ? null : rows[want.row];
   const cellEl = want.col === null ? null : head.cells[want.col];
   const rowBox = rowEl ? overlap(rowEl.getBoundingClientRect(), clip) : null;
-  const colBox = cellEl ? overlap(cellEl.getBoundingClientRect(), clip) : null;
+  // 列の帯は、置いていく先頭列の下には描かない。潜った列の帯だけが残ると、
+  // 送っても動かない棒が画面に貼り付いて見える。先頭列そのものは別（常に見える）。
+  const held = want.col ? frozenEdge(head.cells[want.col]) : null;
+  const seen =
+    held === null
+      ? clip
+      : new DOMRect(
+          Math.max(clip.left, held),
+          clip.top,
+          Math.max(0, clip.right - Math.max(clip.left, held)),
+          clip.height,
+        );
+  const colBox = cellEl ? overlap(cellEl.getBoundingClientRect(), seen) : null;
   const scrolls = wrap !== table && wrap.scrollWidth > wrap.clientWidth + 1;
 
   return {
