@@ -31,12 +31,17 @@ describe("均す", () => {
     const out = tidy(
       article(`
         <div class="mg-block-layer"><button>つまみ</button></div>
+        <div class="mg-review-layer"><span>指摘</span></div>
+        <div class="mg-hl-layer"></div>
         <div class="mg-codeblock"><button>コピー</button><pre>x</pre></div>
         <div class="mg-mermaid" role="button" title="クリックで拡大">
           <svg></svg><span class="mg-mermaid-zoom">z</span>
         </div>`),
     );
     expect(out.querySelector(".mg-block-layer")).toBeNull();
+    // 指摘と検索の当たりは渡す 1 枚に入れない。
+    expect(out.querySelector(".mg-review-layer")).toBeNull();
+    expect(out.querySelector(".mg-hl-layer")).toBeNull();
     expect(out.querySelector(".mg-codeblock button")).toBeNull();
     expect(out.querySelector(".mg-mermaid-zoom")).toBeNull();
     expect(out.querySelector(".mg-mermaid")?.hasAttribute("role")).toBe(false);
@@ -155,6 +160,11 @@ describe("枠", () => {
     expect(html).toContain("<title>覚え書き</title>");
     expect(html).toContain("background: var(--mg-bg)");
     expect(html).toContain("<article>本文</article>");
+  });
+
+  it("渡した先で字を選べる", () => {
+    const html = frame("", "", { title: "x", theme: "daylight", font: "sans" });
+    expect(html).toContain("user-select: text");
   });
 
   it("題の中の記号を逃がす", () => {

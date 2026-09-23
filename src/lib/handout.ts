@@ -34,6 +34,8 @@ const GLYPH: Record<string, string> = {
 // 押せるもの・編集のための目印を落とす。渡した先で動かないものを残すと壊れて見える。
 const DROP = [
   ".mg-block-layer", // 掴んで運ぶつまみ（React の外で article に足されている）
+  ".mg-review-layer", // 指摘の印。渡す 1 枚には入れない
+  ".mg-hl-layer", // 検索の当たりを塗る層
   ".mg-codeblock button", // 「コピー」
   ".mg-mermaid-zoom", // 拡げるつまみ
 ];
@@ -203,6 +205,14 @@ ${css}
 <style>
 body { margin: 0; background: var(--mg-bg); color: var(--mg-fg); }
 .mg-sheet { padding: 3rem 1.5rem 5rem; }
+/* 渡した先ですることは読むことと写すこと。アプリの側には掴んで運ぶための
+   「選ばせない」指定があるので、ここで選べる側に戻す。 */
+.mg-sheet, .mg-sheet * {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: auto;
+}
+.mg-sheet a { cursor: pointer; }
 </style>
 </head>
 <body>
