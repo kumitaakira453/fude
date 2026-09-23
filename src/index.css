@@ -965,6 +965,13 @@ button.mg-task-check:hover {
 .mg-tablebox-body {
   overflow: auto;
   padding: 0 1rem 1rem;
+  /* 本文の幅（prose の 65ch）を外す。せっかく画面いっぱいに開いても、
+     読み物の幅で切られると表だけが狭いところで送られ続ける。 */
+  max-width: none;
+}
+.mg-tablebox-body .mg-cell {
+  /* 長い列の頭打ちも広げる。畳まれた列を読むために開いている。 */
+  max-width: 640px;
 }
 /* 小窓の中では見出しの行も置いていく。行を送っても列の名前が残る。 */
 .mg-tablebox-body thead th {
@@ -975,7 +982,11 @@ button.mg-task-check:hover {
 }
 .mg-tablebox-body .mg-table-wrap {
   max-height: none;
-  margin-block: 1rem 0;
+  /* 収まる表は真ん中に置く。広げた画面の左端に寄せる理由が無い。
+     収まらない表では余白が 0 になり、左から送る形に落ちる。 */
+  width: fit-content;
+  max-width: 100%;
+  margin: 1rem auto 0;
   overflow: visible;
 }
 /* 縮めて全体を見る。字を落とし、長い列の上限も詰める。 */

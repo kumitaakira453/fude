@@ -1090,7 +1090,7 @@ export function EditorGutter({
 
   // ブロックのメニュー。読むとき側にある「編集する」は入れない
   // （編集は編集面そのもの）。
-  // 表なら「大きく開く」。溢れていなくても出す（一覧から消えると、どこに
+  // 表なら「拡大」。溢れていなくても出す（一覧から消えると、どこに
   // あったのか探し直すことになる）。
   const zoomItems = (pos: number): MenuItem[] => {
     const table = tableOf(pos);
@@ -1098,7 +1098,7 @@ export function EditorGutter({
     return [
       {
         icon: "zoom_out_map",
-        label: "大きく開く",
+        label: "拡大",
         run: () => setZoomed(tablePlain(table)),
       },
     ];
@@ -1174,7 +1174,7 @@ export function EditorGutter({
           {spot?.zoom && (
             <button
               type="button"
-              title="大きく開く"
+              title="拡大"
               className="mg-table-zoom is-free"
               style={{
                 top: spot.zoom.top + ZOOM_EDGE,

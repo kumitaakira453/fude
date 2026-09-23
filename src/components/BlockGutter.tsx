@@ -809,7 +809,7 @@ export function BlockGutter({
     },
   ];
 
-  // 表なら「大きく開く」。溢れていなくても出す（一覧から消えると、どこに
+  // 表なら「拡大」。溢れていなくても出す（一覧から消えると、どこに
   // あったのか探し直すことになる）。
   const zoomItems = (index: number): MenuItem[] => {
     const table = content
@@ -819,7 +819,7 @@ export function BlockGutter({
     return [
       {
         icon: "zoom_out_map",
-        label: "大きく開く",
+        label: "拡大",
         run: () => setZoomed(tablePlain(table)),
       },
     ];

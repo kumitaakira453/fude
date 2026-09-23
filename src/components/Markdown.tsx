@@ -245,7 +245,7 @@ function TableWrap({ children }: { children: ReactNode }) {
         <button
           type="button"
           className="mg-table-zoom"
-          title="大きく開く"
+          title="拡大"
           onClick={() => setOpen(true)}
         >
           <Icon name="zoom_out_map" size={15} />
