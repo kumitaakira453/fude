@@ -860,15 +860,25 @@ button.mg-task-check:hover {
 /* 幅の長い表（ベータ）。横に送っても、何の行かを見失わないよう先頭の列を
    置いていく。収まっている表では送りが起きないので、見た目は変わらない。
 
-   塗りは地の上に重ねて持たせる。透かしたままだと、下を通るセルが見える。
-   格子は border-collapse で表に属しており、置いていく列には残らないので、
-   境目は影で描く。 */
+   格子は **セルに持たせ直す**。border-collapse では線が表のものになるので、
+   置いていく列には線が付いてこない（影で描き足すと、下を通る線と合わせて
+   2 本になる）。セルの線なら列と一緒に動き、行の継ぎ目から下の表が覗く
+   「白い点」も出ない。線の引き方は同じ 1px で、見た目は変わらない。 */
+:root[data-widetable="on"] :is(.mg-prose, .mg-pm) table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-top: 1px solid var(--mg-border);
+  border-left: 1px solid var(--mg-border);
+}
+:root[data-widetable="on"] :is(.mg-prose, .mg-pm) table :is(th, td) {
+  border-width: 0 1px 1px 0;
+}
+/* 塗りは地の上に重ねて持たせる。透かしたままだと、下を通るセルが見える。 */
 :root[data-widetable="on"] .mg-table-wrap > table > :is(thead, tbody) > tr > :first-child {
   position: sticky;
   left: 0;
   z-index: 1;
   background: var(--mg-bg);
-  box-shadow: inset -1px 0 0 var(--mg-border);
 }
 :root[data-widetable="on"]
   :is(.mg-prose, .mg-pm).mg-editorial
