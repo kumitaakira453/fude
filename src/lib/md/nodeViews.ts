@@ -15,7 +15,7 @@ import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import type { ImageGoes } from "./imageDrop";
-import { DONE, flipped, markBody, markDone, markOf } from "./taskMarks";
+import { DONE, flipped, markDone, markOf, markShapes } from "./taskMarks";
 import { schema } from "./schema";
 
 // 編集面の専用の描画。
@@ -57,14 +57,39 @@ export interface EditorDeps {
 }
 
 // タスクの印。読む面と同じ形を出す（lib/md/taskMarks.ts）。
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 export function taskBox(mark: string, size = 20): SVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("width", String(size));
   svg.setAttribute("height", String(size));
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("class", "mg-task-box");
-  svg.innerHTML = markBody(mark);
+  for (const shape of markShapes(mark)) {
+    if (shape.kind === "dot") {
+      const dot = document.createElementNS(SVG_NS, "circle");
+      dot.setAttribute("cx", String(shape.cx));
+      dot.setAttribute("cy", String(shape.cy));
+      dot.setAttribute("r", String(shape.r));
+      dot.setAttribute("fill", "currentColor");
+      svg.appendChild(dot);
+      continue;
+    }
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", shape.d);
+    if (shape.kind === "fill") {
+      path.setAttribute("fill", "currentColor");
+      if (shape.even) path.setAttribute("fill-rule", "evenodd");
+    } else {
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "currentColor");
+      path.setAttribute("stroke-width", String(shape.w ?? 2));
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("stroke-linejoin", "round");
+    }
+    svg.appendChild(path);
+  }
   return svg;
 }
 

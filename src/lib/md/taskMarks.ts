@@ -18,8 +18,8 @@ export interface TaskMark {
   // 角括弧の中の 1 字。これをそのまま原文に書く。
   ch: string;
   name: string;
-  // 四角の中に描くもの（SVG）。空なら四角だけ。
-  inner: string;
+  // 四角の中に描くもの。空なら四角だけ。
+  inner: Shape[];
   // 済んだものとして扱う。字を薄くして線を引く。
   done?: boolean;
 }
@@ -29,36 +29,50 @@ export const DONE = "x";
 
 // 印の絵は、書いた字がそのまま四角の中に出る形にする（Obsidian のタスク拡張と
 // 同じ考え方）。別の絵を当てると、原文の `[/]` と画面の印が結び付かない。
-const BOX =
-  '<path d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v14h14V5z" fill="currentColor"/>';
-const line = (d: string, w = 2) =>
-  `<path d="${d}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
-const dot = '<circle cx="12" cy="16.2" r="1.1" fill="currentColor"/>';
+//
+// 形は組み立ての指示で持つ。読む面は React の要素に、編集面は DOM の要素に
+// 組む（どちらも 24 の枠で描く）。
+export type Shape =
+  | { kind: "fill"; d: string; even?: boolean }
+  | { kind: "line"; d: string; w?: number }
+  | { kind: "dot"; cx: number; cy: number; r: number };
+
+const BOX: Shape = {
+  kind: "fill",
+  d: "M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v14h14V5z",
+};
+const line = (d: string, w = 2): Shape => ({ kind: "line", d, w });
+const dot: Shape = { kind: "dot", cx: 12, cy: 16.2, r: 1.1 };
 
 // いつでもある 2 つ。GFM の印そのもの。
 export const BASE_MARKS: TaskMark[] = [
-  { ch: BLANK, name: "未完了", inner: "" },
+  { ch: BLANK, name: "未完了", inner: [] },
   {
     ch: DONE,
     name: "完了",
     done: true,
-    // 塗った四角から check を抜く。中を白で塗らないので、どの地色でも出る。
-    inner:
-      '<path fill-rule="evenodd" fill="currentColor" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5.1 14.3 8-8-1.7-1.7-6.3 6.3-2.5-2.5-1.7 1.7z"/>',
+    // 塗った四角から check を抜く。中を別の色で塗らないので、どの地色でも出る。
+    inner: [
+      {
+        kind: "fill",
+        even: true,
+        d: "M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5.1 14.3 8-8-1.7-1.7-6.3 6.3-2.5-2.5-1.7 1.7z",
+      },
+    ],
   },
 ];
 
 // 設定で選ぶもの。切ってあるものは今までどおり字として出る。
 export const EXTRA_MARKS: TaskMark[] = [
-  { ch: "/", name: "進行中", inner: line("M15.2 8.2 8.8 15.8") },
-  { ch: "-", name: "取りやめ", done: true, inner: line("M8.2 12h7.6") },
-  { ch: ">", name: "先送り", inner: line("m10.6 8.4 3.6 3.6-3.6 3.6") },
+  { ch: "/", name: "進行中", inner: [line("M15.2 8.2 8.8 15.8")] },
+  { ch: "-", name: "取りやめ", done: true, inner: [line("M8.2 12h7.6")] },
+  { ch: ">", name: "先送り", inner: [line("m10.6 8.4 3.6 3.6-3.6 3.6")] },
   {
     ch: "?",
     name: "疑問",
-    inner: line("M10.1 10.1a1.95 1.95 0 112.6 1.85c-.5.2-.7.6-.7 1.05v.45", 1.7) + dot,
+    inner: [line("M10.1 10.1a1.95 1.95 0 112.6 1.85c-.5.2-.7.6-.7 1.05v.45", 1.7), dot],
   },
-  { ch: "!", name: "重要", inner: line("M12 7.4v5.4") + dot },
+  { ch: "!", name: "重要", inner: [line("M12 7.4v5.4"), dot] },
 ];
 
 // 既定は全部入り。書いた印がそのまま出るのが素直で、字のまま出したい人だけが
@@ -97,11 +111,12 @@ export function markOf(ch: string): TaskMark | undefined {
   return [...BASE_MARKS, ...EXTRA_MARKS].find((m) => m.ch === ch);
 }
 
-// 印 1 つぶんの中身（SVG の子）。四角は全部に付き、中だけが変わる。
-export function markBody(ch: string): string {
+// 印 1 つぶんの形。四角は全部に付き、中だけが変わる（完了だけは塗った四角から
+// check を抜いた 1 つの形なので、四角は足さない）。
+export function markShapes(ch: string): Shape[] {
   const mark = markOf(ch);
-  if (!mark) return BOX;
-  return mark.ch === DONE ? mark.inner : BOX + mark.inner;
+  if (!mark) return [BOX];
+  return mark.ch === DONE ? mark.inner : [BOX, ...mark.inner];
 }
 
 // 済んだものとして描くか（薄く・取り消し線）。
