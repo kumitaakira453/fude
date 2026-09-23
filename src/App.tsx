@@ -37,6 +37,7 @@ import {
   sidebarWidthAtom,
   notionKeysAtom,
   taskMarksAtom,
+  wideTableAtom,
   activeIgnoreAtom,
   showOtherFilesAtom,
   fontAtom,
@@ -58,6 +59,7 @@ export default function App() {
   const font = useAtomValue(fontAtom);
   const notionKeys = useAtomValue(notionKeysAtom);
   const marks = useAtomValue(taskMarksAtom);
+  const wideTable = useAtomValue(wideTableAtom);
   const showOther = useAtomValue(showOtherFilesAtom);
   const ignore = useAtomValue(activeIgnoreAtom);
   const { refreshTreeStructure } = useWorkspace();
@@ -81,6 +83,12 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.font = font;
   }, [font]);
+
+  // 幅の長い表の手当ては CSS が受け持つ。効かせる範囲は本文だけではない
+  // （編集面も同じ包みを使う）ので、印は根に置く。
+  useEffect(() => {
+    document.documentElement.dataset.widetable = wideTable ? "on" : "off";
+  }, [wideTable]);
 
   // 打ち込みの規則は打鍵のたびに走るので、設定は編集面の外から渡しておく。
   useEffect(() => {

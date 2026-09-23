@@ -4,7 +4,9 @@ import {
   isValidElement,
   memo,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactElement,
@@ -25,6 +27,7 @@ import remarkMath from "remark-math";
 import { CellEditor } from "./CellEditor";
 import { CodeBlock } from "./CodeBlock";
 import { Icon } from "./Icon";
+import { TableModal, tablePlain } from "./TableModal";
 import { TaskBox } from "./TaskBox";
 import { markdownContext } from "./MarkdownContext";
 import { CALLOUT_RE } from "../lib/callout";
@@ -39,7 +42,7 @@ import {
   marksOf,
   remarkTaskMarks,
 } from "../lib/md/taskMarks";
-import { taskMarksAtom } from "../state/atoms";
+import { taskMarksAtom, wideTableAtom } from "../state/atoms";
 import { useAtomValue } from "jotai";
 import { rehypeSummaryInline } from "../lib/md/summaryInline";
 import { foldKey, recallFold, rememberFold } from "../lib/folds";
@@ -210,6 +213,53 @@ function TaskCheck({
     >
       {glyph}
     </button>
+  );
+}
+
+// 表の入れ物。幅の長い表は、包みから溢れたときだけ「大きく開く」を出す。
+// 収まっている表に釦を出しても押す理由が無い。
+function TableWrap({ children }: { children: ReactNode }) {
+  const on = useAtomValue(wideTableAtom);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [over, setOver] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el || !on) return;
+    const check = () => setOver(el.scrollWidth - el.clientWidth > 4);
+    check();
+    // 幅を測れない場（試験の jsdom など）では、測り直しだけを諦める。
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(check);
+    watch.observe(el);
+    const table = el.querySelector("table");
+    if (table) watch.observe(table);
+    return () => watch.disconnect();
+  }, [on, children]);
+
+  return (
+    <div className="mg-table-hold">
+      <div ref={wrap} className="mg-table-wrap overflow-x-auto">
+        <table>{children}</table>
+      </div>
+      {on && over && (
+        <button
+          type="button"
+          className="mg-table-zoom"
+          title="大きく開く"
+          onClick={() => setOpen(true)}
+        >
+          <Icon name="zoom_out_map" size={15} />
+        </button>
+      )}
+      {open && (
+        <TableModal
+          html={tablePlain(wrap.current!.querySelector("table")!)}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -616,11 +666,7 @@ export const Markdown = memo(function Markdown({
           );
         },
         table({ children }) {
-          return (
-            <div className="mg-table-wrap overflow-x-auto">
-              <table>{children}</table>
-            </div>
-          );
+          return <TableWrap>{children}</TableWrap>;
         },
         // 列幅は内容を包む .mg-cell（ブロック div）で制御する。table-layout:auto の
         // セルへの min/max-width は仕様上 undefined で WKWebView が無視するため。

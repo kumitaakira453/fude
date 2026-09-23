@@ -41,6 +41,7 @@ const DROP = [
   ".mg-cells", // 表のセルの選択
   ".mg-codeblock button", // 「コピー」
   ".mg-mermaid-zoom", // 拡げるつまみ
+  ".mg-table-zoom", // 表を大きく開くつまみ
   ".ProseMirror-gapcursor", // 塊のあいだに出る棒
 ];
 

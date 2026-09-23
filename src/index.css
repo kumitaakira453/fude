@@ -753,6 +753,31 @@ button.mg-task-check:hover {
   position: relative;
 }
 
+/* 表の入れ物。「大きく開く」を表の右上に置くための基準。 */
+.mg-table-hold {
+  position: relative;
+}
+/* 溢れている表にだけ出す。図の拡大（.mg-mermaid-zoom）と同じ作法・同じ形。
+   図は絵そのものを押せるが、表はセルを押して直すので、印だけを合わせる。 */
+.mg-table-zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--mg-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--mg-panel) 82%, transparent);
+  color: var(--mg-fg-dim);
+  transition: color 0.15s;
+}
+.mg-table-hold:hover .mg-table-zoom,
+.mg-table-zoom:hover {
+  color: var(--mg-accent);
+}
+
 /* 横に長い要素は各自スクロールさせ、ページ本体を横スクロールさせない */
 .mg-table-wrap {
   max-width: 100%;
@@ -766,6 +791,23 @@ button.mg-task-check:hover {
 }
 .mg-table-wrap::-webkit-scrollbar {
   display: none;
+}
+/* 送れることを画面に出す。消したままだと、右に続きがあること自体が分からない。
+   出るのは溢れている表だけで、収まっている表には現れない。太さは常に同じに
+   しておく（重ねたときだけ出すと、その 6px ぶん表が動く）。 */
+:root[data-widetable="on"] .mg-table-wrap::-webkit-scrollbar {
+  display: block;
+  height: 6px;
+}
+:root[data-widetable="on"] .mg-table-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 18%, transparent);
+}
+:root[data-widetable="on"] .mg-table-hold:hover .mg-table-wrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mg-fg) 32%, transparent);
+}
+:root[data-widetable="on"] .mg-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
 }
 .mg-table-wrap > table {
   margin: 0;
@@ -815,6 +857,119 @@ button.mg-task-check:hover {
   white-space: normal;
   overflow-wrap: break-word;
 }
+/* 幅の長い表（ベータ）。横に送っても、何の行かを見失わないよう先頭の列を
+   置いていく。収まっている表では送りが起きないので、見た目は変わらない。
+
+   塗りは地の上に重ねて持たせる。透かしたままだと、下を通るセルが見える。
+   格子は border-collapse で表に属しており、置いていく列には残らないので、
+   境目は影で描く。 */
+:root[data-widetable="on"] .mg-table-wrap > table > :is(thead, tbody) > tr > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--mg-bg);
+  box-shadow: inset -1px 0 0 var(--mg-border);
+}
+:root[data-widetable="on"]
+  :is(.mg-prose, .mg-pm).mg-editorial
+  tbody
+  tr:nth-child(even)
+  > :first-child {
+  background: color-mix(in srgb, var(--mg-fg) 4%, var(--mg-bg));
+}
+:root[data-widetable="on"] .mg-pm.mg-editorial tbody tr:nth-child(even) > :first-child {
+  background: var(--mg-bg);
+}
+:root[data-widetable="on"]
+  .mg-pm.mg-editorial
+  tbody
+  tr:has(th)
+  ~ tr:nth-child(odd)
+  > :first-child {
+  background: color-mix(in srgb, var(--mg-fg) 4%, var(--mg-bg));
+}
+:root[data-widetable="on"] :is(.mg-prose, .mg-pm).mg-editorial th:first-child {
+  background: color-mix(in srgb, var(--mg-accent) 10%, var(--mg-bg));
+}
+
+/* 大きく開いて見る小窓。本文の幅から外して、画面いっぱいで読む。 */
+.mg-tablebox {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  padding: 3vh 2vw;
+  backdrop-filter: blur(2px);
+  background: rgb(0 0 0 / 40%);
+}
+.mg-tablebox-panel {
+  display: flex;
+  max-height: 100%;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.9rem;
+  background: var(--mg-bg);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 35%);
+}
+.mg-tablebox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-panel);
+}
+.mg-tablebox-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--mg-muted);
+  font-size: 12px;
+}
+.mg-tablebox-act:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-tablebox-act.is-on {
+  border-color: color-mix(in srgb, var(--mg-accent) 45%, transparent);
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-tablebox-body {
+  overflow: auto;
+  padding: 0 1rem 1rem;
+}
+/* 小窓の中では見出しの行も置いていく。行を送っても列の名前が残る。 */
+.mg-tablebox-body thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--mg-accent) 10%, var(--mg-bg));
+}
+.mg-tablebox-body .mg-table-wrap {
+  max-height: none;
+  margin-block: 1rem 0;
+  overflow: visible;
+}
+/* 縮めて全体を見る。字を落とし、長い列の上限も詰める。 */
+.mg-tablebox-body.is-tight {
+  font-size: 0.82em;
+}
+.mg-tablebox-body.is-tight .mg-cell {
+  max-width: 220px;
+}
+.mg-tablebox-body.is-tight :is(th, td) {
+  padding: 0.25rem 0.5rem;
+}
+
 /* セルのインライン編集。見た目の跳ねを抑えるため、セルの本文と同じ字送り・
    行高でその場に重ね、控えめなアクセント枠で「編集中」を示す。 */
 /* 空のセルでも押せる大きさを保つ。足したばかりの行・列は中身が無く、
