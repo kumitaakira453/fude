@@ -73,6 +73,7 @@ import {
 } from "../lib/gutterGeom";
 import { markOf, taskMarks } from "../lib/md/taskMarks";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
+import { TableModal, tablePlain } from "./TableModal";
 import { Icon } from "./Icon";
 
 // 編集面のつまみ。ブロックを掴んで動かし、表なら行と列も掴める。
@@ -114,6 +115,8 @@ interface Spot {
     edge: number;
     box: Box;
   } | null;
+  // 溢れている表のときだけ。大きく開く印の置き場（包みの枠）。
+  zoom: Box | null;
   // 表のときだけ。below は次のブロックとの空き（下のつまみの置き場所）。
   //
   // 行・列は「どこから掴めるか」を小さな棒で常に示し、指が縁に寄ったときだけ
@@ -131,6 +134,18 @@ interface Spot {
     geo: TableGeometry;
   } | null;
 }
+
+// 溢れている表の包み。大きく開く印はここの右上に置く。表そのものは
+// 送った分だけ左へ出るので、置き場は包みで測る。
+function overflowing(el: HTMLElement, base: DOMRect): Box | null {
+  const wrap = el.querySelector<HTMLElement>(".mg-table-wrap");
+  if (!wrap || wrap.scrollWidth - wrap.clientWidth <= 4) return null;
+  return relative(wrap.getBoundingClientRect(), base);
+}
+
+// 大きく開く印の大きさと、包みの角からの隙間（CSS と合わせる）。
+const ZOOM_SIZE = 26;
+const ZOOM_EDGE = 8;
 
 interface Guide {
   kind: Kind;
@@ -352,6 +367,8 @@ export function EditorGutter({
     y: number;
   } | null>(null);
   const [guide, setGuide] = useState<Guide | null>(null);
+  // 大きく開いて見ている表（描き上がった姿を写したもの）。
+  const [zoomed, setZoomed] = useState<string | null>(null);
 
   const layer = useRef<HTMLDivElement>(null);
   // 出しているものは描き直しを待たずに読みたい（測る側は React の外に居る）。
@@ -479,6 +496,7 @@ export function EditorGutter({
           }
           return top + lift;
         })(),
+        zoom: overflowing(hit.el, base),
         table: geo
           ? {
               rows: node.childCount,
@@ -1138,6 +1156,25 @@ export function EditorGutter({
       {layerHost &&
         createPortal(
         <div ref={layer} className="mg-block-layer not-prose">
+          {spot?.zoom && (
+            <button
+              type="button"
+              title="大きく開く"
+              className="mg-table-zoom is-free"
+              style={{
+                top: spot.zoom.top + ZOOM_EDGE,
+                left: spot.zoom.left + spot.zoom.width - ZOOM_EDGE - ZOOM_SIZE,
+              }}
+              onClick={() => {
+                const dom = view.nodeDOM(spot.pos);
+                const table =
+                  dom instanceof HTMLElement ? dom.querySelector("table") : null;
+                if (table) setZoomed(tablePlain(table));
+              }}
+            >
+              <Icon name="zoom_out_map" size={15} />
+            </button>
+          )}
           {spot && anchor && (
             <div className="mg-gutter" style={{ top: anchor.top, left: anchor.left }}>
               {wide && (
@@ -1321,6 +1358,9 @@ export function EditorGutter({
           }
           onClose={() => setMenu(null)}
         />
+      )}
+      {zoomed !== null && (
+        <TableModal html={zoomed} onClose={() => setZoomed(null)} />
       )}
     </>
   );

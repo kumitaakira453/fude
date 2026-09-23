@@ -777,6 +777,12 @@ button.mg-task-check:hover {
 .mg-table-zoom:hover {
   color: var(--mg-accent);
 }
+/* 編集面では表の上の層に置く。置き場は呼ぶ側が測って渡すので、角からの
+   寄せは使わない。 */
+.mg-table-zoom.is-free {
+  right: auto;
+  pointer-events: auto;
+}
 
 /* 横に長い要素は各自スクロールさせ、ページ本体を横スクロールさせない */
 .mg-table-wrap {
@@ -873,32 +879,31 @@ button.mg-task-check:hover {
 :root[data-widetable="on"] :is(.mg-prose, .mg-pm) table :is(th, td) {
   border-width: 0 1px 1px 0;
 }
-/* 塗りは地の上に重ねて持たせる。透かしたままだと、下を通るセルが見える。 */
-:root[data-widetable="on"] .mg-table-wrap > table > :is(thead, tbody) > tr > :first-child {
+/* 先頭の列を置いていくのは**読む面だけ**。編集面ではカーソルと選択の印を
+   表の上の層に描いているので、固定すると、下に潜った字だけが隠れて印だけが
+   残る。書いている最中に読み返すときは「大きく開く」を使う。
+
+   塗りは地の上に重ねて持たせる。透かしたままだと、下を通るセルが見える。 */
+:root[data-widetable="on"]
+  .mg-prose:not(.mg-pm)
+  .mg-table-wrap
+  > table
+  > :is(thead, tbody)
+  > tr
+  > :first-child {
   position: sticky;
   left: 0;
   z-index: 1;
   background: var(--mg-bg);
 }
 :root[data-widetable="on"]
-  :is(.mg-prose, .mg-pm).mg-editorial
+  .mg-prose:not(.mg-pm).mg-editorial
   tbody
   tr:nth-child(even)
   > :first-child {
   background: color-mix(in srgb, var(--mg-fg) 4%, var(--mg-bg));
 }
-:root[data-widetable="on"] .mg-pm.mg-editorial tbody tr:nth-child(even) > :first-child {
-  background: var(--mg-bg);
-}
-:root[data-widetable="on"]
-  .mg-pm.mg-editorial
-  tbody
-  tr:has(th)
-  ~ tr:nth-child(odd)
-  > :first-child {
-  background: color-mix(in srgb, var(--mg-fg) 4%, var(--mg-bg));
-}
-:root[data-widetable="on"] :is(.mg-prose, .mg-pm).mg-editorial th:first-child {
+:root[data-widetable="on"] .mg-prose:not(.mg-pm).mg-editorial th:first-child {
   background: color-mix(in srgb, var(--mg-accent) 10%, var(--mg-bg));
 }
 
