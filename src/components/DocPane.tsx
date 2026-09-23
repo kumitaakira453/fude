@@ -409,34 +409,42 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 読む面の見た目のまま、1 枚の HTML にして渡す。組み直さず、いま組まれて
   // いるものを写す（メイクアップ版は組む DOM 自体が違う）。
   const handOut = useCallback(async () => {
-    if (!path || !content) return;
-    // 本文は先頭から順に積む。積み終わる前に写すと末尾の欠けたものを渡す。
+    // 書いている最中は編集面が、読んでいるときは読む面が、それぞれ組まれた
+    // 本文を持つ。どちらも同じ組版（.mg-prose）なので、出ている方を写す。
+    const face = editing ? editContent : content;
+    if (!path || !face) {
+      notify(store, "書き出せる本文がありません");
+      return;
+    }
+    // 読む面は先頭から順に積む。積み終わる前に写すと末尾の欠けたものを渡す。
     const now = settled();
     const whole = now === null ? null : blocksOf(parseFrontmatter(now).body).length;
-    if (whole !== null && content.querySelectorAll(".mg-block").length < whole) {
+    if (!editing && whole !== null && face.querySelectorAll(".mg-block").length < whole) {
       notify(store, "本文を組んでいる途中です。少し待ってからもう一度");
       return;
     }
     const name = (path.split("/").pop() ?? path).replace(/\.[^.]+$/, "");
-    const dest = await save({
-      title: "HTML で書き出す",
-      defaultPath: `${name}.html`,
-      filters: [{ name: "HTML", extensions: ["html"] }],
-    });
-    if (!dest) return;
-    const at = notifyBusy(store, "書き出しています…");
+    let at = 0;
     try {
-      const html = await makeHandout(content, { title: name, theme, font });
+      const dest = await save({
+        title: "HTML で書き出す",
+        defaultPath: `${name}.html`,
+        filters: [{ name: "HTML", extensions: ["html"] }],
+      });
+      if (!dest) return;
+      at = notifyBusy(store, "書き出しています…");
+      const html = await makeHandout(face, { title: name, theme, font });
       await writeFile(/\.html?$/i.test(dest) ? dest : `${dest}.html`, html);
       settle(store, at, "HTML で書き出しました");
     } catch (e) {
-      settle(store, at, "書き出せませんでした");
+      if (at) settle(store, at, "書き出せませんでした");
+      console.error("[書き出し]", e);
       void message(`書き出せませんでした。\n${String(e)}`, {
         title: "fude",
         kind: "error",
       });
     }
-  }, [path, content, settled, theme, font, store]);
+  }, [path, content, editContent, editing, settled, theme, font, store]);
 
   // 保存先を決めて、そこへ移す。指摘と版も付いていく。
   //
