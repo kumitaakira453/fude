@@ -989,7 +989,7 @@ button.mg-task-check:hover {
   margin: 1rem auto 0;
   overflow: visible;
 }
-/* 縮めて全体を見る。字を落とし、長い列の上限も詰める。 */
+/* 縮小。字を落とし、長い列の上限も詰める。 */
 .mg-tablebox-body.is-tight {
   font-size: 0.82em;
 }

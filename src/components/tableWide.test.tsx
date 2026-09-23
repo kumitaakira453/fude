@@ -100,18 +100,18 @@ describe("幅の長い表", () => {
     expect(box!.querySelector(".mg-table-zoom")).toBeNull();
   });
 
-  it("縮めて全体を見るに入れ替わる", () => {
+  it("縮小に入れ替わる", () => {
     widths(400, 900);
     render(TABLE);
     act(() => zoom()!.click());
     const act1 = document.querySelector<HTMLElement>(".mg-tablebox-act")!;
-    expect(act1.textContent).toContain("縮めて全体を見る");
+    expect(act1.textContent).toContain("縮小");
     act(() => act1.click());
     const body = document.querySelector(".mg-tablebox-body")!;
     expect(body.classList.contains("is-tight")).toBe(true);
     expect(
       document.querySelector<HTMLElement>(".mg-tablebox-act")!.textContent,
-    ).toContain("元の大きさ");
+    ).toContain("等倍");
   });
 
   it("Esc で閉じる", () => {

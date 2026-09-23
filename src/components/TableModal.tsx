@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
 //
 // 本文の幅に収める限り、列の多い表は横に送るしかない。送る距離が長いほど
 // 何の行か見失うので、本文の幅から外して広げ、見出しの行と先頭の列を置いていく。
-// それでも収まらないものは「縮めて全体を見る」で、字と列を詰めて見渡す。
+// それでも収まらないものは「縮小」で、字と列を詰めて見渡す。
 //
 // 中身は描き上がった表をそのまま写す（組み直すと見たままから外れる）。
 // 押せるものと編集の目印だけを落とす。
@@ -46,7 +46,7 @@ export function TableModal({ html, onClose }: { html: string; onClose: () => voi
             className={`mg-tablebox-act${tight ? " is-on" : ""}`}
           >
             <Icon name={tight ? "zoom_in" : "zoom_out"} size={16} />
-            {tight ? "元の大きさ" : "縮めて全体を見る"}
+            {tight ? "等倍" : "縮小"}
           </button>
           <button
             type="button"
