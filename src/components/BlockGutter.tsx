@@ -32,7 +32,7 @@ import {
   onLine,
   roomBelow,
 } from "../lib/gutterGeom";
-import { iconOfMark, markOf, taskMarks } from "../lib/md/taskMarks";
+import { markOf, taskMarks } from "../lib/md/taskMarks";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { Icon } from "./Icon";
 
@@ -727,7 +727,8 @@ export function BlockGutter({
       icon: "checklist",
       label: "タスクの印",
       items: taskMarks().map((ch) => ({
-        icon: iconOfMark(ch),
+        icon: "check_box_outline_blank",
+        mark: ch,
         label: markOf(ch)?.name ?? ch,
         on: now === ch,
         run: () => onItemMark(index, at, ch),

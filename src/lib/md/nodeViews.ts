@@ -15,7 +15,7 @@ import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import type { ImageGoes } from "./imageDrop";
-import { DONE, flipped, iconOfMark, markDone, markOf } from "./taskMarks";
+import { DONE, flipped, markBody, markDone, markOf } from "./taskMarks";
 import { schema } from "./schema";
 
 // 編集面の専用の描画。
@@ -54,6 +54,18 @@ export interface EditorDeps {
   path?: string | null;
   // 画像の取り込み口。絵の上に出す小さな帯から使う。
   images?: ImageGoes;
+}
+
+// タスクの印。読む面と同じ形を出す（lib/md/taskMarks.ts）。
+export function taskBox(mark: string, size = 20): SVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "mg-task-box");
+  svg.innerHTML = markBody(mark);
+  return svg;
 }
 
 export function icon(name: string, size = 15, fill = false): HTMLElement {
@@ -814,7 +826,7 @@ class ListItemView implements NodeView {
     const mark = markOf(box);
     this.check.setAttribute("aria-label", box === DONE ? "未完了に戻す" : "完了にする");
     this.check.setAttribute("title", mark?.name ?? "");
-    this.check.replaceChildren(icon(iconOfMark(box), 20, markDone(box)));
+    this.check.replaceChildren(taskBox(box));
     // 済み・取りやめは字を薄くして線を引く（index.css がこの印に当たる）。
     if (markDone(box)) this.dom.dataset.done = "";
     else delete this.dom.dataset.done;

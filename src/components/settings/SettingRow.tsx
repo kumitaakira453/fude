@@ -5,7 +5,8 @@ import { ignoreLines } from "../../lib/ignore";
 import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
-import { EXTRA_MARKS, markOf } from "../../lib/md/taskMarks";
+import { TaskBox } from "../TaskBox";
+import { EXTRA_MARKS } from "../../lib/md/taskMarks";
 import type { MarksRow, SwitchRow, WordsRow } from "./rows";
 
 // 設定の 1 行。切り替えと打ち込みの 2 つだけをここで描く。
@@ -61,7 +62,7 @@ export function Marks({ row }: { row: MarksRow }) {
               onClick={() => toggle(mark.ch)}
               className={`mg-set-mark${on.includes(mark.ch) ? " is-on" : ""}`}
             >
-              <Icon name={markOf(mark.ch)!.icon} size={18} />
+              <TaskBox mark={mark.ch} size={18} />
               <span className="mg-set-mark-name">{mark.name}</span>
               <code>[{mark.ch}]</code>
             </button>

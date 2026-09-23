@@ -25,6 +25,7 @@ import remarkMath from "remark-math";
 import { CellEditor } from "./CellEditor";
 import { CodeBlock } from "./CodeBlock";
 import { Icon } from "./Icon";
+import { TaskBox } from "./TaskBox";
 import { markdownContext } from "./MarkdownContext";
 import { CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
@@ -33,7 +34,6 @@ import {
   BLANK,
   DONE,
   flipped,
-  iconOfMark,
   markDone,
   markOf,
   marksOf,
@@ -182,7 +182,7 @@ function TaskCheck({
 }) {
   const [optimistic, setOptimistic] = useState<string | null>(null);
   const now = optimistic ?? box;
-  const glyph = <Icon name={iconOfMark(now)} size={20} fill={markDone(now)} />;
+  const glyph = <TaskBox mark={now} />;
   if (!onToggle) {
     return (
       <span className="mg-task-check" aria-hidden>

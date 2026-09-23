@@ -18,7 +18,8 @@ export interface TaskMark {
   // 角括弧の中の 1 字。これをそのまま原文に書く。
   ch: string;
   name: string;
-  icon: string;
+  // 四角の中に描くもの（SVG）。空なら四角だけ。
+  inner: string;
   // 済んだものとして扱う。字を薄くして線を引く。
   done?: boolean;
 }
@@ -26,22 +27,43 @@ export interface TaskMark {
 export const BLANK = " ";
 export const DONE = "x";
 
+// 印の絵は、書いた字がそのまま四角の中に出る形にする（Obsidian のタスク拡張と
+// 同じ考え方）。別の絵を当てると、原文の `[/]` と画面の印が結び付かない。
+const BOX =
+  '<path d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v14h14V5z" fill="currentColor"/>';
+const line = (d: string, w = 2) =>
+  `<path d="${d}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+const dot = '<circle cx="12" cy="16.2" r="1.1" fill="currentColor"/>';
+
 // いつでもある 2 つ。GFM の印そのもの。
 export const BASE_MARKS: TaskMark[] = [
-  { ch: BLANK, name: "未完了", icon: "check_box_outline_blank" },
-  { ch: DONE, name: "完了", icon: "check_box", done: true },
+  { ch: BLANK, name: "未完了", inner: "" },
+  {
+    ch: DONE,
+    name: "完了",
+    done: true,
+    // 塗った四角から check を抜く。中を白で塗らないので、どの地色でも出る。
+    inner:
+      '<path fill-rule="evenodd" fill="currentColor" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm5.1 14.3 8-8-1.7-1.7-6.3 6.3-2.5-2.5-1.7 1.7z"/>',
+  },
 ];
 
-// 設定で選ぶもの。切ってあるものは今までどおり字として出る
-// （`[?]` を文章の中で書く人を巻き込まない）。
+// 設定で選ぶもの。切ってあるものは今までどおり字として出る。
 export const EXTRA_MARKS: TaskMark[] = [
-  { ch: "/", name: "進行中", icon: "indeterminate_check_box" },
-  { ch: "-", name: "取りやめ", icon: "disabled_by_default", done: true },
-  { ch: ">", name: "先送り", icon: "schedule" },
-  { ch: "?", name: "疑問", icon: "help" },
+  { ch: "/", name: "進行中", inner: line("M15.2 8.2 8.8 15.8") },
+  { ch: "-", name: "取りやめ", done: true, inner: line("M8.2 12h7.6") },
+  { ch: ">", name: "先送り", inner: line("m10.6 8.4 3.6 3.6-3.6 3.6") },
+  {
+    ch: "?",
+    name: "疑問",
+    inner: line("M10.1 10.1a1.95 1.95 0 112.6 1.85c-.5.2-.7.6-.7 1.05v.45", 1.7) + dot,
+  },
+  { ch: "!", name: "重要", inner: line("M12 7.4v5.4") + dot },
 ];
 
-export const DEFAULT_MARKS = ["/", "-"];
+// 既定は全部入り。書いた印がそのまま出るのが素直で、字のまま出したい人だけが
+// 設定で外す（`[?]` を文章の中で書く場合など）。
+export const DEFAULT_MARKS = EXTRA_MARKS.map((m) => m.ch);
 
 // 頭の 2 つを足した並び。設定が持つのは特殊な印だけ。
 export function marksOf(extra: readonly string[]): string[] {
@@ -75,8 +97,11 @@ export function markOf(ch: string): TaskMark | undefined {
   return [...BASE_MARKS, ...EXTRA_MARKS].find((m) => m.ch === ch);
 }
 
-export function iconOfMark(ch: string): string {
-  return markOf(ch)?.icon ?? BASE_MARKS[0].icon;
+// 印 1 つぶんの中身（SVG の子）。四角は全部に付き、中だけが変わる。
+export function markBody(ch: string): string {
+  const mark = markOf(ch);
+  if (!mark) return BOX;
+  return mark.ch === DONE ? mark.inner : BOX + mark.inner;
 }
 
 // 済んだものとして描くか（薄く・取り消し線）。

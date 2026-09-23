@@ -709,6 +709,10 @@ body {
 :is(.mg-prose, .mg-pm) li:has(> .mg-task-check)::before {
   content: none;
 }
+/* 印の形。行に下線や取り消し線が掛かっても、絵は字ではないので線が乗らない。 */
+.mg-task-box {
+  display: block;
+}
 .mg-prose .mg-task-check {
   display: inline-flex;
   align-items: center;
@@ -723,12 +727,7 @@ body {
 button.mg-task-check {
   cursor: pointer;
 }
-/* 済み・取りやめの印は、字と同じだけ引く。印だけが濃く残ると、片付いた行が
-   一覧の中で目立ち続ける。 */
-:is(.mg-prose, .mg-pm) li[data-done] > .mg-task-check,
-:is(.mg-prose, .mg-pm) li[data-done] > .mg-task-line > .mg-task-check {
-  color: var(--mg-muted);
-}
+
 button.mg-task-check:hover {
   color: color-mix(in srgb, var(--mg-accent) 70%, var(--mg-fg));
 }

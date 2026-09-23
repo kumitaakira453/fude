@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
+import { TaskBox } from "./TaskBox";
 
 // つまみや右押しから出す小さなメニュー。
 //
@@ -9,6 +10,8 @@ import { Icon } from "./Icon";
 
 export interface MenuItem {
   icon: string;
+  // 合字の絵では表せないもの（タスクの印）。あればこちらを描く。
+  mark?: string;
   label: string;
   keys?: string;
   danger?: boolean;
@@ -119,11 +122,17 @@ export function BlockMenu({
                   : "hover:bg-[var(--mg-hover)]"
               } ${it.danger ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"}`}
             >
-              <Icon
-                name={it.icon}
-                size={16}
-                className={`shrink-0 ${it.danger ? "" : "text-[var(--mg-muted)]"}`}
-              />
+              {it.mark === undefined ? (
+                <Icon
+                  name={it.icon}
+                  size={16}
+                  className={`shrink-0 ${it.danger ? "" : "text-[var(--mg-muted)]"}`}
+                />
+              ) : (
+                <span className="shrink-0 text-[var(--mg-muted)]">
+                  <TaskBox mark={it.mark} size={16} />
+                </span>
+              )}
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
               {it.keys && <span className="mg-menu-keys shrink-0">{it.keys}</span>}
               {it.items && (
