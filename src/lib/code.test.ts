@@ -65,6 +65,11 @@ describe("名前から色付けの言語を決める", () => {
     expect(langOf("頁.mdx")).toBe("markdown");
   });
 
+  it("自前で足した文法も引ける（Terraform）", () => {
+    expect(langOf("main.tf")).toBe("tf");
+    expect(langOf("本番.tfvars")).toBe("tfvars");
+  });
+
   it("拡張子の無い名前は名前そのもので引く", () => {
     expect(langOf("Dockerfile")).toBe("dockerfile");
     expect(langOf("/x/Makefile")).toBe("makefile");

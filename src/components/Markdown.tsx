@@ -13,7 +13,7 @@ import {
 import { openUrl } from "@tauri-apps/plugin-opener";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
-import { all } from "lowlight";
+import { GRAMMARS } from "../lib/md/grammars";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
@@ -55,9 +55,9 @@ const rehypePlugins = [
   // 言語自動判定が走り、全登録文法との照合で約 90ms かかる。本文はブロック単位に
   // 分けて描画するため、この分だけでファイルを開くのに数秒かかっていた。
   // 言語指定ありのフェンスは従来どおり色が付く。
-  // 語彙は編集面（lib/md/highlight）と同じ all に揃える。片方だけ狭いと、
+  // 語彙は編集面と同じ一覧（lib/md/grammars）に揃える。片方だけ狭いと、
   // 書いている間は色が付いた言語が読むときに素になる。
-  [rehypeHighlight, { ignoreMissing: true, languages: all }] as const,
+  [rehypeHighlight, { ignoreMissing: true, languages: GRAMMARS }] as const,
 ];
 
 // トグル。開いて始めるかは原文のタグで決まり、押して変えた分はファイルを

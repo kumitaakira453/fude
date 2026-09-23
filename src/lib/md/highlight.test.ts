@@ -17,6 +17,22 @@ describe("色の付く範囲", () => {
     expect(got.some((t) => t.text === '"a"' && t.cls === "hljs-string")).toBe(true);
   });
 
+  it("Terraform（.tf）の塊と鍵と字を拾う", () => {
+    const code = [
+      "# 置き場",
+      'resource "aws_s3_bucket" "本" {',
+      '  bucket = "hako-${var.env}"',
+      "  count  = 2",
+      "}",
+    ].join("\n");
+    const got = slice(code, "tf");
+    expect(got).toContainEqual({ text: "# 置き場", cls: "hljs-comment" });
+    expect(got).toContainEqual({ text: "resource", cls: "hljs-keyword" });
+    expect(got).toContainEqual({ text: "bucket", cls: "hljs-attr" });
+    expect(got.some((t) => t.text === '"aws_s3_bucket"' && t.cls === "hljs-string")).toBe(true);
+    expect(got.some((t) => t.text === "2" && t.cls === "hljs-number")).toBe(true);
+  });
+
   it("入れ子の span はいちばん内側のクラスを採る", () => {
     const got = slice("def f(x):\n    pass", "python");
     // 関数名は hljs-title function_ の二枚重ね。読むときの CSS もこの形で当たる。
