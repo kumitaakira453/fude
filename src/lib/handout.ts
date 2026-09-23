@@ -36,14 +36,33 @@ const DROP = [
   ".mg-block-layer", // 掴んで運ぶつまみ（React の外で article に足されている）
   ".mg-review-layer", // 指摘の印。渡す 1 枚には入れない
   ".mg-hl-layer", // 検索の当たりを塗る層
+  ".mg-sel", // 編集面が自前で描く選択の帯
+  ".mg-caret", // 同じく棒
+  ".mg-cells", // 表のセルの選択
   ".mg-codeblock button", // 「コピー」
   ".mg-mermaid-zoom", // 拡げるつまみ
+];
+
+// 編集面の名残。付いたままだと、渡した先で読み手が困る指定まで効く
+// （.mg-pm ::selection は帯を透明にする。自前で描く帯は渡す 1 枚には無い）。
+const EDIT_CLASSES = ["mg-pm", "ProseMirror", "ProseMirror-focused"];
+const EDIT_MARKS = [
+  "translate",
+  "role",
+  "tabindex",
+  "aria-multiline",
+  "aria-label",
+  "autocorrect",
+  "autocapitalize",
 ];
 
 const MARKS = ["data-mg-block", "data-mg-item", "data-mg-cell", "contenteditable", "spellcheck"];
 
 export function tidy(article: HTMLElement): HTMLElement {
   const out = article.cloneNode(true) as HTMLElement;
+  // 書いている最中の面から写したときは、読む面に戻してから均す。
+  out.classList.remove(...EDIT_CLASSES);
+  for (const name of EDIT_MARKS) out.removeAttribute(name);
   for (const sel of DROP) out.querySelectorAll(sel).forEach((el) => el.remove());
   for (const name of MARKS) {
     out.querySelectorAll(`[${name}]`).forEach((el) => el.removeAttribute(name));
@@ -224,10 +243,20 @@ ${body}
 `;
 }
 
+// 一息入れて、画面に描く番を渡す。続けて走らせると、出したばかりの
+// 「書き出しています…」が描かれないまま固まって見える。
+const breathe = (): Promise<void> =>
+  new Promise((ok) => {
+    requestAnimationFrame(() => setTimeout(ok, 0));
+  });
+
 export async function makeHandout(article: HTMLElement, look: Look): Promise<string> {
+  await breathe();
   const out = tidy(article);
   await bakeImages(out);
+  await breathe();
   const math = !!out.querySelector(".katex");
   const css = await bakeFonts(gatherCss(article.ownerDocument.styleSheets, math));
+  await breathe();
   return frame(out.outerHTML, css, look);
 }

@@ -49,6 +49,25 @@ describe("均す", () => {
     expect(out.querySelector(".mg-mermaid svg")).not.toBeNull();
   });
 
+  it("編集面から写しても、読む面に戻す", () => {
+    const el = article("<p>本文</p>");
+    el.className = "mg-pm ProseMirror mg-prose prose";
+    el.setAttribute("translate", "no");
+    el.setAttribute("role", "textbox");
+    el.innerHTML += `<div class="mg-sel"></div><div class="mg-caret"></div>`;
+    const out = tidy(el);
+    // .mg-pm ::selection は帯を透明にする。付いたままだと渡した先で
+    // 選んでも色が付かない（選べないように見える）。
+    expect(out.classList.contains("mg-pm")).toBe(false);
+    expect(out.classList.contains("ProseMirror")).toBe(false);
+    expect(out.classList.contains("mg-prose")).toBe(true);
+    expect(out.hasAttribute("role")).toBe(false);
+    expect(out.hasAttribute("translate")).toBe(false);
+    // 自前で描いていた帯と棒も渡さない。
+    expect(out.querySelector(".mg-sel")).toBeNull();
+    expect(out.querySelector(".mg-caret")).toBeNull();
+  });
+
   it("編集の目印を落とし、済みの印とトグルの開閉は残す", () => {
     const out = tidy(
       article(`
