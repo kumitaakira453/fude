@@ -920,8 +920,10 @@ button.mg-task-check:hover {
   justify-content: center;
   inset: 0;
   padding: 3vh 2vw;
-  backdrop-filter: blur(2px);
-  background: rgb(0 0 0 / 40%);
+  /* 後ろは図の拡大と同じだけ沈める。薄いと、後ろの本文の字が枠の外に読めて
+     しまい、開いている表からはみ出したものに見える。 */
+  backdrop-filter: blur(4px);
+  background: rgb(0 0 0 / 72%);
 }
 .mg-tablebox-panel {
   display: flex;
