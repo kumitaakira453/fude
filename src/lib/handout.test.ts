@@ -54,6 +54,7 @@ describe("均す", () => {
     el.className = "mg-pm ProseMirror mg-prose prose";
     el.setAttribute("translate", "no");
     el.setAttribute("role", "textbox");
+    el.setAttribute("contenteditable", "true");
     el.classList.add("ProseMirror-selectednode");
     el.innerHTML += `<div class="mg-sel"></div><div class="mg-caret"></div>
       <p class="ProseMirror-selectednode">選ばれていた塊</p>`;
@@ -64,6 +65,8 @@ describe("均す", () => {
     expect(out.classList.contains("ProseMirror")).toBe(false);
     expect(out.classList.contains("mg-prose")).toBe(true);
     expect(out.hasAttribute("role")).toBe(false);
+    // 根にも効かせる。残ると渡した先が書ける面になり、押すと枠が出る。
+    expect(out.hasAttribute("contenteditable")).toBe(false);
     expect(out.hasAttribute("translate")).toBe(false);
     // 選んでいた塊の青枠も残さない。
     expect(out.querySelector(".ProseMirror-selectednode")).toBeNull();

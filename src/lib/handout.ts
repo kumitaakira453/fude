@@ -60,20 +60,23 @@ const EDIT_MARKS = [
   "autocapitalize",
 ];
 
-const MARKS = ["data-mg-block", "data-mg-item", "data-mg-cell", "contenteditable", "spellcheck"];
+const MARKS = [
+  "data-mg-block",
+  "data-mg-item",
+  "data-mg-cell",
+  "contenteditable",
+  "spellcheck",
+];
 
 export function tidy(article: HTMLElement): HTMLElement {
   const out = article.cloneNode(true) as HTMLElement;
-  // 書いている最中の面から写したときは、読む面に戻してから均す。
-  out.classList.remove(...EDIT_CLASSES, ...EDIT_STATES);
-  for (const name of EDIT_MARKS) out.removeAttribute(name);
-  // 中にも同じ状態が残る（選んでいた塊、触っていたセル）。青い枠になって出る。
-  for (const state of EDIT_STATES) {
-    out.querySelectorAll(`.${state}`).forEach((el) => el.classList.remove(state));
-  }
   for (const sel of DROP) out.querySelectorAll(sel).forEach((el) => el.remove());
-  for (const name of MARKS) {
-    out.querySelectorAll(`[${name}]`).forEach((el) => el.removeAttribute(name));
+  // 均す相手には**自分自身も入れる**。querySelectorAll は根を返さないので、
+  // 中だけ見ていると、根に付いた contenteditable や編集面の名前が残る
+  // （渡した先で書ける面になり、押すと枠が出る）。
+  for (const el of [out, ...out.querySelectorAll<HTMLElement>("*")]) {
+    el.classList.remove(...EDIT_CLASSES, ...EDIT_STATES);
+    for (const name of [...MARKS, ...EDIT_MARKS]) el.removeAttribute(name);
   }
   // 押せる見かけだけ外す。印そのもの（済みの線・色）は data-checked が持つ。
   out.querySelectorAll(".mg-mermaid").forEach((el) => {
