@@ -49,6 +49,7 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
       ["⌘⇧F", "フォルダ全体を検索"],
       ["⌘⇧M", "メタ情報"],
       ["⌘⌥C", "全文をコピー"],
+      ["⌘⇧E", "HTML で書き出す"],
     ],
   },
   {

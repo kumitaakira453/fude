@@ -1,3 +1,4 @@
+import { message, save } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   startTransition,
@@ -19,6 +20,7 @@ import {
   topmostBlock,
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
+import { makeHandout } from "../lib/handout";
 import { fitRailWidth, RAIL_WIDTH } from "../lib/sidebar";
 import { copyImage, copyText } from "../lib/clip";
 import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
@@ -119,7 +121,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const liveRef = useRef(live);
   liveRef.current = live;
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
-  const dark = DARK_THEME_IDS.has(useAtomValue(themeAtom));
+  const theme = useAtomValue(themeAtom);
+  const dark = DARK_THEME_IDS.has(theme);
   const [rail, setRail] = useAtom(railAtom);
   const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
@@ -403,6 +406,38 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     notify(store, (await copyText(text)) ? "全文をコピーしました" : "コピーできませんでした");
   }, [absOf, isDoc, path, settled, store]);
 
+  // 読む面の見た目のまま、1 枚の HTML にして渡す。組み直さず、いま組まれて
+  // いるものを写す（メイクアップ版は組む DOM 自体が違う）。
+  const handOut = useCallback(async () => {
+    if (!path || !content) return;
+    // 本文は先頭から順に積む。積み終わる前に写すと末尾の欠けたものを渡す。
+    const now = settled();
+    const whole = now === null ? null : blocksOf(parseFrontmatter(now).body).length;
+    if (whole !== null && content.querySelectorAll(".mg-block").length < whole) {
+      notify(store, "本文を組んでいる途中です。少し待ってからもう一度");
+      return;
+    }
+    const name = (path.split("/").pop() ?? path).replace(/\.[^.]+$/, "");
+    const dest = await save({
+      title: "HTML で書き出す",
+      defaultPath: `${name}.html`,
+      filters: [{ name: "HTML", extensions: ["html"] }],
+    });
+    if (!dest) return;
+    const at = notifyBusy(store, "書き出しています…");
+    try {
+      const html = await makeHandout(content, { title: name, theme, font });
+      await writeFile(/\.html?$/i.test(dest) ? dest : `${dest}.html`, html);
+      settle(store, at, "HTML で書き出しました");
+    } catch (e) {
+      settle(store, at, "書き出せませんでした");
+      void message(`書き出せませんでした。\n${String(e)}`, {
+        title: "fude",
+        kind: "error",
+      });
+    }
+  }, [path, content, settled, theme, font, store]);
+
   // 保存先を決めて、そこへ移す。指摘と版も付いていく。
   //
   // 名前を変えるのではなく、書いてから消す。名前を変えると、遅れて届く
@@ -465,8 +500,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   useEffect(() => {
     if (!isActive || overlayOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
       if (inEditable(e.target)) return;
+      if (e.shiftKey) {
+        if (e.altKey || e.code !== "KeyE") return;
+        if (!path || !isDoc) return;
+        e.preventDefault();
+        void handOut();
+        return;
+      }
       // ⌥ を挟むと key は記号になるので code で見る。
       if (e.altKey && e.code === "KeyC") {
         if (!canCopy) return;
@@ -489,6 +531,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     isDoc,
     isDraft,
     showVersions,
+    handOut,
   ]);
   const exitEdit = () => {
     // 書きかけを先に流す。流れた分は自動保存が書く。
@@ -1553,6 +1596,16 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       label: "全文をコピー",
                       keys: "⌘⌥C",
                       run: () => void copyAll(),
+                    },
+                  ]
+                : []),
+              ...(path && isDoc
+                ? [
+                    {
+                      icon: "html",
+                      label: "HTML で書き出す",
+                      keys: "⌘⇧E",
+                      run: () => void handOut(),
                     },
                   ]
                 : []),
