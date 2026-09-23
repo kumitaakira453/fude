@@ -61,12 +61,17 @@ export function firstLine(el: Element): DOMRect | null {
 
 // つまみを置く基準になる、項目の左端。1 行目で最も左にある字に合わせる。
 // 箇条書きの記号（•）は箱を持たないので、リストが記号のために空けている
-// 幅の分だけ左へ寄せる。チェックリストはチェックが項目の中にあるので、
-// 1 行目の左端がそのまま基準になる。
+// 幅の分だけ左へ寄せる。タスクの印は項目の中にある要素なので、その左端を
+// そのまま基準にする（印は字を持たないので、字を探すと本文の頭に落ちて
+// つまみが印の上に重なる）。
 export function itemEdge(li: HTMLElement): number {
   const box = li.getBoundingClientRect();
   const line = firstLine(li) ?? box;
-  if (li.querySelector(".mg-task-check")) return line.left;
+  // 入れ子の子が持つ印を拾わないよう、この項目自身のものだけを見る。
+  const check = li.querySelector(
+    ":scope > .mg-task-check, :scope > .mg-task-line > .mg-task-check",
+  );
+  if (check) return check.getBoundingClientRect().left;
   const list = li.parentElement?.getBoundingClientRect();
   // 行頭の印が占めている幅を空ける。印はリストの内側の字下げに入ることも
   // （箇条書きの丸）、項目自身の字下げに入ることもある（番号の丸）。

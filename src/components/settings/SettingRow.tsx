@@ -46,7 +46,7 @@ export function Marks({ row }: { row: MarksRow }) {
   const toggle = (ch: string) =>
     set(on.includes(ch) ? on.filter((c) => c !== ch) : [...on, ch]);
   return (
-    <div className="mg-set-drop">
+    <div className="mg-set-drop is-boxed">
       <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
       <div className="mg-set-drop-main">
         <span className="mg-set-row-name">
@@ -62,7 +62,7 @@ export function Marks({ row }: { row: MarksRow }) {
               onClick={() => toggle(mark.ch)}
               className={`mg-set-mark${on.includes(mark.ch) ? " is-on" : ""}`}
             >
-              <TaskBox mark={mark.ch} size={18} />
+              <TaskBox mark={mark.ch} size={16} />
               <span className="mg-set-mark-name">{mark.name}</span>
               <code>[{mark.ch}]</code>
             </button>
