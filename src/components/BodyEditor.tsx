@@ -8,6 +8,7 @@ import { EditorView } from "prosemirror-view";
 import "prosemirror-view/style/prosemirror.css";
 import { useEffect, useRef, useState } from "react";
 import { throttled } from "../lib/later";
+import { frozenEdge } from "../lib/gutterGeom";
 import { calloutIcoAt, setCalloutColor, setCalloutIcon } from "../lib/md/calloutIcon";
 import { colorOf } from "../lib/callout";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
@@ -148,6 +149,16 @@ function lineAt(view: EditorView, pos: number): number {
   return Number.isFinite(size) && size > 0 ? size * 1.6 : 24;
 }
 
+// その位置の要素。測る相手（セル）を辿るために使う。
+function elementAt(view: EditorView, pos: number): Element | null {
+  try {
+    const at = view.domAtPos(pos).node;
+    return at instanceof Element ? at : at.parentElement;
+  } catch {
+    return null;
+  }
+}
+
 function caretBar(view: EditorView, host: HTMLElement) {
   const bar = document.createElement("div");
   bar.className = "mg-caret is-idle";
@@ -207,6 +218,10 @@ function caretBar(view: EditorView, host: HTMLElement) {
     // 実測 16.8ms）。日本語を打っているあいだ何度も走るので、変換中は直前の
     // 場所を保つ。
     if (!at) return view.composing ? "keep" : "native";
+    // 置いていく先頭列の下に潜ったら、棒は出さない。字が隠れているのに
+    // 棒だけが残ると、空のセルにカーソルが浮いて見える。
+    const edge = frozenEdge(elementAt(view, selection.head));
+    if (edge !== null && at.left < edge) return null;
     const box = host.getBoundingClientRect();
     // 行の高さで頭打ちにし、下端にそろえる。素の字では測った丈がそのまま
     // 行の高さなので、ここは何も変わらない。
@@ -290,7 +305,18 @@ function selectionBoxes(
     const band = seen
       ? { top: seen.top, bottom: seen.bottom }
       : { top: 0, bottom: host.ownerDocument.documentElement.clientHeight };
-    return selectionRects(view, from, to, band, base);
+    const rects = selectionRects(view, from, to, band, base);
+    // 先頭列を置いていく表では、潜った字の帯を描かない。
+    const edge = frozenEdge(elementAt(view, from));
+    if (edge === null) return rects;
+    const cut = edge - base.left;
+    return rects
+      .map((r) =>
+        r.left >= cut
+          ? r
+          : { ...r, left: cut, width: r.left + r.width - cut },
+      )
+      .filter((r) => r.width > 0);
   };
 
   const apply = (rects: Rect[]) => {
@@ -370,7 +396,9 @@ function cellsBox(view: EditorView, host: HTMLElement) {
         ? (cell.closest(".mg-table-wrap")?.getBoundingClientRect() ?? null)
         : null;
     if (clip) {
-      left = Math.max(left, clip.left);
+      // 置いていく先頭列の下は描かない（潜った升目の囲みだけが残らないよう）。
+      const edge = cell instanceof Element ? frozenEdge(cell) : null;
+      left = Math.max(left, edge ?? clip.left);
       right = Math.min(right, clip.right);
       if (right <= left) return null;
     }

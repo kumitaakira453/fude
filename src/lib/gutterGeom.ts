@@ -147,6 +147,19 @@ export function inWrap(li: Element, block: Element): boolean {
   return !!wrap && block.contains(wrap);
 }
 
+// 置いていく先頭列の右端（画面の座標）。固定が効いていないときは null。
+//
+// 固定した列は表の上に残り、字はその下へ潜る。カーソルや選択の印は表の外の
+// 層に描いているので、潜った字の上に印だけが残らないよう、層の側でここから
+// 右だけを描く。
+export function frozenEdge(el: Element | null | undefined): number | null {
+  const cell = el?.closest("td, th");
+  const first = cell?.closest("tr")?.firstElementChild;
+  if (!cell || !first || first === cell) return null;
+  if (getComputedStyle(first).position !== "sticky") return null;
+  return first.getBoundingClientRect().right;
+}
+
 // つまみを合わせる 1 行目。項目全体の真ん中だと、2 行以上の項目で行の間に
 // 落ちる。
 export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {

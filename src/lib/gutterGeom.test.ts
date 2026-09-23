@@ -5,6 +5,7 @@ import {
   ADD_AWAY,
   addBelow,
   firstLine,
+  frozenEdge,
   holdAt,
   indentStep,
   inWrap,
@@ -354,5 +355,42 @@ describe("囲みの中の項目", () => {
     document.body.innerHTML = '<div class="mg-callout"><ul><li id="d">外</li></ul></div>';
     const block = build('<ul><li id="e">中</li></ul>');
     expect(inWrap(block.querySelector("#e")!, block)).toBe(false);
+  });
+});
+
+describe("置いていく先頭列", () => {
+  // カーソルと選択の印は表の外の層に描くので、潜った字の上に印だけが
+  // 残らないよう、層の側が固定列の右端を知る必要がある。
+  const table = (sticky: boolean) => {
+    const host = document.createElement("div");
+    host.innerHTML =
+      "<table><tbody><tr><th id=\"head\">店舗</th><td id=\"cell\">1,204</td></tr></tbody></table>";
+    document.body.appendChild(host);
+    const first = host.querySelector<HTMLElement>("#head")!;
+    if (sticky) first.style.position = "sticky";
+    return host;
+  };
+
+  it("固定しているときは、その右端を返す", () => {
+    const host = table(true);
+    const first = host.querySelector("#head")!;
+    first.getBoundingClientRect = () => new DOMRect(10, 0, 80, 20);
+    expect(frozenEdge(host.querySelector("#cell"))).toBe(90);
+  });
+
+  it("固定していなければ null", () => {
+    const host = table(false);
+    expect(frozenEdge(host.querySelector("#cell"))).toBeNull();
+  });
+
+  it("固定している列そのものは隠さない", () => {
+    const host = table(true);
+    expect(frozenEdge(host.querySelector("#head"))).toBeNull();
+  });
+
+  it("表の外なら null", () => {
+    const p = document.createElement("p");
+    document.body.appendChild(p);
+    expect(frozenEdge(p)).toBeNull();
   });
 });
