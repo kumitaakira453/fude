@@ -58,6 +58,7 @@ import {
   tightImage,
   GRIP,
   indentStep,
+  inWrap,
   itemAtY,
   itemEdge,
   itemEdgeOf,
@@ -422,7 +423,9 @@ export function EditorGutter({
         : BOTH;
 
       // 箇条書きは項目ごとに掴む。指している高さの li から編集モデルの位置を引く。
-      const li = itemAtY(hit.el, y, "li");
+      // 囲みの中は囲みごと掴ませる（gutterGeom の inWrap）。
+      const near = itemAtY(hit.el, y, "li");
+      const li = near && inWrap(near, hit.el) ? null : near;
       const spot = li ? itemPosOf(view, li) : null;
       const liBox = li?.getBoundingClientRect();
       const line = li && liBox ? itemLine(li, liBox) : null;

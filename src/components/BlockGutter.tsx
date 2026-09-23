@@ -11,6 +11,7 @@ import {
   BAR,
   GRIP,
   indentStep,
+  inWrap,
   itemAtY,
   itemEdge,
   itemEdgeOf,
@@ -345,7 +346,9 @@ export function BlockGutter({
       const box = blockRect(hit.el);
       if (!box) return;
       // 箇条書きは項目ごとに掴む。指している高さの li から行番号を引く。
-      const li = itemAtY(hit.el, y, "li[data-mg-item]");
+      // 囲みの中は囲みごと掴ませる（gutterGeom の inWrap）。
+      const found0 = itemAtY(hit.el, y, "li[data-mg-item]");
+      const li = found0 && inWrap(found0, hit.el) ? null : found0;
       const anchorAt = numberOf(li, "mgItem");
       const found =
         li && anchorAt !== null ? itemAt(hit.index, anchorAt) : null;

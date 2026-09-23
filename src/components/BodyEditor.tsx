@@ -8,7 +8,8 @@ import { EditorView } from "prosemirror-view";
 import "prosemirror-view/style/prosemirror.css";
 import { useEffect, useRef, useState } from "react";
 import { throttled } from "../lib/later";
-import { calloutIcoAt, setCalloutIcon } from "../lib/md/calloutIcon";
+import { calloutIcoAt, setCalloutColor, setCalloutIcon } from "../lib/md/calloutIcon";
+import { colorOf } from "../lib/callout";
 import { fromMarkdown, type Loaded } from "../lib/md/fromMarkdown";
 import { schema } from "../lib/md/schema";
 import { parseAway } from "../lib/md/parseAway";
@@ -721,6 +722,8 @@ export function BodyEditor({
     x: number;
     y: number;
     apply: (icon: string) => void;
+    // 囲みから開いたときだけ。盤に色の並びが出る。
+    color?: { now: string | null; set: (color: string) => void };
   } | null>(null);
 
   // 専用の描画が要るもの（図・画像）へ渡す口。編集面を作り直さずに差し替えたい
@@ -888,6 +891,10 @@ export function BodyEditor({
                 x: box.left,
                 y: box.bottom + 6,
                 apply: (value) => setCalloutIcon(here, hit.pos, value),
+                color: {
+                  now: colorOf(hit.node.attrs.color as string | null),
+                  set: (value: string) => setCalloutColor(here, hit.pos, value),
+                },
               }));
               return true;
             }
@@ -1343,6 +1350,15 @@ export function BodyEditor({
             picking.apply("");
             setPicking(null);
           }}
+          colors={
+            picking.color && {
+              now: picking.color.now,
+              onPick: (value) => {
+                picking.color?.set(value);
+                setPicking(null);
+              },
+            }
+          }
           onClose={() => setPicking(null)}
         />
       )}

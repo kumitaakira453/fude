@@ -40,7 +40,22 @@ export function calloutIcoAt(view: EditorView, target: EventTarget | null): Call
 
 // アイコンを差し替える。空文字なら書き戻しで属性ごと落ちる。
 export function setCalloutIcon(view: EditorView, pos: number, icon: string): void {
+  setCalloutAttrs(view, pos, { icon });
+}
+
+// 背景色。空なら外す（属性そのものを落とすので、原文にも残らない）。
+export function setCalloutColor(view: EditorView, pos: number, color: string): void {
+  setCalloutAttrs(view, pos, { color: color || null });
+}
+
+function setCalloutAttrs(
+  view: EditorView,
+  pos: number,
+  attrs: Record<string, string | null>,
+): void {
   const node = view.state.doc.nodeAt(pos);
   if (!node || node.type !== schema.nodes.callout) return;
-  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, icon }));
+  view.dispatch(
+    view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs }),
+  );
 }

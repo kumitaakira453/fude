@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openHtmlContainers, setCalloutIcon } from "./htmlBlocks";
+import { openHtmlContainers, setCalloutColor, setCalloutIcon } from "./htmlBlocks";
 
 // 組み替えた文字列だけを見る試験。位置の戻しは htmlSpans の試験で見る。
 const opened = (src: string) => openHtmlContainers(src).text;
@@ -249,5 +249,33 @@ describe("囲みのコードの中は触らない", () => {
   it("~~~ の囲みも同じに扱う", () => {
     const src = ["~~~", '<callout icon="💡">', "本文。", "</callout>", "~~~"].join("\n");
     expect(openHtmlContainers(src).text).toBe(src);
+  });
+});
+
+describe("setCalloutColor", () => {
+  const src = (head: string) => [head, "本文", "</callout>"].join("\n");
+  const head = (out: string) => out.split("\n")[0];
+
+  it("色を足す（絵はそのまま）", () => {
+    expect(head(setCalloutColor(src('<callout icon="💡">'), "blue"))).toBe(
+      '<callout color="blue" icon="💡">',
+    );
+  });
+
+  it("既にある色を差し替える", () => {
+    expect(
+      head(setCalloutColor(src('<callout icon="💡" color="gray_bg">'), "red")),
+    ).toBe('<callout color="red" icon="💡">');
+  });
+
+  it("空なら属性ごと外す", () => {
+    expect(head(setCalloutColor(src('<callout color="blue">'), ""))).toBe("<callout>");
+    expect(head(setCalloutColor(src('<callout icon="💡" color="blue">'), ""))).toBe(
+      '<callout icon="💡">',
+    );
+  });
+
+  it("囲みでなければ何もしない", () => {
+    expect(setCalloutColor("ただの段落\n", "blue")).toBe("ただの段落\n");
   });
 });

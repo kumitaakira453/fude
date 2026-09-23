@@ -57,7 +57,7 @@ import { anchorAt, type Section } from "../lib/anchors";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { themeAtom } from "../state/atoms";
-import { setCalloutIcon } from "../lib/htmlBlocks";
+import { setCalloutColor, setCalloutIcon } from "../lib/htmlBlocks";
 import { BlockGutter, type Part, type TableAct } from "./BlockGutter";
 import { CalloutIcon } from "./CalloutIcon";
 import { BlockSourceEditor } from "./BlockSourceEditor";
@@ -695,12 +695,23 @@ export function EditableBody({
     [blocks, body, apply, editTable, openItem],
   );
 
-  // コールアウトのアイコンを選び直す。開きタグの属性だけが変わる。
+  // コールアウトのアイコンと背景色を選び直す。開きタグの属性だけが変わる。
   const pickIcon = useCallback(
     (index: number, icon: string) => {
       const block = blocks[index];
       if (!block) return;
       const next = setCalloutIcon(block.src, icon);
+      if (next === block.src) return;
+      apply(replaceBlock(body, block, next), keep);
+    },
+    [blocks, body, apply],
+  );
+
+  const pickColor = useCallback(
+    (index: number, color: string) => {
+      const block = blocks[index];
+      if (!block) return;
+      const next = setCalloutColor(block.src, color);
       if (next === block.src) return;
       apply(replaceBlock(body, block, next), keep);
     },
@@ -855,6 +866,7 @@ export function EditableBody({
         content={content ?? null}
         contentKey={contentKey ?? ""}
         onPick={pickIcon}
+        onColor={pickColor}
       />
       {mermaidAt !== null && blocks[mermaidAt] && (
         <MermaidModal

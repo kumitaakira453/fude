@@ -10,6 +10,7 @@ import {
   searchEmoji,
   type Emoji,
 } from "../lib/emoji";
+import { CALLOUT_COLORS } from "../lib/callout";
 import { Icon } from "./Icon";
 
 // 絵文字を選ぶ盤。
@@ -43,6 +44,7 @@ export function EmojiBoard({
   onClose,
   // 渡したときだけ「アイコンを外す」を出す（囲み専用）。
   onClear,
+  colors,
 }: {
   x: number;
   y: number;
@@ -51,6 +53,8 @@ export function EmojiBoard({
   onPick: (char: string) => void;
   onClose: () => void;
   onClear?: () => void;
+  // 渡したときだけ色の並びを出す（囲み専用）。空文字は色なし。
+  colors?: { now: string | null; onPick: (color: string) => void };
 }) {
   const [all, setAll] = useState<Emoji[] | null>(emojiReady());
   // 盤が自分で持つ検索の文字。呼び出し側が query を渡すときは使わない。
@@ -211,6 +215,29 @@ export function EmojiBoard({
               <Icon name="delete" size={18} />
             </button>
           )}
+        </div>
+      )}
+
+      {colors && (
+        <div className="mg-ico-colors">
+          <button
+            type="button"
+            title="色なし"
+            onClick={() => colors.onPick("")}
+            className={`mg-ico-color is-none${colors.now === null ? " is-on" : ""}`}
+          >
+            <Icon name="format_color_reset" size={14} />
+          </button>
+          {CALLOUT_COLORS.map((color) => (
+            <button
+              key={color.id}
+              type="button"
+              title={color.name}
+              onClick={() => colors.onPick(color.id)}
+              style={{ background: `var(--mg-callout-${color.id})` }}
+              className={`mg-ico-color${colors.now === color.id ? " is-on" : ""}`}
+            />
+          ))}
         </div>
       )}
 

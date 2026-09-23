@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { colorOf } from "../lib/callout";
 import { EmojiBoard } from "./EmojiBoard";
 
 // コールアウトのアイコンを選び直す盤と、読むときの掴み方。
@@ -14,12 +15,15 @@ export function IconBoard({
   y,
   onPick,
   onClose,
+  colors,
 }: {
   x: number;
   y: number;
   // 選んだアイコン。空文字はアイコンを外す。
   onPick: (icon: string) => void;
   onClose: () => void;
+  // 背景色。渡したときだけ盤に色の並びが出る。
+  colors?: { now: string | null; onPick: (color: string) => void };
 }) {
   return (
     <EmojiBoard
@@ -28,6 +32,7 @@ export function IconBoard({
       onPick={onPick}
       onClear={() => onPick("")}
       onClose={onClose}
+      colors={colors}
     />
   );
 }
@@ -36,11 +41,14 @@ export function CalloutIcon({
   content,
   contentKey,
   onPick,
+  onColor,
 }: {
   content: HTMLElement | null;
   contentKey: string;
   // 選んだアイコン。空文字はアイコンを外す。
   onPick: (blockIndex: number, icon: string) => void;
+  // 選んだ背景色。空文字は色を外す。
+  onColor: (blockIndex: number, color: string) => void;
 }) {
   // seq は開くたびに増やす。盤を作り直させて、前に打った絞り込みを持ち越さない。
   const [open, setOpen] = useState<{
@@ -48,6 +56,7 @@ export function CalloutIcon({
     index: number;
     x: number;
     y: number;
+    color: string | null;
   } | null>(null);
 
   useEffect(() => setOpen(null), [contentKey]);
@@ -65,11 +74,13 @@ export function CalloutIcon({
       e.preventDefault();
       e.stopPropagation();
       const box = ico.getBoundingClientRect();
+      const now = colorOf(ico.closest(".mg-callout")?.getAttribute("data-color"));
       setOpen((was) => ({
         seq: (was?.seq ?? 0) + 1,
         index,
         x: box.left,
         y: box.bottom + 6,
+        color: now,
       }));
     };
     content.addEventListener("click", onClick);
@@ -86,6 +97,13 @@ export function CalloutIcon({
       onPick={(icon) => {
         onPick(open.index, icon);
         setOpen(null);
+      }}
+      colors={{
+        now: open.color,
+        onPick: (color) => {
+          onColor(open.index, color);
+          setOpen(null);
+        },
       }}
       onClose={() => setOpen(null)}
     />

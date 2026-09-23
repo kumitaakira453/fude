@@ -209,17 +209,29 @@ function join(rows: Row[]): Opened {
   };
 }
 
-// callout のアイコンを差し替える。開きタグの icon 属性だけを書き換え、
-// 他の属性と中身はそのまま残す。空文字を渡すと属性を落とす。
+// callout の開きタグの属性を差し替える。他の属性と中身はそのまま残し、
+// 空文字を渡すとその属性を落とす。
+
+// 背景色。
+export function setCalloutColor(src: string, color: string): string {
+  return setCalloutAttr(src, "color", color);
+}
+
+// アイコン。
 export function setCalloutIcon(src: string, icon: string): string {
+  return setCalloutAttr(src, "icon", icon);
+}
+
+// 開きタグの属性を 1 つ差し替える。値が空なら落とす。
+function setCalloutAttr(src: string, name: string, value: string): string {
   const lines = src.split("\n");
   const at = lines.findIndex((line) => CONTAINERS.callout.open.test(line.trim()));
   if (at < 0) return src;
   const line = lines[at].trim();
   const pad = indentOf(lines[at]);
   const attrs = (CONTAINERS.callout.open.exec(line)?.[1] ?? "").trim();
-  const rest = attrs.replace(/\s*icon="[^"]*"/, "").trim();
-  const next = icon ? `icon="${icon}"${rest ? ` ${rest}` : ""}` : rest;
+  const rest = attrs.replace(new RegExp(`\\s*${name}="[^"]*"`), "").trim();
+  const next = value ? `${name}="${value}"${rest ? ` ${rest}` : ""}` : rest;
   lines[at] = next ? `${pad}<callout ${next}>` : `${pad}<callout>`;
   return lines.join("\n");
 }

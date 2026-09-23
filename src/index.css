@@ -2741,29 +2741,67 @@ body.mg-dragging .mg-sel-menu {
   height: 1.4rem;
   font-size: 1.05rem;
 }
-.mg-prose .mg-callout.notion[data-color^="brown"] {
-  --mg-tint: #a1704b;
+/* 囲みの色。値は 1 か所に置き、囲みの飾りと盤の札が同じものを引く。 */
+:root {
+  --mg-callout-brown: #a1704b;
+  --mg-callout-orange: #e2802a;
+  --mg-callout-yellow: #d9a514;
+  --mg-callout-green: #2f9e63;
+  --mg-callout-blue: #3b82f6;
+  --mg-callout-purple: #8b5cf6;
+  --mg-callout-pink: #e0569b;
+  --mg-callout-red: #ef4444;
 }
-.mg-prose .mg-callout.notion[data-color^="orange"] {
-  --mg-tint: #e2802a;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="brown"] {
+  --mg-tint: var(--mg-callout-brown);
 }
-.mg-prose .mg-callout.notion[data-color^="yellow"] {
-  --mg-tint: #d9a514;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="orange"] {
+  --mg-tint: var(--mg-callout-orange);
 }
-.mg-prose .mg-callout.notion[data-color^="green"] {
-  --mg-tint: #2f9e63;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="yellow"] {
+  --mg-tint: var(--mg-callout-yellow);
 }
-.mg-prose .mg-callout.notion[data-color^="blue"] {
-  --mg-tint: #3b82f6;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="green"] {
+  --mg-tint: var(--mg-callout-green);
 }
-.mg-prose .mg-callout.notion[data-color^="purple"] {
-  --mg-tint: #8b5cf6;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="blue"] {
+  --mg-tint: var(--mg-callout-blue);
 }
-.mg-prose .mg-callout.notion[data-color^="pink"] {
-  --mg-tint: #e0569b;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="purple"] {
+  --mg-tint: var(--mg-callout-purple);
 }
-.mg-prose .mg-callout.notion[data-color^="red"] {
-  --mg-tint: #ef4444;
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="pink"] {
+  --mg-tint: var(--mg-callout-pink);
+}
+:is(.mg-prose, .mg-pm) .mg-callout[data-color^="red"] {
+  --mg-tint: var(--mg-callout-red);
+}
+
+/* 盤の色の並び。 */
+.mg-ico-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--mg-border);
+}
+.mg-ico-color {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--mg-muted);
+}
+.mg-ico-color.is-none {
+  border-color: var(--mg-border);
+}
+.mg-ico-color:hover {
+  border-color: var(--mg-fg-dim);
+}
+.mg-ico-color.is-on {
+  box-shadow: 0 0 0 2px var(--mg-bg), 0 0 0 3.5px var(--mg-accent);
 }
 
 /* 番号付きリスト。丸で囲まず、数字そのものを組む。置き場所は行頭の印の

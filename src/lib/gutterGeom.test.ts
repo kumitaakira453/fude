@@ -7,6 +7,7 @@ import {
   firstLine,
   holdAt,
   indentStep,
+  inWrap,
   itemEdge,
   nearEdge,
   onLine,
@@ -319,5 +320,39 @@ describe("項目の左端と字下げ", () => {
     nest.appendChild(kid);
     li.appendChild(nest);
     expect(indentStep(ul)).toBe(24);
+  });
+});
+
+describe("囲みの中の項目", () => {
+  // つまみは 1 か所に 1 つ。囲みの中では囲みごと掴ませるので、中の項目は
+  // 相手にしない（中身が箇条書きだけの囲みが掴めなくなるため）。
+  const build = (html: string) => {
+    const block = document.createElement("div");
+    block.innerHTML = html;
+    document.body.appendChild(block);
+    return block;
+  };
+
+  it("囲みの中の項目は相手にしない", () => {
+    const block = build(
+      '<div class="mg-callout"><div class="mg-callout-body"><ul><li id="a">中</li></ul></div></div>',
+    );
+    expect(inWrap(block.querySelector("#a")!, block)).toBe(true);
+  });
+
+  it("トグルの中も同じ", () => {
+    const block = build("<details><ul><li id=\"b\">中</li></ul></details>");
+    expect(inWrap(block.querySelector("#b")!, block)).toBe(true);
+  });
+
+  it("囲みの外の箇条書きは今までどおり", () => {
+    const block = build('<ul><li id="c">素の項目</li></ul>');
+    expect(inWrap(block.querySelector("#c")!, block)).toBe(false);
+  });
+
+  it("別の塊の囲みは数えない", () => {
+    document.body.innerHTML = '<div class="mg-callout"><ul><li id="d">外</li></ul></div>';
+    const block = build('<ul><li id="e">中</li></ul>');
+    expect(inWrap(block.querySelector("#e")!, block)).toBe(false);
   });
 });

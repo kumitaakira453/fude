@@ -135,6 +135,18 @@ export function itemAtY(
   return hit ?? near;
 }
 
+// 囲み（callout・トグル）の中の項目か。
+//
+// つまみは 1 か所に 1 つ。中の項目を掴む相手にすると、中身が箇条書きだけの
+// 囲みはどこを指しても項目が勝ち、囲み自身を掴む場所が画面から消える。
+// 中の並べ替えより、囲みごと動かせることを採る。
+const WRAPS = ".mg-callout, .mg-details, details";
+
+export function inWrap(li: Element, block: Element): boolean {
+  const wrap = li.closest(WRAPS);
+  return !!wrap && block.contains(wrap);
+}
+
 // つまみを合わせる 1 行目。項目全体の真ん中だと、2 行以上の項目で行の間に
 // 落ちる。
 export function itemLine(li: HTMLElement, box: DOMRect): DOMRect {

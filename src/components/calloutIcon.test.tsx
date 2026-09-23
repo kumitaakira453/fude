@@ -150,6 +150,7 @@ describe("編集面", () => {
 describe("読むとき", () => {
   it("印が出ていて、押すとその塊の番号で盤が出る", async () => {
     const picked: [number, string][] = [];
+  const colored: [number, string][] = [];
     const at = mount(
       <div className="mg-prose">
         <div className="mg-block" data-mg-block="3">
@@ -177,6 +178,7 @@ describe("読むとき", () => {
             content={content}
             contentKey="probe"
             onPick={(index, icon) => picked.push([index, icon])}
+            onColor={(index, color) => colored.push([index, color])}
           />
         </>,
       );
