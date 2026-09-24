@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "../../lib/blocks";
 import type { Resolution } from "../../lib/blockDiff";
-import type { ReviewThread } from "../../lib/review";
+import type { RailFilter, ReviewThread } from "../../lib/review";
 import { CommentRail } from "./CommentRail";
 
 // 本文の横に出すコメント。
@@ -100,6 +100,8 @@ function show(
     content?: HTMLElement | null;
     // 本文の印から選ばれた状態で出す。
     active?: string;
+    // 始めの絞り込み。既定は「未対応」。
+    filter?: RailFilter;
   } = {},
 ) {
   picked = [];
@@ -114,7 +116,7 @@ function show(
   // 開いている 1 枚と、外れた指摘の畳み開きは呼ぶ側が持つ（DocPane と同じ形）。
   function Host() {
     const railRef = useRef<HTMLElement | null>(null);
-    const [all, setAll] = useState(false);
+    const [filter, setFilter] = useState<RailFilter>(over.filter ?? "todo");
     const [active, setActive] = useState<string | null>(over.active ?? null);
     return (
       <CommentRail
@@ -125,8 +127,8 @@ function show(
         done={over.done ?? []}
         resolutions={resolutions}
         loose={over.loose ?? []}
-        all={all}
-        onAll={setAll}
+        filter={filter}
+        onFilter={setFilter}
         width={288}
         active={active}
         onPick={(id) => {
@@ -167,7 +169,15 @@ const box = (card: HTMLElement) => card.querySelector<HTMLTextAreaElement>("text
 const click = (el: HTMLElement) => act(() => el.click());
 const openStray = () => click(document.querySelector<HTMLElement>(".mg-rail-stray-top")!);
 const picks = () =>
-  Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-pick > button"));
+  Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-opt"));
+const openFilter = () => click(document.querySelector<HTMLElement>(".mg-rail-chip")!);
+// 絞り込みを選ぶ。札を押して開き、名前で選ぶ。
+const pick = (name: string) => {
+  openFilter();
+  const hit = picks().find((el) => el.textContent?.startsWith(name));
+  if (!hit) throw new Error(`絞り込みが無い: ${name}`);
+  click(hit);
+};
 
 const at = (index: number) => ({ state: "unchanged", index, head: block(index) }) as const;
 
@@ -226,27 +236,41 @@ describe("絞り込み", () => {
       over,
     );
 
-  it("切り替えにそれぞれの件数を出す", () => {
+  it("選択肢にそれぞれの件数を出す", () => {
     two({ done: [settled("d1")], loose: [thread("x1")] });
-    expect(picks().map((el) => el.textContent)).toEqual(["未解決 3", "すべて 4"]);
+    openFilter();
+    expect(picks().map((el) => el.textContent)).toEqual([
+      "未対応返信も解決もまだ3",
+      "未解決返信済みも含む3",
+      "解決済み片付いたもの1",
+      "すべて4",
+    ]);
   });
 
-  it("既定は未解決だけ。切り替えると片付いたものも本文の並び順で混ざる", () => {
+  it("既定は未対応。返信の付いた指摘は残らない", () => {
     two({ done: [settled("d1")] });
     expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2"]);
-    click(picks()[1]);
+    pick("未解決");
+    expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2"]);
+    pick("すべて");
     expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2", "選んだ字 d1"]);
+  });
+
+  it("片付いたものだけも出せる", () => {
+    two({ done: [settled("d1")] });
+    pick("解決済み");
+    expect(quotes()).toEqual(["選んだ字 d1"]);
   });
 
   it("片付いた札はそれと分かる", () => {
     two({ done: [settled("d1")] });
-    click(picks()[1]);
+    pick("すべて");
     expect(document.querySelectorAll(".mg-rail-card.is-done")).toHaveLength(1);
   });
 
   it("片付いた札の操作は、解決ではなく取り消し", () => {
     two({ done: [settled("d1")] });
-    click(picks()[1]);
+    pick("すべて");
     const acts = cards()[2].querySelectorAll<HTMLElement>(".mg-rail-act");
     click(acts[0]);
     expect(reopened).toEqual(["d1"]);
@@ -255,8 +279,11 @@ describe("絞り込み", () => {
 });
 
 describe("札の姿", () => {
+  // 札の姿を見る組。返信の付いた会話も出したいので、絞り込みは「すべて」。
   const talk = (over: Partial<ReviewThread> = {}) =>
-    show([thread("t1", over)], new Map<string, Resolution>([["t1", at(0)]]));
+    show([thread("t1", over)], new Map<string, Resolution>([["t1", at(0)]]), {
+      filter: "all",
+    });
 
   it("最初から会話を全部出す", () => {
     // 畳んでおくと、読むたびに開く操作が挟まるだけで出てくるものは同じ。

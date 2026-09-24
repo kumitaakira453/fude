@@ -26,7 +26,12 @@ import { copyImage, copyText } from "../lib/clip";
 import { askWhereToSave, DRAFT, dropDraft, inDrafts } from "../lib/drafts";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { displayName, pathExists, readText, writeFile } from "../lib/fsAccess";
-import { createCheckpoint, moveReviewFile, type AnchorHit } from "../lib/review";
+import {
+  createCheckpoint,
+  moveReviewFile,
+  type AnchorHit,
+  type RailFilter,
+} from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
@@ -681,7 +686,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
   // 横の欄で片付いた指摘まで出しているか。出すと決めたときだけ、その居場所を
   // 引かせる（解決済みは溜まる一方で、1 件ごとに基準版の読み込みと差分が要る）。
-  const [railAll, setRailAll] = useState(false);
+  // コメント欄の絞り込み。既定は「未対応」——読み返して手を付けるものだけが残る。
+  const [railFilter, setRailFilter] = useState<RailFilter>("todo");
+  const railAll = railFilter === "all" || railFilter === "done";
   // 欄の幅。掴んでいるあいだは仕切りが DOM へ直に書くので、控えは離した 1 回だけ。
   const [railWidth, setRailWidth] = useAtom(railWidthAtom);
   const railRef = useRef<HTMLElement | null>(null);
@@ -1904,8 +1911,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             done={review.done}
             resolutions={review.resolutions}
             loose={review.looseThreads}
-            all={railAll}
-            onAll={setRailAll}
+            filter={railFilter}
+            onFilter={setRailFilter}
             width={railWidth}
             active={picked}
             onPick={setPicked}

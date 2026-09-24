@@ -8,7 +8,14 @@ import {
 } from "react";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
-import { isOpen, type ReviewComment, type ReviewThread } from "../../lib/review";
+import {
+  hasReply,
+  isOpen,
+  RAIL_FILTERS,
+  type RailFilter,
+  type ReviewComment,
+  type ReviewThread,
+} from "../../lib/review";
 import { ago } from "../../lib/when";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
@@ -42,6 +49,88 @@ interface Card {
   done: boolean;
 }
 
+// 絞り込みの札。押すと選択肢が開き、それぞれの件数が並ぶ。
+//
+// 帯（タブ）で分けていた頃は「面の切り替え」に見えて、いま何で絞っているのか
+// が読み取れなかった。選んでいるものだけを札に出し、他は開いたときに見せる。
+function FilterChip({
+  now,
+  counts,
+  onPick,
+}: {
+  now: RailFilter;
+  counts: Record<RailFilter, number>;
+  onPick: (filter: RailFilter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener("mousedown", away);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", esc, true);
+    };
+  }, [open]);
+
+  const here = RAIL_FILTERS.find((f) => f.id === now) ?? RAIL_FILTERS[0];
+  // 片付いた割合。押す前に、どれだけ進んだかがひと目で分かる。
+  const share = counts.all === 0 ? 0 : counts.done / counts.all;
+
+  return (
+    <div ref={box} className="mg-rail-filter">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`mg-rail-chip${open ? " is-open" : ""}`}
+      >
+        <i className={`mg-rail-dot is-${here.id}`} />
+        {here.name}
+        <b>{counts[now]}</b>
+        <Icon name={open ? "expand_less" : "expand_more"} size={14} />
+      </button>
+      {open && (
+        <div className="mg-rail-menu">
+          {RAIL_FILTERS.map((one) => (
+            <button
+              key={one.id}
+              type="button"
+              onClick={() => {
+                onPick(one.id);
+                setOpen(false);
+              }}
+              className={`mg-rail-opt${one.id === now ? " is-on" : ""}${
+                counts[one.id] === 0 ? " is-empty" : ""
+              }`}
+            >
+              <i className={`mg-rail-dot is-${one.id}`} />
+              <span className="mg-rail-opt-name">
+                {one.name}
+                {one.note && <em>{one.note}</em>}
+              </span>
+              <b>{counts[one.id]}</b>
+            </button>
+          ))}
+          {/* 片付いた割合。全部片付くと満ちる。 */}
+          <div className="mg-rail-gauge" title={`${counts.done} / ${counts.all} 片付いた`}>
+            <i style={{ width: `${Math.round(share * 100)}%` }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CommentRail({
   railRef,
   content,
@@ -50,8 +139,8 @@ export function CommentRail({
   done,
   resolutions,
   loose,
-  all,
-  onAll,
+  filter,
+  onFilter,
   width,
   active,
   onPick,
@@ -74,9 +163,9 @@ export function CommentRail({
   resolutions: Map<string, Resolution>;
   // 本文に居場所を持たない指摘。流れる列には混ぜられないので別に置く。
   loose: ReviewThread[];
-  // 片付いたものも出すか。居場所を引くかどうかが変わるので、呼ぶ側が持つ。
-  all: boolean;
-  onAll: (all: boolean) => void;
+  // 何を出すか。片付いたものを引くかどうかが変わるので、呼ぶ側が持つ。
+  filter: RailFilter;
+  onFilter: (filter: RailFilter) => void;
   // 欄の幅。掴んで変えた分を呼ぶ側が覚える。
   width: number;
   // 選んでいる 1 枚。本文の印と同じ合図を使う。
@@ -93,16 +182,40 @@ export function CommentRail({
   // 行ったり来たりすることになる。
   //
   // 今の本文に居場所を持たない指摘はここへ入れない。押しても飛ぶ先が無い。
+  // 絞り込みごとの件数。選ぶ前に、どれがどれだけあるかを見せる。
+  const counts = useMemo(() => {
+    const todo = [...threads, ...loose].filter((t) => !hasReply(t)).length;
+    const open = threads.length + loose.length;
+    return { todo, open, done: done.length, all: open + done.length };
+  }, [threads, loose, done]);
+
+  const keep = useCallback(
+    (thread: ReviewThread, settled: boolean) => {
+      if (filter === "all") return true;
+      if (filter === "done") return settled;
+      if (settled) return false;
+      return filter === "open" || !hasReply(thread);
+    },
+    [filter],
+  );
+
   const cards = useMemo<Card[]>(() => {
     const out: Card[] = [];
-    for (const thread of all ? [...threads, ...done] : threads) {
+    for (const thread of [...threads, ...done]) {
+      if (!keep(thread, !isOpen(thread))) continue;
       const head = headOf(
         resolutions.get(thread.id) ?? { state: "unknown", index: -1 },
       );
       if (head) out.push({ thread, block: head.index, done: !isOpen(thread) });
     }
     return out.sort((a, b) => a.block - b.block);
-  }, [all, threads, done, resolutions]);
+  }, [keep, threads, done, resolutions]);
+
+  // 本文から外れた指摘も同じ絞り込みに従う。
+  const strays = useMemo(
+    () => loose.filter((thread) => keep(thread, false)),
+    [keep, loose],
+  );
 
   const flowRef = useRef<HTMLDivElement | null>(null);
   // 本文から外れた指摘の組。欄の中だけの開け閉めなので、ここで持つ。
@@ -230,23 +343,8 @@ export function CommentRail({
       }`}
     >
       <div className="mg-rail-bar">
-        <div className="mg-rail-pick">
-          <button
-            type="button"
-            onClick={() => onAll(false)}
-            className={all ? "" : "is-on"}
-          >
-            未解決 {threads.length + loose.length}
-          </button>
-          <button
-            type="button"
-            onClick={() => onAll(true)}
-            className={all ? "is-on" : ""}
-          >
-            すべて {threads.length + loose.length + done.length}
-          </button>
-        </div>
-        {loose.length > 0 && (
+        <FilterChip now={filter} counts={counts} onPick={onFilter} />
+        {strays.length > 0 && (
           <button
             type="button"
             onClick={() => setOpenLoose(!openLoose)}
@@ -254,15 +352,15 @@ export function CommentRail({
             className={`mg-rail-stray-top${openLoose ? " is-on" : ""}`}
           >
             <Icon name="link_off" size={13} />
-            {loose.length}
+            {strays.length}
             <Icon name={openLoose ? "expand_less" : "expand_more"} size={14} />
           </button>
         )}
       </div>
 
-      {openLoose && loose.length > 0 && (
+      {openLoose && strays.length > 0 && (
         <div className="mg-rail-loose">
-          {loose.map((thread) => (
+          {strays.map((thread) => (
             <RailCard
               key={thread.id}
               thread={thread}
@@ -301,9 +399,13 @@ export function CommentRail({
         ))}
       </div>
 
-      {cards.length === 0 && loose.length === 0 && (
+      {cards.length === 0 && strays.length === 0 && (
         <p className="mg-rail-none">
-          {all ? "コメントはありません。" : "未解決のコメントはありません。"}
+          {counts.all === 0
+            ? "コメントはありません。"
+            : filter === "todo"
+              ? "未対応のコメントはありません。片付いています。"
+              : `${RAIL_FILTERS.find((f) => f.id === filter)?.name}のコメントはありません。`}
         </p>
       )}
     </nav>

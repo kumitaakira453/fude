@@ -3459,13 +3459,141 @@ svg[id^="mmd-"] foreignObject p {
    ============================================================ */
 /* 件数と、外れたコメントの口。列の札はこの下をくぐって流れるので、地は透かさない。 */
 .mg-rail-bar {
-  position: relative;
-  z-index: 2;
+  /* 送っても残す。何で絞っているかは、読んでいる間ずっと要る。
+     札は流れる列の上をくぐらせるので、地は透かさない。 */
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   gap: 0.4rem;
   align-items: center;
   padding: 0.5rem 0.7rem;
   background: var(--mg-bg);
+}
+
+/* 絞り込みの札。押すと選択肢が開く。 */
+.mg-rail-filter {
+  position: relative;
+}
+.mg-rail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.4rem 0.2rem 0.5rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 999px;
+  background: var(--mg-panel);
+  color: var(--mg-fg-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.mg-rail-chip:hover,
+.mg-rail-chip.is-open {
+  border-color: color-mix(in srgb, var(--mg-accent) 45%, transparent);
+  color: var(--mg-fg);
+}
+.mg-rail-chip > b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--mg-fg);
+}
+/* 状態の色。札と選択肢で同じものを使う。 */
+.mg-rail-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--mg-muted);
+}
+.mg-rail-dot.is-todo {
+  background: var(--mg-accent);
+}
+.mg-rail-dot.is-open {
+  background: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-muted));
+}
+.mg-rail-dot.is-done {
+  background: color-mix(in srgb, var(--mg-fg) 25%, transparent);
+}
+.mg-rail-dot.is-all {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--mg-muted);
+}
+.mg-rail-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 13.5rem;
+  padding: 0.25rem;
+  border: 1px solid var(--mg-border);
+  border-radius: 0.7rem;
+  background: var(--mg-panel);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
+  animation: mg-rail-drop 0.12s ease-out;
+}
+@keyframes mg-rail-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-0.2rem);
+  }
+}
+.mg-rail-opt {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.5rem;
+  color: var(--mg-fg-dim);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.mg-rail-opt:hover {
+  background: var(--mg-hover);
+}
+.mg-rail-opt.is-on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+/* 0 件のものは沈める。押せるままにしておく（押して空だと分かるのも手掛かり）。 */
+.mg-rail-opt.is-empty {
+  opacity: 0.45;
+}
+.mg-rail-opt-name {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.mg-rail-opt-name > em {
+  font-size: 10px;
+  font-style: normal;
+  color: var(--mg-muted);
+}
+.mg-rail-opt > b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+/* 片付いた割合。選ぶ前に、どれだけ進んだかが見える。 */
+.mg-rail-gauge {
+  height: 3px;
+  margin: 0.35rem 0.45rem 0.15rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 10%, transparent);
+  overflow: hidden;
+}
+.mg-rail-gauge > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mg-accent);
+  transition: width 0.3s ease;
 }
 /* 何を出すかの切り替え。件数も一緒に出して、片付いた分がどれだけあるかを
    切り替える前に見せる。 */

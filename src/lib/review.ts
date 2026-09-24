@@ -18,6 +18,19 @@ export interface ReviewComment {
   created_at: number;
 }
 
+// 欄の絞り込み。既定は「未対応」——読み返して手を付けるべきものだけが残る。
+export type RailFilter = "todo" | "open" | "done" | "all";
+
+export const RAIL_FILTERS: { id: RailFilter; name: string; note: string }[] = [
+  { id: "todo", name: "未対応", note: "返信も解決もまだ" },
+  { id: "open", name: "未解決", note: "返信済みも含む" },
+  { id: "done", name: "解決済み", note: "片付いたもの" },
+  { id: "all", name: "すべて", note: "" },
+];
+
+// 返信が付いているか。先頭は指摘そのものなので、2 件目から先が返信。
+export const hasReply = (thread: ReviewThread): boolean => thread.comments.length > 1;
+
 export interface ReviewThread {
   id: string;
   file: string; // 絶対パス
