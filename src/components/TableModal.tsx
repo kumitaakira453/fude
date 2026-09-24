@@ -1,5 +1,5 @@
 import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { editorialAtom } from "../state/atoms";
 import { Icon } from "./Icon";
@@ -8,7 +8,6 @@ import { Icon } from "./Icon";
 //
 // 本文の幅に収める限り、列の多い表は横に送るしかない。送る距離が長いほど
 // 何の行か見失うので、本文の幅から外して広げ、見出しの行と先頭の列を置いていく。
-// それでも収まらないものは「縮小」で、字と列を詰めて見渡す。
 //
 // 中身は描き上がった表をそのまま写す（組み直すと見たままから外れる）。
 // 押せるものと編集の目印だけを落とす。
@@ -24,7 +23,6 @@ export function tablePlain(table: HTMLElement): string {
 
 export function TableModal({ html, onClose }: { html: string; onClose: () => void }) {
   const editorial = useAtomValue(editorialAtom);
-  const [tight, setTight] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -42,14 +40,6 @@ export function TableModal({ html, onClose }: { html: string; onClose: () => voi
         <div className="mg-tablebox-bar">
           <button
             type="button"
-            onClick={() => setTight((v) => !v)}
-            className={`mg-tablebox-act${tight ? " is-on" : ""}`}
-          >
-            <Icon name={tight ? "zoom_in" : "zoom_out"} size={16} />
-            {tight ? "等倍" : "縮小"}
-          </button>
-          <button
-            type="button"
             onClick={onClose}
             title="閉じる (Esc)"
             className="mg-tablebox-act"
@@ -58,9 +48,7 @@ export function TableModal({ html, onClose }: { html: string; onClose: () => voi
           </button>
         </div>
         <div
-          className={`mg-tablebox-body mg-prose prose${editorial ? " mg-editorial" : ""}${
-            tight ? " is-tight" : ""
-          }`}
+          className={`mg-tablebox-body mg-prose prose${editorial ? " mg-editorial" : ""}`}
         >
           <div className="mg-table-wrap" dangerouslySetInnerHTML={{ __html: html }} />
         </div>

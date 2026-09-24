@@ -996,16 +996,6 @@ button.mg-task-check:hover {
   margin: 1rem auto 0;
   overflow: auto;
 }
-/* 縮小。字を落とし、長い列の上限も詰める。 */
-.mg-tablebox-body.is-tight {
-  font-size: 0.82em;
-}
-.mg-tablebox-body.is-tight .mg-cell {
-  max-width: 220px;
-}
-.mg-tablebox-body.is-tight :is(th, td) {
-  padding: 0.25rem 0.5rem;
-}
 
 /* セルのインライン編集。見た目の跳ねを抑えるため、セルの本文と同じ字送り・
    行高でその場に重ね、控えめなアクセント枠で「編集中」を示す。 */
