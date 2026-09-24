@@ -888,6 +888,17 @@ button.mg-task-check:hover {
   z-index: 1;
   background: var(--mg-bg);
 }
+/* 置いていく列の境目。細い格子と同じ太さだと、固定されていることが
+   読み取れない。溢れている表でだけ太くする。 */
+:root[data-widetable="on"]
+  .mg-table-wrap.is-wide
+  > table
+  > :is(thead, tbody)
+  > tr
+  > :first-child {
+  border-right-width: 2px;
+  border-right-color: color-mix(in srgb, var(--mg-fg) 28%, var(--mg-border));
+}
 :root[data-widetable="on"]
   :is(.mg-prose, .mg-pm).mg-editorial
   tbody
@@ -3443,6 +3454,14 @@ svg[id^="mmd-"] foreignObject p {
   background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
   box-shadow: none;
 }
+/* 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す
+   細い印にする（塗ると、表まるごとへの指摘に見える）。 */
+.mg-review-edge {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mg-accent) 25%, transparent);
+}
+
 /* 箇所は分かっているが、指摘のあと本文が書き換わっている塗り。足元に破線を
    添えるだけにする。ブロックの外枠を重ねると、塗りと枠のどちらを指している
    のかが読み取れない。 */

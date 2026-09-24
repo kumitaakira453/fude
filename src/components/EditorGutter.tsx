@@ -135,6 +135,14 @@ interface Spot {
   } | null;
 }
 
+// 溢れている表に印を付ける。置いていく先頭列の境目を太くするのに使う
+// （収まっている表では固定が起きないので、太い線は出さない）。
+function markWide(root: HTMLElement): void {
+  for (const wrap of root.querySelectorAll<HTMLElement>(".mg-table-wrap")) {
+    wrap.classList.toggle("is-wide", wrap.scrollWidth - wrap.clientWidth > 4);
+  }
+}
+
 // 溢れている表の包み。大きく開く印はここの右上に置く。表そのものは
 // 送った分だけ左へ出るので、置き場は包みで測る。
 function overflowing(el: HTMLElement, base: DOMRect): Box | null {
@@ -718,6 +726,7 @@ export function EditorGutter({
     // 掴んでいる間は動かさない。
     let seen = { w: 0, h: 0 };
     const settle = new ResizeObserver((entries) => {
+      markWide(view.dom);
       const box = entries[0]?.contentRect;
       if (!box) return;
       if (Math.abs(box.width - seen.w) < 1 && Math.abs(box.height - seen.h) < 1) return;
@@ -726,6 +735,7 @@ export function EditorGutter({
       again();
     });
     settle.observe(view.dom);
+    markWide(view.dom);
 
     // 字下げ（Tab / ⇧Tab）のように、大きさは変わらないのに位置だけが動くこと
     // がある。項目が入れ子の並びへ移るだけなので、大きさの見張りでは気付けず、
@@ -733,6 +743,7 @@ export function EditorGutter({
     // 1 枚に 1 回へまとめる（打鍵のたびに測ると本文の大きさに比例して効く）。
     let soon = 0;
     const shifted = new MutationObserver(() => {
+      markWide(view.dom);
       if (soon || heldRef.current) return;
       soon = requestAnimationFrame(() => {
         soon = 0;

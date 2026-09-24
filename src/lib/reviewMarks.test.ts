@@ -3,7 +3,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "./blocks";
 import type { Resolution } from "./blockDiff";
 import type { ReviewThread } from "./review";
-import { readingMarks, readingPending, tableClip, textRects } from "./reviewMarks";
+import {
+  edgeRects,
+  readingMarks,
+  readingPending,
+  tableClip,
+  textRects,
+} from "./reviewMarks";
 
 // 印の組み立て。jsdom は描画を持たないので矩形は当て木で置き、見るのは
 // 「箇所を塗るのか、枠で示すのか、そもそも出さないのか」の分かれ方。
@@ -392,5 +398,37 @@ describe("tableClip", () => {
   it("表が無ければ切らない", () => {
     const box = document.createElement("div");
     expect(tableClip(box)).toBeNull();
+  });
+});
+
+// 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す。
+describe("edgeRects", () => {
+  const clip = new DOMRect(100, 0, 600, 200);
+
+  it("左へ潜っていれば左の縁", () => {
+    const out = edgeRects([new DOMRect(20, 40, 60, 20)], clip);
+    expect(out).toHaveLength(1);
+    expect(out[0].left).toBe(100);
+    expect(out[0].width).toBe(4);
+    expect(out[0].height).toBe(20);
+  });
+
+  it("右へ潜っていれば右の縁", () => {
+    const out = edgeRects([new DOMRect(800, 40, 60, 20)], clip);
+    expect(out).toHaveLength(1);
+    expect(out[0].left).toBe(696);
+  });
+
+  it("見えていれば出さない", () => {
+    expect(edgeRects([new DOMRect(200, 40, 60, 20)], clip)).toEqual([]);
+  });
+
+  it("縦は枠の中へ収める", () => {
+    const out = edgeRects([new DOMRect(20, -50, 60, 20)], clip);
+    expect(out[0].top).toBe(0);
+  });
+
+  it("切る枠が無ければ出さない", () => {
+    expect(edgeRects([new DOMRect(20, 40, 60, 20)], null)).toEqual([]);
   });
 });

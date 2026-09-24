@@ -240,7 +240,10 @@ function TableWrap({ children }: { children: ReactNode }) {
 
   return (
     <div className="mg-table-hold">
-      <div ref={wrap} className="mg-table-wrap overflow-x-auto">
+      <div
+        ref={wrap}
+        className={`mg-table-wrap overflow-x-auto${over ? " is-wide" : ""}`}
+      >
         <table>{children}</table>
       </div>
       {on && over && (

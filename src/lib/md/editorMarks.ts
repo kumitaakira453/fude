@@ -6,6 +6,7 @@ import {
   mergeRects,
   noteOf,
   relTo,
+  edgeRects,
   tableClip,
   textRects,
   unitOf,
@@ -112,24 +113,24 @@ export function editorMarks(
         ? null
         : unitElementIn(view, anchor.pos, thread.unit);
     const cell = marked ?? (inner ? unitOf(inner) : null);
-    const spots = cell
-      ? clipRects(unitRects(cell), spotClip)
-      : inner
-        ? clipRects(mergeRects(textRects(inner)), spotClip)
-        : [];
+    const found = cell ? unitRects(cell) : inner ? mergeRects(textRects(inner)) : [];
+    const spots = clipRects(found, spotClip);
+    // 箇所はあるのに、横に送られて枠の外にいる。潜っている側の縁だけを出す。
+    const edges = spots.length === 0 ? edgeRects(found, spotClip) : [];
     // 箇所が特定できているなら外枠は添えない。塗りと枠を二重に出すと、
     // どちらへの指摘なのか読み取れない。書き換わっていることは塗りの側で示す。
-    const shown = spots.length === 0 ? areas : [];
-    if (shown.length === 0 && spots.length === 0) continue;
+    const shown = spots.length === 0 && edges.length === 0 ? areas : [];
+    if (shown.length === 0 && spots.length === 0 && edges.length === 0) continue;
 
-    const at = spots[0] ?? areas[0];
-    const last = spots[spots.length - 1] ?? areas[0];
+    const at = spots[0] ?? edges[0] ?? areas[0];
+    const last = spots[spots.length - 1] ?? edges[0] ?? areas[0];
     out.push({
       id: thread.id,
       moved: anchor.moved,
       guess: anchor.guess,
       areas: shown.map((rc) => relTo(base, rc)),
       spots: spots.map((rc) => relTo(base, rc)),
+      edges: edges.map((rc) => relTo(base, rc)),
       ...noteOf(thread),
       hit: {
         id: thread.id,

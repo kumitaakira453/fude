@@ -97,6 +97,7 @@ import { SidebarGrip } from "./SidebarGrip";
 import {
   readingMarks,
   readingPending,
+  showAcross,
   type Marked,
 } from "../lib/reviewMarks";
 import { anchorsKey } from "../lib/md/anchors";
@@ -1113,8 +1114,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // DOM は ProseMirror のもので目印を持たないので、編集モデルの位置から引く。
   const showThread = useCallback(
     (id: string, block: number) => {
-      const go = (el: Element | null | undefined) =>
+      const go = (el: Element | null | undefined) => {
         el?.scrollIntoView({ block: "center", behavior: "smooth" });
+        // 枠の中で横に送るもの（表・コード）は、縦だけでは箇所が画面に出ない。
+        const thread = review.threads.find((t) => t.id === id);
+        if (el instanceof HTMLElement && thread) showAcross(el, thread);
+      };
       if (!editing) {
         go(content?.querySelector(`[data-mg-block="${block}"]`));
         return;
@@ -1125,7 +1130,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const dom = pm.view.nodeDOM(at.pos) ?? pm.view.domAtPos(at.pos).node;
       go(dom instanceof HTMLElement ? dom : (dom as Node)?.parentElement);
     },
-    [editing, content, pm],
+    [editing, content, pm, review.threads],
   );
 
   // 編集面で選んだところ。指摘の入口をここに出す。

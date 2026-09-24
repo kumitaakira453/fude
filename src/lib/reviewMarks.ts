@@ -6,6 +6,7 @@ import {
   readBlockText,
   scrollBoxOf,
 } from "./domText";
+import { frozenEdge } from "./gutterGeom";
 import { findPlain } from "./projection";
 import {
   answeredByAgent,
@@ -41,6 +42,10 @@ export interface Mark {
   areas: Rect[];
   // 指摘した箇所そのもの。書き換わっていても見つかれば出す。
   spots: Rect[];
+  // 箇所はあるのに、横に送られて枠の外へ出ているときの、潜っている側の縁。
+  // これが無いと「箇所を出せない」と同じ扱いになり、ブロック全体（表まるごと）
+  // が塗られて、実際よりずっと広い範囲への指摘に見える。
+  edges: Rect[];
   hit: AnchorHit;
   // ホバーで出す指摘の中身（1 件目の書き込みと、続きの件数）。
   note: string;
@@ -169,6 +174,65 @@ export function tableClip(el: Element): DOMRect | null {
   return right > left && bottom > top
     ? new DOMRect(left, top, right - left, bottom - top)
     : box;
+}
+
+// その指摘が指している範囲を、横に送って見せる。
+//
+// 表やコードの枠の中は横にスクロールするので、縦に送っただけでは箇所が
+// 画面に出ない。押したのに何も起きないように見えるので、横も合わせる。
+// 置いていく先頭列の下へ送り込まないよう、その右端から先に収める。
+export function showAcross(el: HTMLElement, thread: ReviewThread): void {
+  const range = spotRange(el, thread);
+  if (!range) return;
+  const box = scrollBoxOf(range.startContainer);
+  if (!box || box.scrollWidth <= box.clientWidth + 1) return;
+  const rc = range.getBoundingClientRect();
+  if (rc.width === 0 && rc.height === 0) return;
+  const view = box.getBoundingClientRect();
+  const held = frozenEdge(range.startContainer.parentElement);
+  const left = Math.max(view.left, held ?? view.left) + EDGE_GAP;
+  const right = view.right - EDGE_GAP;
+  if (rc.left < left) box.scrollLeft -= left - rc.left;
+  else if (rc.right > right) box.scrollLeft += rc.right - right;
+}
+
+// 枠の縁に残す余白。ぴったり寄せると、続きがあるのかどうか読み取れない。
+const EDGE_GAP = 24;
+
+// その指摘が指している範囲。読む面と編集面で同じ引き方をする（どちらも
+// 画面に出ている字から引く）。
+export function spotRange(el: HTMLElement, thread: ReviewThread): Range | null {
+  if (!thread.selection) return null;
+  const bt = readBlockText(el);
+  const span = findPlain(bt.plain, thread.selection, thread.selection_offset);
+  return span ? rangeAt(bt, span.start, span.end) : null;
+}
+
+// 潜っている側の縁。左右どちらへ隠れているかだけを、細い印で示す。
+const EDGE = 4;
+
+export function edgeRects(rects: DOMRect[], clip: DOMRect | null): DOMRect[] {
+  if (!clip) return [];
+  let left = false;
+  let right = false;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const rc of rects) {
+    if (rc.right <= clip.left) left = true;
+    else if (rc.left >= clip.right) right = true;
+    else continue;
+    top = Math.min(top, rc.top);
+    bottom = Math.max(bottom, rc.bottom);
+  }
+  if (!left && !right) return [];
+  // 縦の位置は枠の中へ収める。送った先が上下にはみ出していても、縁は
+  // 見えている高さに出す。
+  const y0 = Math.max(clip.top, Math.min(top, clip.bottom - 1));
+  const y1 = Math.min(clip.bottom, Math.max(bottom, clip.top + 1));
+  const out: DOMRect[] = [];
+  if (left) out.push(new DOMRect(clip.left, y0, EDGE, y1 - y0));
+  if (right) out.push(new DOMRect(clip.right - EDGE, y0, EDGE, y1 - y0));
+  return out;
 }
 
 // 重ねる先の左上を原点にした矩形へ直す。
@@ -328,25 +392,25 @@ export function readingMarks(
     if (boxes.length === 0) boxes.push(outline);
     const areas = clipRects(boxes, clip);
     const cell = marked ?? (inner ? unitOf(inner) : null);
-    const spots = cell
-      ? clipRects(unitRects(cell), spotClip)
-      : inner
-        ? clipRects(mergeRects(textRects(inner)), spotClip)
-        : [];
+    const found = cell ? unitRects(cell) : inner ? mergeRects(textRects(inner)) : [];
+    const spots = clipRects(found, spotClip);
+    // 箇所はあるのに、横に送られて枠の外にいる。潜っている側の縁だけを出す。
+    const edges = spots.length === 0 ? edgeRects(found, spotClip) : [];
     // 箇所が特定できているなら外枠は添えない。塗りと枠を二重に出すと、
     // どちらへの指摘なのか読み取れない。書き換わっていることは塗りの側で示す。
     const moved = resolution.state === "rewritten";
-    const shown = spots.length === 0 ? areas : [];
-    if (shown.length === 0 && spots.length === 0) continue;
+    const shown = spots.length === 0 && edges.length === 0 ? areas : [];
+    if (shown.length === 0 && spots.length === 0 && edges.length === 0) continue;
 
-    const anchor = spots[0] ?? areas[0];
-    const last = spots[spots.length - 1] ?? areas[0];
+    const anchor = spots[0] ?? edges[0] ?? areas[0];
+    const last = spots[spots.length - 1] ?? edges[0] ?? areas[0];
     out.push({
       id: thread.id,
       moved,
       guess: false,
       areas: shown.map((rc) => relTo(base, rc)),
       spots: spots.map((rc) => relTo(base, rc)),
+      edges: edges.map((rc) => relTo(base, rc)),
       ...noteOf(thread),
       hit: {
         id: thread.id,

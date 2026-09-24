@@ -183,6 +183,7 @@ export function AnchorOverlay({
         // 箇所の印を先に見る。ブロック全体の枠より内側にあり、そちらの方が
         // どの指摘か絞れている。
         for (const rc of mark.spots) if (inside(rc, x, y)) return { mark, rc };
+        for (const rc of mark.edges) if (inside(rc, x, y)) return { mark, rc };
       }
       for (const mark of marksRef.current) {
         for (const rc of mark.areas) if (inside(rc, x, y)) return { mark, rc };
@@ -405,6 +406,14 @@ export function AnchorOverlay({
               <div
                 key={`a:${i}`}
                 className={`mg-review-mark mg-review-mark-area${hot}`}
+                style={rc}
+              />
+            ))}
+            {/* 箇所が横に潜っているときの縁。ここから先にあることだけを示す。 */}
+            {mark.edges.map((rc, i) => (
+              <div
+                key={`e:${i}`}
+                className={`mg-review-mark mg-review-edge${hot}`}
                 style={rc}
               />
             ))}
