@@ -11,6 +11,7 @@ import { headOf, type Resolution } from "../../lib/blockDiff";
 import {
   hasReply,
   isOpen,
+  ownsLast,
   RAIL_FILTERS,
   type RailFilter,
   type ReviewComment,
@@ -149,6 +150,8 @@ export function CommentRail({
   onResolve,
   onReopen,
   onReply,
+  onRewrite,
+  onErase,
 }: {
   // 欄そのもの。掴んで幅を変えるとき、仕切りがここへ直に書く。
   railRef: React.MutableRefObject<HTMLElement | null>;
@@ -177,6 +180,9 @@ export function CommentRail({
   onResolve: (id: string) => void;
   onReopen: (id: string) => void;
   onReply: (id: string, body: string) => void;
+  // 自分の最後の書き込みを直す・消す。
+  onRewrite: (id: string, comment: string, body: string) => void;
+  onErase: (id: string, comment: string) => void;
 }) {
   // 本文の並び順に出す。台帳の並びは書いた順なので、そのままでは本文を
   // 行ったり来たりすることになる。
@@ -371,6 +377,8 @@ export function CommentRail({
               onResolve={() => onResolve(thread.id)}
               onReopen={() => onReopen(thread.id)}
               onReply={(text) => onReply(thread.id, text)}
+              onRewrite={(comment, body) => onRewrite(thread.id, comment, body)}
+              onErase={(comment) => onErase(thread.id, comment)}
             />
           ))}
         </div>
@@ -395,6 +403,8 @@ export function CommentRail({
             onResolve={() => onResolve(card.thread.id)}
             onReopen={() => onReopen(card.thread.id)}
             onReply={(text) => onReply(card.thread.id, text)}
+            onRewrite={(comment, body) => onRewrite(card.thread.id, comment, body)}
+            onErase={(comment) => onErase(card.thread.id, comment)}
           />
         ))}
       </div>
@@ -423,6 +433,8 @@ function RailCard({
   onResolve,
   onReopen,
   onReply,
+  onRewrite,
+  onErase,
 }: {
   thread: ReviewThread;
   // 流れる列に置くときの行き先。外れた指摘は持たない。
@@ -437,6 +449,9 @@ function RailCard({
   onResolve: () => void;
   onReopen: () => void;
   onReply: (body: string) => void;
+  // 自分の最後の書き込みを直す・消す。
+  onRewrite: (comment: string, body: string) => void;
+  onErase: (comment: string) => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
   // 返信の口を開いているか。選ばれていること（＝本文の印と対になっていること）
@@ -480,14 +495,18 @@ function RailCard({
         done ? " is-done" : ""
       }`}
     >
-      {/* 札の始末。入力欄の有無で場所が動かないよう、右上へ寄せて重ねる。 */}
+      {/* 札の始末。入力欄の有無で場所が動かないよう、右上へ寄せて重ねる。
+          長い会話では札の頭が画面の外へ出るので、外側は貼り付けて残す
+          （下まで読んでからでも解決にできる）。 */}
       <div className="mg-rail-acts">
-        {done ? (
-          <RailAct icon="undo" label="未解決に戻す" onPick={onReopen} />
-        ) : (
-          <RailAct icon="done" label="解決にする" onPick={onResolve} />
-        )}
-        <RailAct icon="open_in_new" label="別の画面で開く" onPick={onOpen} />
+        <div className="mg-rail-acts-pill">
+          {done ? (
+            <RailAct icon="undo" label="未解決に戻す" onPick={onReopen} />
+          ) : (
+            <RailAct icon="done" label="解決にする" onPick={onResolve} />
+          )}
+          <RailAct icon="open_in_new" label="別の画面で開く" onPick={onOpen} />
+        </div>
       </div>
       <div className="mg-rail-quote">
         {oneLine(thread.selection || thread.quote, QUOTE_LIMIT)}
@@ -506,7 +525,13 @@ function RailCard({
       )}
       <div className="mg-rail-talk">
         {thread.comments.map((c) => (
-          <Said key={c.id} comment={c} />
+          <Said
+            key={c.id}
+            comment={c}
+            own={ownsLast(thread, c)}
+            onRewrite={(body) => onRewrite(c.id, body)}
+            onErase={() => onErase(c.id)}
+          />
         ))}
       </div>
       {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。 */}
@@ -568,15 +593,100 @@ function Face({ author }: { author: string }) {
   );
 }
 
-function Said({ comment }: { comment: ReviewComment }) {
+// 会話の 1 つ。自分が書いた**最後の 1 つ**だけ、その場で直せる・消せる。
+// 途中のものを直せると、あとの返信が何に答えたものか読めなくなる。
+function Said({
+  comment,
+  own,
+  onRewrite,
+  onErase,
+}: {
+  comment: ReviewComment;
+  own: boolean;
+  onRewrite: (body: string) => void;
+  onErase: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(comment.body);
+  const md = useMarkdownKeys(setText);
+
+  const save = () => {
+    const body = text.trim();
+    setEditing(false);
+    if (body && body !== comment.body) onRewrite(body);
+  };
+
   return (
     <div className="mg-rail-said">
       <div className="mg-rail-who">
         <Face author={comment.author} />
         <span className="mg-rail-name">{comment.author}</span>
         <span>{ago(comment.created_at)}</span>
+        {own && !editing && (
+          <span className="mg-rail-own" onClick={(e) => e.stopPropagation()}>
+            <RailAct
+              icon="edit"
+              label="書き直す"
+              onPick={() => {
+                setText(comment.body);
+                setEditing(true);
+              }}
+            />
+            <RailAct icon="delete" label="削除" onPick={onErase} />
+          </span>
+        )}
       </div>
-      <CommentBody body={comment.body} className="mg-rail-body" />
+      {editing ? (
+        <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
+          <AutoTextarea
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyUp={md.onKeyUp}
+            onCompositionStart={md.onCompositionStart}
+            onCompositionEnd={md.onCompositionEnd}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setEditing(false);
+                return;
+              }
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                save();
+                return;
+              }
+              md.onKeyDown(e);
+            }}
+            minRows={1}
+            maxRows={8}
+          />
+          <div className="mg-rail-send">
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setEditing(false);
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="is-go"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                save();
+              }}
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      ) : (
+        <CommentBody body={comment.body} className="mg-rail-body" />
+      )}
     </div>
   );
 }

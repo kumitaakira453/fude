@@ -26,8 +26,10 @@ import { parseFrontmatter } from "../lib/frontmatter";
 import type { Target } from "../lib/md/reviewAnchors";
 import {
   createThread,
+  dropComment,
   editComment,
   isOpen,
+  putComment,
   removeThread,
   reopenThread,
   replyToThread,
@@ -309,6 +311,34 @@ export function useReview({
     [store],
   );
 
+  // 自分の最後の書き込みを消す。1 つしか無い指摘なら、指摘そのものが消える
+  // （remove と同じ道を通り、取り消しも効く）。
+  const erase = useCallback(
+    async (threadId: string, commentId: string) => {
+      const thread = store.get(ledgerAtom).threads.find((t) => t.id === threadId);
+      if (!thread) return;
+      if (thread.comments.length <= 1) {
+        await remove(threadId);
+        return;
+      }
+      const before = thread.comments[thread.comments.length - 1];
+      if (!(await dropComment(threadId, commentId))) return;
+      await syncLedger(store);
+      const restore = async () => {
+        setReviewUndo(null);
+        if (!(await putComment(threadId, before))) return;
+        await syncLedger(store);
+        notify(store, "書き込みを戻しました", "right");
+      };
+      setReviewUndo(restore);
+      notify(store, "書き込みを消しました", "right", {
+        label: "元に戻す",
+        run: () => void restore(),
+      });
+    },
+    [store, remove],
+  );
+
   // 直後の ⌘Z で戻す。戻すものが無ければ本文の undo に譲る。
   const undoRemove = useCallback((): boolean => runReviewUndo(), []);
 
@@ -497,6 +527,7 @@ export function useReview({
     resolve,
     reopen,
     rewrite,
+    erase,
     reply,
     undoRemove,
   };

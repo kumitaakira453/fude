@@ -281,6 +281,25 @@ export async function removeThread(thread: string): Promise<boolean> {
   );
 }
 
+// 書き込みを 1 つ消す。台帳の側でも最後の 1 つだけを受ける。
+export async function dropComment(thread: string, comment: string): Promise<boolean> {
+  return attempt(
+    () => invoke("review_drop_comment", { thread, comment }),
+    "書き込みを消せませんでした",
+  );
+}
+
+// 消した書き込みを元の姿のまま戻す。
+export async function putComment(
+  thread: string,
+  comment: ReviewComment,
+): Promise<boolean> {
+  return attempt(
+    () => invoke("review_put_comment", { thread, comment }),
+    "書き込みを戻せませんでした",
+  );
+}
+
 // 書き込みを書き直す。
 export async function editComment(
   thread: string,
@@ -291,6 +310,15 @@ export async function editComment(
     () => invoke("review_edit_comment", { thread, comment, body }),
     "書き込みを直せませんでした",
   );
+}
+
+// 自分で直せる書き込みか。**最後の 1 つ**で、かつ自分が書いたものだけ。
+//
+// 途中の書き込みを直したり消したりできると、そのあとの返信が何に答えたもの
+// なのか読めなくなる。相手の言葉も書き換えない。
+export function ownsLast(thread: ReviewThread, comment: ReviewComment): boolean {
+  const last = thread.comments[thread.comments.length - 1];
+  return !!last && last.id === comment.id && !AGENTS.has(comment.author);
 }
 
 // 最後の書き込みが AI かどうか。一覧で返信が来ているかを示すのに使う。

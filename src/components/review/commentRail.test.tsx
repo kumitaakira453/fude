@@ -90,6 +90,8 @@ let resolved: string[] = [];
 let reopened: string[] = [];
 let shown: string[] = [];
 let replied: { id: string; body: string }[] = [];
+let rewrote: { id: string; comment: string; body: string }[] = [];
+let erased: { id: string; comment: string }[] = [];
 
 function show(
   threads: ReviewThread[],
@@ -110,6 +112,8 @@ function show(
   reopened = [];
   shown = [];
   replied = [];
+  rewrote = [];
+  erased = [];
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -145,6 +149,8 @@ function show(
         onResolve={(id) => resolved.push(id)}
         onReopen={(id) => reopened.push(id)}
         onReply={(id, text) => replied.push({ id, body: text })}
+        onRewrite={(id, comment, body) => rewrote.push({ id, comment, body })}
+        onErase={(id, comment) => erased.push({ id, comment })}
       />
     );
   }
@@ -167,6 +173,11 @@ const quotes = () =>
   Array.from(document.querySelectorAll(".mg-rail-quote")).map((el) => el.textContent);
 const box = (card: HTMLElement) => card.querySelector<HTMLTextAreaElement>("textarea");
 const click = (el: HTMLElement) => act(() => el.click());
+// 入力欄から焦点が外れる拍子を避けるため、確定は押下（mousedown）で拾っている。
+const press = (el: HTMLElement) =>
+  act(() => {
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  });
 const openStray = () => click(document.querySelector<HTMLElement>(".mg-rail-stray-top")!);
 const picks = () =>
   Array.from(document.querySelectorAll<HTMLElement>(".mg-rail-opt"));
@@ -278,6 +289,67 @@ describe("絞り込み", () => {
   });
 });
 
+describe("自分の書き込み", () => {
+  const two = (over: Partial<ReviewThread> = {}) =>
+    show([thread("t1", over)], new Map<string, Resolution>([["t1", at(0)]]), {
+      filter: "all",
+    });
+  const own = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(".mg-rail-own [aria-label]"),
+    ).map((el) => el.getAttribute("aria-label"));
+
+  it("最後の書き込みが自分のものなら、直せる・消せる", () => {
+    two();
+    click(cards()[0]);
+    expect(own()).toEqual(["書き直す", "削除"]);
+  });
+
+  it("最後が AI の返信なら出さない", () => {
+    two({
+      comments: [
+        { id: "c1", author: "you", body: "ここ直して", created_at: 0 },
+        { id: "c2", author: "AI", body: "直しました", created_at: 1 },
+      ],
+    });
+    click(cards()[0]);
+    expect(own()).toEqual([]);
+  });
+
+  it("途中の自分の書き込みには出さない", () => {
+    two({
+      comments: [
+        { id: "c1", author: "you", body: "ひとつ目", created_at: 0 },
+        { id: "c2", author: "you", body: "ふたつ目", created_at: 1 },
+      ],
+    });
+    click(cards()[0]);
+    // 出るのは最後の 1 つぶんだけ。
+    expect(own()).toEqual(["書き直す", "削除"]);
+    expect(document.querySelectorAll(".mg-rail-own")).toHaveLength(1);
+  });
+
+  it("直すとその場で書き換わり、消すと呼ぶ側へ伝わる", () => {
+    two();
+    click(cards()[0]);
+    click(document.querySelector<HTMLElement>('.mg-rail-own [aria-label="書き直す"]')!);
+    const field = cards()[0].querySelector<HTMLTextAreaElement>("textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(field, "直した本文");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    press(document.querySelector<HTMLElement>(".mg-rail-send .is-go")!);
+    expect(rewrote).toEqual([{ id: "t1", comment: "t1c1", body: "直した本文" }]);
+
+    click(document.querySelector<HTMLElement>('.mg-rail-own [aria-label="削除"]')!);
+    expect(erased).toEqual([{ id: "t1", comment: "t1c1" }]);
+  });
+});
+
 describe("札の姿", () => {
   // 札の姿を見る組。返信の付いた会話も出したいので、絞り込みは「すべて」。
   const talk = (over: Partial<ReviewThread> = {}) =>
@@ -361,8 +433,9 @@ describe("本文から外れた指摘", () => {
   it("一覧で開くのは、その釦を押したときだけ", () => {
     show([], new Map(), { loose });
     openStray();
-    const acts = cards()[0].querySelectorAll<HTMLElement>(".mg-rail-act");
-    click(acts[acts.length - 1]);
+    click(
+      cards()[0].querySelector<HTMLElement>('.mg-rail-acts [aria-label="別の画面で開く"]')!,
+    );
     expect(opened).toEqual(["x1"]);
   });
 

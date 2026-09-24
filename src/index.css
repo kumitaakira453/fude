@@ -3835,11 +3835,17 @@ svg[id^="mmd-"] foreignObject p {
 }
 /* 札の始末。居るべき角へ指を運んだときだけ、小さな一組として札の上へ浮かせる。
    札のどこに触れても出すと、読んでいるあいだじゅう操作が目に入る。 */
+/* 外側は場所を取らない貼り付け。長い会話で札の頭が画面の外へ出ても、
+   操作だけは見えている範囲に残る（下まで読んでから解決にできる）。 */
 .mg-rail-acts {
-  position: absolute;
+  position: sticky;
   z-index: 2;
   top: 0.3rem;
-  right: 0.3rem;
+  display: flex;
+  height: 0;
+  justify-content: flex-end;
+}
+.mg-rail-acts-pill {
   display: flex;
   gap: 0.1rem;
   padding: 0.15rem;
@@ -3850,7 +3856,15 @@ svg[id^="mmd-"] foreignObject p {
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.mg-rail-acts:hover {
+.mg-rail-acts-pill:hover {
+  opacity: 1;
+}
+/* 開いている札では、指を運ぶ前から見せる。長い会話では、どこに操作が
+   あるのか探すことになる。 */
+.mg-rail-card.is-on .mg-rail-acts-pill {
+  opacity: 0.55;
+}
+.mg-rail-card.is-on .mg-rail-acts-pill:hover {
   opacity: 1;
 }
 /* 見えていないあいだは押させない。当たりは一組の側に残してあるので、角へ
@@ -3867,7 +3881,8 @@ svg[id^="mmd-"] foreignObject p {
     background 0.12s ease,
     color 0.12s ease;
 }
-.mg-rail-acts:hover .mg-rail-act {
+.mg-rail-acts-pill:hover .mg-rail-act,
+.mg-rail-card.is-on .mg-rail-acts-pill .mg-rail-act {
   pointer-events: auto;
 }
 .mg-rail-act:hover {

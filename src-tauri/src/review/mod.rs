@@ -691,6 +691,42 @@ pub fn edit_comment(thread_id: &str, comment_id: &str, body: &str) -> Result<(),
     })
 }
 
+// 書き込みを 1 つ消す。消せるのは最後の 1 つだけ。
+//
+// 途中の書き込みを消すと、そのあとの返信が何に答えたものか読めなくなる。
+// 画面も最後の 1 つにしか口を出さないが、台帳の側でも同じ決まりで守る。
+pub fn drop_comment(thread_id: &str, comment_id: &str) -> Result<(), String> {
+    store::update(|ledger: &mut Ledger| {
+        let thread = ledger
+            .thread_mut(thread_id)
+            .ok_or_else(|| format!("指摘 {thread_id} が見つかりません"))?;
+        let last = thread
+            .comments
+            .last()
+            .ok_or_else(|| format!("指摘 {thread_id} に書き込みがありません"))?;
+        if last.id != comment_id {
+            return Err("最後の書き込みだけが消せます".to_string());
+        }
+        thread.comments.pop();
+        Ok(())
+    })
+}
+
+// 消した書き込みを元の姿のまま戻す（取り消しの受け皿）。消せるのは最後の
+// 1 つだけなので、末尾へ戻せば元の並びに戻る。
+pub fn put_comment(thread_id: &str, comment: Comment) -> Result<(), String> {
+    store::update(|ledger: &mut Ledger| {
+        let thread = ledger
+            .thread_mut(thread_id)
+            .ok_or_else(|| format!("指摘 {thread_id} が見つかりません"))?;
+        if thread.comments.iter().any(|c| c.id == comment.id) {
+            return Err(format!("書き込み {} は既にあります", comment.id));
+        }
+        thread.comments.push(comment);
+        Ok(())
+    })
+}
+
 pub fn resolve(thread_id: &str, by: &str) -> Result<(), String> {
     store::update(|ledger: &mut Ledger| {
         let thread = ledger

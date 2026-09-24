@@ -164,6 +164,23 @@ async fn review_resolve(thread: String, by: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn review_drop_comment(thread: String, comment: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || review::drop_comment(&thread, &comment))
+        .await
+        .map_err(|e| format!("書き込みを消せませんでした: {e}"))?
+}
+
+#[tauri::command]
+async fn review_put_comment(
+    thread: String,
+    comment: review::store::Comment,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || review::put_comment(&thread, comment))
+        .await
+        .map_err(|e| format!("書き込みを戻せませんでした: {e}"))?
+}
+
+#[tauri::command]
 async fn review_put_thread(thread: review::store::Thread) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || review::put_thread(thread))
         .await
@@ -489,6 +506,8 @@ pub fn run() {
             review_reply,
             review_resolve,
             review_reopen,
+            review_drop_comment,
+            review_put_comment,
             review_put_thread,
             review_resolve_many,
             review_remove,

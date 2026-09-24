@@ -1921,6 +1921,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             onResolve={(id) => void review.resolve(id)}
             onReopen={(id) => void review.reopen(id)}
             onReply={(id, body) => void review.reply(id, body)}
+            onRewrite={(id, comment, body) => void review.rewrite(id, comment, body)}
+            onErase={(id, comment) => void review.erase(id, comment)}
           />
         )}
 
