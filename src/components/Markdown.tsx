@@ -236,6 +236,8 @@ function TableWrap({ children }: { children: ReactNode }) {
     return () => watch.disconnect();
   }, [on, children]);
 
+  const table = () => wrap.current?.querySelector("table") ?? null;
+
   return (
     <div className="mg-table-hold">
       <div ref={wrap} className="mg-table-wrap overflow-x-auto">
@@ -251,11 +253,8 @@ function TableWrap({ children }: { children: ReactNode }) {
           <Icon name="zoom_out_map" size={15} />
         </button>
       )}
-      {open && (
-        <TableModal
-          html={tablePlain(wrap.current!.querySelector("table")!)}
-          onClose={() => setOpen(false)}
-        />
+      {open && table() && (
+        <TableModal html={tablePlain(table()!)} onClose={() => setOpen(false)} />
       )}
     </div>
   );

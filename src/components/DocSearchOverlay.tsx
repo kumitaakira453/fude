@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLayerHost } from "../lib/layerHost";
 import {
   docFindNonceAtom,
   docFindOpenAtom,
@@ -64,6 +65,11 @@ export function DocSearchOverlay({
   // 見つけた範囲を測って矩形にする。探し直しは伴わないので、枠の中を
   // スクロールしただけのときはこちらだけを呼ぶ。
   const layerAt = into ?? content;
+  // 塗りは自分で作った入れ物へ置く。本文の入れ物そのものへ portal すると、
+  // そこは React が描いているので、ファイルを切り替えて消えるときに
+  // 「親が先、層が後」の順になり、親を探しても居なくて落ちる
+  // （検索の当たりを出したまま別のファイルを開くと再現する）。
+  const layerHost = useLayerHost(layerAt);
 
   const measure = useCallback(
     (ranges: Range[]) => {
@@ -289,7 +295,7 @@ export function DocSearchOverlay({
 
   const total = matches.length;
   const layer =
-    layerAt &&
+    layerHost &&
     createPortal(
       <div className="mg-hl-layer" aria-hidden>
         {matches.map((m, i) =>
@@ -307,7 +313,7 @@ export function DocSearchOverlay({
           )),
         )}
       </div>,
-      layerAt,
+      layerHost,
     );
 
   return (
