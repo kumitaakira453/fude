@@ -523,8 +523,10 @@ function RailCard({
           解決済み
         </div>
       )}
+      {/* 畳んでいる札は最初の 1 つだけ。列に何枚も並ぶので、全部出すと
+          長い会話 1 件で欄が埋まり、他の指摘が見えなくなる。 */}
       <div className="mg-rail-talk">
-        {thread.comments.map((c) => (
+        {(active ? thread.comments : thread.comments.slice(0, 1)).map((c) => (
           <Said
             key={c.id}
             comment={c}
@@ -533,6 +535,12 @@ function RailCard({
             onErase={() => onErase(c.id)}
           />
         ))}
+        {!active && thread.comments.length > 1 && (
+          <div className="mg-rail-more">
+            <Icon name="forum" size={11} />
+            返信 {thread.comments.length - 1} 件
+          </div>
+        )}
       </div>
       {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。 */}
       {(writing || text.trim()) && (

@@ -3889,6 +3889,16 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-hover);
   color: var(--mg-fg);
 }
+/* 畳んでいる札に、続きがあることだけを伝える。 */
+.mg-rail-more {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.25rem;
+  color: var(--mg-muted);
+  font-size: 10.5px;
+}
+
 /* 送る口。打ったものがあるときだけ、入力欄の下へ出す。 */
 .mg-rail-send {
   display: flex;

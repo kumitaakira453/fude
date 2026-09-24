@@ -357,18 +357,24 @@ describe("札の姿", () => {
       filter: "all",
     });
 
-  it("最初から会話を全部出す", () => {
-    // 畳んでおくと、読むたびに開く操作が挟まるだけで出てくるものは同じ。
+  it("畳んでいる札は最初の 1 つだけ。続きがあることは伝える", () => {
+    // 列に何枚も並ぶので、全部出すと長い会話 1 件で欄が埋まる。
     talk({
       comments: [
         { id: "c1", author: "you", body: "ここ直して", created_at: 0 },
         { id: "c2", author: "AI", body: "直しました", created_at: 1 },
       ],
     });
-    const text = cards()[0].textContent ?? "";
-    expect(text).toContain("ここ直して");
-    expect(text).toContain("直しました");
+    const text = () => cards()[0].textContent ?? "";
+    expect(text()).toContain("ここ直して");
+    expect(text()).not.toContain("直しました");
+    expect(text()).toContain("返信 1 件");
     expect(quotes()).toEqual(["選んだ字 t1"]);
+
+    // 押した札は会話を全部出す。
+    click(cards()[0]);
+    expect(text()).toContain("直しました");
+    expect(text()).not.toContain("返信 1 件");
   });
 
   it("押していない札には返信の口を出さない", () => {
