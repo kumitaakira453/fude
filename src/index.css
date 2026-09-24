@@ -920,10 +920,10 @@ button.mg-task-check:hover {
   justify-content: center;
   inset: 0;
   padding: 3vh 2vw;
-  /* 後ろは図の拡大と同じだけ沈める。薄いと、後ろの本文の字が枠の外に読めて
-     しまい、開いている表からはみ出したものに見える。 */
-  backdrop-filter: blur(4px);
-  background: rgb(0 0 0 / 72%);
+  /* 後ろは読めないところまで沈める。薄いと、後ろの本文の字が枠の外に
+     読めてしまい、開いている表からはみ出したものに見える。 */
+  backdrop-filter: blur(8px);
+  background: rgb(0 0 0 / 88%);
 }
 .mg-tablebox-panel {
   display: flex;
@@ -965,7 +965,11 @@ button.mg-task-check:hover {
   color: var(--mg-accent);
 }
 .mg-tablebox-body {
-  overflow: auto;
+  /* 送るのは中の包み 1 つに任せる。ここでも送れる形にすると、切り抜きが
+     2 段になって、送った先の字が枠の外へ漏れて見えることがある。 */
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
   padding: 0 1rem 1rem;
   /* 本文の幅（prose の 65ch）を外す。せっかく画面いっぱいに開いても、
      読み物の幅で切られると表だけが狭いところで送られ続ける。 */
@@ -983,13 +987,14 @@ button.mg-task-check:hover {
   background: color-mix(in srgb, var(--mg-accent) 10%, var(--mg-bg));
 }
 .mg-tablebox-body .mg-table-wrap {
-  max-height: none;
+  /* 縦横ともここで送る。切り抜きもここなので、送った先は枠の中に収まる。 */
+  max-height: 100%;
   /* 収まる表は真ん中に置く。広げた画面の左端に寄せる理由が無い。
      収まらない表では余白が 0 になり、左から送る形に落ちる。 */
   width: fit-content;
   max-width: 100%;
   margin: 1rem auto 0;
-  overflow: visible;
+  overflow: auto;
 }
 /* 縮小。字を落とし、長い列の上限も詰める。 */
 .mg-tablebox-body.is-tight {
