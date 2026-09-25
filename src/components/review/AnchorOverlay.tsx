@@ -64,6 +64,9 @@ function ago(at: number): string {
   return day < 30 ? `${day} 日前` : `${Math.floor(day / 30)} か月前`;
 }
 
+// 塗らずに棒だけで示す高さ（画素）。段落 4〜5 行ぶん。
+const BIG_AREA = 140;
+
 export function AnchorOverlay({
   content,
   contentKey,
@@ -405,7 +408,11 @@ export function AnchorOverlay({
             {mark.areas.map((rc, i) => (
               <div
                 key={`a:${i}`}
-                className={`mg-review-mark mg-review-mark-area${hot}`}
+                // 背の高い塊（表・長い引用）を塗ると、画面の大半が指摘の範囲に
+                // 見える。大きいものは塗らず、左の棒だけで示す。
+                className={`mg-review-mark mg-review-mark-area${
+                  rc.height > BIG_AREA ? " is-big" : ""
+                }${hot}`}
                 style={rc}
               />
             ))}

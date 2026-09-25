@@ -3452,8 +3452,13 @@ svg[id^="mmd-"] foreignObject p {
   padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 0.2em;
-  background: color-mix(in srgb, var(--mg-accent) 7%, transparent);
+  background: color-mix(in srgb, var(--mg-accent) 12%, transparent);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mg-accent) 55%, transparent);
+}
+/* 背の高い塊は塗らない。表のような大きいものを塗ると、画面の大半が指摘の
+   範囲に見える。左の棒だけで「この塊に指摘がある」ことを示す。 */
+.mg-review-mark-area.is-big {
+  background: transparent;
 }
 /* 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す
    細い印にする（塗ると、表まるごとへの指摘に見える）。 */
