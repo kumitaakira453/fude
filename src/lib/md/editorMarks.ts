@@ -9,6 +9,7 @@ import {
   edgeRects,
   tableClip,
   textRects,
+  unitNear,
   unitOf,
   unitRects,
   type Mark,
@@ -112,7 +113,10 @@ export function editorMarks(
       anchor.covered > 1 || !thread.unit
         ? null
         : unitElementIn(view, anchor.pos, thread.unit);
-    const cell = marked ?? (inner ? unitOf(inner) : null);
+    const lost = !inner && anchor.covered <= 1 && !!thread.selection;
+    const cell =
+      marked ??
+      (inner ? unitOf(inner) : lost ? unitNear(el, bt, thread) : null);
     const found = cell ? unitRects(cell) : inner ? mergeRects(textRects(inner)) : [];
     const spots = clipRects(found, spotClip);
     // 箇所はあるのに、横に送られて枠の外にいる。潜っている側の縁だけを出す。

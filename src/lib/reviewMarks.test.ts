@@ -4,6 +4,7 @@ import type { Block } from "./blocks";
 import type { Resolution } from "./blockDiff";
 import type { ReviewThread } from "./review";
 import {
+  cellInQuote,
   edgeRects,
   readingMarks,
   readingPending,
@@ -120,6 +121,37 @@ function listContent(): { article: HTMLElement; item: HTMLElement } {
 }
 
 const LIST_SRC = "- さいしょ\n\n- [ ]\n\n- さいご";
+
+// 表。升目は左から右、上から下へ 1 つずつ並べ、描画側と同じ目印を付ける。
+function tableContent(
+  cols: number,
+  texts: string[],
+): { article: HTMLElement; cells: HTMLElement[] } {
+  const article = document.createElement("article");
+  rects.set(article, new DOMRect(0, 0, 600, 200));
+  const wrap = document.createElement("div");
+  wrap.dataset.mgBlock = "0";
+  rects.set(wrap, new DOMRect(0, 0, 600, 200));
+  const table = document.createElement("table");
+  rects.set(table, new DOMRect(0, 0, 600, 200));
+  const cells: HTMLElement[] = [];
+  for (let r = 0; r < texts.length / cols; r++) {
+    const tr = document.createElement("tr");
+    for (let c = 0; c < cols; c++) {
+      const td = document.createElement(r === 0 ? "th" : "td");
+      td.dataset.mgCell = String(r * 100 + c);
+      td.textContent = texts[r * cols + c];
+      rects.set(td, new DOMRect(c * 200, r * 50, 200, 50));
+      tr.appendChild(td);
+      cells.push(td);
+    }
+    table.appendChild(tr);
+  }
+  wrap.appendChild(table);
+  article.appendChild(wrap);
+  document.body.appendChild(article);
+  return { article, cells };
+}
 
 const resolved = (r: Resolution) => new Map([["t1", r]]);
 const base = new DOMRect(0, 0, 600, 300);
@@ -291,6 +323,43 @@ describe("readingMarks", () => {
     expect(marks[0].areas.length).toBeGreaterThan(0);
   });
 
+  it("表の中の字が書き換わっていたら、指摘した升目だけに出す", () => {
+    // 字が本文から消えると箇所を探せない。表まるごとを塗ると、どの升目への
+    // 指摘なのか分からない。手前の升目の長さが変わっても同じ升目に当てる。
+    const before =
+      "| 機能 | 対応 | 備考 |\n| --- | --- | --- |\n| 全文検索 | 済 | フォルダ全体 |\n| 差分表示 | 未 | 予定 |";
+    const after =
+      "| 機能 | 対応 | 備考 |\n| --- | --- | --- |\n| 全文検索 | 済 | フォルダ全体と 1 ファイル |\n| 差分表示 | 済 | セル単位まで |";
+    const { article, cells } = tableContent(3, [
+      "機能", "対応", "備考",
+      "全文検索", "済", "フォルダ全体と 1 ファイル",
+      "差分表示", "済", "セル単位まで",
+    ]);
+    const marks = readingMarks(
+      article,
+      base,
+      [thread({ quote: before, selection: "予定", selection_offset: 22 })],
+      resolved({ state: "rewritten", index: 0, head: block(0, after), base: block(0, before) }),
+    );
+    expect(marks).toHaveLength(1);
+    expect(marks[0].spots).toHaveLength(1);
+    expect(marks[0].spots[0].top).toBe(cells[8].getBoundingClientRect().top + 2);
+    expect(marks[0].spots[0].left).toBe(cells[8].getBoundingClientRect().left);
+    expect(marks[0].areas).toHaveLength(0);
+  });
+
+  it("升目の無いブロックで字が消えていたら、今までどおりブロックの枠", () => {
+    const el = content("まるごと書き換えた段落。");
+    const marks = readingMarks(
+      el,
+      base,
+      [thread({ quote: "はじめの段落。", selection: "はじめ", selection_offset: 0 })],
+      resolved({ state: "unchanged", index: 0, head: block(0, "まるごと書き換えた段落。") }),
+    );
+    expect(marks[0].spots).toHaveLength(0);
+    expect(marks[0].areas.length).toBeGreaterThan(0);
+  });
+
   it("矩形は重ねる先の左上からの座標で返す", () => {
     const el = content("はじめの段落。", "つぎの段落。");
     const marks = readingMarks(
@@ -402,6 +471,23 @@ describe("tableClip", () => {
 });
 
 // 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す。
+describe("cellInQuote", () => {
+  const quote = "| a | b |\n| --- | --- |\n| 予定 | x |\n| y | 予定 |";
+
+  it("見出し行から数えた升目の番号を返す", () => {
+    expect(cellInQuote("| a | b |\n| --- | --- |\n| c | 予定 |", "予定", 0)).toBe(3);
+  });
+
+  it("同じ字が複数あれば、字の位置に近い升目", () => {
+    expect(cellInQuote(quote, "予定", 2)).toBe(2);
+    expect(cellInQuote(quote, "予定", 7)).toBe(5);
+  });
+
+  it("表でなければ引かない", () => {
+    expect(cellInQuote("予定の段落", "予定", 0)).toBeNull();
+  });
+});
+
 describe("edgeRects", () => {
   const clip = new DOMRect(100, 0, 600, 200);
 

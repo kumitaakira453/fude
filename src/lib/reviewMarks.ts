@@ -1,10 +1,12 @@
 import { headOf, quoteBlocks, type Resolution } from "./blockDiff";
+import { splitRow } from "./blocks";
 import {
   blockRect,
   clipRects,
   rangeAt,
   readBlockText,
   scrollBoxOf,
+  type BlockText,
 } from "./domText";
 import { frozenEdge } from "./gutterGeom";
 import { findPlain } from "./projection";
@@ -259,6 +261,60 @@ export function unitOf(range: Range): Element | null {
   return full.length > 0 && text === full ? start : null;
 }
 
+// 指摘した文字が今の本文に見つからないときに、せめてどの升目・項目への
+// 指摘かだけでも当てる。升目の無いブロックでは当てない（ブロック全体の印のまま）。
+export function unitNear(
+  el: HTMLElement,
+  bt: BlockText,
+  thread: Pick<ReviewThread, "quote" | "selection" | "selection_offset">,
+): Element | null {
+  if (bt.plain.length === 0 || !el.querySelector(UNIT)) return null;
+  // 表は、指摘した時点の原文で何番目の升目だったかで引く。字の位置で引くと、
+  // 手前の升目が書き換わって長さが変わっただけで隣の升目に当たる。
+  const index = cellInQuote(thread.quote, thread.selection, thread.selection_offset);
+  if (index !== null) {
+    const cell = unitElement(el, { kind: "cell", index });
+    if (cell) return cell;
+  }
+  // 位置の直後の 1 字で引く。境目ちょうどだと手前の囲みの末尾に当たる。
+  const at = Math.max(0, Math.min(thread.selection_offset, bt.plain.length - 1)) + 1;
+  const node = rangeAt(bt, at, at)?.startContainer ?? null;
+  const unit = node?.parentElement?.closest(UNIT) ?? null;
+  return unit && el.contains(unit) ? unit : null;
+}
+
+// 引用が表なら、選んだ字を含んでいた升目の通し番号（見出し行から数える）。
+// 同じ字の升目が複数あれば、字の位置に近いほうを取る。
+export function cellInQuote(
+  quote: string,
+  selection: string,
+  offset: number,
+): number | null {
+  const lines = quote.split("\n");
+  if (lines.length < 2 || !/^\s*\|?\s*:?-{3,}/.test(lines[1])) return null;
+  const needle = selection.trim();
+  if (!needle) return null;
+  const hits: { index: number; from: number; to: number }[] = [];
+  let index = 0;
+  let plain = 0;
+  lines.forEach((line, i) => {
+    if (i === 1 || !line.includes("|")) return;
+    const parts = splitRow(line.trim());
+    if (parts[0]?.trim() === "") parts.shift();
+    if (parts.length > 0 && parts[parts.length - 1].trim() === "") parts.pop();
+    for (const part of parts) {
+      const text = part.trim();
+      if (text.includes(needle)) hits.push({ index, from: plain, to: plain + text.length });
+      index++;
+      plain += text.length;
+    }
+  });
+  if (hits.length === 0) return null;
+  const gap = (h: { from: number; to: number }) =>
+    offset < h.from ? h.from - offset : offset > h.to ? offset - h.to : 0;
+  return hits.reduce((a, b) => (gap(b) < gap(a) ? b : a)).index;
+}
+
 // 丸ごと対象にした囲みの要素。ブロックの中の通し番号で引く。文字の一致で
 // 見分けると、記法の囲みやチェックの前後で当たらないことがある。
 export function unitElement(block: HTMLElement, unit: ReviewUnit): Element | null {
@@ -391,7 +447,10 @@ export function readingMarks(
     }
     if (boxes.length === 0) boxes.push(outline);
     const areas = clipRects(boxes, clip);
-    const cell = marked ?? (inner ? unitOf(inner) : null);
+    const lost = !inner && covered <= 1 && !!thread.selection;
+    const cell =
+      marked ??
+      (inner ? unitOf(inner) : lost ? unitNear(el, bt, thread) : null);
     const found = cell ? unitRects(cell) : inner ? mergeRects(textRects(inner)) : [];
     const spots = clipRects(found, spotClip);
     // 箇所はあるのに、横に送られて枠の外にいる。潜っている側の縁だけを出す。
