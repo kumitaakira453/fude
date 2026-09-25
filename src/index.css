@@ -3458,10 +3458,15 @@ svg[id^="mmd-"] foreignObject p {
   box-shadow: none;
 }
 /* 面で埋まる塊（表・図）は塗らない。塗ると画面の大半が指摘の範囲に見える。
-   塗りの代わりに左の棒だけで「この塊に指摘がある」ことを示す。 */
+   代わりに輪郭を細く回す。左だけに棒を出すと、表そのものの枠と読み分けが
+   付かず、線が 1 本ずれて付いているように見える。 */
 .mg-review-mark-area.is-slab {
   background: transparent;
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 38%, transparent);
+}
+.mg-review-mark-area.is-slab.mg-review-mark-active {
+  background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mg-accent) 60%, transparent);
 }
 /* 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す
    細い印にする（塗ると、表まるごとへの指摘に見える）。 */
