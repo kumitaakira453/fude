@@ -405,11 +405,7 @@ export function AnchorOverlay({
             {mark.areas.map((rc, i) => (
               <div
                 key={`a:${i}`}
-                // 表・図のように面で埋まる塊を塗ると、画面の大半が指摘の範囲に
-                // 見える。そこは塗らず、左の棒だけで示す（字だけの塊は長くても塗る）。
-                className={`mg-review-mark mg-review-mark-area${
-                  mark.slab ? " is-slab" : ""
-                }${hot}`}
+                className={`mg-review-mark mg-review-mark-area${hot}`}
                 style={rc}
               />
             ))}

@@ -3440,13 +3440,10 @@ svg[id^="mmd-"] foreignObject p {
   opacity: 0.75;
 }
 
-/* 文字単位で特定できない指摘。ブロック全体に付く。
+/* 文字単位で特定できない指摘。ブロック全体に付くので、字の塗りをそのまま
+   ブロックの大きさまで広げたものとして出す。
    縁に濃い線を回すと、それだけで「囲み」になって callout と読み分けられない。
-   線は持たせず、薄い地と左の棒で「この塊に指摘がある」ことだけを示す。
-
-   字の塗りと同じ濃さでは、表のように大きい塊でそのまま大面積の塗りになり、
-   どこもかしこも指摘の範囲に見える。塊に付くものは薄くして、代わりに左の
-   棒で拾えるようにする。 */
+   線は持たせず、地の濃さと丸みで字の塗りと同じ仲間に見せる。 */
 .mg-review-mark-area {
   margin: var(--mg-box-out);
   padding: var(--mg-box-in);
@@ -3456,17 +3453,6 @@ svg[id^="mmd-"] foreignObject p {
      別の何かが起きているように見える。 */
   background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
   box-shadow: none;
-}
-/* 面で埋まる塊（表・図）は塗らない。塗ると画面の大半が指摘の範囲に見える。
-   代わりに輪郭を細く回す。左だけに棒を出すと、表そのものの枠と読み分けが
-   付かず、線が 1 本ずれて付いているように見える。 */
-.mg-review-mark-area.is-slab {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-accent) 38%, transparent);
-}
-.mg-review-mark-area.is-slab.mg-review-mark-active {
-  background: color-mix(in srgb, var(--mg-accent) 6%, transparent);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mg-accent) 60%, transparent);
 }
 /* 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す
    細い印にする（塗ると、表まるごとへの指摘に見える）。 */

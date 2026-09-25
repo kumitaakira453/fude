@@ -42,9 +42,6 @@ export interface Mark {
   areas: Rect[];
   // 指摘した箇所そのもの。書き換わっていても見つかれば出す。
   spots: Rect[];
-  // 表・図のように面で埋まる塊か。塗ると画面の大半が指摘の範囲に見えるので、
-  // 塗らずに左の棒で示す。字だけの塊（段落・箇条書き）は長くても塗る。
-  slab: boolean;
   // 箇所はあるのに、横に送られて枠の外へ出ているときの、潜っている側の縁。
   // これが無いと「箇所を出せない」と同じ扱いになり、ブロック全体（表まるごと）
   // が塗られて、実際よりずっと広い範囲への指摘に見える。
@@ -209,13 +206,6 @@ export function spotRange(el: HTMLElement, thread: ReviewThread): Range | null {
   const bt = readBlockText(el);
   const span = findPlain(bt.plain, thread.selection, thread.selection_offset);
   return span ? rangeAt(bt, span.start, span.end) : null;
-}
-
-// 面で埋まる塊か。表・コードの塊・図・絵を抱えているもの。
-const SLAB = "table, pre, img, .mg-mermaid, .katex-display";
-
-export function isSlab(el: Element): boolean {
-  return el.matches(SLAB) || !!el.querySelector(SLAB);
 }
 
 // 潜っている側の縁。左右どちらへ隠れているかだけを、細い印で示す。
@@ -421,7 +411,6 @@ export function readingMarks(
       areas: shown.map((rc) => relTo(base, rc)),
       spots: spots.map((rc) => relTo(base, rc)),
       edges: edges.map((rc) => relTo(base, rc)),
-      slab: isSlab(el),
       ...noteOf(thread),
       hit: {
         id: thread.id,
