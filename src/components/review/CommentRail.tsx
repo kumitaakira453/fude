@@ -123,8 +123,13 @@ function FilterChip({
             </button>
           ))}
           {/* 片付いた割合。全部片付くと満ちる。 */}
-          <div className="mg-rail-gauge" title={`${counts.done} / ${counts.all} 片付いた`}>
-            <i style={{ width: `${Math.round(share * 100)}%` }} />
+          <div className="mg-rail-gauge">
+            <span>
+              片付いた {counts.done} / {counts.all}
+            </span>
+            <u>
+              <i style={{ width: `${Math.round(share * 100)}%` }} />
+            </u>
           </div>
         </div>
       )}

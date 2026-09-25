@@ -3440,19 +3440,20 @@ svg[id^="mmd-"] foreignObject p {
   opacity: 0.75;
 }
 
-/* 文字単位で特定できない指摘。ブロック全体に付くので、字の塗りをそのまま
-   ブロックの大きさまで広げたものとして出す。
+/* 文字単位で特定できない指摘。ブロック全体に付く。
    縁に濃い線を回すと、それだけで「囲み」になって callout と読み分けられない。
-   線は持たせず、地の濃さと丸みで字の塗りと同じ仲間に見せる。 */
+   線は持たせず、薄い地と左の棒で「この塊に指摘がある」ことだけを示す。
+
+   字の塗りと同じ濃さでは、表のように大きい塊でそのまま大面積の塗りになり、
+   どこもかしこも指摘の範囲に見える。塊に付くものは薄くして、代わりに左の
+   棒で拾えるようにする。 */
 .mg-review-mark-area {
   margin: var(--mg-box-out);
   padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 0.2em;
-  /* 濃さは字の塗りと同じにする。指摘であることは変わらないのに濃淡が違うと、
-     別の何かが起きているように見える。 */
-  background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
-  box-shadow: none;
+  background: color-mix(in srgb, var(--mg-accent) 7%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
 /* 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す
    細い印にする（塗ると、表まるごとへの指摘に見える）。 */
@@ -3515,10 +3516,20 @@ svg[id^="mmd-"] foreignObject p {
   border-color: color-mix(in srgb, var(--mg-accent) 45%, transparent);
   color: var(--mg-fg);
 }
-.mg-rail-chip > b {
+/* 件数は、ツリーに出しているコメントの数と同じ札の形にする。 */
+.mg-rail-chip > b,
+.mg-rail-opt > b {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+  font-size: 10.5px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  color: var(--mg-fg);
+}
+.mg-rail-opt.is-empty > b {
+  background: color-mix(in srgb, var(--mg-fg) 8%, transparent);
+  color: var(--mg-muted);
 }
 /* 状態の色。札と選択肢で同じものを使う。 */
 .mg-rail-dot {
@@ -3595,19 +3606,30 @@ svg[id^="mmd-"] foreignObject p {
   font-style: normal;
   color: var(--mg-muted);
 }
-.mg-rail-opt > b {
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-}
-/* 片付いた割合。選ぶ前に、どれだけ進んだかが見える。 */
+
+/* 片付いた割合。棒だけだと送る口に見えるので、数も添える。 */
 .mg-rail-gauge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0.45rem 0.1rem;
+  color: var(--mg-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.mg-rail-gauge > span {
+  flex: none;
+}
+.mg-rail-gauge > u {
+  display: block;
+  overflow: hidden;
   height: 3px;
-  margin: 0.35rem 0.45rem 0.15rem;
+  flex: 1;
   border-radius: 999px;
   background: color-mix(in srgb, var(--mg-fg) 10%, transparent);
-  overflow: hidden;
+  text-decoration: none;
 }
-.mg-rail-gauge > i {
+.mg-rail-gauge > u > i {
   display: block;
   height: 100%;
   border-radius: 999px;
@@ -3750,6 +3772,8 @@ svg[id^="mmd-"] foreignObject p {
   display: flex;
   gap: 0.3rem;
   align-items: center;
+  flex-wrap: nowrap;
+  min-height: 1.2rem;
   font-family: var(--mg-font-sans);
   font-size: 10px;
   color: var(--mg-muted);
@@ -3878,14 +3902,7 @@ svg[id^="mmd-"] foreignObject p {
 .mg-rail-acts-pill:hover {
   opacity: 1;
 }
-/* 開いている札では、指を運ぶ前から見せる。長い会話では、どこに操作が
-   あるのか探すことになる。 */
-.mg-rail-card.is-on .mg-rail-acts-pill {
-  opacity: 0.55;
-}
-.mg-rail-card.is-on .mg-rail-acts-pill:hover {
-  opacity: 1;
-}
+
 /* 見えていないあいだは押させない。当たりは一組の側に残してあるので、角へ
    指を運べば出てくるし、出る前の一押しは札そのものへ抜ける。 */
 .mg-rail-act {
@@ -3900,8 +3917,7 @@ svg[id^="mmd-"] foreignObject p {
     background 0.12s ease,
     color 0.12s ease;
 }
-.mg-rail-acts-pill:hover .mg-rail-act,
-.mg-rail-card.is-on .mg-rail-acts-pill .mg-rail-act {
+.mg-rail-acts-pill:hover .mg-rail-act {
   pointer-events: auto;
 }
 .mg-rail-act:hover {
@@ -3916,6 +3932,25 @@ svg[id^="mmd-"] foreignObject p {
   margin-top: 0.25rem;
   color: var(--mg-muted);
   font-size: 10.5px;
+}
+
+/* 自分の最後の書き込みの操作。重ねたときだけ出す（出ずっぱりだと、読む
+   ための欄に押すものが並び続ける）。折り返さないよう、行の右端に置く。 */
+.mg-rail-own {
+  display: flex;
+  flex: none;
+  gap: 0.05rem;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.mg-rail-said:hover .mg-rail-own {
+  opacity: 1;
+}
+.mg-rail-own .mg-rail-act {
+  width: 1.2rem;
+  height: 1.2rem;
+  pointer-events: auto;
 }
 
 /* 送る口。打ったものがあるときだけ、入力欄の下へ出す。 */
