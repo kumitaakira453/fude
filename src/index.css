@@ -3452,13 +3452,16 @@ svg[id^="mmd-"] foreignObject p {
   padding: var(--mg-box-in);
   box-sizing: content-box;
   border-radius: 0.2em;
-  background: color-mix(in srgb, var(--mg-accent) 12%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mg-accent) 55%, transparent);
+  /* 濃さは字の塗りと同じにする。指摘であることは変わらないのに濃淡が違うと、
+     別の何かが起きているように見える。 */
+  background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
+  box-shadow: none;
 }
 /* 背の高い塊は塗らない。表のような大きいものを塗ると、画面の大半が指摘の
-   範囲に見える。左の棒だけで「この塊に指摘がある」ことを示す。 */
+   範囲に見える。塗りの代わりに左の棒だけで「この塊に指摘がある」ことを示す。 */
 .mg-review-mark-area.is-big {
   background: transparent;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }
 /* 箇所が横に潜っているときの縁。塗りではなく、その先にあることだけを示す
    細い印にする（塗ると、表まるごとへの指摘に見える）。 */
@@ -3500,36 +3503,56 @@ svg[id^="mmd-"] foreignObject p {
 .mg-rail-filter {
   position: relative;
 }
+/* 状態の色。札・選択肢・点がこの 1 つを引く。
+   未対応＝手を付けるもの（アクセント）、未解決＝途中（アクセントと蛍光の間）、
+   解決済み＝落ち着いた灰、すべて＝字の色。テーマごとの色から作るので、
+   どの配色でも浮かない。 */
+[data-tone="todo"] {
+  --mg-tone: var(--mg-accent);
+}
+[data-tone="open"] {
+  --mg-tone: color-mix(in srgb, var(--mg-accent) 55%, var(--mg-mark));
+}
+[data-tone="done"] {
+  --mg-tone: var(--mg-muted);
+}
+[data-tone="all"] {
+  --mg-tone: var(--mg-fg-dim);
+}
+
 .mg-rail-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.4rem 0.2rem 0.5rem;
-  border: 1px solid var(--mg-border);
+  gap: 0.35rem;
+  padding: 0.22rem 0.4rem 0.22rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--mg-tone) 30%, transparent);
   border-radius: 999px;
-  background: var(--mg-panel);
-  color: var(--mg-fg-dim);
+  background: color-mix(in srgb, var(--mg-tone) 10%, var(--mg-panel));
+  color: color-mix(in srgb, var(--mg-tone) 70%, var(--mg-fg));
   font-size: 11px;
+  font-weight: 600;
   line-height: 1.4;
   cursor: pointer;
   transition:
     border-color 0.12s ease,
-    color 0.12s ease;
+    background 0.12s ease,
+    box-shadow 0.12s ease;
 }
 .mg-rail-chip:hover,
 .mg-rail-chip.is-open {
-  border-color: color-mix(in srgb, var(--mg-accent) 45%, transparent);
-  color: var(--mg-fg);
+  border-color: color-mix(in srgb, var(--mg-tone) 55%, transparent);
+  background: color-mix(in srgb, var(--mg-tone) 16%, var(--mg-panel));
+  box-shadow: 0 1px 6px -2px color-mix(in srgb, var(--mg-tone) 45%, transparent);
 }
-/* 件数は、ツリーに出しているコメントの数と同じ札の形にする。 */
+/* 件数は、ツリーに出しているコメントの数と同じ札の形にする。色は状態ごと。 */
 .mg-rail-chip > b,
 .mg-rail-opt > b {
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
+  background: color-mix(in srgb, var(--mg-tone) 18%, transparent);
+  color: color-mix(in srgb, var(--mg-tone) 80%, var(--mg-fg));
   font-size: 10.5px;
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .mg-rail-opt.is-empty > b {
@@ -3542,20 +3565,12 @@ svg[id^="mmd-"] foreignObject p {
   height: 0.45rem;
   flex: none;
   border-radius: 999px;
-  background: var(--mg-muted);
+  background: var(--mg-tone);
 }
-.mg-rail-dot.is-todo {
-  background: var(--mg-accent);
-}
-.mg-rail-dot.is-open {
-  background: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-muted));
-}
-.mg-rail-dot.is-done {
-  background: color-mix(in srgb, var(--mg-fg) 25%, transparent);
-}
-.mg-rail-dot.is-all {
+/* 「すべて」は状態ではないので、塗らずに輪だけにする。 */
+[data-tone="all"] > .mg-rail-dot {
   background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--mg-muted);
+  box-shadow: inset 0 0 0 1.5px var(--mg-tone);
 }
 .mg-rail-menu {
   position: absolute;
@@ -3593,8 +3608,9 @@ svg[id^="mmd-"] foreignObject p {
   background: var(--mg-hover);
 }
 .mg-rail-opt.is-on {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
+  background: color-mix(in srgb, var(--mg-tone) 12%, transparent);
+  color: color-mix(in srgb, var(--mg-tone) 75%, var(--mg-fg));
+  font-weight: 600;
 }
 /* 0 件のものは沈める。押せるままにしておく（押して空だと分かるのも手掛かり）。 */
 .mg-rail-opt.is-empty {
@@ -3612,35 +3628,6 @@ svg[id^="mmd-"] foreignObject p {
   color: var(--mg-muted);
 }
 
-/* 片付いた割合。棒だけだと送る口に見えるので、数も添える。 */
-.mg-rail-gauge {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.35rem 0.45rem 0.1rem;
-  color: var(--mg-muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.mg-rail-gauge > span {
-  flex: none;
-}
-.mg-rail-gauge > u {
-  display: block;
-  overflow: hidden;
-  height: 3px;
-  flex: 1;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mg-fg) 10%, transparent);
-  text-decoration: none;
-}
-.mg-rail-gauge > u > i {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--mg-accent);
-  transition: width 0.3s ease;
-}
 /* 何を出すかの切り替え。件数も一緒に出して、片付いた分がどれだけあるかを
    切り替える前に見せる。 */
 .mg-rail-pick {

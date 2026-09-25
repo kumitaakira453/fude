@@ -85,17 +85,16 @@ function FilterChip({
   }, [open]);
 
   const here = RAIL_FILTERS.find((f) => f.id === now) ?? RAIL_FILTERS[0];
-  // 片付いた割合。押す前に、どれだけ進んだかがひと目で分かる。
-  const share = counts.all === 0 ? 0 : counts.done / counts.all;
 
   return (
     <div ref={box} className="mg-rail-filter">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        data-tone={here.id}
         className={`mg-rail-chip${open ? " is-open" : ""}`}
       >
-        <i className={`mg-rail-dot is-${here.id}`} />
+        <i className="mg-rail-dot" />
         {here.name}
         <b>{counts[now]}</b>
         <Icon name={open ? "expand_less" : "expand_more"} size={14} />
@@ -110,11 +109,12 @@ function FilterChip({
                 onPick(one.id);
                 setOpen(false);
               }}
+              data-tone={one.id}
               className={`mg-rail-opt${one.id === now ? " is-on" : ""}${
                 counts[one.id] === 0 ? " is-empty" : ""
               }`}
             >
-              <i className={`mg-rail-dot is-${one.id}`} />
+              <i className="mg-rail-dot" />
               <span className="mg-rail-opt-name">
                 {one.name}
                 {one.note && <em>{one.note}</em>}
@@ -122,15 +122,6 @@ function FilterChip({
               <b>{counts[one.id]}</b>
             </button>
           ))}
-          {/* 片付いた割合。全部片付くと満ちる。 */}
-          <div className="mg-rail-gauge">
-            <span>
-              片付いた {counts.done} / {counts.all}
-            </span>
-            <u>
-              <i style={{ width: `${Math.round(share * 100)}%` }} />
-            </u>
-          </div>
         </div>
       )}
     </div>
