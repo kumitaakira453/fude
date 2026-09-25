@@ -1006,6 +1006,54 @@ class DetailsView implements NodeView {
   }
 }
 
+// 表の包み。はみ出しているときだけ is-wide を付ける（先頭列を置く見た目の
+// 切り替え）。包みは ProseMirror が描いた DOM なので、外から印を付けると
+// 書き換えと見なされて描き直され、印が消えて付け直す、を繰り返す。印は
+// ここで付け、その変化は見なかったことにする。
+export class TableView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+  private node: PmNode;
+  private watch: ResizeObserver | null = null;
+
+  constructor(node: PmNode) {
+    this.node = node;
+    this.dom = document.createElement("div");
+    this.dom.className = "mg-table-wrap overflow-x-auto";
+    const table = document.createElement("table");
+    this.contentDOM = document.createElement("tbody");
+    table.appendChild(this.contentDOM);
+    this.dom.appendChild(table);
+    if (typeof ResizeObserver !== "undefined") {
+      this.watch = new ResizeObserver(() => this.mark());
+      this.watch.observe(this.dom);
+      this.watch.observe(table);
+    }
+  }
+
+  private mark() {
+    const wide = this.dom.scrollWidth - this.dom.clientWidth > 4;
+    if (this.dom.classList.contains("is-wide") !== wide) {
+      this.dom.classList.toggle("is-wide", wide);
+    }
+  }
+
+  update(node: PmNode): boolean {
+    if (node.type !== this.node.type) return false;
+    this.node = node;
+    return true;
+  }
+
+  ignoreMutation(m: ViewMutationRecord): boolean {
+    if (m.type === "selection") return false;
+    return !this.contentDOM.contains(m.target);
+  }
+
+  destroy() {
+    this.watch?.disconnect();
+  }
+}
+
 export function nodeViews(deps: EditorDeps) {
   return {
     codeBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
@@ -1022,6 +1070,7 @@ export function nodeViews(deps: EditorDeps) {
       new MathView(node, view, getPos),
     mathBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new MathBlockView(node, view, getPos),
+    table: (node: PmNode) => new TableView(node),
   };
 }
 
