@@ -39,6 +39,7 @@ function marked(mine: boolean): Marked {
         guess: false,
         areas: [],
     edges: [],
+    slab: false,
         spots: [SPOT],
         hit: { id: "t1" } as Marked["marks"][number]["hit"],
         note: "**もと**の言葉",

@@ -3457,9 +3457,9 @@ svg[id^="mmd-"] foreignObject p {
   background: color-mix(in srgb, var(--mg-accent) 16%, transparent);
   box-shadow: none;
 }
-/* 背の高い塊は塗らない。表のような大きいものを塗ると、画面の大半が指摘の
-   範囲に見える。塗りの代わりに左の棒だけで「この塊に指摘がある」ことを示す。 */
-.mg-review-mark-area.is-big {
+/* 面で埋まる塊（表・図）は塗らない。塗ると画面の大半が指摘の範囲に見える。
+   塗りの代わりに左の棒だけで「この塊に指摘がある」ことを示す。 */
+.mg-review-mark-area.is-slab {
   background: transparent;
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mg-accent) 55%, transparent);
 }

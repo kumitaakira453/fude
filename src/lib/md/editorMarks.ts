@@ -7,6 +7,7 @@ import {
   noteOf,
   relTo,
   edgeRects,
+  isSlab,
   tableClip,
   textRects,
   unitOf,
@@ -131,6 +132,7 @@ export function editorMarks(
       areas: shown.map((rc) => relTo(base, rc)),
       spots: spots.map((rc) => relTo(base, rc)),
       edges: edges.map((rc) => relTo(base, rc)),
+      slab: isSlab(el),
       ...noteOf(thread),
       hit: {
         id: thread.id,
