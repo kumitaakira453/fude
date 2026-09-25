@@ -35,6 +35,17 @@ vi.mock("../hooks/useWorkspace", () => ({
   }),
 }));
 
+// OS のダイアログの返事。試験ごとに、選んだ道筋か取りやめ（null）を置く。
+let picked: string | null = null;
+vi.mock("../lib/fsAccess", async () => {
+  const real = await vi.importActual<typeof import("../lib/fsAccess")>("../lib/fsAccess");
+  return { ...real, pickDirectory: () => Promise.resolve(picked) };
+});
+vi.mock("../lib/kind", async () => {
+  const real = await vi.importActual<typeof import("../lib/kind")>("../lib/kind");
+  return { ...real, pickDocFile: () => Promise.resolve(picked) };
+});
+
 const forgotten: string[] = [];
 vi.mock("../lib/idb", async () => {
   const real = await vi.importActual<typeof import("../lib/idb")>("../lib/idb");
@@ -233,5 +244,33 @@ describe("行の操作", () => {
     click(pick("履歴から削除"));
     expect(forgotten).toEqual(["/work/monorepo"]);
     expect(opened).toEqual([]);
+  });
+});
+
+describe("OS のダイアログから開く", () => {
+  const foot = (label: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>(".mg-open-foot button")).find((el) =>
+      el.textContent?.includes(label),
+    )!;
+  const settle = () => act(() => Promise.resolve());
+
+  it("ダイアログを出している間は閉じない。選んだら閉じて開く", async () => {
+    show([], []);
+    picked = "/work/new";
+    act(() => foot("フォルダを開く").click());
+    // 押した瞬間はまだ出ている（先に閉じると背景がちらつく）
+    expect(store.get(openPickerAtom)).toBe(true);
+    await settle();
+    expect(store.get(openPickerAtom)).toBe(false);
+    expect(opened).toEqual(["/work/new"]);
+  });
+
+  it("取りやめたら一覧に戻る", async () => {
+    show([], []);
+    picked = null;
+    act(() => foot("ファイルを開く").click());
+    await settle();
+    expect(store.get(openPickerAtom)).toBe(true);
+    expect(docsOpened).toEqual([]);
   });
 });

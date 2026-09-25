@@ -111,18 +111,28 @@ export function OpenPicker() {
 
   // 下書きのままなら、選ぶ前に行き先を決めさせる。OS のダイアログを開いてから
   // 引き止めると、選んだのに何も起きなかったように見える。
+  // OS のダイアログは、この画面を出したまま重ねる。先に閉じると、ダイアログが
+  // 出るまでの間だけ暗幕が外れて背景がちらつく。取りやめたら一覧に戻る。
   const addFolder = async () => {
-    setOpen(false);
-    if (holdDraft(() => void addFolder())) return;
+    if (holdDraft(() => void addFolder())) {
+      setOpen(false);
+      return;
+    }
     const path = await pickDirectory();
-    if (path) await openFolder(path);
+    if (!path) return;
+    setOpen(false);
+    await openFolder(path);
   };
 
   const addDoc = async () => {
-    setOpen(false);
-    if (holdDraft(() => void addDoc())) return;
+    if (holdDraft(() => void addDoc())) {
+      setOpen(false);
+      return;
+    }
     const path = await pickDocFile();
-    if (path) await openDoc(path);
+    if (!path) return;
+    setOpen(false);
+    await openDoc(path);
   };
 
   const forget = async (entry: DocEntry) => {
