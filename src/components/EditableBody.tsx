@@ -1,4 +1,5 @@
 import {
+  memo,
   startTransition,
   useCallback,
   useEffect,
@@ -98,7 +99,7 @@ interface EditingItem {
 
 // レンダリング表示を保ったまま、ダブルクリックしたブロックだけをその場で
 // 生ソース編集にする。編集対象以外は一切動かない（目線を動かさない）。
-export function EditableBody({
+export const EditableBody = memo(function EditableBody({
   body,
   editorial,
   onSaveBody,
@@ -889,4 +890,4 @@ export function EditableBody({
       )}
     </>
   );
-}
+});

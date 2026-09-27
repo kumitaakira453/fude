@@ -1470,6 +1470,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     landed.current = pending.nonce;
     land(pending.id);
   }, [pending, content, pm, editing, path, land]);
+  // 渡す先は memo で止めているので、その場で包まず同じ関数を渡し続ける。
+  const copyLinkQuiet = useCallback(
+    (section: Section | null) => void copyLink(section),
+    [copyLink],
+  );
 
   // 別のファイルへ移ったら、寄せている最中の印は落とす。
   useEffect(() => {
@@ -1863,7 +1868,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                         scroller={scroller}
                         contentKey={path}
                         onComment={commentOnBlock}
-                        onCopyLink={(anchor) => void copyLink(anchor)}
+                        onCopyLink={copyLinkQuiet}
                         onCommentItem={commentOnItem}
                         onCommentCell={commentOnCellAt}
                       />
