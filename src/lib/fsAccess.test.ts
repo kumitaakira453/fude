@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  listName,
   ancestorPaths,
   childrenAt,
   filterTree,
@@ -189,3 +190,12 @@ describe("道筋の区切り", () => {
     expect(crumbsOf("/")).toEqual([]);
   });
 });
+
+describe("listName", () => {
+  it("Markdown だけが並ぶときは拡張子を外し、ほかも並ぶときは出す", () => {
+    expect(listName("docs/メモ.md", false)).toBe("メモ");
+    expect(listName("docs/メモ.md", true)).toBe("メモ.md");
+    expect(listName("図.png", false)).toBe("図.png");
+  });
+});
+

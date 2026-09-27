@@ -11,6 +11,8 @@ import { FileTree } from "./FileTree";
 // そのファイルしか持たないので、作っても出てこない。押せる状態にしない。
 //
 // もう 1 つは外から落とされたものの行き先。落とした行によって入る場所が変わる。
+//
+// 最後は行に焦点があるときの打鍵。Enter で名前を変える。
 
 const brought: { dest: string; rels: string[] }[] = [];
 const said: string[] = [];
@@ -37,6 +39,8 @@ vi.mock("../hooks/useWorkspace", () => ({
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  // jsdom に無いもの。行へ焦点を戻すときに使う。
+  (globalThis as { CSS?: { escape: (s: string) => string } }).CSS ??= { escape: (s) => s };
 });
 
 const file = (name: string, at = ""): TreeNode => ({
@@ -179,5 +183,41 @@ describe("掴んだまま留まったフォルダ", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("行に焦点があるときの打鍵", () => {
+  const key = (el: Element, k: string) =>
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    });
+  const frame = () => act(() => new Promise((r) => setTimeout(r, 40)));
+
+  it("Enter で名前の変更に入り、拡張子の前までを選ぶ", () => {
+    const el = show(null, [file("learn.py")]);
+    rowOf(el, "learn.py").focus();
+    key(rowOf(el, "learn.py"), "Enter");
+    const input = el.querySelector("input")!;
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("learn.py");
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 5]);
+  });
+
+  it("フォルダの行の Enter は開け閉めで、名前の変更には入らない", () => {
+    const el = show(null, [dir("資料", [file("表紙.md", "資料")])]);
+    rowOf(el, "資料").focus();
+    key(rowOf(el, "資料"), "Enter");
+    expect(el.querySelector("input")).toBeNull();
+    expect(el.querySelector('[data-path="資料/表紙.md"]')).not.toBeNull();
+  });
+
+  it("Escape でやめると、焦点が行へ戻る", async () => {
+    const el = show(null, [file("learn.py")]);
+    rowOf(el, "learn.py").focus();
+    key(rowOf(el, "learn.py"), "Enter");
+    key(el.querySelector("input")!, "Escape");
+    await frame();
+    expect(el.querySelector("input")).toBeNull();
+    expect(document.activeElement).toBe(rowOf(el, "learn.py"));
   });
 });

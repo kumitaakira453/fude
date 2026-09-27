@@ -742,18 +742,20 @@ export function useWorkspace() {
   );
 
   const renameEntry = useCallback(
-    async (rel: string, newName: string, isDir: boolean) => {
+    // 名前を変えた後の道筋を返す。変えなかったときは元の道筋。
+    async (rel: string, newName: string, isDir: boolean): Promise<string> => {
       const trimmed = newName.trim();
-      if (!trimmed) return;
+      if (!trimmed) return rel;
       let base = trimmed;
       if (!isDir && !/\.[a-z0-9]+$/i.test(base)) base += ".md";
       const newRel = joinRel(dirOf(rel), base);
-      if (newRel === rel) return;
+      if (newRel === rel) return rel;
       const oldAbs = absOf(rel);
       const newAbs = absOf(newRel);
-      if (!oldAbs || !newAbs) return;
+      if (!oldAbs || !newAbs) return rel;
       await renamePath(oldAbs, newAbs);
       await applyPathRemap(remapper(rel, newRel), [rel, newRel]);
+      return newRel;
     },
     [absOf, applyPathRemap],
   );

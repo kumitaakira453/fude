@@ -68,33 +68,6 @@ export function kindOf(nameOrPath: string): Kind {
   return name ? "text" : "other";
 }
 
-// 一覧に出す顔。名前を読む前に何のファイルか分かるようにする。
-//
-// 名前は Material Symbols のもの。無い名前を書くと、その字がそのまま出て
-// しまうので、実際に描いて確かめたものだけを並べてある（svg という名前の
-// 記号は無いので図形の記号で代える。写真と絵は同じ字面なので分けない）。
-const ICONS: Record<string, string> = {
-  svg: "shapes",
-  gif: "gif_box",
-};
-
-const BY_KIND: Record<Kind, string> = {
-  markdown: "markdown",
-  image: "image",
-  html: "html",
-  pdf: "picture_as_pdf",
-  text: "draft",
-  other: "draft",
-};
-
-export function iconOf(nameOrPath: string): string {
-  const name = nameOrPath.split("/").pop() ?? nameOrPath;
-  const dot = name.lastIndexOf(".");
-  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
-  const kind = kindOf(name);
-  return (kind === "image" && ICONS[ext]) || BY_KIND[kind];
-}
-
 // fude で開けるもの。ツリーの絞り込みとダイアログで共に使う。
 export const isViewable = (nameOrPath: string): boolean => kindOf(nameOrPath) !== "other";
 

@@ -24,6 +24,12 @@ export function displayName(nameOrPath: string): string {
   return ext ? base.slice(0, -ext.length) : base;
 }
 
+// 一覧（ツリー・パンくず・タブ）に出す名前。Markdown 以外も並べているときは、
+// ほかのファイルと同じく拡張子まで出す。Markdown だけが並ぶときは外す。
+export function listName(nameOrPath: string, full: boolean): string {
+  return full ? (nameOrPath.split("/").pop() ?? nameOrPath) : displayName(nameOrPath);
+}
+
 export interface TreeNode {
   name: string;
   path: string; // ルートからの相対パス（/ 区切り）

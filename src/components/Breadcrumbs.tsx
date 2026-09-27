@@ -6,7 +6,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import {
   childrenAt,
   crumbsOf,
-  displayName,
+  listName,
   filterTree,
   MARKDOWN_SIEVE,
   parentPath,
@@ -16,6 +16,7 @@ import {
 import { VIEWABLE_SIEVE } from "../lib/kind";
 import { revealInTree } from "../lib/ui";
 import { activeIgnoreAtom, showOtherFilesAtom, treeAtom } from "../state/atoms";
+import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
 
 // ヘッダーの道筋。区切りを押すと、その階層がツリーとして開く。
@@ -335,6 +336,7 @@ function PickerRow({
   onPick: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
+  const showOthers = useAtomValue(showOtherFilesAtom);
   // キーで辿ったときに、選んでいる行を隠れたままにしない。
   useEffect(() => {
     if (hovered) ref.current?.scrollIntoView({ block: "nearest" });
@@ -366,20 +368,9 @@ function PickerRow({
       ) : (
         <span className="w-[18px] shrink-0" />
       )}
-      <Icon
-        name={dir ? (open ? "folder_open" : "folder") : "markdown"}
-        size={dir ? 17 : 16}
-        fill={dir || here}
-        className={
-          dir
-            ? "shrink-0 text-[var(--mg-accent2)]"
-            : here
-              ? "shrink-0 text-[var(--mg-accent)]"
-              : "shrink-0 text-[var(--mg-muted)]"
-        }
-      />
+      <FileIcon name={node.name} dir={dir} open={open} size={dir ? 17 : 16} />
       <span className={`truncate ${dir ? "font-medium" : ""}`}>
-        {dir ? node.name : displayName(node.name)}
+        {dir ? node.name : listName(node.name, showOthers)}
       </span>
     </button>
   );

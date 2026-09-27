@@ -1099,18 +1099,12 @@ button.mg-task-check:hover {
 .mg-tree-row {
   color: var(--mg-fg-dim);
 }
-.mg-tree-row .mg-tree-ico {
-  color: var(--mg-muted);
-}
 .mg-tree-row:hover {
   background: var(--mg-hover);
 }
 /* 選ばれている行。:hover と強さが同じなので、後に置いて勝たせる。 */
 .mg-tree-row[data-on] {
   background: var(--mg-accent-soft);
-  color: var(--mg-accent);
-}
-.mg-tree-row[data-on] .mg-tree-ico {
   color: var(--mg-accent);
 }
 /* 左端の棒 */
@@ -3031,7 +3025,9 @@ body.mg-dragging .mg-sel-menu {
   line-height: 1.15;
 }
 /* 選択はアクセント色でやわらかく。指摘を書いている間も選んだところが
-   分かるよう、入力欄に焦点が移っても同じ色で残す。 */
+   分かるよう、入力欄に焦点が移っても同じ色で残す。入力欄（名前の変更など）も
+   同じ色にし、どこで選んでも OS の青にしない。 */
+::selection,
 .mg-prose ::selection {
   background: color-mix(in srgb, var(--mg-accent) 28%, transparent);
 }
@@ -7530,3 +7526,165 @@ body.mg-carrying {
   font-size: 13px;
   text-align: center;
 }
+
+/* ファイルとフォルダの顔（FileIcon）。種類ごとの色（TS は青・JS は黄）を、
+   テーマごとの色の組から引く。dracula・nord・tokyonight・catppuccin・rosepine・
+   solarized・latte は各テーマの公式の色の組。ほかは、ふつうの色をアクセント色の方へ
+   3 割寄せ、テーマの色味に揃える（rose なら青は藤色寄り）。 */
+:root,
+[data-theme="aurora"] {
+  --mg-ic-blue: color-mix(in oklab, #6cb6ff 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #4fd1c5 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #6bc46d 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #d4b85a 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #e0925a 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #f47067 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #b392f0 70%, var(--mg-accent));
+}
+[data-theme="midnight"] {
+  --mg-ic-blue: color-mix(in oklab, #6ea8fe 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #5bc8e8 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #74c69d 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #e3c16f 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #f0a060 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #f28b82 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #c08cff 70%, var(--mg-accent));
+}
+[data-theme="nord"] {
+  --mg-ic-blue: #81a1c1;
+  --mg-ic-cyan: #88c0d0;
+  --mg-ic-green: #a3be8c;
+  --mg-ic-yellow: #ebcb8b;
+  --mg-ic-orange: #d08770;
+  --mg-ic-red: #bf616a;
+  --mg-ic-purple: #b48ead;
+}
+[data-theme="forest"] {
+  --mg-ic-blue: color-mix(in oklab, #7fb4d9 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #6fcfc0 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #6ee7a8 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #e6c15a 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #e39a5b 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #e8837a 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #b9a0e0 70%, var(--mg-accent));
+}
+[data-theme="dracula"] {
+  --mg-ic-blue: #8aa4f9;
+  --mg-ic-cyan: #8be9fd;
+  --mg-ic-green: #50fa7b;
+  --mg-ic-yellow: #f1fa8c;
+  --mg-ic-orange: #ffb86c;
+  --mg-ic-red: #ff5555;
+  --mg-ic-purple: #bd93f9;
+}
+[data-theme="tokyonight"] {
+  --mg-ic-blue: #7aa2f7;
+  --mg-ic-cyan: #7dcfff;
+  --mg-ic-green: #9ece6a;
+  --mg-ic-yellow: #e0af68;
+  --mg-ic-orange: #ff9e64;
+  --mg-ic-red: #f7768e;
+  --mg-ic-purple: #bb9af7;
+}
+[data-theme="catppuccin"] {
+  --mg-ic-blue: #89b4fa;
+  --mg-ic-cyan: #89dceb;
+  --mg-ic-green: #a6e3a1;
+  --mg-ic-yellow: #f9e2af;
+  --mg-ic-orange: #fab387;
+  --mg-ic-red: #f38ba8;
+  --mg-ic-purple: #cba6f7;
+}
+[data-theme="rosepine"] {
+  --mg-ic-blue: #7aa7d6;
+  --mg-ic-cyan: #9ccfd8;
+  --mg-ic-green: #95c4a0;
+  --mg-ic-yellow: #f6c177;
+  --mg-ic-orange: #ea9a97;
+  --mg-ic-red: #eb6f92;
+  --mg-ic-purple: #c4a7e7;
+}
+[data-theme="paper"] {
+  --mg-ic-blue: color-mix(in oklab, #3b6ea8 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #2f8a88 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #5a7f2e 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #a87a0a 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #b45309 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #b23a3a 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #7a4fa0 70%, var(--mg-accent));
+}
+[data-theme="sunset"] {
+  --mg-ic-blue: color-mix(in oklab, #2f6fb7 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #1a8a9a 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #4d8a2f 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #b7860b 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #ea580c 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #d33a3a 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #8b4fc0 70%, var(--mg-accent));
+}
+[data-theme="rose"] {
+  --mg-ic-blue: color-mix(in oklab, #4063b8 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #1f8594 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #3f8a4a 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #b07d10 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #d0632a 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #c7303f 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #9b3fbf 70%, var(--mg-accent));
+}
+[data-theme="solarized"] {
+  --mg-ic-blue: #268bd2;
+  --mg-ic-cyan: #2aa198;
+  --mg-ic-green: #859900;
+  --mg-ic-yellow: #b58900;
+  --mg-ic-orange: #cb4b16;
+  --mg-ic-red: #dc322f;
+  --mg-ic-purple: #6c71c4;
+}
+[data-theme="daylight"] {
+  --mg-ic-blue: color-mix(in oklab, #2563eb 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #0891b2 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #16a34a 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #ca8a04 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #ea580c 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #dc2626 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #9333ea 70%, var(--mg-accent));
+}
+[data-theme="latte"] {
+  --mg-ic-blue: #1e66f5;
+  --mg-ic-cyan: #04a5e5;
+  --mg-ic-green: #40a02b;
+  --mg-ic-yellow: #df8e1d;
+  --mg-ic-orange: #fe640b;
+  --mg-ic-red: #d20f39;
+  --mg-ic-purple: #8839ef;
+}
+[data-theme="mint"] {
+  --mg-ic-blue: color-mix(in oklab, #2f6fa8 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #0f766e 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #3f8a3a 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #a67c00 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #c2601a 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #c0392b 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #7b4bb3 70%, var(--mg-accent));
+}
+[data-theme="lavender"] {
+  --mg-ic-blue: color-mix(in oklab, #3b5fc9 70%, var(--mg-accent));
+  --mg-ic-cyan: color-mix(in oklab, #1b8599 70%, var(--mg-accent));
+  --mg-ic-green: color-mix(in oklab, #3d8a4d 70%, var(--mg-accent));
+  --mg-ic-yellow: color-mix(in oklab, #a47a10 70%, var(--mg-accent));
+  --mg-ic-orange: color-mix(in oklab, #c4602a 70%, var(--mg-accent));
+  --mg-ic-red: color-mix(in oklab, #c33a4f 70%, var(--mg-accent));
+  --mg-ic-purple: color-mix(in oklab, #6d28d9 70%, var(--mg-accent));
+}
+.mg-ficon {
+  color: var(--mg-muted);
+}
+.mg-ficon[data-tone="accent"] { color: var(--mg-accent); }
+.mg-ficon[data-tone="blue"] { color: var(--mg-ic-blue); }
+.mg-ficon[data-tone="cyan"] { color: var(--mg-ic-cyan); }
+.mg-ficon[data-tone="green"] { color: var(--mg-ic-green); }
+.mg-ficon[data-tone="yellow"] { color: var(--mg-ic-yellow); }
+.mg-ficon[data-tone="orange"] { color: var(--mg-ic-orange); }
+.mg-ficon[data-tone="red"] { color: var(--mg-ic-red); }
+.mg-ficon[data-tone="purple"] { color: var(--mg-ic-purple); }
+.mg-ficon[data-tone="gray"] { color: var(--mg-muted); }

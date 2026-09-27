@@ -1,6 +1,6 @@
 import { message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import type { DropPoint } from "../lib/windows";
@@ -16,10 +16,9 @@ import { setDragChip } from "../lib/dragImage";
 import { bringIn, INTAKE_LIMIT } from "../lib/intake";
 import { makeSpring } from "../lib/spring";
 import { dirOf } from "../lib/paths";
-import { iconOf } from "../lib/kind";
 import {
   ancestorPaths,
-  displayName,
+  listName,
   filterTree,
   type TreeNode,
 } from "../lib/fsAccess";
@@ -28,6 +27,7 @@ import {
   expandedByFolderAtom,
   loadingAtom,
   revealInTreeAtom,
+  showOtherFilesAtom,
   soleAtom,
   treeAtom,
   treeFilterAtom,
@@ -35,6 +35,7 @@ import {
 } from "../state/atoms";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
+import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
 
 
@@ -59,8 +60,10 @@ interface ItemCtx {
   toggle: (path: string) => void;
   onContext: (e: React.MouseEvent, node: TreeNode) => void;
   editingPath: string | null;
-  commitRename: (node: TreeNode, name: string) => void;
-  cancelRename: () => void;
+  // 打鍵で決めた・やめたときは、焦点を行へ戻す（続けて上下で動ける）。
+  // 外を押して抜けたときは、押した先に焦点を渡したままにする。
+  commitRename: (node: TreeNode, name: string, byKey: boolean) => void;
+  cancelRename: (node: TreeNode) => void;
   creating: Creating | null;
   commitCreate: (name: string) => void;
   cancelCreate: () => void;
@@ -85,24 +88,52 @@ function NameInput({
   onCancel,
   pad,
   icon,
+  keepExt = false,
+  bold = false,
+  on = false,
 }: {
   initial: string;
   placeholder?: string;
-  onCommit: (v: string) => void;
+  onCommit: (v: string, byKey: boolean) => void;
   onCancel: () => void;
+  // 行と同じ字下げ。入力欄は行と同じ位置・同じ高さに置き、入るときも
+  // 抜けるときも字と印が動かないようにする。
   pad: number;
-  icon: string;
+  icon: ReactNode;
+  bold?: boolean;
+  // 出しているファイルの名前を変えるとき。選ばれている行の塗りと左端の棒を
+  // 残す（消えると、選択が外れたように見える）。
+  on?: boolean;
+  // ファイルの名前を変えるとき。拡張子の前までを選んだ状態で始める
+  // （打てばそのまま名前だけが置き換わる）。
+  keepExt?: boolean;
 }) {
   const [v, setV] = useState(initial);
   const ime = useImeSafeEnter();
+  // 打鍵で抜けたあとに外れる焦点で、もう一度決めないようにする。
+  const done = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    // 行はもう見えている位置にある。既定の focus は入力欄を見える位置へ
+    // 寄せ直すので、木が動いてしまう。
+    el.focus({ preventScroll: true });
+    const dot = initial.lastIndexOf(".");
+    el.setSelectionRange(0, keepExt && dot > 0 ? dot : initial.length);
+  }, [initial, keepExt]);
   return (
     <div
-      className="flex h-7 items-center gap-1"
+      data-on={on || undefined}
+      className={`relative flex h-7 items-center gap-1 rounded-md pr-2 ${on ? "mg-tree-row" : "text-[var(--mg-fg)]"}`}
       style={{ paddingLeft: `${pad}px` }}
     >
-      <Icon name={icon} size={16} className="shrink-0 text-[var(--mg-muted)]" />
+      {on && <span className="mg-tree-rail" />}
+      {/* 行の折り返しの印（フォルダ）・空き（ファイル）と同じ幅 */}
+      <span className="w-[18px] shrink-0" />
+      {icon}
       <input
-        autoFocus
+        ref={input}
         value={v}
         onChange={(e) => setV(e.target.value)}
         onKeyUp={ime.onKeyUp}
@@ -110,12 +141,21 @@ function NameInput({
         onCompositionEnd={ime.onCompositionEnd}
         onKeyDown={(e) => {
           if (ime.isComposing(e)) return;
-          if (e.key === "Enter") onCommit(v);
-          else if (e.key === "Escape") onCancel();
+          if (e.key === "Enter") {
+            done.current = true;
+            onCommit(v, true);
+          } else if (e.key === "Escape") {
+            done.current = true;
+            onCancel();
+          }
         }}
-        onBlur={() => onCommit(v)}
+        onBlur={() => {
+          if (!done.current) onCommit(v, false);
+        }}
         placeholder={placeholder}
-        className="min-w-0 flex-1 rounded border border-[var(--mg-accent)] bg-[var(--mg-input-bg)] px-1 py-0.5 text-[13px] outline-none"
+        // 枠も地も付けず、字の位置と行の高さを名前を出している行に揃える。
+        // 変えている最中なのは、選んだ範囲とカーソルで分かる。
+        className={`h-6 min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] leading-none text-inherit outline-none ${bold ? "font-medium" : ""}`}
       />
     </div>
   );
@@ -153,6 +193,7 @@ const TreeItem = memo(function TreeItem({
   // フォルダを開いているあいだは空のままなので、行が起きることはない。
   const draftRel = useAtomValue(draftRelAtom);
   const draftName = useAtomValue(draftNameAtom);
+  const showOthers = useAtomValue(showOtherFilesAtom);
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
   const basePad = depth * 14 + 8;
 
@@ -169,10 +210,11 @@ const TreeItem = memo(function TreeItem({
         {ctx.editingPath === node.path ? (
           <NameInput
             initial={node.name}
-            onCommit={(v) => ctx.commitRename(node, v)}
-            onCancel={ctx.cancelRename}
+            onCommit={(v, byKey) => ctx.commitRename(node, v, byKey)}
+            onCancel={() => ctx.cancelRename(node)}
             pad={basePad}
-            icon="folder"
+            icon={<FileIcon name={node.name} dir size={17} />}
+            bold
           />
         ) : (
           <div
@@ -180,6 +222,7 @@ const TreeItem = memo(function TreeItem({
             tabIndex={0}
             draggable
             data-path={node.path}
+            data-row="dir"
             onDragStart={startDrag}
             onDragOver={(e) => {
               const outside = hasFiles(e.dataTransfer);
@@ -207,7 +250,10 @@ const TreeItem = memo(function TreeItem({
               }
               ctx.onMoveDrop(node.path, e);
             }}
-            onClick={() => ctx.toggle(node.path)}
+            onClick={(e) => {
+              e.currentTarget.focus({ preventScroll: true });
+              ctx.toggle(node.path);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -219,7 +265,7 @@ const TreeItem = memo(function TreeItem({
             className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none ${
               isDropTarget
                 ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]"
-                : "hover:bg-[var(--mg-hover)]"
+                : "hover:bg-[var(--mg-hover)] focus-visible:bg-[var(--mg-hover)]"
             }`}
           >
             <Icon
@@ -227,12 +273,7 @@ const TreeItem = memo(function TreeItem({
               size={18}
               className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
             />
-            <Icon
-              name={isOpen ? "folder_open" : "folder"}
-              size={17}
-              fill
-              className="shrink-0 text-[var(--mg-accent2)]"
-            />
+            <FileIcon name={node.name} dir open={isOpen} size={17} />
             <span className="truncate font-medium">{node.name}</span>
             {/* ホバー時に「このフォルダ内に作成」アクション */}
             <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -276,7 +317,7 @@ const TreeItem = memo(function TreeItem({
                 onCommit={ctx.commitCreate}
                 onCancel={ctx.cancelCreate}
                 pad={(depth + 1) * 14 + 8}
-                icon={ctx.creating.kind === "dir" ? "folder" : "markdown"}
+                icon={<FileIcon name={ctx.creating.kind === "dir" ? "" : "a.md"} dir={ctx.creating.kind === "dir"} />}
               />
             )}
             {node.children!.map((c) => (
@@ -292,10 +333,12 @@ const TreeItem = memo(function TreeItem({
     return (
       <NameInput
         initial={node.name}
-        onCommit={(v) => ctx.commitRename(node, v)}
-        onCancel={ctx.cancelRename}
-        pad={basePad + 18}
-        icon="markdown"
+        onCommit={(v, byKey) => ctx.commitRename(node, v, byKey)}
+        onCancel={() => ctx.cancelRename(node)}
+        pad={basePad}
+        icon={<FileIcon name={node.name} />}
+        keepExt
+        on={active}
       />
     );
   }
@@ -305,6 +348,7 @@ const TreeItem = memo(function TreeItem({
     <button
       draggable
       data-path={node.path}
+      data-row="file"
       onDragStart={startDrag}
       // 外から落とされたものは、この行のあるフォルダへ入れる。
       onDragOver={(e) => {
@@ -332,6 +376,9 @@ const TreeItem = memo(function TreeItem({
           ctx.openInNewWindow(node.path);
           return;
         }
+        // WebKit は押した釦に焦点を渡さない。渡しておかないと、続けて打った
+        // Enter や上下が木に届かない。
+        e.currentTarget.focus({ preventScroll: true });
         markOn(node.path);
         ctx.openFile(node.path);
       }}
@@ -342,18 +389,13 @@ const TreeItem = memo(function TreeItem({
       // class 文字列で切り替えると、遷移の掛かるものと掛からないものが混ざり、
       // 押した瞬間に一部だけ変わる。
       data-on={active || undefined}
-      className="mg-tree-row group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px]"
+      className="mg-tree-row group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] outline-none"
     >
       {active && <span className="mg-tree-rail" />}
       <span className="w-[18px] shrink-0" />
-      <Icon
-        name={iconOf(node.name)}
-        size={16}
-        fill={active}
-        className="mg-tree-ico shrink-0"
-      />
+      <FileIcon name={node.name} />
       <span className="truncate">
-        {node.path === draftRel ? draftName : displayName(node.name)}
+        {node.path === draftRel ? draftName : listName(node.name, showOthers)}
       </span>
       {reviewCount > 0 && (
         <span
@@ -542,6 +584,26 @@ export function FileTree() {
     [setExpandedOpen],
   );
 
+  // 行へ焦点を戻す。入力欄から行へ戻るときは、行が描き直されるのを待つ。
+  const focusRow = useCallback((path: string) => {
+    requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector<HTMLElement>(`[data-row][data-path="${CSS.escape(path)}"]`)
+        ?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  // ファイルの行に焦点があるときに Enter を押したら、名前の変更に入る。
+  // フォルダの Enter は行の側で開け閉めする。
+  const onListKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    const row = e.target as HTMLElement;
+    if (e.key === "Enter" && row.dataset.row === "file") {
+      e.preventDefault();
+      setEditingPath(row.dataset.path!);
+    }
+  };
+
   // 行へ渡す道具。**識別を保つのが肝**。毎回作り直すと行の memo が素通りして、
   // 選択が変わるたびに全行が描き直される（実測で 1000 行 200ms）。
   const ctx: ItemCtx = useMemo(
@@ -557,11 +619,22 @@ export function FileTree() {
         setMenu({ x: e.clientX, y: e.clientY, node });
       },
       editingPath,
-      commitRename: (node, name) => {
+      commitRename: (node, name, byKey) => {
         setEditingPath(null);
-        void renameEntry(node.path, name, node.kind === "dir");
+        if (!byKey) {
+          void renameEntry(node.path, name, node.kind === "dir");
+          return;
+        }
+        // 木が新しい名前で組み直されてから、その行へ戻る。
+        focusRow(node.path);
+        void renameEntry(node.path, name, node.kind === "dir").then((to) => {
+          if (to !== node.path) focusRow(to);
+        });
       },
-      cancelRename: () => setEditingPath(null),
+      cancelRename: (node) => {
+        setEditingPath(null);
+        focusRow(node.path);
+      },
       creating,
       commitCreate: (name) => {
         if (creating && name.trim()) {
@@ -590,6 +663,7 @@ export function FileTree() {
       onNewFolder: (parentPath) => startCreate(parentPath, "dir"),
     }),
     [
+      focusRow,
       expanded,
       filter,
       counts,
@@ -666,6 +740,7 @@ export function FileTree() {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) markOver(null);
         }}
         onDrop={onRootDrop}
+        onKeyDown={onListKey}
         className={`min-h-full flex-1 rounded py-1 pl-1 ${
           rootDragOver ? "ring-1 ring-inset ring-[var(--mg-accent)]" : ""
         }`}
@@ -679,7 +754,7 @@ export function FileTree() {
             onCommit={ctx.commitCreate}
             onCancel={ctx.cancelCreate}
             pad={8}
-            icon={creating.kind === "dir" ? "folder" : "markdown"}
+            icon={<FileIcon name={creating.kind === "dir" ? "" : "a.md"} dir={creating.kind === "dir"} />}
           />
         )}
         {filtered.length === 0 && !creating ? (

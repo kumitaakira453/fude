@@ -20,6 +20,7 @@ import { type ContentHit, searchContents, type SearchOptions } from "../lib/sear
 import { buildSearchTree, type SearchTreeNode } from "../lib/searchTree";
 import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
 
 function basename(p: string): string {
@@ -284,7 +285,7 @@ export function SearchPanel() {
           style={{ paddingLeft: pad }}
         >
           <Icon name={chevron} size={16} className="shrink-0 text-[var(--mg-muted)]" />
-          <Icon name="markdown" size={15} className="shrink-0 text-[var(--mg-muted)]" />
+          <FileIcon name={node.name} size={15} />
           <span className="truncate">{node.name}</span>
           <span className="ml-auto shrink-0 rounded-full bg-[var(--mg-hover)] px-1.5 text-[10px] text-[var(--mg-muted)]">
             {node.count}

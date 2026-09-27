@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { iconOf, isViewable, kindOf } from "./kind";
+import { isViewable, kindOf } from "./kind";
 
 describe("拡張子から見せ方を決める", () => {
   it("Markdown", () => {
@@ -48,23 +48,5 @@ describe("拡張子から見せ方を決める", () => {
     expect(kindOf("png")).toBe("text");
     expect(kindOf(".png")).toBe("image");
     expect(kindOf("/a/b.png/c")).toBe("text");
-  });
-});
-
-describe("一覧に出す顔", () => {
-  it("種類ごとに変わる", () => {
-    expect(iconOf("メモ.md")).toBe("markdown");
-    expect(iconOf("頁.html")).toBe("html");
-    expect(iconOf("資料.pdf")).toBe("picture_as_pdf");
-    expect(iconOf("控え.txt")).toBe("draft");
-    expect(iconOf("書庫.zip")).toBe("draft");
-  });
-
-  it("画像は形ごとに分ける", () => {
-    expect(iconOf("図.svg")).toBe("shapes");
-    expect(iconOf("動く.gif")).toBe("gif_box");
-    expect(iconOf("写真.JPG")).toBe("image");
-    expect(iconOf("絵.png")).toBe("image");
-    expect(iconOf("絵.webp")).toBe("image");
   });
 });

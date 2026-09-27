@@ -9,7 +9,7 @@ import {
   setDragPayload,
 } from "../lib/dnd";
 import { setDragChip } from "../lib/dragImage";
-import { displayName, findNode, type TreeNode } from "../lib/fsAccess";
+import { findNode, listName, type TreeNode } from "../lib/fsAccess";
 import {
   activateTab,
   closeAll,
@@ -20,7 +20,7 @@ import {
   openInPane,
   revealInTree,
 } from "../lib/ui";
-import { type LeafNode, treeAtom } from "../state/atoms";
+import { type LeafNode, showOtherFilesAtom, treeAtom } from "../state/atoms";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
@@ -34,6 +34,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   const tree = useAtomValue(treeAtom);
   const draftRel = useAtomValue(draftRelAtom);
   const draftName = useAtomValue(draftNameAtom);
+  const showOthers = useAtomValue(showOtherFilesAtom);
 
   // 開いているタブを見える位置へ寄せる。数が増えると端から溢れるので、
   // 切り替えた先が隠れていると、どれを見ているのか分からなくなる。
@@ -46,7 +47,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   // タブに出す名前。下書きは置き場で採った機械的な名前を持っているので、
   // 書いた中身から採り直す。
   const label = (path: string): string =>
-    path === draftRel ? draftName : displayName(path);
+    path === draftRel ? draftName : listName(path, showOthers);
   // ドロップで差し込む位置。null なら受け付けていない。
   const [insertAt, setInsertAt] = useState<number | null>(null);
   // 右押しの相手。並びの中の位置も持つ（「他のタブを閉じる」が要る）。
