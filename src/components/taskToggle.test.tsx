@@ -135,3 +135,33 @@ describe("済みの項目の見た目", () => {
     expect(done.querySelector(":scope > ul")).not.toBeNull();
   });
 });
+
+describe("タスクの項目の中の塊", () => {
+  const item = (at: HTMLElement) => at.querySelector<HTMLElement>("li.task-list-item")!;
+  const line = (at: HTMLElement) => item(at).querySelector<HTMLElement>(":scope > .mg-task-line")!;
+
+  it("チェックの行に入るのは最初の段落だけ。後ろの塊は行の外に並ぶ", () => {
+    const at = render(
+      ["- [ ] やること", "", "  ```ts", "  const a = 1;", "  ```", "", "  | 列 |", "  | --- |", "  | a |"].join("\n"),
+    );
+    expect(line(at).textContent).toContain("やること");
+    expect(line(at).querySelector("pre, table")).toBeNull();
+    const outside = [...item(at).children].filter((el) => !el.classList.contains("mg-task-line"));
+    expect(outside.some((el) => el.querySelector("pre"))).toBe(true);
+    expect(outside.some((el) => el.querySelector("table"))).toBe(true);
+  });
+
+  it("続きの段落も行の外に出す（済みの飾りが届かない）", () => {
+    const at = render(["- [x] 済んだ", "", "  続きの段落"].join("\n"));
+    expect(line(at).textContent).toContain("済んだ");
+    expect(line(at).textContent).not.toContain("続きの段落");
+  });
+
+  it("詰めて書いた項目は今までどおり、入れ子の手前まで", () => {
+    const at = render(["- [ ] 親", "  - 子"].join("\n"));
+    expect(line(at).textContent).toContain("親");
+    expect(line(at).querySelector("ul")).toBeNull();
+    expect(item(at).querySelector(":scope > ul")).not.toBeNull();
+  });
+});
+

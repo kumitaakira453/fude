@@ -334,13 +334,25 @@ interface HastChild {
   position?: { start?: { offset?: number }; end?: { offset?: number } };
 }
 
-// 項目の中に入っている並び。組んだあとの要素から見分ける。上書きを通した
-// ものには元の節点が付いてくるので、そちらも見る。
-function isNestedList(kid: ReactNode): boolean {
-  if (!isValidElement<{ node?: HastChild }>(kid)) return false;
-  if (kid.type === "ul" || kid.type === "ol") return true;
-  const tag = kid.props.node?.tagName;
-  return tag === "ul" || tag === "ol";
+// 項目の中の塊か。空行で書いた（ゆるい）項目は、字が段落に包まれて届く。
+const BLOCK_TAGS = new Set([
+  "p", "div", "pre", "blockquote", "table", "ul", "ol", "figure", "details", "hr",
+  "h1", "h2", "h3", "h4", "h5", "h6",
+]);
+function tagOf(kid: ReactNode): string | null {
+  if (!isValidElement<{ node?: HastChild }>(kid)) return null;
+  if (typeof kid.type === "string") return kid.type;
+  return kid.props.node?.tagName ?? null;
+}
+
+// チェックの行に入れる分の切れ目。ゆるい項目は最初の段落まで、詰めて書いた
+// 項目は入れ子の並びの手前まで。後ろの子（画像・コード・表・入れ子）は行の
+// 外に置き、チェックの下へ字下げして並べる。行の中に入れると、チェックと
+// 同じ行に並ぼうとして崩れ、済みの飾りも子まで届く。
+function taskLineEnd(kids: ReactNode[]): number {
+  const first = kids.findIndex((kid) => BLOCK_TAGS.has(tagOf(kid) ?? ""));
+  if (first < 0) return -1;
+  return tagOf(kids[first]) === "p" ? first + 1 : first;
 }
 
 // タスクの項目か。そうなら印（角括弧の中の 1 字）を返す。
@@ -499,11 +511,10 @@ export const Markdown = memo(function Markdown({
               .filter(Boolean)
               .join(" ") || undefined;
           if (box !== null) {
-            // 済みの印は項目自身の字にだけ掛ける（index.css）。入れ子の並びは
-            // 包みの外に置く。中に入れると飾りがそこまで届き、子の済み・未済と
-            // 食い違って見える。
+            // 済みの印は項目自身の字にだけ掛ける（index.css）。後ろの子は
+            // 包みの外に置く（taskLineEnd）。
             const kids = Children.toArray(children);
-            const cut = kids.findIndex(isNestedList);
+            const cut = taskLineEnd(kids);
             const ordinal = taskSeq.n++;
             return (
               <li

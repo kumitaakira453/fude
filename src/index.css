@@ -716,9 +716,16 @@ body {
 /* タスクの下の入れ子。タスクの項目は字下げを持たない（チェックが印になる）
    ので、そのままだと子の印が親のチェックと同じ位置に並ぶ。チェックの幅と
    字との間（.mg-task-check の margin-right）の分だけ下げて、親の字の頭に揃える。
-   編集面は入れ子を .mg-task-body の中に置くので、こちらだけに掛ける。 */
-.mg-prose li.task-list-item > :is(ul, ol) {
+   編集面は入れ子を .mg-task-body の中に置くので、こちらだけに掛ける（編集面の
+   入れ物も .mg-prose を持つので .mg-pm を外す）。 */
+.mg-prose:not(.mg-pm) li.task-list-item > :is(ul, ol) {
   padding-left: calc(20px + 0.35em);
+}
+/* 入れ子の並び以外の子（画像・コード・表・引用・続きの段落）も同じ幅だけ
+   下げる。並びは中の項目に字下げを持たせるので padding、塊は枠ごと下げたい
+   ので margin で持つ。 */
+.mg-prose:not(.mg-pm) li.task-list-item > :not(.mg-task-line, ul, ol) {
+  margin-left: calc(20px + 0.35em);
 }
 /* 印の形。行に下線や取り消し線が掛かっても、絵は字ではないので線が乗らない。 */
 .mg-task-box {
