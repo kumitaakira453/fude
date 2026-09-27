@@ -10,6 +10,7 @@ import type {
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { toMarkdown as mdastToMarkdown, type Options } from "mdast-util-to-markdown";
 import { fromMarkdown, parseTree, type Loaded, type Span } from "./fromMarkdown";
+import { writeImageHtml, type ImageAlign } from "./imageHtml";
 import { nestOf, schema } from "./schema";
 import { splitRow } from "../blocks";
 import { plainEdit, sameShape, spliceNode } from "./splice";
@@ -204,8 +205,17 @@ function toMdast(node: PmNode): RootContent {
     case "paragraph":
       return { type: "paragraph", children: inlineToMdast(node) };
 
-    // 塊として持っている絵は、原文では段落の中の行内要素へ戻す。
-    case "imageBlock":
+    // 塊として持っている絵は、原文では段落の中の行内要素へ戻す。寄せや幅を
+    // 持つときだけ HTML で書く（Markdown の書き方には無い）。
+    case "imageBlock": {
+      const html = writeImageHtml({
+        src: node.attrs.src as string,
+        alt: node.attrs.alt as string,
+        title: node.attrs.title as string | null,
+        align: node.attrs.align as ImageAlign | null,
+        width: node.attrs.width as string | null,
+      });
+      if (html) return verbatim(html);
       return {
         type: "paragraph",
         children: [
@@ -217,6 +227,7 @@ function toMdast(node: PmNode): RootContent {
           },
         ],
       };
+    }
 
     case "heading":
       return { type: "heading", depth: node.attrs.level, children: inlineToMdast(node) };

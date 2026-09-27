@@ -7,6 +7,7 @@ import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { schema } from "./schema";
 import { splitRow } from "../blocks";
+import { readImageHtml } from "./imageHtml";
 import { boxOf, readTaskMarks } from "./taskMarks";
 import {
   CONTAINERS,
@@ -634,6 +635,22 @@ function blockOf(
         node: schema.nodes.thematicBreak.create({ ...attrs, marker: slice(node, source).trim() }),
         span: span(start, end),
       };
+
+    case "html": {
+      // 寄せや幅を持つ画像（`<p align><img width></p>`）は絵の塊として持つ。
+      // 読めない形の HTML は、ほかの生 HTML と同じく原文のまま持つ。
+      const img = readImageHtml(slice(node, source));
+      if (img) {
+        return {
+          node: schema.nodes.imageBlock.create({ ...attrs, ...img }),
+          span: span(start, end),
+        };
+      }
+      return {
+        node: schema.nodes.rawBlock.create({ ...attrs, value: slice(node, source) }),
+        span: span(start, end),
+      };
+    }
 
     default:
       // 生 HTML・定義・脚注・数式など。構造化せず原文のまま持つ。

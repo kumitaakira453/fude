@@ -204,15 +204,24 @@ export const schema = new Schema({
         src: { default: "" },
         alt: { default: "" },
         title: { default: null as string | null },
+        // 寄せ（左・右。中央は null）と幅（書かれたとおり。% か px）。どちらかが
+        // あると、原文では `<p align><img width></p>` の HTML で書く（lib/md/imageHtml）。
+        align: { default: null as "left" | "right" | null },
+        width: { default: null as string | null },
       },
       parseDOM: [
         {
           tag: "div[data-mg-image]",
-          getAttrs: (dom: HTMLElement) => ({
-            src: dom.getAttribute("data-src") ?? "",
-            alt: dom.getAttribute("data-alt") ?? "",
-            title: dom.getAttribute("data-title"),
-          }),
+          getAttrs: (dom: HTMLElement) => {
+            const align = dom.getAttribute("data-align");
+            return {
+              src: dom.getAttribute("data-src") ?? "",
+              alt: dom.getAttribute("data-alt") ?? "",
+              title: dom.getAttribute("data-title"),
+              align: align === "left" || align === "right" ? align : null,
+              width: dom.getAttribute("data-width"),
+            };
+          },
         },
       ],
       toDOM: (node) =>
@@ -223,6 +232,8 @@ export const schema = new Schema({
             "data-src": node.attrs.src as string,
             "data-alt": node.attrs.alt as string,
             ...(node.attrs.title ? { "data-title": node.attrs.title as string } : {}),
+            ...(node.attrs.align ? { "data-align": node.attrs.align as string } : {}),
+            ...(node.attrs.width ? { "data-width": node.attrs.width as string } : {}),
           },
           ["img", { src: node.attrs.src as string, alt: node.attrs.alt as string }],
         ] as DOMOutputSpec,

@@ -57,6 +57,8 @@ describe("無編集なら原文がそのまま返る", () => {
     ["水平線", "***\n\n本文\n"],
     ["生 HTML", "<div class=\"x\">\n中身\n</div>\n"],
     ["callout", '<callout icon="✅" color="gray_bg">\n中身の**強調**\n</callout>\n'],
+    ["寄せと幅を持つ画像", '<p align="right"><img src="./images/a.png" alt="図" width="40%"></p>\n'],
+    ["幅だけを持つ画像", '<img src="./images/a.png" alt="図" width="320">\n'],
     ["1 行の callout", '<callout icon="💡">結論：`monthly-usage` は **1 ユーザー分**。</callout>\n'],
     ["details", "<details>\n<summary>見出し</summary>\n中身\n</details>\n"],
     [
@@ -81,6 +83,23 @@ describe("構造を読み取る", () => {
     expect(node.attrs.icon).toBe("✅");
     expect(node.attrs.color).toBe("blue_bg");
     expect(node.child(0).textContent).toBe("本文");
+  });
+
+  it("寄せと幅を持つ画像は絵の塊になる。読めない HTML は生のまま", () => {
+    const img = fromMarkdown('<p align="left"><img src="a.png" alt="図" width="30%"></p>\n').doc.child(0);
+    expect(img.type.name).toBe("imageBlock");
+    expect(img.attrs).toMatchObject({ src: "a.png", alt: "図", align: "left", width: "30%" });
+    const raw = fromMarkdown('<img src="a.png" class="x">\n').doc.child(0);
+    expect(raw.type.name).toBe("rawBlock");
+  });
+
+  it("寄せや幅を変えると HTML で書き、両方外すと ![]() に戻る", () => {
+    const loaded = fromMarkdown("![図](a.png)\n");
+    const img = loaded.doc.child(0);
+    const set = (attrs: Record<string, unknown>) =>
+      toMarkdown(schema.nodes.doc.create(null, [img.type.create({ ...img.attrs, ...attrs })]), loaded);
+    expect(set({ align: "right", width: "40%" })).toBe('<p align="right"><img src="a.png" alt="図" width="40%"></p>\n');
+    expect(set({ align: null, width: null })).toBe("![図](a.png)\n");
   });
 
   it("1 行に収まった callout も、属性と中身を持つ", () => {
