@@ -203,12 +203,15 @@ describe("行に焦点があるときの打鍵", () => {
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, 5]);
   });
 
-  it("フォルダの行の Enter は開け閉めで、名前の変更には入らない", () => {
+  it("フォルダの行でも Enter で名前の変更に入り、名前全体を選ぶ", () => {
     const el = show(null, [dir("資料", [file("表紙.md", "資料")])]);
     rowOf(el, "資料").focus();
     key(rowOf(el, "資料"), "Enter");
-    expect(el.querySelector("input")).toBeNull();
-    expect(el.querySelector('[data-path="資料/表紙.md"]')).not.toBeNull();
+    const input = el.querySelector("input")!;
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 2]);
+    // 開け閉めはしない。
+    expect(el.querySelector('[data-path="資料/表紙.md"]')).toBeNull();
   });
 
   it("Escape でやめると、焦点が行へ戻る", async () => {

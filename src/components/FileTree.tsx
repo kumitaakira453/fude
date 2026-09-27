@@ -255,7 +255,7 @@ const TreeItem = memo(function TreeItem({
               ctx.toggle(node.path);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
+              if (e.key === " ") {
                 e.preventDefault();
                 ctx.toggle(node.path);
               }
@@ -593,12 +593,12 @@ export function FileTree() {
     });
   }, []);
 
-  // ファイルの行に焦点があるときに Enter を押したら、名前の変更に入る。
-  // フォルダの Enter は行の側で開け閉めする。
+  // 行に焦点があるときに Enter を押したら、名前の変更に入る（ファイルも
+  // フォルダも）。フォルダの開け閉めは押すか Space で行う。
   const onListKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     const row = e.target as HTMLElement;
-    if (e.key === "Enter" && row.dataset.row === "file") {
+    if (e.key === "Enter" && row.dataset.row) {
       e.preventDefault();
       setEditingPath(row.dataset.path!);
     }
