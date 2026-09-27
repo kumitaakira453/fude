@@ -1049,14 +1049,29 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 出すのは離したとき。引いている間に出すと、そのままドラッグの行き先を
     // 奪って選択が飛ぶ。打ち始めたら消す。
     const onUp = () => read();
+    // 変換を確定した打鍵の keyup では出さない。候補を矢印で選んでいる間、
+    // WebKit は変換中の字を選択範囲として持つので、確定の直後はその範囲が
+    // 残っていて、選んだように見えてしまう。確定の keyup は 229 ではなく
+    // Enter として届くことがあるので、変換が終わってから次の本物の打鍵
+    // （229 でない keydown）までを確定の続きとみなす。
+    let composed = false;
+    const onComposeEnd = () => {
+      composed = true;
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (composed || e.isComposing || e.keyCode === 229) return;
+      read();
+    };
     // 自分が出した帯・メニュー・入力欄を押したときは畳まない。畳むと押した番に
     // 帯ごと消えて、そこから出しているものも一緒に消える（リンクや式の入力欄が
     // 押した瞬間に閉じるのはこれ）。
     const onDown = (e: MouseEvent) => {
+      composed = false;
       if (inFloating(e.target)) return;
       setEditSel(null);
     };
     const onKey = (e: KeyboardEvent) => {
+      if (!e.isComposing && e.keyCode !== 229) composed = false;
       // 選択を伸ばす操作と、ショートカット（装飾の付け外しなど）では消さない。
       // 消すのは字が入るとき（対象がずれる）。
       if (e.shiftKey && e.key.startsWith("Arrow")) return;
@@ -1075,7 +1090,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       });
     };
     view.dom.addEventListener("mouseup", onUp);
-    view.dom.addEventListener("keyup", onUp);
+    view.dom.addEventListener("keyup", onKeyUp);
+    view.dom.addEventListener("compositionend", onComposeEnd);
     window.addEventListener("mousedown", onDown);
     view.dom.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onMove, true);
@@ -1083,7 +1099,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     return () => {
       cancelAnimationFrame(soon);
       view.dom.removeEventListener("mouseup", onUp);
-      view.dom.removeEventListener("keyup", onUp);
+      view.dom.removeEventListener("keyup", onKeyUp);
+      view.dom.removeEventListener("compositionend", onComposeEnd);
       window.removeEventListener("mousedown", onDown);
       view.dom.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onMove, true);

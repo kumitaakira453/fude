@@ -1,4 +1,4 @@
-import { Plugin } from "prosemirror-state";
+import { Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { readBlockText } from "../domText";
 
@@ -92,6 +92,19 @@ const mendAfterCompose = (view: EditorView): void => {
   view.updateState(view.state);
 };
 
+// 候補を矢印で選んでいる間、WebKit は変換中の字を選択範囲として持ち、
+// prosemirror もそれを読んで選択を範囲にする。確定したあともその範囲が残ると、
+// 確定した字が選ばれたまま見える。変換が終わって字が落ち着いたら末尾へ畳む。
+// 次の変換が始まっていたら触らない。
+const collapseAfterCompose = (view: EditorView): void => {
+  requestAnimationFrame(() => {
+    if (view.isDestroyed || view.composing) return;
+    const sel = view.state.selection;
+    if (!(sel instanceof TextSelection) || sel.empty) return;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.to)));
+  });
+};
+
 export const composingKeys = () => {
   // 変換中か。WebKit は確定の打鍵の isComposing を false で寄こすことがあるので、
   // 知らせを自分でも数える（useImeSafeEnter と同じ見分け方）。
@@ -107,6 +120,7 @@ export const composingKeys = () => {
         compositionend(view) {
           composing = false;
           mendAfterCompose(view);
+          collapseAfterCompose(view);
           return false;
         },
         beforeinput(view, event) {

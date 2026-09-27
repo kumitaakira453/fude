@@ -187,3 +187,32 @@ describe("変換の確定のあと", () => {
     expect(kept(view)).toBeGreaterThan(0);
   });
 });
+
+describe("変換が終わったときの選択", () => {
+  const frame = () => new Promise((done) => requestAnimationFrame(() => done(null)));
+  // 候補を矢印で選んでいた形。WebKit は変換中の字を選択範囲として持つ。
+  const selectWord = (view: EditorView) => {
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 3)));
+  };
+
+  it("範囲のまま終わったら、末尾へ畳む", async () => {
+    const view = editor("既定で\n");
+    selectWord(view);
+    send(view, "compositionstart");
+    send(view, "compositionend");
+    await frame();
+    expect(view.state.selection.empty).toBe(true);
+    expect(view.state.selection.from).toBe(3);
+  });
+
+  it("次の変換が始まっていたら触らない", async () => {
+    const view = editor("既定で\n");
+    selectWord(view);
+    send(view, "compositionstart");
+    send(view, "compositionend");
+    (view as EditorView & { input?: { composing: boolean } }).input!.composing = true;
+    await frame();
+    expect(view.state.selection.empty).toBe(false);
+  });
+});
+
