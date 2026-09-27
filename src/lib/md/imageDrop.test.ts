@@ -212,3 +212,23 @@ describe("pasteImages", () => {
   });
 });
 
+describe("落とした境目へ入れる", () => {
+  it("境目を渡したら、その塊の上に入る（カーソルの位置へは寄せない）", async () => {
+    const { view, out } = editor("一つ目\n\n二つ目\n");
+    const goes = stows("./images/図.png");
+    // 2 つ目の段落の前の境目
+    const at = view.state.doc.child(0).nodeSize;
+    expect(takeImages(view, { files: [shot("図.png", "image/png")] }, at, goes, true)).toBe(true);
+    await settle();
+    expect(out()).toBe("一つ目\n\n![](./images/図.png)\n\n二つ目\n");
+  });
+
+  it("複数枚は 1 枚目の直後に並ぶ", async () => {
+    const { view, out } = editor("一つ目\n\n二つ目\n");
+    const goes = stows("./images/1.png", "./images/2.png");
+    takeImages(view, { files: [shot("1.png", "image/png"), shot("2.png", "image/png")] }, 0, goes, true);
+    await settle();
+    expect(out()).toBe("![](./images/1.png)\n\n![](./images/2.png)\n\n一つ目\n\n二つ目\n");
+  });
+});
+

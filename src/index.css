@@ -2472,6 +2472,16 @@ body.mg-dragging .mg-sel-menu {
   border-radius: 1px;
   background: var(--mg-accent);
 }
+/* 画像を落とす先の線。編集面の外（body）に置き、画面の座標で動かす。 */
+.mg-drop-line {
+  position: fixed;
+  z-index: 60;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--mg-accent);
+  pointer-events: none;
+}
 .mg-guide-v {
   position: absolute;
   width: 2px;
