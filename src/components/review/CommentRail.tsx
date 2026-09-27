@@ -18,6 +18,7 @@ import {
   type ReviewThread,
 } from "../../lib/review";
 import { ago } from "../../lib/when";
+import { touchesBody } from "../../lib/layerHost";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { CommentBody } from "./CommentMarkdown";
@@ -285,7 +286,11 @@ export function CommentRail({
     for (const el of Array.from(flow.children)) ro.observe(el);
     if (railRef.current) ro.observe(railRef.current);
     if (content) ro.observe(content);
-    const mo = content ? new MutationObserver(schedule) : null;
+    const mo = content
+      ? new MutationObserver((records) => {
+          if (touchesBody(records)) schedule();
+        })
+      : null;
     mo?.observe(content!, { childList: true, subtree: true });
     scroller?.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);

@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useLayerHost } from "../lib/layerHost";
+import { touchesBody, useLayerHost } from "../lib/layerHost";
 import {
   docFindNonceAtom,
   docFindOpenAtom,
@@ -167,7 +167,9 @@ export function DocSearchOverlay({
       window.clearTimeout(rescan);
       rescan = window.setTimeout(compute, RESCAN_WAIT);
     };
-    const mo = new MutationObserver(scheduleScan);
+    const mo = new MutationObserver((records) => {
+      if (touchesBody(records)) scheduleScan();
+    });
     mo.observe(content, { childList: true, subtree: true, characterData: true });
     // 表やコードは枠の中で横にスクロールする。印は文字の上に重ねているだけで
     // 一緒には動かないので、枠が動いたら測り直す。scroll は上がって来ないが、

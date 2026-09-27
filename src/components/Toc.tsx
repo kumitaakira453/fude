@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { touchesBody } from "../lib/layerHost";
 
 interface Heading {
   id: string;
@@ -61,7 +62,8 @@ export function Toc({
     };
     collect();
     let raf = 0;
-    const mo = new MutationObserver(() => {
+    const mo = new MutationObserver((records) => {
+      if (!touchesBody(records)) return;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(collect);
     });

@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import type { AnchorHit } from "../../lib/review";
 import type { Mark, Marked, Rect } from "../../lib/reviewMarks";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
-import { useLayerHost } from "../../lib/layerHost";
+import { touchesBody, useLayerHost } from "../../lib/layerHost";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
@@ -294,7 +294,9 @@ export function AnchorOverlay({
     };
     const ro = new ResizeObserver(schedule);
     ro.observe(content);
-    const mo = new MutationObserver(schedule);
+    const mo = new MutationObserver((records) => {
+      if (touchesBody(records)) schedule();
+    });
     mo.observe(content, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
     // 表やコードは枠の中で横にスクロールする。印は重ねているだけなので、
