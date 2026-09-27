@@ -3016,6 +3016,13 @@ body.mg-dragging .mg-sel-menu {
 .katex-display::-webkit-scrollbar {
   display: none;
 }
+/* KaTeX は縦の位置合わせに使う空の支え（.pstrut）を overflow: hidden にする。
+   中身が無いので切り取っても見た目は変わらないが、切り取る箱は 1 つずつ
+   重ね合わせの単位になる。数式の多い文書では、これだけで数百になり、画面の
+   更新や当たり判定のたびにたどり直すことになる。 */
+:is(.mg-prose, .mg-pm) .katex .vlist > span > .pstrut {
+  overflow: visible;
+}
 
 /* mermaid: 生成 SVG のサイズを正規化。縦長・横長で巨大化しないよう最大サイズを
    決めて収める。クリックで拡大モーダルを開く。 */
