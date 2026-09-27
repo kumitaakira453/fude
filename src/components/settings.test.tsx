@@ -5,12 +5,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activeFolderIdAtom,
+  activeLiveEditAtom,
   folderIgnoresAtom,
+  folderLiveEditAtom,
   ignoreAtom,
   imageDirAtom,
   liveEditAtom,
   settingsOpenAtom,
   shortcutsOpenAtom,
+  soleAtom,
 } from "../state/atoms";
 import { Settings } from "./Settings";
 
@@ -310,3 +313,73 @@ describe("一覧から外すもの", () => {
     expect(store.get(folderIgnoresAtom)).toEqual({});
   });
 });
+
+describe("リアルタイム編集のフォルダごとの上書き", () => {
+  const choice = (label: string) =>
+    Array.from(box().querySelectorAll<HTMLElement>(".mg-set-folder-own button")).find(
+      (el) => el.textContent === label,
+    )!;
+  const toWrite = () => act(() => face("書く").click());
+
+  it("ベータの札は付かない", () => {
+    open();
+    toWrite();
+    const row = Array.from(box().querySelectorAll<HTMLElement>(".mg-set-row")).find((el) =>
+      el.textContent?.includes("リアルタイム編集"),
+    )!;
+    expect(row.querySelector(".mg-set-beta")).toBeNull();
+  });
+
+  it("フォルダを開いていなければ、上書きは出さない", () => {
+    open((s) => s.set(activeFolderIdAtom, null));
+    toWrite();
+    expect(box().querySelector(".mg-set-folder-own")).toBeNull();
+  });
+
+  it("1 枚だけ開いたファイルでは、上書きは出さない", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work");
+      s.set(soleAtom, "/work/a.md");
+    });
+    toWrite();
+    expect(box().querySelector(".mg-set-folder-own")).toBeNull();
+  });
+
+  it("いまのフォルダだけを読むだけにできる。既定は動かさない", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(liveEditAtom, true);
+    });
+    toWrite();
+    expect(choice("既定に従う").className).toContain("is-on");
+    act(() => choice("読むだけ").click());
+    expect(store.get(folderLiveEditAtom)).toEqual({ "/work/ark": false });
+    expect(store.get(liveEditAtom)).toBe(true);
+    expect(store.get(activeLiveEditAtom)).toBe(false);
+  });
+
+  it("既定に従うに戻すと、上書きが消える", () => {
+    open((s) => {
+      s.set(activeFolderIdAtom, "/work/ark");
+      s.set(folderLiveEditAtom, { "/work/ark": true, "/work/other": false });
+    });
+    toWrite();
+    act(() => choice("既定に従う").click());
+    expect(store.get(folderLiveEditAtom)).toEqual({ "/work/other": false });
+  });
+});
+
+describe("activeLiveEditAtom", () => {
+  it("上書きの無いフォルダは既定、あるフォルダはその値、1 枚開きは既定", () => {
+    const s = createStore();
+    s.set(liveEditAtom, false);
+    s.set(folderLiveEditAtom, { "/work/ark": true });
+    s.set(activeFolderIdAtom, "/work/other");
+    expect(s.get(activeLiveEditAtom)).toBe(false);
+    s.set(activeFolderIdAtom, "/work/ark");
+    expect(s.get(activeLiveEditAtom)).toBe(true);
+    s.set(soleAtom, "/work/ark/a.md");
+    expect(s.get(activeLiveEditAtom)).toBe(false);
+  });
+});
+

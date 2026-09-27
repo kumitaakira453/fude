@@ -51,7 +51,7 @@ import {
   draftsDirAtom,
   freshFileAtom,
   imageDirAtom,
-  liveEditAtom,
+  activeLiveEditAtom,
   metaOpenAtom,
   paletteOpenAtom,
   pendingAnchorAtom,
@@ -121,7 +121,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const cache = useAtomValue(contentCacheAtom);
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
-  const live = useAtomValue(liveEditAtom);
+  // 既定と、いまのフォルダの上書きを合わせた値。
+  const live = useAtomValue(activeLiveEditAtom);
   // 設定の切り替えでファイル切替の手順を走らせないよう、控えから読む。
   const liveRef = useRef(live);
   liveRef.current = live;

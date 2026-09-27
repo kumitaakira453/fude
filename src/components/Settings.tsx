@@ -24,7 +24,7 @@ import {
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
-import { IgnoreWords, Marks, Switch, Words } from "./settings/SettingRow";
+import { FolderSwitch, IgnoreWords, Marks, Switch, Words } from "./settings/SettingRow";
 import { FACES, matches, type Face, type Row } from "./settings/rows";
 
 // 設定。⌘, で開く。
@@ -83,10 +83,9 @@ const ROWS: Row[] = [
     id: "live",
     face: "write",
     icon: "edit_note",
-    beta: true,
     atom: liveEditAtom,
     name: "リアルタイム編集",
-    note: "組版されたまま直接書ける編集面でファイルを開く。切ると読む画面になり、直すのは本文のダブルクリックから",
+    note: "組版されたまま直接書ける編集面でファイルを開く。切ると読む面で開く（書き換えるのはチェックとコールアウトだけ）。フォルダごとに変えられる",
     aliases: ["live", "編集", "wysiwyg"],
   },
   {
@@ -256,6 +255,8 @@ export function Settings() {
   const draw = (row: Row) => {
     switch (row.kind) {
       case "switch":
+        // リアルタイム編集は、いまのフォルダだけの上書きを添える。
+        if (row.id === "live") return <FolderSwitch row={row} />;
         return <Switch row={row} />;
       case "words":
         // 一覧から外すものは、共通とフォルダごとを切り替えて書く。

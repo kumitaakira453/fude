@@ -117,8 +117,9 @@ export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
   "cozy",
 );
 
-// リアルタイム編集（ベータ）: どのファイルも、組版されたまま直接書ける編集面で
-// 開く。切っていれば読む画面だけになり、直すのは本文のダブルクリックから。
+// リアルタイム編集の既定。入れていれば、組版されたまま直接書ける編集面で
+// ファイルを開く。切っていれば読む面で開く（書き換えるのはチェックと
+// コールアウトだけ）。
 export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 // Markdown 以外もツリーに出すか。画像・HTML・PDF が並ぶ。切ると読み物だけの
 // 見え方になる（開ける・開けないは変わらない。1 枚だけ開く経路は常に通る）。
@@ -151,6 +152,20 @@ export const activeIgnoreAtom = atom((get) => {
   const id = get(activeFolderIdAtom);
   const own = id === null ? undefined : get(folderIgnoresAtom)[id];
   return own ?? get(ignoreAtom);
+});
+// リアルタイム編集のフォルダごとの上書き。鍵はフォルダの絶対パス。鍵が無い
+// フォルダは既定に従う。
+export const folderLiveEditAtom = atomWithStorage<Record<string, boolean>>(
+  "fude:liveedit-by-folder",
+  {},
+);
+
+// いま開いているフォルダで効いている値。1 枚だけ開いたファイルは、そのフォルダが
+// 登録したものとは限らないので既定に従う。
+export const activeLiveEditAtom = atom((get) => {
+  const id = get(soleAtom) === null ? get(activeFolderIdAtom) : null;
+  const own = id === null ? undefined : get(folderLiveEditAtom)[id];
+  return own ?? get(liveEditAtom);
 });
 // 取り込んだ画像の置き場所。文書と同じところに、この名前のフォルダを作る。
 export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images");

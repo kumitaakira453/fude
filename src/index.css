@@ -1941,6 +1941,22 @@ button.mg-task-check:hover {
   padding: 0.55rem 0.6rem;
   border-color: var(--mg-border);
 }
+/* 切り替えの下に添える、いまのフォルダだけの上書き。字の頭を行の名前に揃える
+   （左の余白 0.6rem + 絵 18px + 間 0.6rem）。 */
+.mg-set-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.mg-set-folder-own {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-left: calc(0.6rem + 18px + 0.6rem);
+}
+.mg-set-folder-own .mg-set-sides {
+  margin-top: 0;
+}
 .mg-set-row.is-static {
   cursor: default;
 }
