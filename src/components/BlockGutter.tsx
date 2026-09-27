@@ -387,15 +387,27 @@ export function BlockGutter({
       if (!same(viewRef.current, next)) show(next);
     };
 
+    // 測るのは 1 フレームに 1 回、最後に指していた場所だけ。mousemove は
+    // 1 フレームに何度も来るうえ、測るたびに本文のレイアウトを確定させる。
+    let moveFrame = 0;
+    let moveTarget: Node | null = null;
     const onMouseMove = (e: MouseEvent) => {
       // 選択を引いているあいだは出さない。押せるものが下に出ると、ドラッグの
       // 行き先をそれが奪って選択が飛ぶ。
       if (e.buttons !== 0) return;
       atRef.current = { x: e.clientX, y: e.clientY };
-      measure(e.clientX, e.clientY, e.target as Node | null);
+      moveTarget = e.target as Node | null;
+      if (moveFrame) return;
+      moveFrame = requestAnimationFrame(() => {
+        moveFrame = 0;
+        const at = atRef.current;
+        if (at) measure(at.x, at.y, moveTarget);
+      });
     };
 
     const onMouseLeave = () => {
+      cancelAnimationFrame(moveFrame);
+      moveFrame = 0;
       if (!heldRef.current && !menuRef.current) show(null);
     };
 
@@ -624,6 +636,7 @@ export function BlockGutter({
       host.removeEventListener("drop", onDrop);
       host.removeEventListener("contextmenu", onContextMenu);
       settle.disconnect();
+      cancelAnimationFrame(moveFrame);
     };
   }, [content, scroller, isTable, onMove, onTableMove]);
 
