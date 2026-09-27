@@ -20,7 +20,6 @@ import {
 } from "../../lib/versions";
 import {
   contentCacheAtom,
-  editorialAtom,
   fontAtom,
   readingWidthAtom,
 } from "../../state/atoms";
@@ -60,7 +59,6 @@ export function VersionScreen({ path }: { path: string }) {
   const store = useStore();
   const ledger = useAtomValue(ledgerAtom);
   const cache = useAtomValue(contentCacheAtom);
-  const editorial = useAtomValue(editorialAtom);
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
   const close = useSetAtom(versionScreenAtom);
@@ -415,7 +413,6 @@ export function VersionScreen({ path }: { path: string }) {
                     <markdownContext.Provider value={ctx}>
                       <Body
                         text={pickedText}
-                        editorial={editorial}
                         style={style}
                         width={width}
                       />
@@ -434,7 +431,6 @@ export function VersionScreen({ path }: { path: string }) {
                       base={oldText}
                       head={newText}
                       layout={shown.layout}
-                      editorial={editorial}
                       style={style}
                     />
                   </markdownContext.Provider>
@@ -626,12 +622,10 @@ const NEXT_CHUNK = 160;
 // ファイルで固まる。
 function Body({
   text,
-  editorial,
   style,
   width,
 }: {
   text: string;
-  editorial: boolean;
   style: React.CSSProperties;
   width: string;
 }) {
@@ -653,13 +647,13 @@ function Body({
     <>
       <article
         style={style}
-        className={`mg-prose prose ${editorial ? "mg-editorial" : ""} ${
+        className={`mg-prose prose mg-editorial ${
           WIDTH_CLASS[width]
         } mx-auto`}
       >
         {blocks.slice(0, limit).map((block) => (
           <div key={block.index} className="mg-block">
-            <Markdown body={block.src} editorial={editorial} />
+            <Markdown body={block.src} editorial />
           </div>
         ))}
       </article>

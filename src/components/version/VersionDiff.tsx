@@ -20,13 +20,11 @@ export function VersionDiff({
   base,
   head,
   layout,
-  editorial,
   style,
 }: {
   base: string;
   head: string;
   layout: Layout;
-  editorial: boolean;
   style: React.CSSProperties;
 }) {
   const rows = useMemo(() => compare(base, head), [base, head]);
@@ -34,7 +32,7 @@ export function VersionDiff({
   // 描き終わったあとに、変わった字へ印を付ける。
   useEffect(
     () => applyDiffMarks(root.current),
-    [rows, layout, editorial, style],
+    [rows, layout, style],
   );
 
   if (unchanged(rows)) {
@@ -53,7 +51,6 @@ export function VersionDiff({
           key={i}
           row={row}
           layout={layout}
-          editorial={editorial}
           style={style}
         />
       ))}
@@ -64,12 +61,10 @@ export function VersionDiff({
 function Row({
   row,
   layout,
-  editorial,
   style,
 }: {
   row: DiffRow;
   layout: Layout;
-  editorial: boolean;
   style: React.CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
@@ -90,14 +85,14 @@ function Row({
           畳む
         </button>
         {row.blocks.map((block) => (
-          <Kept key={block.index} block={block} editorial={editorial} style={style} />
+          <Kept key={block.index} block={block} style={style} />
         ))}
       </>
     );
   }
 
   if (row.kind === "kept") {
-    return <Kept block={row.block} editorial={editorial} style={style} />;
+    return <Kept block={row.block} style={style} />;
   }
 
   // フロントマターは本文のブロックに割れないので、書いたままの形で並べる。
@@ -105,13 +100,13 @@ function Row({
     row.kind === "meta" ? (
       <pre className="mg-ver-meta">{row.base.trim()}</pre>
     ) : "base" in row ? (
-      <Prose src={row.base.src} editorial={editorial} style={style} />
+      <Prose src={row.base.src} style={style} />
     ) : null;
   const after =
     row.kind === "meta" ? (
       <pre className="mg-ver-meta">{row.head.trim()}</pre>
     ) : "head" in row ? (
-      <Prose src={row.head.src} editorial={editorial} style={style} />
+      <Prose src={row.head.src} style={style} />
     ) : null;
 
   return (
@@ -171,32 +166,28 @@ function Side({
 // 変わっていないブロック。周りの文脈として置く。
 function Kept({
   block,
-  editorial,
   style,
 }: {
   block: Block;
-  editorial: boolean;
   style: React.CSSProperties;
 }) {
   return (
     <div className="mg-ver-kept">
-      <Prose src={block.src} editorial={editorial} style={style} />
+      <Prose src={block.src} style={style} />
     </div>
   );
 }
 
 function Prose({
   src,
-  editorial,
   style,
 }: {
   src: string;
-  editorial: boolean;
   style: React.CSSProperties;
 }) {
   return (
-    <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-      <Markdown body={src} editorial={editorial} />
+    <div className="mg-prose prose mg-editorial" style={style}>
+      <Markdown body={src} editorial />
     </div>
   );
 }

@@ -46,7 +46,6 @@ import {
   activePath,
   activePaneIdAtom,
   contentCacheAtom,
-  editorialAtom,
   fontAtom,
   draftAskAtom,
   draftsDirAtom,
@@ -122,7 +121,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const cache = useAtomValue(contentCacheAtom);
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
-  const editorial = useAtomValue(editorialAtom);
   const live = useAtomValue(liveEditAtom);
   // 設定の切り替えでファイル切替の手順を走らせないよう、控えから読む。
   const liveRef = useRef(live);
@@ -402,7 +400,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   }, [absOf, isDoc, path, settled, store]);
 
   // 読む面の見た目のまま、1 枚の HTML にして渡す。組み直さず、いま組まれて
-  // いるものを写す（メイクアップ版は組む DOM 自体が違う）。
+  // いるものを写す（本文の組版は組む DOM 自体を変える）。
   const handOut = useCallback(async () => {
     // 書いている最中は編集面が、読んでいるときは読む面が、それぞれ組まれた
     // 本文を持つ。どちらも同じ組版（.mg-prose）なので、出ている方を写す。
@@ -1692,9 +1690,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               dark={dark}
               resolveAsset={ctx.resolveAsset}
               peekAsset={ctx.peekAsset}
-              className={`mg-prose prose ${
-                editorial ? "mg-editorial" : ""
-              } ${WIDTH_CLASS[width]} mx-auto`}
+              className={`mg-prose prose mg-editorial ${WIDTH_CLASS[width]} mx-auto`}
             />
           </div>
         ) : (
@@ -1716,9 +1712,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                   <article
                     ref={setContent}
                     style={{ fontFamily: fontStack(font) }}
-                    className={`mg-prose prose ${
-                      editorial ? "mg-editorial" : ""
-                    } ${WIDTH_CLASS[width]} mx-auto`}
+                    className={`mg-prose prose mg-editorial ${WIDTH_CLASS[width]} mx-auto`}
                   >
                     <markdownContext.Provider value={ctx}>
                       {/* 選択メニューやつまみから、そのブロックだけを生ソース編集 */}
@@ -1726,7 +1720,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                       <EditableBody
                         key={path}
                         body={body}
-                        editorial={editorial}
                         onSaveBody={saveBody}
                         startIndex={startAt}
                         content={content}

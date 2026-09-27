@@ -46,7 +46,6 @@ import {
   activeFolderIdAtom,
   reviewSideWidthAtom,
   contentCacheAtom,
-  editorialAtom,
   fontAtom,
 } from "../../state/atoms";
 import {
@@ -689,7 +688,6 @@ function ThreadDetail({
   const setSelectedId = useSetAtom(reviewThreadAtom);
   const ledger = useAtomValue(ledgerAtom);
   const root = useAtomValue(activeFolderIdAtom);
-  const editorial = useAtomValue(editorialAtom);
   const font = useAtomValue(fontAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
   const { openFile, navigate, resolveAsset, peekAsset } = useWorkspace();
@@ -935,7 +933,6 @@ function ThreadDetail({
                 changes={view.changes}
                 answered={answered}
                 goTo={goTo}
-                editorial={editorial}
                 style={style}
                 focusNonce={focus}
                 selection={thread.selection}

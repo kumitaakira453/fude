@@ -7,7 +7,6 @@ import { FONTS } from "../lib/fonts";
 import { cleanDir, DEFAULT_DIR } from "../lib/images";
 import { THEMES } from "../lib/themes";
 import {
-  editorialAtom,
   fontAtom,
   ignoreAtom,
   imageDirAtom,
@@ -67,17 +66,6 @@ const ROWS: Row[] = [
     name: "本文幅",
     note: "1 行の長さを決める",
     aliases: ["width", "幅", "余白"],
-  },
-  {
-    kind: "switch",
-    id: "editorial",
-    face: "look",
-    icon: "brush",
-    beta: true,
-    atom: editorialAtom,
-    name: "メイクアップ版",
-    note: "字間・行間から見出し・箇条書き・引用の組み方まで作り込んで描く",
-    aliases: ["editorial", "組版", "typography"],
   },
   {
     kind: "switch",

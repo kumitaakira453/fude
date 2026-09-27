@@ -116,8 +116,6 @@ export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
   "mdglow:width",
   "cozy",
 );
-// エディトリアル組版（ベータ）: 構造を読み取って組版を強化する描画モード
-export const editorialAtom = atomWithStorage<boolean>("mdglow:editorial", true);
 
 // リアルタイム編集（ベータ）: どのファイルも、組版されたまま直接書ける編集面で
 // 開く。切っていれば読む画面だけになり、直すのは本文のダブルクリックから。

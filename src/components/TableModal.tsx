@@ -1,7 +1,5 @@
-import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { editorialAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 
 // 幅の長い表を、画面いっぱいで見る。
@@ -22,7 +20,6 @@ export function tablePlain(table: HTMLElement): string {
 }
 
 export function TableModal({ html, onClose }: { html: string; onClose: () => void }) {
-  const editorial = useAtomValue(editorialAtom);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -48,7 +45,7 @@ export function TableModal({ html, onClose }: { html: string; onClose: () => voi
           </button>
         </div>
         <div
-          className={`mg-tablebox-body mg-prose prose${editorial ? " mg-editorial" : ""}`}
+          className="mg-tablebox-body mg-prose prose mg-editorial"
         >
           <div className="mg-table-wrap" dangerouslySetInnerHTML={{ __html: html }} />
         </div>

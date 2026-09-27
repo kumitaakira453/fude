@@ -36,7 +36,6 @@ const HOLD_FRAMES = 5;
 // 編集はリアルタイム編集の面でやる。
 export const EditableBody = memo(function EditableBody({
   body,
-  editorial,
   onSaveBody,
   startIndex,
   content,
@@ -48,7 +47,6 @@ export const EditableBody = memo(function EditableBody({
   onCommentCell,
 }: {
   body: string;
-  editorial: boolean;
   onSaveBody: (newBody: string) => void;
   // つまみを重ねる先と、位置を据え置くためのスクロール枠。
   content?: HTMLElement | null;
@@ -252,7 +250,7 @@ export const EditableBody = memo(function EditableBody({
       // 属性は残るので、キーボードでの選択でもブロックを特定できる。
       data-mg-block={b.index}
     >
-      <Markdown body={b.src} editorial={editorial} onToggleTask={toggleTask} />
+      <Markdown body={b.src} editorial onToggleTask={toggleTask} />
     </div>
   ));
 

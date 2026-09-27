@@ -38,7 +38,6 @@ export function DocumentView({
   changes,
   answered,
   blocks,
-  editorial,
   style,
   focusNonce,
   goTo,
@@ -55,7 +54,6 @@ export function DocumentView({
   answered: boolean;
   // 押すたびに、この番号の塊へ寄せる。
   goTo: { at: number; nonce: number } | null;
-  editorial: boolean;
   style: React.CSSProperties;
   // 増えるたびに指摘の箇所へ戻す。読み進めて見失ったときのための合図。
   focusNonce: number;
@@ -133,7 +131,7 @@ export function DocumentView({
   // バージョンの画面と同じ道を通す。箇所の外で動いた塊の組も、ここで一緒に見る。
   useEffect(
     () => applyDiffMarks(root.current),
-    [paired, spotKey, changes, limit, editorial, style],
+    [paired, spotKey, changes, limit, style],
   );
 
   // 選ばれていた文字列そのものに印を付ける。表のように大きなブロックでは、
@@ -221,8 +219,8 @@ export function DocumentView({
         // 長いときに今の本文が画面の下へ押し出されてしまう。
         const isTarget = i === at;
         const now = (
-          <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-            <Markdown body={block.src} editorial={editorial} />
+          <div className="mg-prose prose mg-editorial" style={style}>
+            <Markdown body={block.src} editorial />
           </div>
         );
         if (isSpot && paired && spot.before !== null) {
@@ -233,10 +231,10 @@ export function DocumentView({
               <section className="mg-spot-side is-base">
                 <div data-diff-side="base">
                   <div
-                    className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
+                    className="mg-prose prose mg-editorial"
                     style={style}
                   >
-                    <Markdown body={spot.before} editorial={editorial} />
+                    <Markdown body={spot.before} editorial />
                   </div>
                 </div>
               </section>
@@ -265,7 +263,7 @@ export function DocumentView({
                 className={isTarget ? "mg-anchor" : undefined}
               >
                 <Tag state={spot.state} added={0} removed={spot.removed} />
-                <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
+                <Gone src={spot.before ?? ""} style={style} />
               </div>
             )}
             {(dropped.get(i) ?? []).map((c, n) => (
@@ -273,7 +271,6 @@ export function DocumentView({
                 key={n}
                 src={c.before ?? ""}
                 answered={answered}
-                editorial={editorial}
                 style={style}
               />
             ))}
@@ -285,10 +282,10 @@ export function DocumentView({
               <section className="mg-change-side is-base">
                 <div data-diff-side="base">
                   <div
-                    className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`}
+                    className="mg-prose prose mg-editorial"
                     style={style}
                   >
-                    <Markdown body={change.before} editorial={editorial} />
+                    <Markdown body={change.before} editorial />
                   </div>
                 </div>
               </section>
@@ -315,7 +312,7 @@ export function DocumentView({
       {spot.state === "removed" && at >= blocks.length && (
         <div ref={targetRef} className="mg-anchor">
           <Tag state={spot.state} added={0} removed={spot.removed} />
-          <Gone src={spot.before ?? ""} editorial={editorial} style={style} />
+          <Gone src={spot.before ?? ""} style={style} />
         </div>
       )}
 
@@ -372,20 +369,18 @@ function ChangeHead({ kind, answered }: { kind: Change["kind"]; answered: boolea
 function Dropped({
   src,
   answered,
-  editorial,
   style,
 }: {
   src: string;
   answered: boolean;
-  editorial: boolean;
   style: React.CSSProperties;
 }) {
   return (
     <>
       <ChangeHead kind="removed" answered={answered} />
       <div className="mg-change-side is-base mg-spot-gone">
-        <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-          <Markdown body={src} editorial={editorial} />
+        <div className="mg-prose prose mg-editorial" style={style}>
+          <Markdown body={src} editorial />
         </div>
       </div>
     </>
@@ -395,17 +390,15 @@ function Dropped({
 // 指摘の箇所が今の本文から消えているとき、そこに在ったものを出す。
 function Gone({
   src,
-  editorial,
   style,
 }: {
   src: string;
-  editorial: boolean;
   style: React.CSSProperties;
 }) {
   return (
     <div className="mg-spot mg-spot-gone">
-      <div className={`mg-prose prose ${editorial ? "mg-editorial" : ""}`} style={style}>
-        <Markdown body={src} editorial={editorial} />
+      <div className="mg-prose prose mg-editorial" style={style}>
+        <Markdown body={src} editorial />
       </div>
     </div>
   );
