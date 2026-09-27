@@ -463,11 +463,17 @@ export const Markdown = memo(function Markdown({
           return <pre>{children}</pre>;
         },
         details: Toggle,
-        p({ children }) {
+        p({ node, children }) {
           // 単独の外部リンク → リンクカード
           if (editorial) {
             const link = standaloneLink(children);
             if (link) return <LinkCard href={link.href} text={link.text} />;
+          }
+          // 画像の寄せ（`<p align="right"><img …></p>`）。align は古い属性で
+          // 効き方が揃わないので、目印に移して CSS で寄せる。
+          const align = (node as HastChild | undefined)?.properties?.align;
+          if (align === "left" || align === "right") {
+            return <p data-align={align}>{children}</p>;
           }
           return <p>{children}</p>;
         },
@@ -599,12 +605,13 @@ export const Markdown = memo(function Markdown({
             </a>
           );
         },
-        img({ src, alt, title }) {
+        img({ src, alt, title, width }) {
           return (
             <MdImage
               src={typeof src === "string" ? src : undefined}
               alt={alt}
               title={title}
+              width={width === undefined ? null : String(width)}
             />
           );
         },

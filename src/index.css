@@ -762,6 +762,13 @@ button.mg-task-check:hover {
 .mg-prose img {
   margin-inline: auto;
 }
+/* 画像の寄せ（`<p align>`）。絵も、キャプションを包んだ入れ物も、左右へ寄せる。 */
+.mg-prose p[data-align="left"] :is(img, .mg-figure) {
+  margin-inline: 0 auto;
+}
+.mg-prose p[data-align="right"] :is(img, .mg-figure) {
+  margin-inline: auto 0;
+}
 
 /* 長い URL や識別子は本文内で折り返す（はみ出し防止） */
 .mg-prose {

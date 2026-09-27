@@ -1,12 +1,24 @@
 import { useAtomValue } from "jotai";
 import { memo, useContext, useEffect, useState } from "react";
+import { cssWidth } from "../lib/md/imageHtml";
 import { assetVersionAtom } from "../state/atoms";
 import { markdownContext } from "./MarkdownContext";
 
 // 相対パス画像をローカル FS から解決して表示する。
 // object URL はセッション内キャッシュから同期取得し、revoke しないため
 // スクロールや再レンダーで消えたりちらついたりしない。
-function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
+function MdImageInner({
+  src,
+  alt,
+  title,
+  width,
+}: {
+  src?: string;
+  alt?: string;
+  title?: string;
+  // 書かれた幅（`<img width>`）。% か px。本文の幅を超えない。
+  width?: string | null;
+}) {
   const ctx = useContext(markdownContext);
   const isRemote = !!src && /^(https?:|data:|blob:)/.test(src);
 
@@ -49,6 +61,9 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
     );
   }
 
+  // 幅はキャプションがあれば包みに、無ければ絵に当てる。包みに当てると、
+  // キャプションも絵と同じ幅で折り返す。
+  const size = cssWidth(width ?? null);
   const shown = (
     <img
       src={(isRemote ? src : resolved) ?? undefined}
@@ -57,6 +72,7 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
       loading="lazy"
       onError={() => setFailed(true)}
       className="mx-auto my-4 max-w-full rounded shadow-md"
+      style={size ? { width: alt ? "100%" : size } : undefined}
     />
   );
 
@@ -64,7 +80,7 @@ function MdImageInner({ src, alt, title }: { src?: string; alt?: string; title?:
   // figure は段落の中に置けないので、入れ物は span で組む。
   if (!alt) return shown;
   return (
-    <span className="mg-figure">
+    <span className="mg-figure" style={size ? { width: size, maxWidth: "100%" } : undefined}>
       {shown}
       <span className="mg-figcap">{alt}</span>
     </span>
