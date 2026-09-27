@@ -2107,6 +2107,9 @@ button.mg-task-check:hover {
 .mg-block-layer {
   position: absolute;
   inset: 0;
+  /* 幅の長い表で置いていく先頭列（z-index: 1）より上に重ねる。同じ段だと、
+     表の上端にかかる列のつまみが、その列の見出しの升目に下半分を隠される。 */
+  z-index: 2;
   pointer-events: none;
   user-select: none;
 }
