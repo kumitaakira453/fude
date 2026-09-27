@@ -2,12 +2,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { useState } from "react";
 import { useOptimisticSetting } from "../../hooks/useOptimisticSetting";
 import { ignoreLines } from "../../lib/ignore";
-import {
-  activeFolderIdAtom,
-  folderIgnoresAtom,
-  folderLiveEditAtom,
-  soleAtom,
-} from "../../state/atoms";
+import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { TaskBox } from "../TaskBox";
@@ -41,47 +36,6 @@ export function Switch({ row }: { row: SwitchRow }) {
         <i />
       </span>
     </button>
-  );
-}
-
-// 既定の切り替えに、いまのフォルダだけの上書きを添える。上書きは 3 つから
-// 選ぶ（既定に従う・入れる・切る）。1 枚だけ開いたファイルは既定に従うので、
-// そのときは上書きを出さない。
-export function FolderSwitch({ row }: { row: SwitchRow }) {
-  const [byFolder, setByFolder] = useAtom(folderLiveEditAtom);
-  const folderId = useAtomValue(activeFolderIdAtom);
-  const sole = useAtomValue(soleAtom);
-  const here = sole === null ? folderId : null;
-  const own = here === null ? undefined : byFolder[here];
-
-  const pick = (next: boolean | undefined) => {
-    if (here === null) return;
-    const map = { ...byFolder };
-    if (next === undefined) delete map[here];
-    else map[here] = next;
-    setByFolder(map);
-  };
-
-  return (
-    <div className="mg-set-folder">
-      <Switch row={row} />
-      {here !== null && (
-        <div className="mg-set-folder-own">
-          <span className="mg-set-note">いまのフォルダ</span>
-          <div className="mg-rail-pick mg-set-sides">
-            <button type="button" onClick={() => pick(undefined)} className={own === undefined ? "is-on" : ""}>
-              既定に従う
-            </button>
-            <button type="button" onClick={() => pick(true)} className={own === true ? "is-on" : ""}>
-              編集できる
-            </button>
-            <button type="button" onClick={() => pick(false)} className={own === false ? "is-on" : ""}>
-              読むだけ
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 
