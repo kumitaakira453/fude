@@ -670,11 +670,14 @@ body {
   position: relative;
   padding-left: 1.5em;
 }
-/* 点。字の大きさに連れて丸も変わるよう em で持つ。 */
+/* 点。字の大きさに連れて丸も変わるよう em で持つ。
+   字との間はチェックと字の間（margin-right の 0.35em に、絵の内側の余白を
+   足した見た目の空き）に揃える。字下げの量（li の padding-left）は変えず、
+   点だけを字の側へ寄せる。 */
 :is(.mg-prose, .mg-pm) ul > li::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: calc(1.5em - 0.5em - 0.36em);
   top: 0.66em;
   width: 0.36em;
   height: 0.36em;
@@ -692,10 +695,11 @@ body {
   /* 2 桁でも字に掛からない幅。 */
   padding-left: 1.9em;
 }
+/* 番号は右で揃え、字との間を点と同じにする。桁が増えても字の頭は動かない。 */
 :is(.mg-prose, .mg-pm) ol > li::before {
   content: counter(mg-item) ".";
   position: absolute;
-  left: 0;
+  right: calc(100% - 1.9em + 0.5em);
   font-variant-numeric: tabular-nums;
 }
 /* タスクリスト: ネイティブ checkbox をやめ Material アイコンに統一。
