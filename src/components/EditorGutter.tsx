@@ -1098,6 +1098,28 @@ export function EditorGutter({
           });
         },
       },
+      {
+        icon: "format_align_center",
+        label: "配置",
+        items: (
+          [
+            ["format_align_left", "左寄せ", "left"],
+            ["format_align_center", "中央", null],
+            ["format_align_right", "右寄せ", "right"],
+          ] as const
+        ).map(([icon, label, align]) => ({
+          icon,
+          label,
+          on: (held.node.attrs.align ?? null) === align,
+          run: () => {
+            const now = loneImage(view.state.doc, pos);
+            if (!now || (now.node.attrs.align ?? null) === align) return;
+            view.dispatch(
+              view.state.tr.setNodeMarkup(now.at, null, { ...now.node.attrs, align }),
+            );
+          },
+        })),
+      },
     ];
   };
 

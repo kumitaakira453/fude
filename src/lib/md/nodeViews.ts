@@ -16,6 +16,7 @@ import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
 import type { ImageGoes } from "./imageDrop";
+import { cssWidth, type ImageAlign } from "./imageHtml";
 import { DONE, flipped, markDone, markShapes } from "./taskMarks";
 import { schema } from "./schema";
 
@@ -513,6 +514,11 @@ class ImageView implements NodeView {
   private kind: PmNode["type"];
   // 塊の絵か。行内の絵には帯もキャプションも付けない。
   private block: boolean;
+  // 寄せ（左・右。中央は null）と幅（書かれたとおり）。
+  private align: ImageAlign | null;
+  private width: string | null;
+  // 帯の寄せの 3 つ。いまの寄せを強く出すために持つ。
+  private aligns: { value: ImageAlign | null; button: HTMLElement }[] = [];
 
   constructor(
     node: PmNode,
@@ -525,6 +531,8 @@ class ImageView implements NodeView {
     this.src = src;
     this.alt = node.attrs.alt as string;
     this.title = node.attrs.title as string | null;
+    this.align = (node.attrs.align ?? null) as ImageAlign | null;
+    this.width = (node.attrs.width ?? null) as string | null;
     const remote = /^(https?:|data:|blob:)/.test(src);
     const at = remote ? src : (deps.peekAsset?.(src) ?? null);
 
@@ -570,7 +578,10 @@ class ImageView implements NodeView {
     });
 
     this.fill(at, view, getPos, block ? deps.images : undefined);
-    if (block) this.paintCap();
+    if (block) {
+      this.paintCap();
+      this.paintSize();
+    }
 
     if (!remote && !at && deps.resolveAsset) {
       void deps.resolveAsset(src)
@@ -615,7 +626,95 @@ class ImageView implements NodeView {
     });
     add("subtitles", "キャプション", () => this.edit());
     add("content_copy", "画像をコピー", () => goes.copy(this.src));
+
+    // 寄せ。いまの寄せを強く出す。
+    const gap = document.createElement("span");
+    gap.className = "mg-img-bar-gap";
+    bar.appendChild(gap);
+    this.aligns = [];
+    const place = (name: string, title: string, value: ImageAlign | null) => {
+      add(name, title, () => this.write(view, getPos, { align: value }));
+      this.aligns.push({ value, button: bar.lastElementChild as HTMLElement });
+    };
+    place("format_align_left", "左寄せ", "left");
+    place("format_align_center", "中央", null);
+    place("format_align_right", "右寄せ", "right");
+    this.paintSize();
     return bar;
+  }
+
+  // 寄せ・幅を本文へ書く。
+  private write(
+    view: EditorView,
+    getPos: () => number | undefined,
+    change: { align?: ImageAlign | null; width?: string | null },
+  ) {
+    const pos = getPos();
+    const now = pos === undefined ? null : view.state.doc.nodeAt(pos);
+    if (!now) return;
+    const next = { ...now.attrs, ...change };
+    if (next.align === now.attrs.align && next.width === now.attrs.width) return;
+    view.dispatch(view.state.tr.setNodeMarkup(pos!, null, next));
+  }
+
+  // 左右の端のつまみ。掴んでいる間は見た目の幅だけを動かし、離したときに一度だけ
+  // 本文へ書く（キャプションと同じ作法。動かすたびに書くと取り消しの履歴が
+  // 細切れになる）。幅は本文の幅に対する % で書き、100% を超えない。
+  //
+  // 中央寄せの絵は両側へ等しく伸び縮みするので、手の動きの 2 倍だけ幅が変わる。
+  // 寄せた絵は、掴んだ側だけが動く。
+  private grips(view: EditorView, getPos: () => number | undefined): HTMLElement[] {
+    const MIN = 48;
+    return (["left", "right"] as const).map((side) => {
+      const grip = document.createElement("span");
+      grip.className = `mg-img-grip is-${side}`;
+      grip.setAttribute("aria-hidden", "true");
+      grip.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        grip.setPointerCapture(event.pointerId);
+        const room = this.shown.getBoundingClientRect().width;
+        const start = this.col.getBoundingClientRect().width;
+        const from = event.clientX;
+        const pull = (side === "right" ? 1 : -1) * (this.align === null ? 2 : 1);
+        let size = start;
+        this.dom.classList.add("is-sizing");
+        const move = (e: PointerEvent) => {
+          size = Math.min(room, Math.max(MIN, start + (e.clientX - from) * pull));
+          this.col.style.width = `${size}px`;
+        };
+        const done = () => {
+          grip.removeEventListener("pointermove", move);
+          grip.removeEventListener("pointerup", done);
+          grip.removeEventListener("pointercancel", done);
+          this.dom.classList.remove("is-sizing");
+          if (room <= 0 || Math.abs(size - start) < 1) {
+            this.paintSize();
+            return;
+          }
+          const pct = Math.min(100, Math.max(1, Math.round((size / room) * 100)));
+          this.write(view, getPos, { width: `${pct}%` });
+          this.paintSize();
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", done);
+        grip.addEventListener("pointercancel", done);
+      });
+      return grip;
+    });
+  }
+
+  // 寄せと幅を見た目に当てる。
+  private paintSize() {
+    if (!this.block) return;
+    if (this.align) this.dom.dataset.align = this.align;
+    else delete this.dom.dataset.align;
+    const width = cssWidth(this.width);
+    this.dom.classList.toggle("is-sized", !!width);
+    this.col.style.width = width ?? "";
+    for (const { value, button } of this.aligns) {
+      button.classList.toggle("is-on", value === this.align);
+    }
   }
 
   // 解けたら画像、解けなければ読むときと同じ枠。
@@ -647,7 +746,10 @@ class ImageView implements NodeView {
     const hold = document.createElement("span");
     hold.className = "mg-img-hold";
     hold.appendChild(el);
-    if (goes) hold.appendChild(this.bar(view, getPos, goes));
+    if (goes) {
+      hold.appendChild(this.bar(view, getPos, goes));
+      hold.append(...this.grips(view, getPos));
+    }
     // キャプションは絵と同じ幅の桁に入れる。入れ物に直に置くと本文の幅
     // いっぱいに伸び、絵の左端とそろわない。
     this.col.replaceChildren(...(this.block ? [hold, this.cap] : [hold]));
@@ -678,6 +780,8 @@ class ImageView implements NodeView {
     const src = node.attrs.src as string;
     this.alt = node.attrs.alt as string;
     this.title = node.attrs.title as string | null;
+    this.align = (node.attrs.align ?? null) as ImageAlign | null;
+    this.width = (node.attrs.width ?? null) as string | null;
     // 道筋が変わったときだけ描き直す。キャプションを打つたびに画像を
     // 読み直すと、打鍵ごとに絵が点滅する。
     if (src !== this.src) return false;
@@ -692,6 +796,7 @@ class ImageView implements NodeView {
       else img.removeAttribute("title");
     }
     this.paintCap();
+    this.paintSize();
     return true;
   }
 

@@ -7358,6 +7358,67 @@ body.mg-carrying {
   background: var(--mg-hover);
   color: var(--mg-fg);
 }
+/* 寄せ。塊の絵は入れ物の中で中央に置いているので、置き場所を左右へ切り替える。 */
+.mg-img.is-block[data-align="left"] .mg-img-body {
+  justify-content: flex-start;
+}
+.mg-img.is-block[data-align="right"] .mg-img-body {
+  justify-content: flex-end;
+}
+/* 幅を持つ絵（と、幅を変えている最中の絵）は、桁の幅いっぱいに描く。桁の幅は
+   ImageView が当てる。 */
+.mg-img.is-block:is(.is-sized, .is-sizing) .mg-img-hold,
+.mg-img.is-block:is(.is-sized, .is-sizing) .mg-img-hold > img {
+  width: 100%;
+}
+/* 幅を変えるつまみ。絵の左右の端に、当てたときだけ細い縦の棒を出す。当たりは
+   棒より広く取る（細い棒だけだと狙いにくい）。 */
+.mg-img-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  cursor: col-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  touch-action: none;
+}
+.mg-img-grip.is-left {
+  left: 0;
+}
+.mg-img-grip.is-right {
+  right: 0;
+}
+.mg-img-grip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: min(48px, 40%);
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--mg-bg) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-fg) 70%, transparent);
+}
+.mg-img-hold:hover .mg-img-grip,
+.mg-img.is-sizing .mg-img-grip {
+  opacity: 1;
+}
+.mg-img.is-sizing,
+.mg-img.is-sizing * {
+  cursor: col-resize;
+  user-select: none;
+}
+.mg-img-bar-gap {
+  width: 1px;
+  height: 14px;
+  margin: 0 0.15rem;
+  background: var(--mg-border);
+}
+.mg-img-bar button.is-on {
+  color: var(--mg-accent);
+}
 /* 名前は当てたときに出す。窓の既定の吹き出しは出るまで間があり、押すかどうかを
    決める前に間に合わない。 */
 .mg-img-tip {
