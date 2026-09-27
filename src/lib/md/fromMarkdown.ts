@@ -14,6 +14,7 @@ import {
   containerSpans,
   innerPad,
   lostList,
+  oneLineCallout,
   unpadLines,
   type ContainerSpan,
 } from "../htmlSpans";
@@ -179,6 +180,19 @@ function containerGroup(at: ContainerSpan, source: string): Group {
   const line = source.lastIndexOf("\n", at.end - 1) + 1;
   const closeStart = source.indexOf(close, line);
   const innerEnd = closeStart < 0 ? at.end : closeStart;
+  // 1 行に収まった callout。中身は開きタグの直後から、閉じタグの手前まで。
+  const one = at.kind === "callout" ? oneLineCallout(first) : null;
+  if (one) {
+    return {
+      kind: at.kind,
+      start: at.start,
+      end: at.end,
+      attrs: open.exec(one.open)?.[1]?.trim() ?? "",
+      head: one.open,
+      innerStart: Math.min(at.start + one.open.length, innerEnd),
+      innerEnd,
+    };
+  }
   return {
     kind: at.kind,
     start: at.start,

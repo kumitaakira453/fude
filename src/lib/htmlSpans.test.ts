@@ -4,6 +4,7 @@ import {
   containerSpans,
   innerPad,
   lostList,
+  oneLineCallout,
   unpadLines,
 } from "./htmlSpans";
 
@@ -179,3 +180,24 @@ describe("囲みのコードの中は囲みとして読まない", () => {
     );
   });
 });
+
+describe("1 行の callout", () => {
+  it("開きタグと中身を分ける", () => {
+    expect(oneLineCallout('<callout icon="💡">結論</callout>')).toEqual({
+      open: '<callout icon="💡">',
+      inner: "結論",
+    });
+  });
+
+  it("中に別の callout を抱える行と、閉じの無い行は扱わない", () => {
+    expect(oneLineCallout("<callout>a<callout>b</callout></callout>")).toBeNull();
+    expect(oneLineCallout('<callout icon="💡">')).toBeNull();
+  });
+
+  it("囲みの範囲として拾う", () => {
+    const src = lines("前", "", '<callout icon="💡">結論</callout>', "", "後");
+    const [span] = containerSpans(src);
+    expect(src.slice(span.start, span.end)).toBe('<callout icon="💡">結論</callout>');
+  });
+});
+

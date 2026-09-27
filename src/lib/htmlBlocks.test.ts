@@ -135,11 +135,6 @@ describe("openHtmlContainers", () => {
     expect(opened(src)).toBe(src);
   });
 
-  it("開きタグと同じ行に中身があるものは触らない", () => {
-    const src = "<callout>本文</callout>";
-    expect(opened(src)).toBe(src);
-  });
-
   it("インラインの details 記述は触らない", () => {
     const src = "文中に <details> と書いただけ。";
     expect(opened(src)).toBe(src);
@@ -279,3 +274,20 @@ describe("setCalloutColor", () => {
     expect(setCalloutColor("ただの段落\n", "blue")).toBe("ただの段落\n");
   });
 });
+
+describe("1 行の callout を開く", () => {
+  const src = '<callout icon="💡">結論：`monthly-usage` は 1 件</callout>';
+
+  it("飾りの付いた囲みに組み、中身は markdown として読める段落にする", () => {
+    const { text } = openHtmlContainers(src);
+    expect(text).toContain('<div class="mg-callout notion">');
+    expect(text).toContain("\n\n結論：`monthly-usage` は 1 件\n\n");
+  });
+
+  it("中身の位置は原文の位置へ戻る（指摘の位置合わせに使う）", () => {
+    const { text, back } = openHtmlContainers(src);
+    const at = text.indexOf("monthly-usage");
+    expect(back(at)).toBe(src.indexOf("monthly-usage"));
+  });
+});
+

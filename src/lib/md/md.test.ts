@@ -57,6 +57,7 @@ describe("無編集なら原文がそのまま返る", () => {
     ["水平線", "***\n\n本文\n"],
     ["生 HTML", "<div class=\"x\">\n中身\n</div>\n"],
     ["callout", '<callout icon="✅" color="gray_bg">\n中身の**強調**\n</callout>\n'],
+    ["1 行の callout", '<callout icon="💡">結論：`monthly-usage` は **1 ユーザー分**。</callout>\n'],
     ["details", "<details>\n<summary>見出し</summary>\n中身\n</details>\n"],
     [
       "入れ子の details",
@@ -80,6 +81,15 @@ describe("構造を読み取る", () => {
     expect(node.attrs.icon).toBe("✅");
     expect(node.attrs.color).toBe("blue_bg");
     expect(node.child(0).textContent).toBe("本文");
+  });
+
+  it("1 行に収まった callout も、属性と中身を持つ", () => {
+    const { doc } = fromMarkdown('<callout icon="💡" color="blue_bg">結論：`monthly-usage` は 1 件</callout>\n');
+    const node = doc.child(0);
+    expect(node.type.name).toBe("callout");
+    expect(node.attrs.icon).toBe("💡");
+    expect(node.attrs.color).toBe("blue_bg");
+    expect(node.child(0).textContent).toBe("結論：monthly-usage は 1 件");
   });
 
   it("details は開きタグを持ち、題は最初の子になる", () => {

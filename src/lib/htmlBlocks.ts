@@ -17,6 +17,7 @@ import {
   innerPad,
   kindOf,
   lostList,
+  oneLineCallout,
   unpadLines,
 } from "./htmlSpans";
 
@@ -96,6 +97,17 @@ function open(src: string, back: Back): Row[] {
     if (mark) {
       fence = mark;
       out.push(row(i));
+      continue;
+    }
+    // 1 行に収まった callout は、開き・中身・閉じの 3 行に割って組む。中身が
+    // markdown として読まれるよう空行で挟む（1 行の summary と同じ扱い）。
+    const one = oneLineCallout(lines[i]);
+    if (one) {
+      const pad = indentOf(lines[i]);
+      const from = heads[i] + pad.length + one.open.length;
+      out.push(wrapper(pad + one.open, pad, back(heads[i])), blank(i));
+      if (one.inner.trim()) out.push({ text: pad + one.inner, at: back(from), lead: pad.length });
+      out.push(blank(i), held(`${pad}</div></div>`, i));
       continue;
     }
     const kind = kindOf(lines[i]);

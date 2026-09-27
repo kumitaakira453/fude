@@ -19,6 +19,17 @@ export const CONTAINERS: Record<ContainerKind, { open: RegExp; close: string }> 
 
 const KINDS = Object.keys(CONTAINERS) as ContainerKind[];
 
+// 1 行に収まった callout（`<callout icon="💡">中身</callout>`）。開きタグと、
+// 中身が始まる位置を返す。中に別の callout を抱える行は扱わない（どこで閉じる
+// のか行の中だけでは決められない）。
+const ONE_LINE = /^<callout(\s[^>]*)?>(.*)<\/callout>$/;
+export function oneLineCallout(line: string): { open: string; inner: string } | null {
+  const text = line.trim();
+  const found = ONE_LINE.exec(text);
+  if (!found || found[2].includes("<callout")) return null;
+  return { open: text.slice(0, text.indexOf(">") + 1), inner: found[2] };
+}
+
 export interface ContainerSpan {
   kind: ContainerKind;
   // 開きタグの行頭と、閉じタグの行末（排他）。
@@ -123,6 +134,10 @@ export function containerSpans(src: string): ContainerSpan[] {
       continue;
     }
     if (indentOf(line) !== "") continue;
+    if (oneLineCallout(line)) {
+      out.push({ kind: "callout", start: lines[i].at, end: lines[i].at + line.length });
+      continue;
+    }
     const kind = kindOf(line);
     if (!kind) continue;
     const end = closeLineOf(texts, i, kind);
