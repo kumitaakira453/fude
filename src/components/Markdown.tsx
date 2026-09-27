@@ -43,6 +43,7 @@ import {
 } from "../lib/md/taskMarks";
 import { taskMarksAtom, wideTableAtom } from "../state/atoms";
 import { useAtomValue } from "jotai";
+import { rehypeKatexSafe } from "../lib/md/katexSafe";
 import { rehypeSummaryInline } from "../lib/md/summaryInline";
 import { foldKey, recallFold, rememberFold } from "../lib/folds";
 import { MdImage } from "./MdImage";
@@ -64,6 +65,7 @@ const rehypePlugins = [
   rehypeRaw,
   rehypeSummaryInline,
   rehypeSlug,
+  rehypeKatexSafe,
   rehypeKatex,
   // detect は付けない。言語指定のないコードフェンス 1 個ごとに highlight.js の
   // 言語自動判定が走り、全登録文法との照合で約 90ms かかる。本文はブロック単位に

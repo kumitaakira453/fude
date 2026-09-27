@@ -11,6 +11,7 @@ import katex from "katex";
 import { copyText } from "../clip";
 import { renderMermaid } from "../mermaid";
 import { covers } from "./decos";
+import { katexSafe } from "./katexSafe";
 import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
 import { MERMAID, PLAIN, languages } from "./highlight";
@@ -732,7 +733,7 @@ class MathView implements NodeView {
       return;
     }
     // 組めない式は記号をそのまま出す（書いている途中は必ず通る）。
-    katex.render(tex, this.dom, { throwOnError: false, displayMode: false });
+    katex.render(katexSafe(tex), this.dom, { throwOnError: false, displayMode: false });
   }
 
   update(node: PmNode) {
@@ -784,7 +785,7 @@ class MathBlockView implements NodeView {
       this.dom.textContent = "TeX 式を追加する";
       return;
     }
-    katex.render(tex, this.dom, { throwOnError: false, displayMode: true });
+    katex.render(katexSafe(tex), this.dom, { throwOnError: false, displayMode: true });
   }
 
   update(node: PmNode) {
