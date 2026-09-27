@@ -709,6 +709,13 @@ body {
 :is(.mg-prose, .mg-pm) li:has(> .mg-task-check)::before {
   content: none;
 }
+/* タスクの下の入れ子。タスクの項目は字下げを持たない（チェックが印になる）
+   ので、そのままだと子の印が親のチェックと同じ位置に並ぶ。チェックの幅と
+   字との間（.mg-task-check の margin-right）の分だけ下げて、親の字の頭に揃える。
+   編集面は入れ子を .mg-task-body の中に置くので、こちらだけに掛ける。 */
+.mg-prose li.task-list-item > :is(ul, ol) {
+  padding-left: calc(20px + 0.35em);
+}
 /* 印の形。行に下線や取り消し線が掛かっても、絵は字ではないので線が乗らない。 */
 .mg-task-box {
   display: block;
