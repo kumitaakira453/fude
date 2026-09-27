@@ -143,3 +143,49 @@ describe("差分から作られた打鍵", () => {
     expect(source()).toBe("- 一つ\n- 二つ\n");
   });
 });
+
+// 変換を確定する Enter。WebKit は compositionend の後にこの keydown を届けることが
+// あり、そのときは composing がもう下りている。本物の打鍵だが、行は割らない。
+function confirmEnter(view: EditorView, how: { keyCode?: number; isComposing?: boolean }) {
+  const event = new KeyboardEvent("keydown", {
+    key: "Enter",
+    bubbles: true,
+    isComposing: how.isComposing ?? false,
+  });
+  if (how.keyCode !== undefined) Object.defineProperty(event, "keyCode", { value: how.keyCode });
+  return view.someProp("handleKeyDown", (f) => f(view, event)) ?? false;
+}
+
+describe("変換を確定する Enter", () => {
+  it("段落を割らない（keyCode 229）", () => {
+    const view = editor("変換した\n");
+    caretAtEndOf(view, "変換した");
+    composing(view, false);
+    expect(confirmEnter(view, { keyCode: 229 })).toBe(false);
+    expect(source()).toBe("変換した\n");
+  });
+
+  it("段落を割らない（isComposing）", () => {
+    const view = editor("変換した\n");
+    caretAtEndOf(view, "変換した");
+    composing(view, false);
+    expect(confirmEnter(view, { isComposing: true })).toBe(false);
+    expect(source()).toBe("変換した\n");
+  });
+
+  it("タスクの項目も割らない", () => {
+    const view = editor("- [ ] あ\n");
+    caretAtEndOf(view, "あ");
+    composing(view, false);
+    expect(confirmEnter(view, { keyCode: 229 })).toBe(false);
+    expect(source()).toBe("- [ ] あ\n");
+  });
+
+  it("確定の後に押した本物の Enter は割る", () => {
+    const view = editor("変換した\n");
+    caretAtEndOf(view, "変換した");
+    composing(view, false);
+    expect(realEnter(view)).toBe(true);
+    expect(view.state.doc.childCount).toBe(2);
+  });
+});

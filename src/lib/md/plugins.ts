@@ -972,6 +972,11 @@ const pasteMarkdown = new Plugin({
 // 変換の最中も同じく渡さない。止めるのは差分から作られた分だけで、止めれば
 // 本文は差分どおりに直る（その差分が壊れないよう、読み取りを束ねるのは
 // ime.ts の側でやっている）。
+//
+// 変換を確定する Enter も渡さない。WebKit はこの keydown を compositionend の
+// 後に届けることがあり、そのときは view.composing がもう下りている。ここで
+// 行を割ると、後から入る確定の字と重なって同じ文が二重に残る。確定の keydown
+// は isComposing か keyCode 229 を持つので、それで見分ける。
 const realKeys = (map: Record<string, Command>): Plugin => {
   const inner = keymap(map);
   const handle = inner.props.handleKeyDown;
@@ -979,6 +984,7 @@ const realKeys = (map: Record<string, Command>): Plugin => {
     props: {
       handleKeyDown(view, event) {
         if (view.composing || !(event instanceof KeyboardEvent)) return false;
+        if (event.isComposing || event.keyCode === 229) return false;
         return handle?.call(inner, view, event) ?? false;
       },
     },
