@@ -1,43 +1,22 @@
-import { ask } from "@tauri-apps/plugin-dialog";
-import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useMermaidSvg } from "../hooks/useMermaidSvg";
-import { mermaidPaneAtom } from "../state/atoms";
 import { Icon } from "./Icon";
-import { MermaidSourceEditor } from "./MermaidSourceEditor";
-
-// ソース欄の左右の余白と、幅の下限・図に残す下限。
-const GUTTER = 16;
-const MIN_PANE = 320;
-const MIN_STAGE = 420;
-
-// まだ動かしていないときの幅。図の記述は 1 行が長いので、窓が広いほど広く取る。
-function defaultPane(): number {
-  return Math.round(Math.min(680, Math.max(460, window.innerWidth * 0.38)));
-}
-// 打ち終わってから描き直すまでの待ち。打つたびに描くと図が跳ねる。
-const REDRAW_DELAY = 250;
 
 // Mermaid 図を全画面のライトボックスで拡大表示。ホイールでズーム、ドラッグでパン。
-// edit を渡すと左にソース欄が出て、図を見ながら直せる。
 export function MermaidModal({
   svg,
   dark,
   onClose,
   onEdit,
-  edit,
 }: {
   svg: string;
   dark: boolean;
   onClose: () => void;
   // 見るだけのときに出す鉛筆。押すと呼び出し側が編集で開き直す。
   onEdit?: () => void;
-  edit?: { src: string; onSave: (src: string) => void };
 }) {
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [draft, setDraft] = useState(edit?.src ?? "");
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(
     null,
   );
@@ -49,59 +28,10 @@ export function MermaidModal({
   // 開いた直後(ダブルタップの2打目)で即閉じしないためのガード
   const closableRef = useRef(false);
 
-  const [stored, setStored] = useAtom(mermaidPaneAtom);
-  const fit = (w: number) =>
-    Math.min(
-      Math.max(w, MIN_PANE),
-      Math.max(MIN_PANE, window.innerWidth - MIN_STAGE - GUTTER * 2),
-    );
-  const paneW = edit ? fit(stored > 0 ? stored : defaultPane()) : 0;
-  // 図を寄せる量。欄の幅に左右の余白を足したもの。
-  const pane = edit ? paneW + GUTTER * 2 : 0;
-  const resize = useRef<{ x: number; w: number } | null>(null);
-  // 開いた時点のソースは待たずに描く。待つのは打ち直した分だけ。
-  const initial = useRef(edit?.src ?? "");
-  const live = useMermaidSvg(
-    edit ? draft : "",
-    dark,
-    draft === initial.current ? 0 : REDRAW_DELAY,
-  );
-  const shown = edit ? live.svg || svg : svg;
-  const dirty = edit ? draft !== edit.src : false;
-
-  // 取消。書き換えたまま閉じると気付かないので、そのときだけ確かめる。
-  const cancelRef = useRef(() => {});
-  cancelRef.current = () => {
-    if (!dirty || !("__TAURI_INTERNALS__" in window)) {
-      onClose();
-      return;
-    }
-    void ask("書き換えた内容を捨てて閉じますか？", {
-      title: "fude",
-      kind: "warning",
-    }).then((yes) => {
-      if (yes) onClose();
-    });
-  };
-
-  // 保存する中身は、ソース欄が今持っているものを優先する。打った直後に
-  // 押されると、控えの draft が 1 拍遅れることがある。
-  const saveRef = useRef((_src?: string) => {});
-  saveRef.current = (src?: string) => edit?.onSave(src ?? draft);
-
   useEffect(() => {
-    // ソース欄の中で押した分は CodeMirror が受けて preventDefault する。
-    // ここで拾うのは、図の側にカーソルがあるときの分だけ。
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      if (e.key === "Escape") {
-        cancelRef.current();
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        saveRef.current();
-      }
+      if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     const t = window.setTimeout(() => {
@@ -113,9 +43,8 @@ export function MermaidModal({
     };
   }, []);
 
-  // 背景（図・ツールバー以外）クリックで閉じる。書いている最中は閉じない。
+  // 背景（図・ツールバー以外）クリックで閉じる。
   const handleBackground = () => {
-    if (edit) return;
     if (draggedRef.current) {
       draggedRef.current = false;
       return;
@@ -130,7 +59,7 @@ export function MermaidModal({
   // 図が画面外へ出ないようパン量を制限する。ズーム時は要素サイズに合わせて
   // 端を超えない範囲だけ許可（小さい時は中央固定）。
   const clampPos = (x: number, y: number, s: number) => {
-    const vw = window.innerWidth - pane;
+    const vw = window.innerWidth;
     const vh = window.innerHeight;
     const w = 0.92 * vw * s;
     const h = 0.88 * vh * s;
@@ -184,62 +113,6 @@ export function MermaidModal({
       }}
       onClick={handleBackground}
     >
-      {edit && (
-        <div
-          className="mg-mmd-pane"
-          style={{ width: paneW, left: GUTTER, top: GUTTER, bottom: GUTTER }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="mg-mmd-pane-head">
-            <Icon name="account_tree" size={15} />
-            <span>図のソース</span>
-          </div>
-          <div className="mg-mmd-pane-body">
-            <MermaidSourceEditor
-              src={edit.src}
-              onChange={setDraft}
-              onSave={(src) => saveRef.current(src)}
-              onCancel={() => cancelRef.current()}
-            />
-          </div>
-          {live.error && <div className="mg-mmd-err">{live.error}</div>}
-          <div className="mg-mmd-pane-foot">
-            <button
-              className="mg-mmd-save"
-              onClick={() => edit.onSave(draft)}
-              disabled={!dirty}
-            >
-              保存
-              <span className="mg-mmd-key">⌘⏎</span>
-            </button>
-            <button className="mg-mmd-quiet" onClick={() => cancelRef.current()}>
-              取消
-              <span className="mg-mmd-key">Esc</span>
-            </button>
-          </div>
-        </div>
-      )}
-      {edit && (
-        // 掴んで幅を変える帯。欄の外に置く（中だと編集欄のスクロールバーと重なる）。
-        <div
-          className="mg-mmd-grip"
-          title="幅を変える"
-          style={{ left: GUTTER + paneW, top: GUTTER, bottom: GUTTER }}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId);
-            resize.current = { x: e.clientX, w: paneW };
-          }}
-          onPointerMove={(e) => {
-            const r = resize.current;
-            if (!r) return;
-            setStored(fit(r.w + (e.clientX - r.x)));
-          }}
-          onPointerUp={() => {
-            resize.current = null;
-          }}
-        />
-      )}
       <div className="mg-mmd-toolbar" onClick={(e) => e.stopPropagation()}>
         {onEdit && (
           <button onClick={onEdit} title="図を編集">
@@ -255,17 +128,13 @@ export function MermaidModal({
         <button onClick={reset} title="等倍に戻す">
           <Icon name="fit_screen" size={18} />
         </button>
-        <button onClick={() => cancelRef.current()} title="閉じる (Esc)">
+        <button onClick={onClose} title="閉じる (Esc)">
           <Icon name="close" size={18} />
         </button>
       </div>
       <div
         className="mg-mmd-stage"
-        style={{
-          marginLeft: pane,
-          width: `calc(100vw - ${pane}px)`,
-          cursor: drag.current ? "grabbing" : "grab",
-        }}
+        style={{ cursor: drag.current ? "grabbing" : "grab" }}
         onPointerDown={(e) => {
           (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
           draggedRef.current = false;
@@ -293,12 +162,12 @@ export function MermaidModal({
           onClick={(e) => e.stopPropagation()}
           style={{
             // ズームは要素サイズで行う（SVG をベクターのまま再描画＝ボケない）
-            width: `calc((100vw - ${pane}px) * 0.92 * ${scale})`,
+            width: `calc(100vw * 0.92 * ${scale})`,
             height: `calc(88vh * ${scale})`,
             // 中央アンカー(-50%)＋パン(pos)。中心から拡大するので吹っ飛ばない
             transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`,
           }}
-          dangerouslySetInnerHTML={{ __html: shown }}
+          dangerouslySetInnerHTML={{ __html: svg }}
         />
       </div>
     </div>,

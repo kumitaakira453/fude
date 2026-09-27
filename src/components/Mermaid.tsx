@@ -1,10 +1,9 @@
 import { useAtomValue } from "jotai";
-import { useContext, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMermaidSvg } from "../hooks/useMermaidSvg";
 import { DARK_THEME_IDS } from "../lib/themes";
 import { themeAtom } from "../state/atoms";
 import { Icon } from "./Icon";
-import { markdownContext } from "./MarkdownContext";
 import { MermaidModal } from "./MermaidModal";
 
 export function Mermaid({ code }: { code: string }) {
@@ -15,18 +14,6 @@ export function Mermaid({ code }: { code: string }) {
   const { svg, error } = useMermaidSvg(code, dark);
   const [zoomed, setZoomed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const ctx = useContext(markdownContext);
-
-  // 直すのはブロック単位なので、この図がどのブロックかを DOM から辿って頼む。
-  const edit = ctx?.onEditBlock;
-  const editThis = () => {
-    const at =
-      ref.current?.closest<HTMLElement>("[data-mg-block]")?.dataset.mgBlock;
-    if (at === undefined || !edit) return;
-    setZoomed(false);
-    edit(Number(at));
-  };
-
   // 失敗時（記述途中含む）はコードとエラー内容を表示して UI を壊さない。
   if (error) {
     return (
@@ -60,8 +47,6 @@ export function Mermaid({ code }: { code: string }) {
           e.stopPropagation();
           setZoomed(true);
         }}
-        // ブロックのダブルクリック編集（コード表示）を抑止
-        onDoubleClick={(e) => e.stopPropagation()}
       >
         {/* mermaid が生成する SVG（securityLevel: strict でサニタイズ済み） */}
         <div
@@ -76,7 +61,6 @@ export function Mermaid({ code }: { code: string }) {
         <MermaidModal
           svg={svg}
           dark={dark}
-          onEdit={edit ? editThis : undefined}
           onClose={() => setZoomed(false)}
         />
       )}

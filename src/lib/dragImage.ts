@@ -14,23 +14,6 @@ export function setDragChip(data: DataTransfer, label: string): void {
   requestAnimationFrame(() => chip.remove());
 }
 
-// 掴んだものそのものを薄い写しとして見せる。組版の見た目を保ったまま運べる。
-// 背の高いものは札に落とす（画面を覆う写しが付いてくると位置が読めない）。
-const PREVIEW_MAX = 180;
-
-export function setDragPreview(
-  data: DataTransfer,
-  el: Element | null,
-  label: string,
-): void {
-  const box = el?.getBoundingClientRect();
-  if (el && box && box.height > 0 && box.height <= PREVIEW_MAX && box.width > 0) {
-    data.setDragImage(el, 12, Math.min(box.height / 2, 22));
-    return;
-  }
-  setDragChip(data, label);
-}
-
 // 表の行・列を掴んだときの写し。
 //
 // 行は tr、列は行ごとに散った升目で、どちらも単体では表として組まれない
@@ -146,36 +129,4 @@ export function blockCopy(el: HTMLElement | null): HTMLElement | null {
   copy.style.margin = "0";
   shell.appendChild(copy);
   return shell;
-}
-
-// 写しを setDragImage へ渡す。HTML5 のドラッグを使う側（読むとき）から呼ぶ。
-function handOver(data: DataTransfer, shell: HTMLElement | null, label: string): void {
-  if (!shell) {
-    setDragChip(data, label);
-    return;
-  }
-  // 画面外に置く。setDragImage は描画済みの要素しか写せない。
-  shell.style.position = "fixed";
-  shell.style.top = "-9999px";
-  shell.style.left = "-9999px";
-  document.body.appendChild(shell);
-  const box = shell.getBoundingClientRect();
-  if (box.height <= 0 || box.width <= 0) {
-    shell.remove();
-    setDragChip(data, label);
-    return;
-  }
-  data.setDragImage(shell, 12, Math.min(box.height / 2, 22));
-  // 写しは同期で取られるので、次のフレームには捨ててよい。
-  requestAnimationFrame(() => shell.remove());
-}
-
-export function setDragTablePart(
-  data: DataTransfer,
-  table: HTMLTableElement | null,
-  kind: "row" | "col",
-  at: number,
-  label: string,
-): void {
-  handOver(data, tablePartCopy(table, kind, at), label);
 }

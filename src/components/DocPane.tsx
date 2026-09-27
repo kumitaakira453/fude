@@ -174,19 +174,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 選択と画面が切り替わって見えるようにするため、ここを同じ一枚でやらない。
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState("");
-  // フロントマター（先頭の --- ブロック）をその場編集中か（開始時のクリック座標）
-  // 選択メニューの「編集する」から立てる編集の頼み。
-  const [editRequest, setEditRequest] = useState<{
-    // どのファイルへの頼みか。ファイルを切り替えると本文の中身も番号も
-    // 変わるので、別のファイルに残った頼みは効かせない。
-    path: string;
-    blockIndex: number;
-    // 表のセル・箇条書きの項目を選んでいるときは、その要素のソースオフセット。
-    // どちらでもなければ両方 undefined で、ブロック全体の編集になる。
-    cellStart?: number;
-    itemAnchor?: number;
-    nonce: number;
-  } | null>(null);
   // 編集面の要素と、その入れ物。目次が本文の DOM を見るのに使う。
   const [editContent, setEditContent] = useState<HTMLElement | null>(null);
   const [editScroller, setEditScroller] = useState<HTMLElement | null>(null);
@@ -830,63 +817,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     reviewRef.current?.startDraft({ unit: true });
   }, [content]);
 
-  // 選択したところを消す頼み。ソースのどこを切るかは EditableBody が出す。
-  const [deleteRequest, setDeleteRequest] = useState<{
-    path: string;
-    blockIndex: number;
-    start: number;
-    text: string;
-    cellStart?: number;
-    itemAnchor?: number;
-    nonce: number;
-  } | null>(null);
-
-  const deleteSelection = useCallback(() => {
-    const sel = reviewRef.current?.selection;
-    const p = pathRef.current;
-    if (!sel || !p) return;
-    // またいだ選択は扱わない。見えている選択と消える範囲が食い違う。
-    if (sel.endBlockIndex !== undefined) {
-      notify(store, "ブロックをまたいだ選択は消せません", "right");
-      return;
-    }
-    setDeleteRequest((r) => ({
-      path: p,
-      blockIndex: sel.blockIndex,
-      start: sel.start,
-      text: sel.text,
-      cellStart: sel.cellStart,
-      itemAnchor: sel.itemAnchor,
-      nonce: (r?.nonce ?? 0) + 1,
-    }));
-    window.getSelection()?.removeAllRanges();
-    reviewRef.current?.clearSelection();
-  }, [store]);
-
-  // 選択したところに対する 2 つの操作。メニューとキーの両方から呼ぶ。
-  const startEdit = useCallback(() => {
-    const sel = reviewRef.current?.selection;
-    const p = pathRef.current;
-    if (!sel || !p) return;
-    // またいだ選択は扱わない。先頭のブロックだけを開くと、選んだ範囲と
-    // 直す範囲が食い違う。
-    if (sel.endBlockIndex !== undefined) {
-      notify(store, "ブロックをまたいだ選択は編集できません", "right");
-      return;
-    }
-    setEditRequest((r) => ({
-      path: p,
-      blockIndex: sel.blockIndex,
-      cellStart: sel.cellStart,
-      itemAnchor: sel.itemAnchor,
-      nonce: (r?.nonce ?? 0) + 1,
-    }));
-    // 選択を解いてメニューを閉じる。selectionchange は 1 フレーム遅れて
-    // 届くので、控えの方も同時に落として待たせない。
-    window.getSelection()?.removeAllRanges();
-    reviewRef.current?.clearSelection();
-  }, [store]);
-
   // 選択したところへのキー操作。メニューを出さずに同じことができる。
   useEffect(() => {
     if (!isActive) return;
@@ -894,22 +824,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       const current = reviewRef.current;
       const sel = current?.selection;
       if (!current || !sel || current.draft) return;
-      // 選択したところを消す。入力欄の中の削除はそのまま入力欄に任せる。
-      // ⌫ の既定動作（WKWebView の「戻る」）は useHotkeys が止めている。
-      // 重ねた画面（設定・一覧・パレット）が出ているあいだは、本文に残った
-      // 選択へ効かせない。
-      if (
-        (e.key === "Backspace" || e.key === "Delete") &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !inEditable(e.target) &&
-        !overlayOpen
-      ) {
-        e.preventDefault();
-        deleteSelection();
-        return;
-      }
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "i" && !e.shiftKey) {
@@ -923,48 +837,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         else if (sel.itemAnchor !== undefined)
           commentOnItem(sel.blockIndex, sel.itemAnchor);
         else commentOnBlock(sel.blockIndex);
-      } else if (key === "e" && !e.shiftKey) {
-        e.preventDefault();
-        startEdit();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [
-    isActive,
-    startEdit,
-    commentOnCell,
-    commentOnBlock,
-    commentOnItem,
-    deleteSelection,
-    overlayOpen,
-  ]);
-
-  // 頼みは 1 回で使い切る。残しておくと、本文の入れ物が組み直されたとき
-  // （全文編集から戻ったときなど）にもう一度効いてしまう。編集なら勝手に
-  // その場編集が開き、削除なら同じ削除がもう一度走る。
-  // 子の layout effect のあとに走るので、渡し損ねることはない。
-  useLayoutEffect(() => {
-    if (editRequest) setEditRequest(null);
-  }, [editRequest]);
-  useLayoutEffect(() => {
-    if (deleteRequest) setDeleteRequest(null);
-  }, [deleteRequest]);
-
-  // 削除の知らせ。消す前の本文を受け取ったときだけ取り消しを出す。
-  const undoDelete = useCallback(
-    (previousBody: string | null, text: string) => {
-      notify(
-        store,
-        text,
-        "right",
-        previousBody === null
-          ? undefined
-          : { label: "元に戻す", run: () => saveBody(previousBody) },
-      );
-    },
-    [store, saveBody],
-  );
+  }, [isActive, commentOnCell, commentOnBlock, commentOnItem]);
 
   // フロントマター（本文の前にある --- ブロック）の生ソース
   const fmPrefix = (raw ?? "").slice(0, (raw ?? "").length - body.length);
@@ -1534,15 +1411,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       onAnchor: (id: string) => land(id),
       resolveAsset: (src: string) => resolveAsset(path ?? "", src),
       peekAsset: (src: string) => peekAsset(path ?? "", src),
-      onEditBlock: (blockIndex: number) => {
-        const p = pathRef.current;
-        if (!p) return;
-        setEditRequest((r) => ({
-          path: p,
-          blockIndex,
-          nonce: (r?.nonce ?? 0) + 1,
-        }));
-      },
     }),
     [path, navigate, resolveAsset, peekAsset, land],
   );
@@ -1860,9 +1728,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                         body={body}
                         editorial={editorial}
                         onSaveBody={saveBody}
-                        editRequest={editRequest}
-                        deleteRequest={deleteRequest}
-                        onDeleted={undoDelete}
                         startIndex={startAt}
                         content={content}
                         scroller={scroller}
@@ -1975,14 +1840,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           >
             {review.selection.cellStart !== undefined && (
               <SelectionAct icon="table" label="セルにコメント" onPick={commentOnCell} />
-            )}
-            {/* またいだ選択では出さない。先頭のブロックだけに効くと、
-                選んだ範囲と食い違う。 */}
-            {review.selection.endBlockIndex === undefined && (
-              <>
-                <SelectionAct icon="edit" label="編集する" onPick={startEdit} />
-                <SelectionAct icon="backspace" label="削除" onPick={deleteSelection} />
-              </>
             )}
           </SelectionMenu>
         )}

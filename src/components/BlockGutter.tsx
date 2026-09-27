@@ -2,73 +2,39 @@ import { useEffect, useRef, useState } from "react";
 import { useLayerHost } from "../lib/layerHost";
 import { createPortal } from "react-dom";
 import { blockIndexOf, blockRect, topmostBlock } from "../lib/domText";
-import { setDragPreview, setDragTablePart } from "../lib/dragImage";
 import {
-  ADD,
-  ADD_AWAY,
   AWAY,
-  BOTH,
-  BAR,
   GRIP,
-  indentStep,
   inWrap,
   itemAtY,
   itemEdge,
-  itemEdgeOf,
   itemLine,
   lineHeight,
   HEAD_ROW,
   ONLY,
   relative,
   tableBands,
-  tableGeometry,
   type Box,
-  addAway,
-  HOLD,
-  nearEdge,
-  NUB,
-  NUB_LONG,
   HOLD_GAP,
-  holdAt,
-  onLine,
-  roomBelow,
 } from "../lib/gutterGeom";
-import { markOf, taskMarks } from "../lib/md/taskMarks";
 import { BlockMenu, type MenuItem } from "./BlockMenu";
 import { TableModal, tablePlain } from "./TableModal";
 import { Icon } from "./Icon";
 
-// ブロックを掴んで動かすための層。表のときは行と列のつまみも出す。
+// 読む面のブロックのつまみ。押すと、そのブロック（箇条書きなら項目）への
+// 指摘・表の拡大・リンクの写しを出す。書き換える操作は持たない（書くのは
+// リアルタイム編集の面でやる）。
 //
 // 本文の DOM は書き換えない。位置を測って重ねるだけなので、つまみが出ても
 // 組版は動かない（AnchorOverlay と同じ持ち方）。
-//
-// 掴む相手は 3 種。ブロック全体（表なら左上の角）、表の行、表の列。
-// 表の行番号は描画された並びから読む。GFM の表はソースの 1 行が 1 つの tr に
-// なるので、本体の行は「tbody 内の位置 + 2」がソースの行になる
-// （0 行目が見出し、1 行目が区切り）。
-
-const BLOCK_MIME = "application/x-fude-block";
-const ROW_MIME = "application/x-fude-trow";
-const COL_MIME = "application/x-fude-tcol";
-
 
 interface View {
   index: number;
-  atRight: boolean;
-  bottom: number;
-  // 表の下に足すつまみを置ける高さ（次のブロックとの空き）。
-  below: number;
-  // 行・列のつまみを育てるか。寄っていないあいだは小さな棒だけを出す。
-  nearRow: boolean;
-  nearCol: boolean;
   // 非表のブロックの外枠。メニューの対象を塗るのに使う。
   box: Box | null;
-  // 箇条書きの項目。Markdown ではリスト全体が 1 ブロックだが、掴む単位は項目。
+  // 箇条書きの項目。Markdown ではリスト全体が 1 ブロックだが、指す単位は項目。
   item: {
     at: number;
-    top: number;
-    height: number;
     // 1 行目の真ん中。つまみはここに合わせる（項目全体の真ん中だと、
     // 2 行以上の項目で行の間に落ちる）。
     mid: number;
@@ -78,35 +44,13 @@ interface View {
   } | null;
   // 非表のとき: 1 行目の中心（本文の座標）。つまみをこの高さに揃える。
   y: number;
-  // 左余白の広さ。狭い画面では出すつまみを減らす。
+  // 左余白の広さ。狭い画面では本文に寄せて置く。
   room: number;
-  // 表のときだけ。
+  // 表のときだけ。見えている範囲の表の箱。
   table: Box | null;
-  row: { line: number; top: number; height: number } | null;
-  col: { index: number; left: number; width: number } | null;
 }
 
-type Kind = "block" | "row" | "col" | "item";
-
-export type Part = "row" | "col";
-export type TableAct =
-  "insertBefore" | "insertAfter" | "duplicate" | "clear" | "delete";
-
-interface Guide {
-  kind: Kind;
-  top: number;
-  left: number;
-  length: number;
-}
-
-const ITEM_MIME = "application/x-fude-item";
-
-const MIME: Record<Kind, string> = {
-  block: BLOCK_MIME,
-  row: ROW_MIME,
-  col: COL_MIME,
-  item: ITEM_MIME,
-};
+type Kind = "block" | "item";
 
 // 同じ場所を指し続けている間は描き直さない。マウスを動かすだけで層を
 // 組み直すと、大きな本文で目に見えて重くなる。
@@ -115,26 +59,13 @@ function same(a: View | null, b: View): boolean {
     !!a &&
     a.index === b.index &&
     a.room === b.room &&
-    a.atRight === b.atRight &&
-    a.bottom === b.bottom &&
-    a.below === b.below &&
-    a.nearRow === b.nearRow &&
-    a.nearCol === b.nearCol &&
     (a.box?.top ?? -1) === (b.box?.top ?? -1) &&
     (a.item?.at ?? -1) === (b.item?.at ?? -1) &&
     Math.abs(a.y - b.y) < 0.5 &&
-    (a.row?.line ?? -1) === (b.row?.line ?? -1) &&
-    (a.col?.index ?? -1) === (b.col?.index ?? -1) &&
-    (a.table?.top ?? -1) === (b.table?.top ?? -1)
+    (a.table?.top ?? -1) === (b.table?.top ?? -1) &&
+    (a.table?.left ?? -1) === (b.table?.left ?? -1)
   );
 }
-
-// 相手のブロックは縦位置から決める。当たり判定で拾うと、重ねた層や指摘の印、
-// 本文の外の余白で相手を見失う。
-// 指している高さの項目。入れ子は内側（背の低い方）が勝つ。
-// 当たり判定で拾うと、余白に出た瞬間に相手を見失う。
-// 要素の 1 行目の箱。行の高さを読むより確実で、チェックボックスの行送りや
-// 項目の余白に引っ張られない。
 
 function numberOf(el: Element | null, key: string): number | null {
   const raw = (el as HTMLElement | null)?.dataset?.[key];
@@ -143,6 +74,8 @@ function numberOf(el: Element | null, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// 相手のブロックは縦位置から決める。当たり判定で拾うと、重ねた層や指摘の印、
+// 本文の外の余白で相手を見失う。
 function blockAtY(
   content: HTMLElement,
   y: number,
@@ -152,20 +85,12 @@ function blockAtY(
   return el && index !== null ? { el, index } : null;
 }
 
-// 表のつまみの相手は、その表の DOM から測る。行の数え方はモードで違うので
-// 候補の行を渡す形になっている（読むときは見出しが <thead> に入る）。
-function geometryOf(blockEl: Element, x: number, y: number, base: DOMRect) {
+// 表の箱。横に溢れる表は枠の中でスクロールするので、見えている範囲で切る。
+function tableBoxOf(blockEl: Element, base: DOMRect): Box | null {
   const table = blockEl.querySelector("table");
   if (!table) return null;
   const rows = Array.from(table.tBodies[0]?.rows ?? []);
-  const geo = tableGeometry(table, rows, { x, y }, base);
-  if (!geo) return null;
-  // GFM の表はソースの 1 行が 1 つの tr になる。本体は 2 行目から
-  // （0 行目が見出し、1 行目が区切り）。
-  return {
-    ...geo,
-    row: geo.row ? { ...geo.row, line: geo.row.index + 2 } : null,
-  };
+  return tableBands(table, rows, { row: null, col: null }, base)?.table ?? null;
 }
 
 export function BlockGutter({
@@ -173,81 +98,39 @@ export function BlockGutter({
   scroller,
   contentKey,
   isTable,
-  onEdit,
   onComment,
   onCopyLink,
-  onMove,
-  onInsert,
-  onDuplicate,
-  onDelete,
-  onTableMove,
-  onTableAct,
-  onTableAppend,
-  onItemMove,
-  onItemOut,
-  onItemAct,
-  onItemMark,
-  onItemEdit,
   onItemComment,
-  onCellEdit,
   onCellComment,
   itemAt,
-  itemDrop,
 }: {
   content: HTMLElement | null;
   scroller: HTMLElement | null;
   // ファイルが変わったら測り直す。
   contentKey: string;
-  // そのブロックが表そのものか。callout の中の表などは行・列を掴ませない。
+  // そのブロックが表そのものか。callout の中の表などは表として扱わない。
   isTable: (index: number) => boolean;
-  onEdit: (index: number) => void;
   onComment: (index: number) => void;
-  // その塗を指すリンクを写す。
+  // その塊を指すリンクを写す。
   onCopyLink: (index: number) => void;
-  onMove: (from: number, to: number) => void;
-  onInsert: (index: number, side: "before" | "after") => void;
-  onDuplicate: (index: number) => void;
-  onDelete: (index: number) => void;
-  // 表の行・列。kind で行と列を分け、at は行番号または列番号。
-  onTableMove: (index: number, kind: Part, from: number, to: number) => void;
-  onTableAct: (index: number, kind: Part, at: number, act: TableAct) => void;
-  onTableAppend: (index: number, kind: Part) => void;
-  // 箇条書きの項目。at は記号がある行番号。
-  onItemMove: (index: number, from: number, to: number, depth: number) => void;
-  // 項目を並びの外へ出す。to は何番目の塊の前か。
-  onItemOut: (index: number, from: number, to: number) => void;
-  onItemAct: (index: number, at: number, act: TableAct) => void;
-  // 項目に印を書き入れる（タスクの印を選んだとき）。
-  onItemMark: (index: number, at: number, mark: string) => void;
-  // 項目の中身をその場で編集する。
-  onItemEdit: (index: number, at: number) => void;
-  // 項目そのものへの指摘。
+  // 項目そのものへの指摘。at は記号がある行番号。
   onItemComment: (index: number, at: number) => void;
-  // 表のセル。at はセルの中身が始まるソース上の位置（描画側が持つ目印）。
+  // 表のセルへの指摘。at はセルの中身が始まるソース上の位置（描画側が持つ目印）。
   // 空のセルは選ぶ文字が無く、選択からは入れないのでここから開く。
-  onCellEdit: (index: number, at: number) => void;
   onCellComment: (index: number, at: number) => void;
   // その位置が箇条書きの何行目の項目か。無ければ null。
   itemAt: (
     index: number,
     offset: number,
   ) => { from: number; to: number } | null;
-  // その隙間に落とせる深さの幅。指の横位置をこの中に収める。
-  itemDrop: (
-    index: number,
-    from: number,
-    to: number,
-  ) => { min: number; max: number } | null;
 }) {
   // 層の置き場所。React が描いている入れ物へ直に差すと、ファイルを
   // 切り替えたときに片付けの順で落ちる（useLayerHost の説明）。
   const layerHost = useLayerHost(content ?? null);
   const layerRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
-  const [guide, setGuide] = useState<Guide | null>(null);
   // 大きく開いて見ている表（描き上がった姿を写したもの）。
   const [zoomed, setZoomed] = useState<string | null>(null);
-  // 何のメニューか。ブロックのつまみは項目一式、行・列は削除だけ。
   const [menu, setMenu] = useState<{
     kind: Kind | "cell";
     index: number;
@@ -258,21 +141,6 @@ export function BlockGutter({
   const viewRef = useRef<View | null>(null);
   // 最後に指していた場所。中身の高さが変わったときに測り直すのに使う。
   const atRef = useRef<{ x: number; y: number } | null>(null);
-  // 掴んでいる相手。素の listener からも読むので ref に置く。
-  // box は表の矩形（行・列を掴んだときだけ）。帯の上を動いている間も、
-  // 表の中へ座標を寄せて落とす先を決めるために使う。
-  const heldRef = useRef<{
-    kind: Kind;
-    index: number;
-    at: number;
-    box: Box | null;
-  } | null>(null);
-  const toRef = useRef<number | null>(null);
-  // 項目の落とし先。行と、そこで入る深さ。
-  const dropRef = useRef<{ to: number; depth: number } | null>(null);
-  // 掴んでいるあいだ薄くしている実体。離すときに元へ戻す。
-  const liftedRef = useRef<Element[]>([]);
-  const liftRafRef = useRef(0);
   // メニューを開いている間は相手を変えない。素の listener からも読む。
   const menuRef = useRef<boolean>(false);
   menuRef.current = menu !== null;
@@ -284,7 +152,6 @@ export function BlockGutter({
 
   useEffect(() => {
     show(null);
-    setGuide(null);
     setMenu(null);
   }, [contentKey]);
 
@@ -297,7 +164,7 @@ export function BlockGutter({
     // 指している場所から出すものを決める。中身の高さが変わったときにも
     // 同じ場所で測り直せるよう、座標を引数で受ける。
     const measure = (x: number, y: number, target: Node | null) => {
-      if (heldRef.current || menuRef.current) return;
+      if (menuRef.current) return;
       // つまみの上に来ても保つ。消えると押せない。
       if (target && layerRef.current?.contains(target)) return;
       const hit = blockAtY(content, y);
@@ -305,7 +172,7 @@ export function BlockGutter({
       if (!hit) return;
 
       const base = content.getBoundingClientRect();
-      // 表のつまみは表の外側（左と上）に置く。そこへ向かう途中で表から離れると
+      // 表のつまみは表の左上の外に置く。そこへ向かう途中で表から離れると
       // 相手が別のブロックに変わって消えてしまうので、少し外まで表として扱う。
       const held = viewRef.current?.table;
       if (held && !isTable(hit.index)) {
@@ -319,37 +186,19 @@ export function BlockGutter({
       }
       const room = scroller
         ? base.left - scroller.getBoundingClientRect().left
-        : BOTH;
-      const geo = isTable(hit.index) ? geometryOf(hit.el, x, y, base) : null;
+        : ONLY;
+      const table = isTable(hit.index) ? tableBoxOf(hit.el, base) : null;
 
-      if (geo) {
-        // 縁に寄ったらつまみに育てる。寄っていないあいだは棒だけを出す
-        // （表の内側どこでもアイコンを出すと本文より目立つ）。
-        const onLeft = nearEdge(x, base.left + geo.table.left);
-        const onTop = nearEdge(y, base.top + geo.table.top);
-        const next: View = {
-          index: hit.index,
-          y: 0,
-          room,
-          atRight: geo.atRight,
-          bottom: geo.bottom,
-          below: roomBelow(content, hit.index, hit.el),
-          box: null,
-          item: null,
-          table: geo.table,
-          nearRow: onLeft,
-          nearCol: onTop,
-          row: geo.row,
-          col: geo.col,
-        };
+      if (table) {
+        const next: View = { index: hit.index, y: 0, room, box: null, item: null, table };
         if (!same(viewRef.current, next)) show(next);
         return;
       }
 
       const box = blockRect(hit.el);
       if (!box) return;
-      // 箇条書きは項目ごとに掴む。指している高さの li から行番号を引く。
-      // 囲みの中は囲みごと掴ませる（gutterGeom の inWrap）。
+      // 箇条書きは項目ごとに指す。指している高さの li から行番号を引く。
+      // 囲みの中は囲みごと指させる（gutterGeom の inWrap）。
       const found0 = itemAtY(hit.el, y, "li[data-mg-item]");
       const li = found0 && inWrap(found0, hit.el) ? null : found0;
       const anchorAt = numberOf(li, "mgItem");
@@ -358,18 +207,11 @@ export function BlockGutter({
       const liBox = li ? li.getBoundingClientRect() : null;
       const next: View = {
         index: hit.index,
-        atRight: true,
-        bottom: 0,
-        below: 0,
-        nearRow: false,
-        nearCol: false,
         box: relative(box, base),
         item:
           found && liBox && li
             ? {
                 at: found.from,
-                top: liBox.top - base.top,
-                height: liBox.height,
                 mid: itemLine(li, liBox).top - base.top + itemLine(li, liBox).height / 2,
                 edge: itemEdge(li) - base.left,
                 box: relative(liBox, base),
@@ -381,8 +223,6 @@ export function BlockGutter({
         y: box.top - base.top + Math.min(lineHeight(hit.el), box.height, HEAD_ROW) / 2,
         room,
         table: null,
-        row: null,
-        col: null,
       };
       if (!same(viewRef.current, next)) show(next);
     };
@@ -408,190 +248,24 @@ export function BlockGutter({
     const onMouseLeave = () => {
       cancelAnimationFrame(moveFrame);
       moveFrame = 0;
-      if (!heldRef.current && !menuRef.current) show(null);
+      if (!menuRef.current) show(null);
     };
 
-    const onDragOver = (e: DragEvent) => {
-      const held = heldRef.current;
-      if (!held || !e.dataTransfer?.types.includes(MIME[held.kind])) return;
-      const base = content.getBoundingClientRect();
-
-      if (held.kind === "block") {
-        const hit = blockAtY(content, e.clientY);
-        const box2 = hit ? blockRect(hit.el) : null;
-        if (!hit || !box2) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        const after = e.clientY > box2.top + box2.height / 2;
-        toRef.current = after ? hit.index + 1 : hit.index;
-        setGuide({
-          kind: "block",
-          top: (after ? box2.bottom : box2.top) - base.top,
-          left: 0,
-          length: base.width,
-        });
-        return;
-      }
-
-      if (held.kind === "item") {
-        const hit = blockAtY(content, e.clientY);
-        if (!hit) return;
-
-        // 掴んだ並びの外。塊の境目を落とし先にして、項目を並びから出す。
-        if (hit.index !== held.index) {
-          const out = blockRect(hit.el);
-          if (!out) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          const below = e.clientY > out.top + out.height / 2;
-          toRef.current = below ? hit.index + 1 : hit.index;
-          dropRef.current = null;
-          setGuide({
-            kind: "item",
-            top: (below ? out.bottom : out.top) - base.top,
-            left: 0,
-            length: base.width,
-          });
-          return;
-        }
-
-        const li = itemAtY(hit.el, e.clientY, "li[data-mg-item]");
-        const anchorAt = numberOf(li, "mgItem");
-        const found = anchorAt === null ? null : itemAt(held.index, anchorAt);
-        if (!li || !found) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        const box = li.getBoundingClientRect();
-        const after = e.clientY > box.top + box.height / 2;
-        const to = after ? found.to : found.from;
-        toRef.current = null;
-        // 指の横位置で深さを決める。置ける幅は上下の項目が決める。
-        const room = itemDrop(held.index, held.at, to);
-        const step = indentStep(hit.el as HTMLElement);
-        const edge = itemEdgeOf(hit.el as HTMLElement);
-        const want = Math.round((e.clientX - edge) / step);
-        const depth = room ? Math.max(room.min, Math.min(room.max, want)) : 0;
-        dropRef.current = { to, depth };
-        const left = edge + depth * step;
-        setGuide({
-          kind: "item",
-          top: (after ? box.bottom : box.top) - base.top,
-          left: left - base.left,
-          length: Math.max(GRIP, base.left + base.width - left),
-        });
-        return;
-      }
-
-      // 帯の上を動いている間は表から外れている。掴んだ表の矩形へ座標を寄せる。
-      const box = held.box;
-      const hit = blockAtY(
-        content,
-        box
-          ? Math.min(
-              Math.max(e.clientY, base.top + box.top + 2),
-              base.top + box.top + box.height - 2,
-            )
-          : e.clientY,
-      );
-      const geo =
-        hit && hit.index === held.index
-          ? geometryOf(hit.el, e.clientX, e.clientY, base)
-          : null;
-      if (!geo) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-
-      if (held.kind === "row") {
-        if (!geo.row) return;
-        const after = e.clientY > base.top + geo.row.top + geo.row.height / 2;
-        toRef.current = after ? geo.row.line + 1 : geo.row.line;
-        setGuide({
-          kind: "row",
-          top: geo.row.top + (after ? geo.row.height : 0),
-          left: geo.table.left,
-          length: geo.table.width,
-        });
-        return;
-      }
-
-      if (!geo.col) return;
-      const after = e.clientX > base.left + geo.col.left + geo.col.width / 2;
-      toRef.current = after ? geo.col.index + 1 : geo.col.index;
-      setGuide({
-        kind: "col",
-        top: geo.table.top,
-        left: geo.col.left + (after ? geo.col.width : 0),
-        length: geo.table.height,
-      });
-    };
-
-    const onDrop = (e: DragEvent) => {
-      const held = heldRef.current;
-      const to = toRef.current;
-      const drop = dropRef.current;
-      heldRef.current = null;
-      toRef.current = null;
-      dropRef.current = null;
-      setGuide(null);
-      unlift();
-      if (!held) return;
-      if (held.kind === "item") {
-        if (drop) {
-          e.preventDefault();
-          onItemMove(held.index, held.at, drop.to, drop.depth);
-        } else if (to !== null) {
-          e.preventDefault();
-          onItemOut(held.index, held.at, to);
-        }
-        return;
-      }
-      if (to === null) return;
-      e.preventDefault();
-      if (held.kind === "block") onMove(held.at, to);
-      else onTableMove(held.index, held.kind, held.at, to);
-    };
-
-    // 表は枠の中で横へスクロールする。列の位置が変わっても入れ物の大きさは
+    // 表は枠の中で横へスクロールする。表の位置が変わっても入れ物の大きさは
     // 変わらないので、大きさの見張りでは気付けない。scroll は上がってこない
-    // ので捕まえる側で拾う。
-    //
-    // ここで相手を選び直さない。手は動いていないし、メニューを開いている間は
-    // 何行目・何列目が決まっている。置き場所だけを測り直す（測り直さないと
-    // 塗りだけが表と別に動いて、選んでいる場所からずれていく）。
+    // ので捕まえる側で拾い、つまみの置き場所だけを測り直す。
     const onScroll = (e: Event) => {
       const from = e.target instanceof Element ? e.target : null;
       if (!from?.closest(".mg-table-wrap")) return;
       const held = viewRef.current;
       if (!held?.table) return;
       const blockEl = content.querySelector(`[data-mg-block="${held.index}"]`);
-      const el = blockEl?.querySelector("table");
-      if (!el) return;
-      const geo = tableBands(
-        el,
-        Array.from(el.tBodies[0]?.rows ?? []),
-        {
-          // 行の相手はソースの行番号で持っている（本体は 2 行目から）。
-          row: held.row ? held.row.line - 2 : null,
-          col: held.col?.index ?? null,
-        },
-        content.getBoundingClientRect(),
-      );
-      if (!geo) return;
-      show({
-        ...held,
-        atRight: geo.atRight,
-        bottom: geo.bottom,
-        below: roomBelow(content, held.index, null),
-        nearRow: true,
-        nearCol: true,
-        table: geo.table,
-        row: geo.row ? { line: geo.row.index + 2, top: geo.row.top, height: geo.row.height } : null,
-        col: geo.col,
-      });
+      const table = blockEl ? tableBoxOf(blockEl, content.getBoundingClientRect()) : null;
+      if (table) show({ ...held, table });
     };
 
     // 右押しでセルのメニューを出す。空のセルは選ぶ文字が無いので、
-    // 選択から入る道（⌘E・⌘⇧I）が使えない。ここが唯一の入口になる。
+    // 選択から入る道（⌘⇧I）が使えない。ここが唯一の入口になる。
     const onContextMenu = (e: MouseEvent) => {
       const target = e.target instanceof Element ? e.target : null;
       const cell = target?.closest<HTMLElement>("[data-mg-cell]") ?? null;
@@ -604,10 +278,9 @@ export function BlockGutter({
       setMenu({ kind: "cell", index, at, x: e.clientX, y: e.clientY });
     };
 
-    // 中身の高さが変わると、出したままの帯は前の位置に取り残される（行を足すと
-    // 表が下へ伸び、足す帯が新しい行に重なる）。最後に指していた場所で測り
-    // 直す。大きさが変わっていない知らせでは何もしない（描き直しと測り直しが
-    // 互いを呼び合うのを避ける）。掴んでいる間は動かさない。
+    // 中身の高さが変わると、出したままのつまみは前の位置に取り残される。最後に
+    // 指していた場所で測り直す。大きさが変わっていない知らせでは何もしない
+    // （描き直しと測り直しが互いを呼び合うのを避ける）。
     let seen = { w: 0, h: 0 };
     const settle = new ResizeObserver((entries) => {
       const box = entries[0]?.contentRect;
@@ -616,7 +289,6 @@ export function BlockGutter({
         return;
       }
       seen = { w: box.width, h: box.height };
-      if (heldRef.current) return;
       const at = atRef.current;
       if (at) measure(at.x, at.y, null);
     });
@@ -625,202 +297,18 @@ export function BlockGutter({
     host.addEventListener("mousemove", onMouseMove);
     host.addEventListener("mouseleave", onMouseLeave);
     host.addEventListener("scroll", onScroll, true);
-    host.addEventListener("dragover", onDragOver);
-    host.addEventListener("drop", onDrop);
     host.addEventListener("contextmenu", onContextMenu);
     return () => {
       host.removeEventListener("mousemove", onMouseMove);
       host.removeEventListener("mouseleave", onMouseLeave);
       host.removeEventListener("scroll", onScroll, true);
-      host.removeEventListener("dragover", onDragOver);
-      host.removeEventListener("drop", onDrop);
       host.removeEventListener("contextmenu", onContextMenu);
       settle.disconnect();
       cancelAnimationFrame(moveFrame);
     };
-  }, [content, scroller, isTable, onMove, onTableMove]);
+  }, [content, scroller, isTable, itemAt]);
 
   if (!content) return null;
-
-  const hold =
-    (kind: Kind, index: number, at: number, box: Box | null = null) =>
-    (e: React.DragEvent) => {
-      heldRef.current = { kind, index, at, box };
-      e.dataTransfer.setData(MIME[kind], String(at));
-      e.dataTransfer.effectAllowed = "move";
-      // 掴んだものを薄い写しで見せる。大きすぎるときは名前の札に落ちる。
-      if (kind === "col" || kind === "row") {
-        setDragTablePart(
-          e.dataTransfer,
-          content
-            .querySelector(`[data-mg-block="${index}"]`)
-            ?.querySelector("table") ?? null,
-          kind,
-          // 行はソースの行番号で持っている（本体は 2 行目から）。写しは
-          // table.rows で数えるので、見出しの 1 行ぶんだけ戻す。
-          kind === "row" ? at - 1 : at,
-          label(kind, index),
-        );
-      } else {
-        setDragPreview(e.dataTransfer, previewOf(kind, index, at), label(kind, index));
-      }
-      lift(heldParts(kind, index, at));
-      setMenu(null);
-    };
-
-  // 写しに使う要素。ブロックはその中身、表は掴んだ行。
-  const previewOf = (kind: Kind, index: number, at: number): Element | null => {
-    const blockEl = content.querySelector(`[data-mg-block="${index}"]`);
-    if (!blockEl) return null;
-    if (kind === "block") return blockEl.firstElementChild;
-    if (kind === "item") {
-      for (const li of blockEl.querySelectorAll<HTMLElement>("li[data-mg-item]")) {
-        if (numberOf(li, "mgItem") !== null && itemAt(index, numberOf(li, "mgItem") as number)?.from === at) {
-          return li;
-        }
-      }
-      return null;
-    }
-    const table = blockEl.querySelector("table");
-    if (!table) return null;
-    if (kind === "row") return table.tBodies[0]?.rows[at - 2] ?? null;
-    return (table.tHead?.rows[0] ?? table.rows[0])?.cells[at] ?? null;
-  };
-
-  // 掴んでいるものの名前。ブロックは書き出しを拝借する。
-  const label = (kind: Kind, index: number): string => {
-    if (kind === "row") return "行を移動";
-    if (kind === "col") return "列を移動";
-    if (kind === "item") return "項目を移動";
-    const text = content
-      .querySelector(`[data-mg-block="${index}"]`)
-      ?.textContent?.replace(/\s+/g, " ")
-      .trim();
-    if (!text) return "ブロックを移動";
-    return text.length > 24 ? `${text.slice(0, 24)}…` : text;
-  };
-  // 掴んだものを薄くして、持ち上がったことをその場で見せる。元の位置に濃いまま
-  // 残っていると動いている実感が無いので、別に囲みを描いて示す必要が出る。
-  const lift = (els: (Element | null | undefined)[]) => {
-    const found = els.filter((el): el is Element => !!el);
-    // 写しは setDragImage の時点で取られる。薄くするのはその後の一枚から。
-    // 掴んですぐ離したときは、この一枚が来る前に取り消す（薄いまま残る）。
-    liftRafRef.current = requestAnimationFrame(() => {
-      liftedRef.current = found;
-      for (const el of found) el.classList.add("mg-lifting");
-    });
-  };
-
-  const unlift = () => {
-    cancelAnimationFrame(liftRafRef.current);
-    for (const el of liftedRef.current) el.classList.remove("mg-lifting");
-    liftedRef.current = [];
-  };
-
-  // 薄くする対象。ブロックと項目はその実体、表は掴んだ行・列の升目。
-  const heldParts = (kind: Kind, index: number, at: number): (Element | null)[] => {
-    if (kind === "block" || kind === "item") return [previewOf(kind, index, at)];
-    const table = content
-      .querySelector(`[data-mg-block="${index}"]`)
-      ?.querySelector("table");
-    if (!table) return [];
-    const rows = Array.from(table.rows);
-    // 行はソースの行番号で持っている（本体は 2 行目から）。
-    if (kind === "row") return [rows[at - 1] ?? null];
-    return rows.map((row) => row.cells[at] ?? null);
-  };
-
-  const release = () => {
-    unlift();
-    heldRef.current = null;
-    toRef.current = null;
-    setGuide(null);
-    show(null);
-  };
-
-  // タスクの印。押して入れ替わるのは未完了と完了だけなので、それ以外の印は
-  // ここから選ぶ。印の無い項目に選べば、そのままタスクになる。
-  const markMenu = (index: number, at: number) => {
-    const now = boxAt(index, at);
-    return {
-      icon: "checklist",
-      label: "タスクの印",
-      items: taskMarks().map((ch) => ({
-        icon: "check_box_outline_blank",
-        mark: ch,
-        label: markOf(ch)?.name ?? ch,
-        on: now === ch,
-        run: () => onItemMark(index, at, ch),
-      })),
-    };
-  };
-
-  // その項目に今ついている印。描いたものから読む（原文を持たないので）。
-  const boxAt = (index: number, at: number): string | null =>
-    content
-      .querySelector(`[data-mg-block="${index}"]`)
-      ?.querySelector<HTMLElement>(`[data-mg-item="${at}"]`)?.dataset.box ?? null;
-
-  // 行・列のメニュー。並びは Notion に合わせる。
-  const partItems = (kind: Part, index: number, at: number) => {
-    const act = (a: TableAct) => () => onTableAct(index, kind, at, a);
-    const row = kind === "row";
-    return [
-      {
-        icon: row ? "arrow_upward" : "arrow_back",
-        label: row ? "上に挿入" : "左に挿入",
-        run: act("insertBefore"),
-      },
-      {
-        icon: row ? "arrow_downward" : "arrow_forward",
-        label: row ? "下に挿入" : "右に挿入",
-        run: act("insertAfter"),
-      },
-      { icon: "content_copy", label: "複製", run: act("duplicate") },
-      { icon: "cancel", label: "コンテンツをクリア", run: act("clear") },
-      { icon: "delete", label: "削除", run: act("delete"), danger: true },
-    ];
-  };
-
-  // 箇条書きの項目のメニュー。行・列と同じ並びに揃える。
-  const itemItems = (index: number, at: number) => {
-    const act = (a: TableAct) => () => onItemAct(index, at, a);
-    return [
-      {
-        icon: "add_comment",
-        label: "コメント",
-        keys: "⌘⇧I",
-        run: () => onItemComment(index, at),
-      },
-      markMenu(index, at),
-      {
-        icon: "edit",
-        label: "編集する",
-        keys: "⌘E",
-        run: () => onItemEdit(index, at),
-      },
-      { icon: "arrow_upward", label: "上に挿入", run: act("insertBefore") },
-      { icon: "arrow_downward", label: "下に挿入", run: act("insertAfter") },
-      { icon: "content_copy", label: "複製", run: act("duplicate") },
-      { icon: "delete", label: "削除", run: act("delete"), danger: true },
-    ];
-  };
-
-  // 表のセルのメニュー。右押しで出す。空のセルへ入る唯一の道でもある。
-  const cellItems = (index: number, at: number): MenuItem[] => [
-    {
-      icon: "add_comment",
-      label: "コメント",
-      keys: "⌘⇧I",
-      run: () => onCellComment(index, at),
-    },
-    {
-      icon: "edit",
-      label: "編集する",
-      keys: "⌘E",
-      run: () => onCellEdit(index, at),
-    },
-  ];
 
   // 表なら「拡大」。溢れていなくても出す（一覧から消えると、どこに
   // あったのか探し直すことになる）。
@@ -848,78 +336,48 @@ export function BlockGutter({
     return { top: base.top + rel.top, bottom: base.top + rel.top + rel.height };
   };
 
-  const items =
+  const comment = (run: () => void): MenuItem => ({
+    icon: "add_comment",
+    label: "コメント",
+    keys: "⌘⇧I",
+    run,
+  });
+
+  const items: MenuItem[] =
     menu === null
       ? []
       : menu.kind === "cell"
-        ? cellItems(menu.index, menu.at)
+        ? [comment(() => onCellComment(menu.index, menu.at))]
         : menu.kind === "item"
-        ? itemItems(menu.index, menu.at)
-        : menu.kind !== "block"
-          ? partItems(menu.kind, menu.index, menu.at)
-        : [
-            {
-              icon: "add_comment",
-              label: "コメント",
-              keys: "⌘⇧I",
-              run: () => onComment(menu.index),
-            },
-            ...zoomItems(menu.index),
-            {
-              icon: "edit",
-              label: "編集する",
-              keys: "⌘E",
-              run: () => onEdit(menu.index),
-            },
-            {
-              icon: "link",
-              label: "リンクをコピー",
-              run: () => onCopyLink(menu.index),
-            },
-            {
-              icon: "vertical_align_top",
-              label: "上に挿入",
-              run: () => onInsert(menu.index, "before"),
-            },
-            {
-              icon: "vertical_align_bottom",
-              label: "下に挿入",
-              run: () => onInsert(menu.index, "after"),
-            },
-            {
-              icon: "content_copy",
-              label: "複製",
-              run: () => onDuplicate(menu.index),
-            },
-            {
-              icon: "delete",
-              label: "削除",
-              run: () => onDelete(menu.index),
-              danger: true,
-            },
-          ];
+          ? [comment(() => onItemComment(menu.index, menu.at))]
+          : [
+              comment(() => onComment(menu.index)),
+              ...zoomItems(menu.index),
+              {
+                icon: "link",
+                label: "リンクをコピー",
+                run: () => onCopyLink(menu.index),
+              },
+            ];
 
-  // ブロックのつまみの置き場所。表なら左上の角、それ以外は 1 行目の左。
-  // 余白に入る分だけ出す。本文の上に重ねると読めなくなるので、狭いときは
-  // 掴みだけにする。
-  // 使える幅。箇条書きは項目の左端から測る（字下げの分だけ余裕がある）。
-  const room = view ? view.room + (view.item ? view.item.edge : 0) : 0;
-  const wide = !!view && room >= BOTH;
-  // 非表のつまみの置き場所。表は行・列の帯の交点（下で別に置く）。
+  // つまみの置き場所。余白に入るなら本文の左の外、狭いときは本文に寄せる。
   // 箇条書きは項目の 1 行目に高さを合わせ、左は項目の左端に寄せる。本文の
   // 左端に合わせると、字下げの分だけ離れて見える。
+  const room = view ? view.room + (view.item ? view.item.edge : 0) : 0;
   const anchor =
     view && !view.table
       ? {
           top: (view.item ? view.item.mid : view.y) - GRIP / 2,
-          left:
-            (view.item ? view.item.edge : 0) +
-            (room >= ONLY ? -(wide ? BOTH : ONLY) : 2),
+          left: (view.item ? view.item.edge : 0) + (room >= ONLY ? -ONLY : 2),
         }
       : null;
-  // 箇条書きの中では、掴む相手は項目そのもの。
-  const grabKind: Kind = view?.item ? "item" : "block";
-  const grabAt = view?.item ? view.item.at : (view?.index ?? 0);
+  // 箇条書きの中では、指す相手は項目そのもの。
+  const kind: Kind = view?.item ? "item" : "block";
+  const at = view?.item ? view.item.at : (view?.index ?? 0);
+  const open = (next: { kind: Kind; index: number; at: number }) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ ...next, x: e.clientX, y: e.clientY });
+  };
 
   return (
     <>
@@ -931,277 +389,44 @@ export function BlockGutter({
               className="mg-gutter"
               style={{ top: anchor.top, left: anchor.left }}
             >
-              {wide && (
-                <button
-                  type="button"
-                  title={view.item ? "下に項目を挿入" : "下に挿入"}
-                  className="mg-grip"
-                  onContextMenu={(e) => e.preventDefault()}
-                  onClick={() =>
-                    view.item
-                      ? onItemAct(view.index, view.item.at, "insertAfter")
-                      : onInsert(view.index, "after")
-                  }
-                >
-                  <Icon name="add" size={17} />
-                </button>
-              )}
               <button
                 type="button"
-                title={
-                  view.item
-                    ? "ドラッグで項目を移動 / クリックでメニュー"
-                    : "ドラッグで移動 / クリックでメニュー"
-                }
+                aria-label="メニュー"
                 className="mg-grip mg-grip-hold"
-                draggable
-                onDragStart={hold(grabKind, view.index, grabAt)}
-                onDragEnd={release}
-                onClick={(e) =>
-                  setMenu({
-                    kind: grabKind,
-                    index: view.index,
-                    at: grabAt,
-                    x: e.clientX,
-                    y: e.clientY,
-                  })
-                }
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setMenu({
-                    kind: grabKind,
-                    index: view.index,
-                    at: grabAt,
-                    x: e.clientX,
-                    y: e.clientY,
-                  });
-                }}
+                onClick={open({ kind, index: view.index, at })}
+                onContextMenu={open({ kind, index: view.index, at })}
               >
                 <Icon name="drag_indicator" size={17} />
               </button>
             </div>
           )}
 
-          {/* 表そのものを動かすつまみ。行と列の帯が交わる点に中心を合わせる。
-              大きさは他のブロックのつまみと同じ。表だけ小さいと、狙って
-              触れるまでの手間がここだけ増える。 */}
+          {/* 表のつまみは表の左上の外に置く。大きさは他のブロックのつまみと
+              同じ。表だけ小さいと、狙って触れるまでの手間がここだけ増える。 */}
           {view?.table && (
             <button
               type="button"
-              title="ドラッグで表を移動 / クリックでメニュー"
+              aria-label="メニュー"
               className="mg-grip mg-grip-hold"
-              draggable
               style={{
                 top: view.table.top,
                 left: view.table.left - GRIP - HOLD_GAP,
                 width: GRIP,
                 height: GRIP,
               }}
-              onDragStart={hold("block", view.index, view.index)}
-              onDragEnd={release}
-              onClick={(e) =>
-                setMenu({
-                  kind: "block",
-                  index: view.index,
-                  at: view.index,
-                  x: e.clientX,
-                  y: e.clientY,
-                })
-              }
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({
-                  kind: "block",
-                  index: view.index,
-                  at: view.index,
-                  x: e.clientX,
-                  y: e.clientY,
-                });
-              }}
+              onClick={open({ kind: "block", index: view.index, at: view.index })}
+              onContextMenu={open({ kind: "block", index: view.index, at: view.index })}
             >
               <Icon name="drag_indicator" size={17} />
             </button>
           )}
 
-          {view?.table && view.row && (
-            <button
-              type="button"
-              title="ドラッグで移動 / クリックでメニュー"
-              className={`mg-grip mg-grip-hold mg-grip-bar${
-                view.nearRow ? "" : " mg-nub"
-              }`}
-              draggable
-              style={
-                view.nearRow
-                  ? {
-                      top: holdAt(view.row.top, view.row.height),
-                      left: onLine(view.table.left, BAR),
-                      width: BAR,
-                      height: HOLD,
-                    }
-                  : {
-                      top: holdAt(view.row.top, view.row.height),
-                      left: onLine(view.table.left, NUB),
-                      width: NUB,
-                      height: NUB_LONG,
-                    }
-              }
-              onDragStart={hold("row", view.index, view.row.line, view.table)}
-              onDragEnd={release}
-              onClick={(e) =>
-                setMenu({
-                  kind: "row",
-                  index: view.index,
-                  at: view.row?.line ?? -1,
-                  x: e.clientX,
-                  y: e.clientY,
-                })
-              }
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({
-                  kind: "row",
-                  index: view.index,
-                  at: view.row?.line ?? -1,
-                  x: e.clientX,
-                  y: e.clientY,
-                });
-              }}
-            >
-              {view.nearRow && <Icon name="drag_indicator" size={15} />}
-            </button>
-          )}
-
-          {view?.table && view.col && (
-            <button
-              type="button"
-              title="ドラッグで移動 / クリックでメニュー"
-              className={`mg-grip mg-grip-hold mg-grip-bar${
-                view.nearCol ? "" : " mg-nub"
-              }`}
-              draggable
-              style={
-                view.nearCol
-                  ? {
-                      top: onLine(view.table.top, BAR),
-                      left: holdAt(view.col.left, view.col.width),
-                      width: HOLD,
-                      height: BAR,
-                    }
-                  : {
-                      top: onLine(view.table.top, NUB),
-                      left: holdAt(view.col.left, view.col.width),
-                      width: NUB_LONG,
-                      height: NUB,
-                    }
-              }
-              onDragStart={hold("col", view.index, view.col.index, view.table)}
-              onDragEnd={release}
-              onClick={(e) =>
-                setMenu({
-                  kind: "col",
-                  index: view.index,
-                  at: view.col?.index ?? -1,
-                  x: e.clientX,
-                  y: e.clientY,
-                })
-              }
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({
-                  kind: "col",
-                  index: view.index,
-                  at: view.col?.index ?? -1,
-                  x: e.clientX,
-                  y: e.clientY,
-                });
-              }}
-            >
-              {view.nearCol && (
-                <Icon name="drag_indicator" size={15} className="rotate-90" />
-              )}
-            </button>
-          )}
-
-          {view?.table && (
-            <>
-              {view.atRight && (
-                <button
-                  type="button"
-                  title="列を追加"
-                  className="mg-grip mg-grip-bar mg-grip-add"
-                  style={{
-                    top: view.table.top,
-                    left: view.table.left + view.table.width + addAway(view.below, ADD_AWAY),
-                    width: ADD,
-                    height: view.table.height,
-                  }}
-                  onClick={() => onTableAppend(view.index, "col")}
-                >
-                  <Icon name="add" size={12} />
-                </button>
-              )}
-              <button
-                type="button"
-                title="行を追加"
-                className="mg-grip mg-grip-bar mg-grip-add"
-                style={{
-                  top: view.bottom + addAway(view.below, ADD_AWAY),
-                  left: view.table.left,
-                  width: view.table.width,
-                  height: ADD,
-                }}
-                onClick={() => onTableAppend(view.index, "row")}
-              >
-                <Icon name="add" size={12} />
-              </button>
-            </>
-          )}
-
-          {/* 何に対するメニューかを塗って示す。メニューへ動かすと表から
-              離れるので、印が無いとどの行・列だったか分からなくなる。 */}
+          {/* 何に対するメニューかを塗って示す。 */}
           {menu?.kind === "block" && view?.box && (
             <div className="mg-target" style={view.box} />
           )}
           {menu?.kind === "item" && view?.item && (
             <div className="mg-target" style={view.item.box} />
-          )}
-          {menu?.kind === "row" &&
-            view?.table &&
-            view.row && (
-              <div
-                className="mg-target"
-                style={{
-                  top: view.row.top,
-                  left: view.table.left,
-                  width: view.table.width,
-                  height: view.row.height,
-                }}
-              />
-            )}
-          {menu?.kind === "col" &&
-            view?.table &&
-            view.col && (
-              <div
-                className="mg-target"
-                style={{
-                  top: view.table.top,
-                  left: view.col.left,
-                  width: view.col.width,
-                  height: view.table.height,
-                }}
-              />
-            )}
-
-          {guide && (
-            <div
-              className={guide.kind === "col" ? "mg-guide-v" : "mg-guide-h"}
-              style={
-                guide.kind === "col"
-                  ? { top: guide.top, left: guide.left, height: guide.length }
-                  : { top: guide.top, left: guide.left, width: guide.length }
-              }
-            />
           )}
         </div>,
         layerHost,
@@ -1223,9 +448,3 @@ export function BlockGutter({
     </>
   );
 }
-
-// メニューの外を押した／Esc で閉じる。
-//
-// 見張るのは click ではなく mousedown。click で見張ると、メニューを開いた
-// その 1 回のクリックがそのまま「外側を押した」として届き、開いた瞬間に
-// 閉じてしまう（左クリックでメニューが出ないのはこれが原因だった）。

@@ -1,20 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
   blocksOf,
-  cutBlock,
   insertAfter,
   insertBefore,
-  moveBlock,
-  moveTableRow,
   replaceBlock,
   resplitBlocks,
   splitBlocks,
+  type Block,
 } from "./blocks";
 
 // 局所 parse は全文 parse と同じ結果でなければならない。速さのために
 // 分かれ方が変わると、指摘の位置やブロック編集が別の場所を指す。
 // ここでは「実際の操作を全ブロックに掛けて、全文 parse と突き合わせる」形で
 // 確かめる。落ちる形（境界が危ない形）はフォールバックで一致するはず。
+
+// 書き換えの形を作る手。どれも本文を切り貼りするだけで、割り直しの試験に
+// 要るのは「その形の本文ができること」だけ。
+const cutBlock = (body: string, b: Block) => body.slice(0, b.start) + body.slice(b.end);
+
+const moveBlock = (body: string, blocks: Block[], from: number, to: number) => {
+  const b = blocks[from];
+  if (!b || from === to) return body;
+  const rest = cutBlock(body, b);
+  const at = to >= blocks.length ? rest.length : blocks[to].start - (to > from ? b.end - b.start : 0);
+  return rest.slice(0, at) + b.src + "\n\n" + rest.slice(at);
+};
+
+const swapLines = (src: string, a: number, b: number) => {
+  const lines = src.split("\n");
+  [lines[a], lines[b]] = [lines[b], lines[a]];
+  return lines.join("\n");
+};
 
 const DOC = [
   "# 見出し",
@@ -137,7 +153,7 @@ describe("resplitBlocks", () => {
   it("表の行を入れ替えても一致する", () => {
     const table = splitBlocks(DOC).find((b) => b.type === "table");
     expect(table).toBeTruthy();
-    agree(DOC, replaceBlock(DOC, table!, moveTableRow(table!.src, 2, 4)));
+    agree(DOC, replaceBlock(DOC, table!, swapLines(table!.src, 2, 4)));
   });
 
   it("間の段落を消して箇条書きが 1 つに繋がる形でも一致する", () => {

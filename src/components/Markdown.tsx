@@ -24,7 +24,6 @@ import remarkCjkFriendly from "remark-cjk-friendly";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { CellEditor } from "./CellEditor";
 import { CodeBlock } from "./CodeBlock";
 import { Icon } from "./Icon";
 import { TableModal, tablePlain } from "./TableModal";
@@ -325,23 +324,6 @@ function standaloneLink(
   return null;
 }
 
-// スクロール等での親再レンダー時に再パースしないよう body でメモ化する。
-// （再パースは画像 blob の revoke や mermaid のチカチカを引き起こす）
-export interface CellEditInfo {
-  blockIndex: number;
-  cellStart: number;
-  colIndex: number;
-  rowKind: "head" | "body";
-  rowIndex: number;
-}
-
-// ダブルクリックされた箇条書き項目の位置。実際に編集するソース範囲は
-// EditableBody がこの位置を含む行から求める（マーカーとネスト項目は除く）。
-export interface ItemEditInfo {
-  blockIndex: number;
-  anchor: number;
-}
-
 interface HastChild {
   type?: string;
   tagName?: string;
@@ -370,8 +352,7 @@ function itemBox(node: unknown): string | null {
   return typeof box === "string" ? box : null;
 }
 
-// 項目の開始オフセット。実際に編集する範囲は EditableBody 側がソースの行から
-// 決めるので、ここでは「どの項目か」を特定できる位置だけを返す。
+// 項目の開始オフセット。「どの項目か」を特定できる位置だけを返す。
 // rehype-raw / rehype-katex を通すと子ノードの position が落ちることがあるため、
 // li 自身の position を基点にする。
 function itemAnchor(node: unknown, back: (at: number) => number): number | null {
@@ -385,12 +366,6 @@ export const Markdown = memo(function Markdown({
   editorial,
   breaks,
   onToggleTask,
-  editCell,
-  onCellCommit,
-  onCellCancel,
-  editItem,
-  onItemCommit,
-  onItemCancel,
 }: {
   body: string;
   editorial: boolean;
@@ -400,14 +375,6 @@ export const Markdown = memo(function Markdown({
   // タスクチェックボックスのトグル用（ブロック内の何番目のタスクかと、
   // 押されたボタン）。渡されないときはチェックボックスを押せなくする。
   onToggleTask?: (ordinal: number, el: HTMLElement) => void;
-  // テーブルのセル単位編集。編集対象セルは cellStart（ソース内オフセット）で特定。
-  editCell?: { cellStart: number; value: string } | null;
-  onCellCommit?: (v: string) => void;
-  onCellCancel?: () => void;
-  // 箇条書きの項目単位編集。編集対象は項目の開始オフセットで特定。
-  editItem?: { anchor: number; value: string } | null;
-  onItemCommit?: (v: string) => void;
-  onItemCancel?: () => void;
 }) {
   const ctx = useContext(markdownContext);
   // レンダーごとにリセットされるタスクの通し番号
@@ -431,7 +398,7 @@ export const Markdown = memo(function Markdown({
   // 戻してから持たせる。ずれた目印で編集すると、別の場所を書き換えてしまう。
   const back = opened.back;
 
-  // td/th 共通のレンダリング。編集対象セルはインラインエディタに差し替える。
+  // td/th 共通のレンダリング。
   const renderCell = (
     tag: "td" | "th",
     node: unknown,
@@ -442,22 +409,9 @@ export const Markdown = memo(function Markdown({
     const at = (node as { position?: { start?: { offset?: number } } })
       ?.position?.start?.offset;
     const start = at === undefined ? undefined : back(at);
-    if (editCell && start !== undefined && editCell.cellStart === start) {
-      return (
-        <Tag {...rest}>
-          <div className="mg-cell mg-cell-editing">
-            <CellEditor
-              value={editCell.value}
-              onCommit={(v) => onCellCommit?.(v)}
-              onCancel={() => onCellCancel?.()}
-            />
-          </div>
-        </Tag>
-      );
-    }
     return (
       // 選択からこのセルを特定するための目印。値は描画側が持っている
-      // 正確なソースオフセットで、セル編集の照合にそのまま使える。
+      // 正確なソースオフセットで、セルへの指摘の照合にそのまま使える。
       <Tag {...rest} data-mg-cell={start}>
         <div className="mg-cell">{children}</div>
       </Tag>
@@ -533,7 +487,6 @@ export const Markdown = memo(function Markdown({
             </ol>
           );
         },
-        // 箇条書きはリスト全体ではなくダブルクリックした 1 項目だけを編集する。
         li({ node, children, ...rest }) {
           const anchor = itemAnchor(node, back);
           const box = itemBox(node);
@@ -545,29 +498,6 @@ export const Markdown = memo(function Markdown({
             [rest.className, box !== null ? "task-list-item" : null, ...more]
               .filter(Boolean)
               .join(" ") || undefined;
-          if (editItem && anchor !== null && editItem.anchor === anchor) {
-            // 印は編集の対象ではないが、消さずに残す。消えると、どの項目を
-            // 直しているのか分からなくなる。押せる状態のまま残すと、押した
-            // 拍子に確定が走るので飾りとして描き直す。
-            return (
-              // 横に並べる指定は印がある行だけ（has-check）。箇条書きの
-              // 行に付けると list-item でなくなり、記号（•）が消える。印の
-              // 行はもともと記号を出さないので、付けても失うものが無い。
-              <li
-                {...rest}
-                data-box={box ?? undefined}
-                data-done={done}
-                className={klass("mg-item-editing", box !== null ? "has-check" : null)}
-              >
-                {box !== null ? <TaskCheck box={box} /> : null}
-                <CellEditor
-                  value={editItem.value}
-                  onCommit={(v) => onItemCommit?.(v)}
-                  onCancel={() => onItemCancel?.()}
-                />
-              </li>
-            );
-          }
           if (box !== null) {
             // 済みの印は項目自身の字にだけ掛ける（index.css）。入れ子の並びは
             // 包みの外に置く。中に入れると飾りがそこまで届き、子の済み・未済と
