@@ -884,7 +884,12 @@ button.mg-task-check:hover {
    残らないよう、層の側で固定列の右から描く（BodyEditor の frozenEdge）。
    固定するのは溢れている表だけ。固定した升目は 1 つずつ重ね合わせの単位に
    なるので、収まっている表の行にまで付けると、当たり判定や選択の描き直しが
-   行の数だけ重くなる。 */
+   行の数だけ重くなる。
+   地の色は固定と切り離して元の強さのまま置く。固定の規則は .is-wide の分だけ
+   強いので、ここに色を持たせると見出しや縞の色より勝ってしまう。 */
+:root[data-widetable="on"] .mg-table-wrap > table > :is(thead, tbody) > tr > :first-child {
+  background: var(--mg-bg);
+}
 :root[data-widetable="on"]
   .mg-table-wrap.is-wide
   > table
@@ -894,7 +899,6 @@ button.mg-task-check:hover {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: var(--mg-bg);
 }
 /* 置いていく列の境目。細い格子と同じ太さだと、固定されていることが
    読み取れない。溢れている表でだけ太くする。 */
