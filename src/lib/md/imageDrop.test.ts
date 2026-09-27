@@ -3,9 +3,13 @@ import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromMarkdown } from "./fromMarkdown";
-import { canHold, loneImage, takeImages } from "./imageDrop";
+import { canHold, loneImage, pasteImages, takeImages } from "./imageDrop";
 import { editorPlugins } from "./plugins";
 import { toMarkdown } from "./toMarkdown";
+
+// 写しにある画像をアプリ側から読むところ。試験では画像がある体で返す。
+const native = vi.hoisted(() => ({ image: null as { bytes: Uint8Array; mime: string } | null }));
+vi.mock("../clip", () => ({ pastedImage: () => Promise.resolve(native.image) }));
 
 // 持ち込まれた画像を本文へ入れるところ。
 //
@@ -149,3 +153,62 @@ describe("編集面への組み込み", () => {
     expect(pasters[0].props.handleDrop).toBeTruthy();
   });
 });
+
+// 貼り付けの知らせの形。字の種類ごとに中身を持つ。
+const clip = (over: {
+  files?: File[];
+  items?: { kind: string; getAsFile(): File | null }[];
+  text?: Record<string, string>;
+}) => ({
+  files: over.files ?? [],
+  items: over.items ?? [],
+  getData: (format: string) => over.text?.[format] ?? "",
+});
+
+describe("pasteImages", () => {
+  it("files に無くても items にある画像を拾う", async () => {
+    const { view, out } = editor("本文\n");
+    const goes = stows("./images/写し.png");
+    const file = shot("image.png", "image/png");
+    expect(pasteImages(view, clip({ items: [{ kind: "file", getAsFile: () => file }] }), 3, goes)).toBe(true);
+    await settle();
+    expect(out()).toContain("![](./images/写し.png)");
+  });
+
+  it("Finder で写したファイルは、道筋から取り込む", async () => {
+    const { view, out } = editor("本文\n");
+    const goes = stows("./images/図.png");
+    const data = clip({ text: { "text/uri-list": "file:///Users/me/%E5%9B%B3.png", "text/plain": "図.png" } });
+    expect(pasteImages(view, data, 3, goes)).toBe(true);
+    await settle();
+    expect(goes.take).toHaveBeenCalledWith("/Users/me/図.png");
+    expect(out()).toContain("![](./images/図.png)");
+  });
+
+  it("字の無い貼り付けは、アプリ側から画像を読む", async () => {
+    native.image = { bytes: new Uint8Array([1]), mime: "image/png" };
+    const { view, out } = editor("本文\n");
+    const goes = stows("./images/画面.png");
+    expect(pasteImages(view, clip({}), 3, goes)).toBe(true);
+    await settle();
+    expect(goes.stow).toHaveBeenCalledWith({ bytes: native.image.bytes, name: null, mime: "image/png" });
+    expect(out()).toContain("![](./images/画面.png)");
+    native.image = null;
+  });
+
+  it("字の貼り付けは素通しする", () => {
+    const { view } = editor("本文\n");
+    const goes = stows("./images/a.png");
+    expect(pasteImages(view, clip({ text: { "text/plain": "ことば" } }), 3, goes)).toBe(false);
+    expect(goes.stow).not.toHaveBeenCalled();
+    expect(goes.take).not.toHaveBeenCalled();
+  });
+
+  it("画像でないファイルの道筋は拾わない", () => {
+    const { view } = editor("本文\n");
+    const goes = stows("./images/a.png");
+    const data = clip({ text: { "text/uri-list": "file:///Users/me/memo.md", "text/plain": "memo.md" } });
+    expect(pasteImages(view, data, 3, goes)).toBe(false);
+  });
+});
+

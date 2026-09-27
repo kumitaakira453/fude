@@ -1,7 +1,15 @@
 import type { Node as PmNode, ResolvedPos } from "prosemirror-model";
 import { Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
-import { imageFiles, readIncoming, type Held, type Incoming } from "../images";
+import { pastedImage } from "../clip";
+import {
+  carriesNoText,
+  imageFiles,
+  imagePaths,
+  readIncoming,
+  type Held,
+  type Incoming,
+} from "../images";
 import { schema } from "./schema";
 
 // 外から持ち込まれた画像を本文へ入れる。落とすのと貼るの 2 経路。
@@ -38,14 +46,18 @@ export function canHold(view: EditorView, pos: number): boolean {
   return true;
 }
 
-// 画像を 1 枚ずつ、その位置へ置く。
+// 画像を 1 枚ずつ、その位置へ置く。取り込みの手（take）は本文に書く道筋を返す。
 //
 // 取り込みは待ちを挟むので、置く位置は書き込むたびに取り直す。1 枚目を
 // 入れた時点で 2 枚目の位置はずれている。
-async function land(view: EditorView, at: number, files: File[], goes: ImageGoes) {
+async function land(
+  view: EditorView,
+  at: number,
+  takes: (() => Promise<string | null>)[],
+) {
   let pos = at;
-  for (const shot of await readIncoming(files)) {
-    const src = await goes.stow(shot);
+  for (const take of takes) {
+    const src = await take();
     if (!src || view.isDestroyed) continue;
     const here = blockAfter(view.state.doc.resolve(Math.min(Math.max(pos, 0), view.state.doc.content.size)));
     const node = schema.nodes.imageBlock.create({ src, alt: "", title: null });
@@ -81,7 +93,36 @@ export function takeImages(
   const files = imageFiles(data);
   if (files.length === 0) return false;
   if (!canHold(view, pos)) return false;
-  void land(view, pos, files, goes);
+  void readIncoming(files).then((shots) =>
+    land(view, pos, shots.map((shot) => () => goes.stow(shot))),
+  );
+  return true;
+}
+
+// 貼り付け。中身のファイル → 写したファイルの道筋 → アプリ側から読む画像、の
+// 順に探す。どれも無ければ受けない（字の貼り付けとして流れる）。
+export function pasteImages(
+  view: EditorView,
+  data: Held | null,
+  pos: number,
+  goes: ImageGoes,
+): boolean {
+  if (takeImages(view, data, pos, goes)) return true;
+  if (!canHold(view, pos)) return false;
+  const paths = imagePaths(data);
+  if (paths.length > 0) {
+    void land(view, pos, paths.map((path) => () => goes.take(path)));
+    return true;
+  }
+  if (!carriesNoText(data)) return false;
+  // 字の無い貼り付け。窓に任せると、中身の読めない絵（webkit-fake-url）が
+  // 本文に入る。画像が無ければ何も起きない。
+  void land(view, pos, [
+    async () => {
+      const shot = await pastedImage();
+      return shot ? goes.stow({ bytes: shot.bytes, name: null, mime: shot.mime }) : null;
+    },
+  ]);
   return true;
 }
 
@@ -99,7 +140,7 @@ export const imageDrops = (goes: ImageGoes): Plugin =>
       },
       // 貼る。撮った画面はここから入る。
       handlePaste(view, event) {
-        return takeImages(view, event.clipboardData, view.state.selection.from, goes);
+        return pasteImages(view, event.clipboardData, view.state.selection.from, goes);
       },
     },
   });

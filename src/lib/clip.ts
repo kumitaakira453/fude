@@ -54,3 +54,28 @@ export async function copyImage(url: string): Promise<boolean> {
     return false;
   }
 }
+
+// 写しにある画像を、アプリ側から読む。貼り付けの知らせに中身が載らないとき
+// （画面の写しを貼ったときなど）に使う。アプリ側が渡すのは生の画素なので、
+// 窓に描かせて PNG に詰め直す。画像が無ければ null。
+export async function pastedImage(): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  if (!inApp()) return null;
+  try {
+    const { readImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const held = await readImage();
+    const { width, height } = await held.size();
+    const rgba = await held.rgba();
+    if (!width || !height) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const paint = canvas.getContext("2d");
+    if (!paint) return null;
+    paint.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
+    const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
+    if (!blob) return null;
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: "image/png" };
+  } catch {
+    return null;
+  }
+}

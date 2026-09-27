@@ -138,16 +138,51 @@ export async function adopt(
 // どちらも当てはまる形で受ける。
 export interface Held {
   files: FileList | File[];
+  // 貼り付けでは、画像が files に入らず items にだけ載ることがある（WKWebView で
+  // 他のアプリから写した画像など）。
+  items?: DataTransferItemList | { kind: string; getAsFile(): File | null }[];
+  getData?: (format: string) => string;
 }
+
+const isImageFile = (f: File) => f.type.startsWith("image/") || isImage(f.name);
 
 // 持ち込みの中の画像。字や他の種別のファイルは拾わない。
 //
 // 落とした / 貼った瞬間に「受けるかどうか」を決める必要があるので、ここは
 // 待ちを挟まない。中身を読むのは受けると決めたあと。
 export function imageFiles(data: Held | null): File[] {
-  return Array.from(data?.files ?? []).filter(
-    (f) => f.type.startsWith("image/") || isImage(f.name),
-  );
+  const files = Array.from(data?.files ?? []).filter(isImageFile);
+  if (files.length > 0) return files;
+  const items = Array.from(data?.items ?? []);
+  return items
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((f): f is File => !!f && isImageFile(f));
+}
+
+// 写したファイルの道筋。Finder でファイルを写すと、中身ではなく file:// の
+// 道筋だけが載る。画像のものだけを返す。
+export function imagePaths(data: Held | null): string[] {
+  const list = data?.getData?.("text/uri-list") ?? "";
+  return list
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("file://"))
+    .map((line) => {
+      try {
+        return decodeURIComponent(new URL(line).pathname);
+      } catch {
+        return null;
+      }
+    })
+    .filter((path): path is string => !!path && isImage(path));
+}
+
+// 字も HTML も持たない貼り付けか。画面の写しを貼ると、WKWebView は中身を
+// 渡さずこの形で寄こすことがある。そのときはアプリ側から画像を読む。
+export function carriesNoText(data: Held | null): boolean {
+  if (!data?.getData) return false;
+  return data.getData("text/plain") === "" && data.getData("text/html") === "";
 }
 
 export async function readIncoming(files: File[]): Promise<Incoming[]> {

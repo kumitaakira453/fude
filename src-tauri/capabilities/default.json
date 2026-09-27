@@ -12,6 +12,7 @@
     "dialog:default",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-write-image",
+    "clipboard-manager:allow-read-image",
     "updater:default",
     "process:allow-restart",
     "fs:allow-read-text-file",
