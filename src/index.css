@@ -881,8 +881,16 @@ button.mg-task-check:hover {
 }
 /* 塗りは地の上に重ねて持たせる。透かしたままだと、下を通るセルが見える。
    カーソルと選択の印は表の外の層に描いているので、潜った字の上に印だけが
-   残らないよう、層の側で固定列の右から描く（BodyEditor の frozenEdge）。 */
-:root[data-widetable="on"] .mg-table-wrap > table > :is(thead, tbody) > tr > :first-child {
+   残らないよう、層の側で固定列の右から描く（BodyEditor の frozenEdge）。
+   固定するのは溢れている表だけ。固定した升目は 1 つずつ重ね合わせの単位に
+   なるので、収まっている表の行にまで付けると、当たり判定や選択の描き直しが
+   行の数だけ重くなる。 */
+:root[data-widetable="on"]
+  .mg-table-wrap.is-wide
+  > table
+  > :is(thead, tbody)
+  > tr
+  > :first-child {
   position: sticky;
   left: 0;
   z-index: 1;
