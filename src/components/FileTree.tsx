@@ -101,8 +101,8 @@ function NameInput({
   pad: number;
   icon: ReactNode;
   bold?: boolean;
-  // 出しているファイルの名前を変えるとき。選ばれている行の塗りと左端の棒を
-  // 残す（消えると、選択が外れたように見える）。
+  // 選ばれている行の塗りと左端の棒で描く。出しているファイルの名前を変える
+  // ときに使う（消えると、選択が外れたように見える）。
   on?: boolean;
   // ファイルの名前を変えるとき。拡張子の前までを選んだ状態で始める
   // （打てばそのまま名前だけが置き換わる）。
@@ -215,6 +215,9 @@ const TreeItem = memo(function TreeItem({
             pad={basePad}
             icon={<FileIcon name={node.name} dir size={17} />}
             bold
+            // フォルダには「出している」印が無いので、変えている最中はいつも
+            // 選ばれている行の塗りにする（どの行を変えているかが分かる）。
+            on
           />
         ) : (
           <div
