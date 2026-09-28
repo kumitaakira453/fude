@@ -82,7 +82,7 @@ describe("場面で分ける", () => {
     open();
     click(tab("そのほか"));
     expect(titles()).toEqual([
-      "画像・HTML を見る",
+      "画像・HTML・CSV を見る",
       "メタ情報の小窓（⌘⇧M）",
       "つまみ（本文の左に出る）",
       "そのほか",

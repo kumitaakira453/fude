@@ -1433,7 +1433,9 @@ button.mg-task-check:hover {
   background: var(--mg-code-bg);
   font-family: var(--mg-font-mono);
   font-size: 12.5px;
-  line-height: 1.7;
+  /* 見えている行だけを組み、空きの高さを行の数から出すので、行の高さは px で
+     揃える（SourceView の LINE と対）。 */
+  line-height: 21px;
   color: var(--mg-code-fg);
   /* 折り返さない。折ると行番号と中身がずれて、原文の形が読めなくなる。 */
   white-space: pre;
@@ -1444,8 +1446,8 @@ button.mg-task-check:hover {
   display: flex;
   align-items: baseline;
   gap: 1rem;
-  /* 空の行にも高さを持たせる（原文の見え方をそのまま保つ）。 */
-  min-height: 1.7em;
+  /* 空の行にも同じ高さを持たせる（原文の見え方をそのまま保つ）。 */
+  height: 21px;
   width: max-content;
   min-width: 100%;
   counter-increment: mg-line;
@@ -1471,6 +1473,85 @@ button.mg-task-check:hover {
   padding-right: 1.5rem;
   background: none;
   font: inherit;
+}
+
+/* CSV・TSV の列の色。原文では値の字に、表では列の名前（A・B・…）に当てる。
+   色はテーマごとの色の組（ファイルの顔と同じ）から、虹の順に回す。 */
+.mg-csv-c0 { color: var(--mg-ic-red); }
+.mg-csv-c1 { color: var(--mg-ic-orange); }
+.mg-csv-c2 { color: var(--mg-ic-yellow); }
+.mg-csv-c3 { color: var(--mg-ic-green); }
+.mg-csv-c4 { color: var(--mg-ic-cyan); }
+.mg-csv-c5 { color: var(--mg-ic-blue); }
+.mg-csv-c6 { color: var(--mg-ic-purple); }
+
+/* CSV・TSV の表（Excel の見た目）。上の 2 行（列の名前とヘッダー行）と左の
+   行番号は、スクロールしても残す。固定した升目の罫線が消えないよう、罫は
+   升目ごとに持つ（border-collapse では固定した升目から罫が外れる）。 */
+.mg-csv-table {
+  /* 行の高さ。CsvDoc の TABLE_ROW と対にする（見えている行だけを組み、
+     空きの高さを行の数から出す）。列の幅は CsvDoc が全体から決めて固定する。 */
+  --mg-csv-row: 26px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mg-fg);
+}
+.mg-csv-table :is(th, td) {
+  max-width: 320px;
+  height: var(--mg-csv-row);
+  padding: 0 0.6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-right: 1px solid var(--mg-border);
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-bg);
+  font-weight: 400;
+  text-align: left;
+}
+.mg-csv-letters th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--mg-panel);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+/* ヘッダー行。列の名前の真下に固定し、太字と少し濃い地で本文の行と分ける。 */
+.mg-csv-head th {
+  position: sticky;
+  top: var(--mg-csv-row);
+  z-index: 2;
+  background: color-mix(in srgb, var(--mg-accent) 8%, var(--mg-panel));
+  font-weight: 600;
+  border-bottom-color: color-mix(in srgb, var(--mg-accent) 35%, var(--mg-border));
+}
+.mg-csv-table .mg-csv-no {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 3rem;
+  background: var(--mg-panel);
+  color: var(--mg-muted);
+  font-weight: 400;
+  text-align: right;
+}
+.mg-csv-table .mg-csv-gap td {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.mg-csv-table thead .mg-csv-no {
+  z-index: 3;
+}
+/* 番号と列の名前は字として置かない（⌘F の探し先や、写した中身に混ざる）。 */
+.mg-csv-table [data-n]::before {
+  content: attr(data-n);
 }
 
 /* 一覧で AI の返信が来ていることを示す印。 */

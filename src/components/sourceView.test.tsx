@@ -4,30 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { SourceView } from "./SourceView";
 
-// 原文の面。長いファイルを一息に組むと出るまで固まるので、最初の分だけを
-// 出してからフレームごとに伸ばす。
-
-// 待っているフレーム。伸ばす合図は requestAnimationFrame に載るので、
-// 進めたいときだけ手で回す。
-let pending: FrameRequestCallback[] = [];
+// 原文の面。長いファイルを全部組むと出るまで固まり、送るのにも描画が
+// 追いつかないので、見えている行とその前後だけを組む。
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  globalThis.requestAnimationFrame = ((f: FrameRequestCallback) => {
-    pending.push(f);
-    return pending.length;
-  }) as typeof globalThis.requestAnimationFrame;
-  globalThis.cancelAnimationFrame = (() => {}) as typeof globalThis.cancelAnimationFrame;
 });
-
-// フレームを 1 回ぶん進める。
-function frame() {
-  act(() => {
-    const waiting = pending;
-    pending = [];
-    waiting.forEach((f) => f(0));
-  });
-}
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
@@ -39,8 +21,11 @@ afterEach(() => {
   host = null;
 });
 
+// 送る枠。jsdom は大きさを測らないので、枠の高さと送った量は手で決める。
 function show(code: string, lang: string | null = null) {
   host = document.createElement("div");
+  host.style.overflowY = "auto";
+  Object.defineProperty(host, "clientHeight", { value: 420 });
   document.body.appendChild(host);
   root = createRoot(host);
   act(() => {
@@ -63,19 +48,32 @@ describe("原文の面", () => {
     expect(document.querySelector(".mg-source")?.textContent).toBe("あい");
   });
 
-  it("長いファイルは最初の分だけ出て、フレームごとに伸びる", () => {
+  it("長いファイルは見えている分とその前後だけを組み、残りは空きの高さで持つ", () => {
     const long = Array.from({ length: 5_000 }, (_, i) => `行 ${i}`).join("\n");
     show(long);
-    const first = rows();
-    expect(first).toBeLessThan(5_000);
-    frame();
-    expect(rows()).toBeGreaterThan(first);
+    expect(rows()).toBeLessThan(200);
+    const box = document.querySelector<HTMLElement>(".mg-source")!;
+    const gap = box.lastElementChild as HTMLElement;
+    expect(parseInt(gap.style.height)).toBe((5_000 - rows()) * 21);
   });
 
-  it("伸びきれば全部出る", () => {
-    const long = Array.from({ length: 3_000 }, (_, i) => `行 ${i}`).join("\n");
+  it("送ると、組む行がその位置へ移り、行番号もそこから数える", () => {
+    const long = Array.from({ length: 5_000 }, (_, i) => `行 ${i}`).join("\n");
     show(long);
-    for (let i = 0; i < 5; i++) frame();
-    expect(rows()).toBe(3_000);
+    // 送った量と、送ったぶん上へずれた面の位置（本物の窓では配置から決まる）。
+    let scrolled = 0;
+    Object.defineProperty(host!, "scrollTop", { get: () => scrolled });
+    document.querySelector<HTMLElement>(".mg-source")!.getBoundingClientRect = () =>
+      ({ top: -scrolled }) as DOMRect;
+    act(() => {
+      scrolled = 21 * 3_000;
+      host!.dispatchEvent(new Event("scroll"));
+    });
+    const texts = [...document.querySelectorAll(".mg-source-line")].map((l) => l.textContent);
+    expect(texts).toContain("行 3000");
+    expect(texts).not.toContain("行 0");
+    const box = document.querySelector<HTMLElement>(".mg-source")!;
+    const start = Number(texts[0]!.replace("行 ", ""));
+    expect(box.style.counterReset).toBe(`mg-line ${start}`);
   });
 });

@@ -2,6 +2,7 @@ import { useStore } from "jotai";
 import { useEffect, useRef } from "react";
 import { closeAll, closeOthers, closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
 import { RAIL_ROOM } from "../lib/sidebar";
+import { delimOf } from "../lib/csv";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
@@ -36,6 +37,11 @@ export function useHotkeys() {
   draft.current = newDraft;
 
   useEffect(() => {
+    const showingCsv = () => {
+      const pane = store.get(A.panesAtom).find((p) => p.id === store.get(A.activePaneIdAtom));
+      const path = pane?.tabs[pane.active];
+      return !!path && delimOf(path) !== null;
+    };
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       // プレビュー（非編集）で本文を選択して Backspace/Delete を押すと、
@@ -121,6 +127,11 @@ export function useHotkeys() {
         // ⌘N: 保存先の決まっていないメモを作って開く。
         e.preventDefault();
         void draft.current();
+      } else if (mod && e.shiftKey && (e.key === "v" || e.key === "V") && showingCsv()) {
+        // ⌘⇧V: CSV・TSV の見た目を替える。出しているのが CSV・TSV のときだけ
+        // 受ける（ほかでは書式を落とした貼り付けとして編集面へ通す）。
+        e.preventDefault();
+        store.set(A.csvViewAtom, store.get(A.csvViewAtom) === "table" ? "rainbow" : "table");
       } else if (mod && e.shiftKey && (e.key === "m" || e.key === "M")) {
         // ⌘⇧M: メタ情報の小窓。活きているペインの分だけ開け閉めする。
         e.preventDefault();

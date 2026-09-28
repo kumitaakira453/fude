@@ -123,6 +123,8 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 // Markdown 以外もツリーに出すか。画像・HTML・PDF が並ぶ。切ると読み物だけの
 // 見え方になる（開ける・開けないは変わらない。1 枚だけ開く経路は常に通る）。
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
+// CSV・TSV をどちらの見た目で開くか。列ごとに色を変えた原文か、表か。
+export const csvViewAtom = atomWithStorage<"rainbow" | "table">("mdglow:csvview", "rainbow");
 // 一覧から外すもの。書き方は .gitignore と同じで、そのまま走査へ渡す。外した
 // ものは走査に入らないので、索引にも検索にも載らない。
 //

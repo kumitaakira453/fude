@@ -33,7 +33,8 @@ export function TextDoc({ abs }: { abs: string }) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* 端で勢いよく送っても弾ませない（弾むと枠の外の下地が見える）。 */}
+      <div className="min-h-0 flex-1 overflow-auto overscroll-none">
         {lost ? (
           <div className="flex h-full items-center justify-center text-[13px] text-[var(--mg-muted)]">
             このファイルは字として読めませんでした

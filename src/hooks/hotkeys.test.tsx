@@ -3,7 +3,13 @@ import { createStore, Provider } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { activePaneIdAtom, layoutAtom, metaOpenAtom, railAtom } from "../state/atoms";
+import {
+  activePaneIdAtom,
+  csvViewAtom,
+  layoutAtom,
+  metaOpenAtom,
+  railAtom,
+} from "../state/atoms";
 import { useHotkeys } from "./useHotkeys";
 
 // 窓ぜんたいで受けるキー操作。見るのは ⌘⇧M（活きているペインのメタ情報だけが
@@ -137,5 +143,28 @@ describe("右の欄", () => {
     press("O", { shift: true });
     expect(store.get(railAtom)).toBe("none");
     wide = true;
+  });
+});
+
+describe("⌘⇧V", () => {
+  const showing = (path: string) => {
+    const store = rig();
+    store.set(layoutAtom, { kind: "leaf", id: "p1", tabs: [path], active: 0 });
+    store.set(activePaneIdAtom, "p1");
+    return store;
+  };
+
+  it("CSV を出しているときは、原文と表を切り替える", () => {
+    const store = showing("data/表.csv");
+    press("V", { shift: true });
+    expect(store.get(csvViewAtom)).toBe("table");
+    press("V", { shift: true });
+    expect(store.get(csvViewAtom)).toBe("rainbow");
+  });
+
+  it("CSV でなければ受けない（書式を落とした貼り付けに通す）", () => {
+    const store = showing("読み物.md");
+    press("V", { shift: true });
+    expect(store.get(csvViewAtom)).toBe("rainbow");
   });
 });

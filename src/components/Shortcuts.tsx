@@ -92,7 +92,7 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "画像・HTML を見る",
+    title: "画像・HTML・CSV を見る",
     face: "misc",
     rows: [
       ["ピンチ", "指した場所を中心に拡大・縮小"],
@@ -101,6 +101,7 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
       ["⌘+ ⌘-", "拡大・縮小"],
       ["⌘0", "原寸で見る"],
       ["⌘9", "枠に合わせる"],
+      ["⌘⇧V", "CSV・TSV を、列ごとに色を付けた原文 ↔ 表で見る"],
     ],
   },
   {
