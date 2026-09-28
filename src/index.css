@@ -2648,7 +2648,10 @@ body.mg-dragging .mg-sel-menu {
 }
 /* 三角は題の字面の中央に置く。字面の高さは書体で違う（ゴシックは行の中央、
    明朝・丸ゴシック・ヒューマニストはそれより上）ので、書体ごとに寄せる。
-   辺は丸めで歪まないよう整数の px で持つ（8 × 12）。 */
+   辺は丸めで歪まないよう整数の px で持つ（8 × 12）。
+   三角は箱の中央に切り出し、箱を左へ出して、閉じた三角の左端を題の桁の
+   左端（0）に置く。三角を箱の左端に寄せると、押したときの地が三角から
+   右へずれて見える。 */
 :root {
   --mg-mark-lift: 0px;
 }
@@ -2664,7 +2667,7 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details-mark {
   content: "";
   position: absolute;
-  left: 0;
+  left: -7px;
   top: calc(3px - var(--mg-mark-lift));
   width: 22px;
   height: 22px;
@@ -2678,7 +2681,7 @@ body.mg-dragging .mg-sel-menu {
 .mg-prose summary::before,
 .mg-pm .mg-details-mark::before {
   background: currentColor;
-  clip-path: polygon(0 5px, 8px 11px, 0 17px);
+  clip-path: polygon(7px 5px, 15px 11px, 7px 17px);
   transition: clip-path 120ms ease;
 }
 .mg-pm .mg-details-mark {
@@ -2713,12 +2716,11 @@ body.mg-dragging .mg-sel-menu {
   top: calc(1px - var(--mg-mark-lift));
 }
 /* 開いた三角も形として書く。回して作ると、箱の中心が軸になるぶんだけ印が
-   右上へずれる（左端に寄せた三角を回すと、横 8 と縦 12 が入れ替わるため、
-   左端を揃えることと縦の中央を保つことは両立しない）。
+   右上へずれる（横 8 と縦 12 が入れ替わるため、回すと中心がずれる）。
    頂点は回した後の対応で並べてあるので、移り変わりは回転として見える。 */
 .mg-prose details[open] > summary::before,
 .mg-pm .mg-details:not(.is-closed) > .mg-details-mark::before {
-  clip-path: polygon(12px 7px, 6px 15px, 0 7px);
+  clip-path: polygon(17px 7px, 11px 15px, 5px 7px);
 }
 @media (prefers-reduced-motion: reduce) {
   .mg-prose summary::before,
