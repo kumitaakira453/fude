@@ -28,6 +28,8 @@ export function EntryMenu({
   menu,
   onClose,
   onRename,
+  onIcon,
+  iconOpen = false,
   onNewFile,
   onNewFolder,
   onCloseOthers,
@@ -36,6 +38,11 @@ export function EntryMenu({
   menu: EntryMenuState;
   onClose: () => void;
   onRename: (n: TreeNode) => void;
+  // フォルダのアイコンを選ぶ盤を開く。ツリーの行からだけ渡る。盤はメニューの
+  // 右隣に出すので、メニューの右端・左端と、押した項目の上端を添える。
+  onIcon?: (n: TreeNode, at: { x: number; y: number; left: number }) => void;
+  // 盤が出ているか。出ているあいだは「アイコンを変更…」の行を押した見た目にする。
+  iconOpen?: boolean;
   onNewFile?: (n: TreeNode) => void;
   onNewFolder?: (n: TreeNode) => void;
   // タブの並びから出したときだけ渡る。ツリーの行には閉じるものが無い。
@@ -87,7 +94,11 @@ export function EntryMenu({
     | {
         icon: string;
         label: string;
-        action: () => void;
+        // el は押した項目。項目の位置が要る操作（盤を右隣に出す）で使う。
+        action: (el: HTMLElement) => void;
+        // 押してもメニューを閉じない（右隣に盤を出すもの）。
+        keep?: boolean;
+        on?: boolean;
         // 操作の種別。絵の色になる。添えないものは控えめに出る。
         tone?: Tone;
         keys?: string;
@@ -122,6 +133,26 @@ export function EntryMenu({
   ];
   const commonItems: MI[] = [
     "sep",
+    ...(onIcon && node.kind === "dir"
+      ? [
+          {
+            icon: "interests",
+            label: "アイコンを変更…",
+            tone: "edit",
+            keep: true,
+            on: iconOpen,
+            action: (el: HTMLElement) => {
+              const frame = el.closest("[data-entry-menu]")?.getBoundingClientRect();
+              const row = el.getBoundingClientRect();
+              onIcon(node, {
+                x: (frame?.right ?? row.right) + 4,
+                y: row.top,
+                left: (frame?.left ?? row.left) - 4,
+              });
+            },
+          } satisfies MI,
+        ]
+      : []),
     {
       icon: "drive_file_rename_outline",
       label: "名前を変更",
@@ -210,6 +241,7 @@ export function EntryMenu({
   // ぼかしを掛けた枠の中に置くと fixed の基準がそこになる。body へ出して逃がす。
   return createPortal(
     <div
+      data-entry-menu
       style={style}
       onClick={(e) => e.stopPropagation()}
       className="fixed z-50 w-52 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
@@ -220,11 +252,13 @@ export function EntryMenu({
         ) : (
           <button
             key={i}
-            onClick={() => {
-              it.action();
-              onClose();
+            onClick={(e) => {
+              it.action(e.currentTarget);
+              if (!it.keep) onClose();
             }}
             className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[var(--mg-hover)] ${
+              it.on ? "bg-[var(--mg-hover)] " : ""
+            }${
               it.tone === "drop" ? "text-[var(--mg-danger)]" : "text-[var(--mg-fg-dim)]"
             }`}
           >

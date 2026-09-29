@@ -368,7 +368,7 @@ function PickerRow({
       ) : (
         <span className="w-[18px] shrink-0" />
       )}
-      <FileIcon name={node.name} dir={dir} open={open} size={dir ? 17 : 16} />
+      <FileIcon name={node.name} abs={node.abs} dir={dir} open={open} size={dir ? 17 : 16} />
       <span className={`truncate ${dir ? "font-medium" : ""}`}>
         {dir ? node.name : listName(node.name, showOthers)}
       </span>

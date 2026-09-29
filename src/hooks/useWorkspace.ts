@@ -48,6 +48,7 @@ import { splitHref } from "../lib/anchors";
 import { dirOf, resolvePath } from "../lib/paths";
 import { notify, notifyBusy, settle } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
+import { dropFolderIcons, moveFolderIcons } from "../lib/folderIcons";
 import {
   remapLeafPaths,
   resetLayout,
@@ -312,6 +313,8 @@ export function useWorkspace() {
         const to = absOf(moved[1]);
         if (from && to) {
           void moveReviewFile(from, to).then(() => syncLedger(store));
+          // フォルダに付けたアイコンも、動いた先（と下のフォルダ）へ連れていく。
+          store.set(A.folderIconsAtom, (was) => moveFolderIcons(was, from, to));
         }
       }
       remapLeafPaths(store, remap);
@@ -765,6 +768,7 @@ export function useWorkspace() {
       const abs = absOf(rel);
       if (!abs) return;
       await removePath(abs, isDir);
+      if (isDir) store.set(A.folderIconsAtom, (was) => dropFolderIcons(was, abs));
       const gone = (p: string | null) =>
         p === rel || (p && p.startsWith(rel + "/")) ? null : p;
       remapLeafPaths(store, gone);

@@ -36,6 +36,7 @@ import {
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { FileIcon } from "./FileIcon";
+import { FolderIconPicker, type IconPickerState } from "./FolderIconPicker";
 import { Icon } from "./Icon";
 
 
@@ -213,7 +214,7 @@ const TreeItem = memo(function TreeItem({
             onCommit={(v, byKey) => ctx.commitRename(node, v, byKey)}
             onCancel={() => ctx.cancelRename(node)}
             pad={basePad}
-            icon={<FileIcon name={node.name} dir size={17} />}
+            icon={<FileIcon name={node.name} abs={node.abs} dir size={17} />}
             bold
             // フォルダには「出している」印が無いので、変えている最中はいつも
             // 選ばれている行の塗りにする（どの行を変えているかが分かる）。
@@ -276,7 +277,7 @@ const TreeItem = memo(function TreeItem({
               size={18}
               className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
             />
-            <FileIcon name={node.name} dir open={isOpen} size={17} />
+            <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
             <span className="truncate font-medium">{node.name}</span>
             {/* ホバー時に「このフォルダ内に作成」アクション */}
             <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -424,6 +425,7 @@ export function FileTree() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
   const [menu, setMenu] = useState<EntryMenuState | null>(null);
+  const [iconFor, setIconFor] = useState<IconPickerState | null>(null);
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [creating, setCreating] = useState<Creating | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
@@ -780,10 +782,25 @@ export function FileTree() {
       {menu && (
         <EntryMenu
           menu={menu}
-          onClose={() => setMenu(null)}
+          // 盤はメニューの子の画面。メニューを閉じたら盤も閉じる。
+          onClose={() => {
+            setMenu(null);
+            setIconFor(null);
+          }}
           onNewFile={noAdd ? undefined : (n) => startCreate(n.path, "file")}
           onNewFolder={noAdd ? undefined : (n) => startCreate(n.path, "dir")}
           onRename={(n) => setEditingPath(n.path)}
+          onIcon={(n, at) => setIconFor({ ...at, abs: n.abs, name: n.name })}
+          iconOpen={!!iconFor}
+        />
+      )}
+      {iconFor && (
+        <FolderIconPicker
+          at={iconFor}
+          onClose={() => {
+            setIconFor(null);
+            setMenu(null);
+          }}
         />
       )}
     </div>

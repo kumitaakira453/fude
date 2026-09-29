@@ -125,6 +125,10 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
 // CSV・TSV をどちらの見た目で開くか。列ごとに色を変えた原文か、表か。
 export const csvViewAtom = atomWithStorage<"rainbow" | "table">("mdglow:csvview", "rainbow");
+// フォルダに付けたアイコン（Material Symbols の名前）。鍵はフォルダの絶対パス。
+// 覚えるのはアプリの中だけで、フォルダには何も書かない。fude で動かしたときは
+// useWorkspace が付け替える。
+export const folderIconsAtom = atomWithStorage<Record<string, string>>("mdglow:foldericons", {});
 // CSV の表で、つまみで変えた列の幅（px）。ファイルの道筋ごと・列の番号ごとに
 // 覚える。見た目だけの設定で、ファイルには書かない。
 export const csvWidthsAtom = atomWithStorage<Record<string, Record<number, number>>>(
