@@ -125,6 +125,12 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
 // CSV・TSV をどちらの見た目で開くか。列ごとに色を変えた原文か、表か。
 export const csvViewAtom = atomWithStorage<"rainbow" | "table">("mdglow:csvview", "rainbow");
+// CSV の表で、つまみで変えた列の幅（px）。ファイルの道筋ごと・列の番号ごとに
+// 覚える。見た目だけの設定で、ファイルには書かない。
+export const csvWidthsAtom = atomWithStorage<Record<string, Record<number, number>>>(
+  "mdglow:csvwidths",
+  {},
+);
 // 一覧から外すもの。書き方は .gitignore と同じで、そのまま走査へ渡す。外した
 // ものは走査に入らないので、索引にも検索にも載らない。
 //
