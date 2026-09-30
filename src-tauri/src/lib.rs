@@ -225,6 +225,74 @@ async fn open_in_app(app: String, path: String) -> Result<(), String> {
     }
 }
 
+// ログインシェル。fude はアプリとして起動しているので、PATH や nvim の設定は
+// ログインシェルを通さないと読まれない。
+fn login_shell() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/bin/zsh".into())
+}
+
+// Ghostty に新しい窓を開かせ、その中で path を nvim で開く AppleScript。
+// macOS の Ghostty は、外から新しい窓とコマンドを渡す口を AppleScript だけに
+// 持つ（1.3 から。`ghostty -e` や `open --args -e` は macOS では窓を開く口として
+// 用意されていない）。
+//
+// 引数は argv で受ける（開くもの・作業場所・ログインシェル）。開くものは窓の
+// 環境変数で渡し、コマンドの字には埋め込まない。空白や記号を含む名前でも
+// 崩れない。nvim を閉じたら、その窓はシェルとして残す。
+const OPEN_IN_GHOSTTY: &str = r#"on run argv
+	set target to item 1 of argv
+	set cwd to item 2 of argv
+	set sh to item 3 of argv
+	tell application "Ghostty"
+		set cfg to new surface configuration
+		set initial working directory of cfg to cwd
+		set environment variables of cfg to {"FUDE_OPEN=" & target}
+		set command of cfg to sh & " -lic 'nvim \"$FUDE_OPEN\"; exec " & sh & " -l'"
+		new window with configuration cfg
+		activate
+	end tell
+end run"#;
+
+// Ghostty の新しい窓で、path を nvim で開く。作業場所はフォルダそのもの
+// （ファイルなら置いてあるフォルダ）。
+//
+// Ghostty を操作するには macOS のオートメーションの許可が要る。初めての
+// ときは許可を尋ねられ、断られていれば失敗として理由を返す。
+#[tauri::command]
+async fn open_in_terminal(path: String, is_dir: bool) -> Result<(), String> {
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        let target = PathBuf::from(&path);
+        let cwd = if is_dir {
+            target.clone()
+        } else {
+            target.parent().map(PathBuf::from).unwrap_or_else(|| target.clone())
+        };
+        Command::new("/usr/bin/osascript")
+            .arg("-e")
+            .arg(OPEN_IN_GHOSTTY)
+            .arg(&path)
+            .arg(cwd.as_os_str())
+            .arg(login_shell())
+            .output()
+    })
+    .await
+    .map_err(|e| format!("起動処理に失敗しました: {e}"))?
+    .map_err(|e| format!("osascript を実行できませんでした: {e}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+    let err = String::from_utf8_lossy(&output.stderr);
+    // -1743：オートメーションの許可が無い。
+    if err.contains("-1743") {
+        return Err("fude に Ghostty を操作する許可がありません。システム設定 → プライバシーとセキュリティ → オートメーション で、fude の「Ghostty」を入れてください。".into());
+    }
+    Err(format!("Ghostty で開けませんでした。{}", err.trim()))
+}
+
 // フォルダ配下の Markdown の更新時刻を、1 回の呼び出しでまとめて返す。
 // ファイルごとに stat を投げると、数百ファイルで往復が積み上がってフォルダを
 // 開くのが目に見えて遅くなる。走査は Rust 側で完結させる。
@@ -493,6 +561,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             open_in_app,
+            open_in_terminal,
             installed_apps,
             folder_mtimes,
             scan_tree,

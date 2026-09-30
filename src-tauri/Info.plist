@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 「nvim で開く」で Ghostty を AppleScript で操作する。説明が無いと、macOS は尋ねずに断る。 -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>「nvim で開く」で、Ghostty の新しい窓を開いてファイルを nvim で開くために使います。</string>
+</dict>
+</plist>

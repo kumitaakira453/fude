@@ -116,7 +116,7 @@ export function EntryMenu({
       icon: a.icon,
       label: a.label,
       tone: "open" as const,
-      action: () => openWith(absPath, a.app),
+      action: () => openWith(absPath, a, node.kind === "dir"),
     })),
   ];
   const pathItems: MI[] = [
