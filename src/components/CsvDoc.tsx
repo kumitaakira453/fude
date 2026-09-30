@@ -1,11 +1,12 @@
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
 import { colName, CSV_TONES, csvLines, csvRows, delimOf } from "../lib/csv";
 import { readText } from "../lib/fsAccess";
 import { measureText, widestText } from "../lib/textWidth";
 import { assetVersionAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
 import { SourceView } from "./SourceView";
+import { ValuePeek } from "./ValuePeek";
 
 // CSV・TSV を読む。開いたときは原文を列ごとの色で出し、釦か ⌘⇧V で
 // 表（Excel の見た目）に替える。どちらで見るかは全体で 1 つ覚える。
@@ -298,10 +299,12 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
         </tbody>
       </table>
       {peek && (
-        <CellPeek
-          table={box}
+        <ValuePeek
           boxRef={peekBox}
-          cell={peek}
+          anchor={() => box.current?.querySelector(`[data-r="${peek.row}"][data-c="${peek.col}"]`) ?? null}
+          frame={() => box.current?.parentElement?.getBoundingClientRect()}
+          watch={`${peek.row},${peek.col}`}
+          label={`${colName(peek.col)}${peek.row + 1}`}
           value={rows[peek.row]?.[peek.col] ?? ""}
           onClose={() => {
             setPeekOn(false);
@@ -316,111 +319,4 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
 interface Cell {
   row: number;
   col: number;
-}
-
-// JSON として読めるなら字下げして見せる（ログの 1 行が JSON のことが多い）。
-function pretty(value: string): { text: string; code: boolean } {
-  const t = value.trim();
-  if (t.startsWith("{") || t.startsWith("[")) {
-    try {
-      return { text: JSON.stringify(JSON.parse(t), null, 2), code: true };
-    } catch {
-      /* JSON でなければそのまま */
-    }
-  }
-  return { text: value, code: false };
-}
-
-const PEEK_WIDTH = 560;
-const PEEK_GAP = 4;
-
-// 升目の全文の小窓。字は選んでコピーできる。升目の下（入らなければ上）に
-// 出し、表を送っても升目に付いていく。升目が枠の外へ出たら隠す。
-function CellPeek({
-  table,
-  boxRef,
-  cell,
-  value,
-  onClose,
-}: {
-  table: RefObject<HTMLTableElement>;
-  boxRef: RefObject<HTMLDivElement>;
-  cell: Cell;
-  value: string;
-  onClose: () => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const shown = useMemo(() => pretty(value), [value]);
-  const [place, setPlace] = useState<{ left: number; top: number } | null>(null);
-  useEffect(() => setCopied(false), [cell.row, cell.col]);
-
-  useLayoutEffect(() => {
-    const put = () => {
-      const el = boxRef.current;
-      const t = table.current;
-      const anchor = t?.querySelector(`[data-r="${cell.row}"][data-c="${cell.col}"]`);
-      const frame = t?.parentElement?.getBoundingClientRect();
-      if (!el || !anchor || !frame) return setPlace(null);
-      const at = anchor.getBoundingClientRect();
-      if (at.bottom < frame.top || at.top > frame.bottom) return setPlace(null);
-      const h = el.offsetHeight;
-      const w = Math.min(PEEK_WIDTH, window.innerWidth - 16);
-      const left = Math.max(8, Math.min(at.left, window.innerWidth - w - 8));
-      const below = at.bottom + PEEK_GAP;
-      const top = below + h <= window.innerHeight - 8 ? below : Math.max(8, at.top - PEEK_GAP - h);
-      setPlace({ left, top });
-    };
-    put();
-    // 送ったあとの升目の位置へ付いていく。組む行の入れ替えは送った催しの
-    // 中で起きるので、描き直しを待ってから測る。
-    let frame = 0;
-    const later = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(put);
-    };
-    window.addEventListener("scroll", later, true);
-    window.addEventListener("resize", later);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", later, true);
-      window.removeEventListener("resize", later);
-    };
-  }, [table, boxRef, cell.row, cell.col, value]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && boxRef.current?.contains(document.activeElement)) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [boxRef, onClose]);
-
-  const copy = () => {
-    void navigator.clipboard?.writeText(value).then(() => setCopied(true));
-  };
-
-  return (
-    <div
-      ref={boxRef}
-      role="dialog"
-      className="mg-csv-peek"
-      style={{
-        left: place?.left ?? 0,
-        top: place?.top ?? 0,
-        visibility: place ? "visible" : "hidden",
-      }}
-    >
-      <div className="mg-csv-peek-bar">
-        <span>
-          {colName(cell.col)}
-          {cell.row + 1}
-          {shown.code ? " · JSON" : ""}
-        </span>
-        <button type="button" className="mg-small" onClick={copy}>
-          {copied ? "コピーしました" : "コピー"}
-        </button>
-      </div>
-      <div className={`mg-csv-peek-body${shown.code ? " is-code" : ""}`}>{shown.text}</div>
-    </div>
-  );
 }

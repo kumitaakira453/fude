@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activePaneIdAtom,
   csvViewAtom,
+  jsonViewAtom,
   layoutAtom,
   metaOpenAtom,
   railAtom,
@@ -166,5 +167,20 @@ describe("⌘⇧V", () => {
     const store = showing("読み物.md");
     press("V", { shift: true });
     expect(store.get(csvViewAtom)).toBe("rainbow");
+  });
+});
+
+describe("⌘⇧V（JSON）", () => {
+  it("JSON を出しているときは、木と原文を切り替え、CSV の見た目には触らない", () => {
+    const store = rig();
+    store.set(layoutAtom, { kind: "leaf", id: "p1", tabs: ["data/設定.json"], active: 0 });
+    store.set(activePaneIdAtom, "p1");
+    store.set(jsonViewAtom, "tree");
+    store.set(csvViewAtom, "rainbow");
+    press("V", { shift: true });
+    expect(store.get(jsonViewAtom)).toBe("source");
+    expect(store.get(csvViewAtom)).toBe("rainbow");
+    press("V", { shift: true });
+    expect(store.get(jsonViewAtom)).toBe("tree");
   });
 });

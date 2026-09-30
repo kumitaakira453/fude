@@ -7927,3 +7927,99 @@ body.mg-carrying {
   color: var(--mg-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* JSON の木（JsonDoc）。行は見えている分だけを組み、位置は top で決める
+   （行の高さは JsonDoc の ROW と対にする）。 */
+.mg-json {
+  position: relative;
+  min-height: 100%;
+  background: var(--mg-code-bg);
+  font-family: var(--mg-font-mono);
+  font-size: 12.5px;
+  color: var(--mg-code-fg);
+}
+.mg-json-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: 22px;
+  align-items: center;
+  gap: 0.35rem;
+  padding-right: 1rem;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 22px;
+}
+.mg-json-row.is-box {
+  cursor: pointer;
+}
+/* 選んでいる行（押すか矢印で動かす）。Enter で値の全文を小窓に出す。 */
+.mg-json {
+  outline: none;
+}
+.mg-json-row.is-sel {
+  box-shadow: inset 2px 0 0 var(--mg-accent);
+  background: var(--mg-accent-soft);
+}
+.mg-json-row:hover {
+  background: var(--mg-hover);
+}
+.mg-json-caret {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  transition: transform 120ms ease;
+}
+/* 右向きの三角（6 × 8）を箱の中央に切り出す。開いたら下へ回す。 */
+.mg-json-caret.is-box::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--mg-muted);
+  clip-path: polygon(5px 4px, 11px 8px, 5px 12px);
+}
+.mg-json-caret.is-open {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-json-caret {
+    transition: none;
+  }
+}
+.mg-json-key {
+  flex: none;
+  color: var(--mg-accent);
+}
+.mg-json-index {
+  flex: none;
+  color: var(--mg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mg-json-colon {
+  flex: none;
+  margin-left: -0.3rem;
+  color: var(--mg-muted);
+}
+.mg-json-str,
+.mg-json-num,
+.mg-json-bool,
+.mg-json-null,
+.mg-json-box {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg-json-str { color: var(--mg-ic-green); }
+.mg-json-num { color: var(--mg-ic-blue); }
+.mg-json-bool { color: var(--mg-ic-purple); }
+.mg-json-null { color: var(--mg-muted); }
+.mg-json-box {
+  color: var(--mg-muted);
+}
+.mg-json-count {
+  margin-left: 0.5rem;
+  font-family: var(--mg-font-sans);
+  font-size: 11px;
+}

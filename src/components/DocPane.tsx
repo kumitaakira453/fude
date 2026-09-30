@@ -21,6 +21,7 @@ import {
 } from "../lib/domText";
 import { blocksOf } from "../lib/blocks";
 import { delimOf } from "../lib/csv";
+import { isJsonPath } from "../lib/jsonTree";
 import { makeHandout } from "../lib/handout";
 import { fitRailWidth, RAIL_WIDTH } from "../lib/sidebar";
 import { copyImage, copyText } from "../lib/clip";
@@ -82,6 +83,7 @@ import { ImageDoc } from "./ImageDoc";
 import { PdfDoc } from "./PdfDoc";
 import { TextDoc } from "./TextDoc";
 import { CsvDoc } from "./CsvDoc";
+import { JsonDoc } from "./JsonDoc";
 import { SelectionBar } from "./SelectionBar";
 import { SaveVersion } from "./version/SaveVersion";
 import {
@@ -1646,6 +1648,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               <PdfDoc abs={absPath ?? path} />
             ) : kind === "text" && delimOf(path) ? (
               <CsvDoc abs={absPath ?? path} />
+            ) : kind === "text" && isJsonPath(path) ? (
+              <JsonDoc abs={absPath ?? path} />
             ) : kind === "text" ? (
               <TextDoc abs={absPath ?? path} />
             ) : null}

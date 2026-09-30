@@ -125,6 +125,8 @@ export const liveEditAtom = atomWithStorage<boolean>("mdglow:liveedit", false);
 export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", true);
 // CSV・TSV をどちらの見た目で開くか。列ごとに色を変えた原文か、表か。
 export const csvViewAtom = atomWithStorage<"rainbow" | "table">("mdglow:csvview", "rainbow");
+// JSON をどちらの見た目で開くか。開け閉めできる木か、色付きの原文か。
+export const jsonViewAtom = atomWithStorage<"tree" | "source">("mdglow:jsonview", "tree");
 // フォルダに付けたアイコン（Material Symbols の名前）。鍵はフォルダの絶対パス。
 // 覚えるのはアプリの中だけで、フォルダには何も書かない。fude で動かしたときは
 // useWorkspace が付け替える。
