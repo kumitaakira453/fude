@@ -460,6 +460,8 @@ function RailCard({
   // 入力欄が割り込む。
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState("");
+  // 上の書き込みを直している最中か。その間は返信の口を隠す。
+  const [rewriting, setRewriting] = useState(false);
   const md = useMarkdownKeys(setText);
   // 焦点を当てると既定でその要素が見える位置まで送られ、直前に始めた本文の
   // 滑らかな送りを打ち消す。当てるだけにする。
@@ -534,6 +536,7 @@ function RailCard({
             own={ownsLast(thread, c)}
             onRewrite={(body) => onRewrite(c.id, body)}
             onErase={() => onErase(c.id)}
+            onEditing={setRewriting}
           />
         ))}
         {!active && thread.comments.length > 1 && (
@@ -543,8 +546,10 @@ function RailCard({
           </div>
         )}
       </div>
-      {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。 */}
-      {(writing || text.trim()) && (
+      {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。
+          上の書き込みを直している間は隠す（入力欄が 2 つ並ぶと、どちらに打って
+          いるのか紛れる）。書きかけは消さずに持ち、直し終えたら戻す。 */}
+      {!rewriting && (writing || text.trim()) && (
         // 入力欄を押したときまで箇所へ送ると、打っている最中に本文が動く。
         <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
           <AutoTextarea
@@ -609,13 +614,20 @@ function Said({
   own,
   onRewrite,
   onErase,
+  onEditing,
 }: {
   comment: ReviewComment;
   own: boolean;
   onRewrite: (body: string) => void;
   onErase: () => void;
+  // 直している最中かを札へ知らせる（その間、札は返信の口を隠す）。
+  onEditing: (on: boolean) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (on: boolean) => {
+    setEditingState(on);
+    onEditing(on);
+  };
   const [text, setText] = useState(comment.body);
   const md = useMarkdownKeys(setText);
 
@@ -674,6 +686,7 @@ function Said({
           <div className="mg-rail-send">
             <button
               type="button"
+              className="mg-rail-reply-off"
               onMouseDown={(e) => {
                 e.preventDefault();
                 setEditing(false);
@@ -683,7 +696,7 @@ function Said({
             </button>
             <button
               type="button"
-              className="is-go"
+              className="mg-rail-reply-send is-go"
               onMouseDown={(e) => {
                 e.preventDefault();
                 save();

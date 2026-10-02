@@ -348,6 +348,21 @@ describe("自分の書き込み", () => {
     click(document.querySelector<HTMLElement>('.mg-rail-own [aria-label="削除"]')!);
     expect(erased).toEqual([{ id: "t1", comment: "t1c1" }]);
   });
+
+  it("直している間は返信の口を隠し、釦は返信の口と同じ見た目にする", () => {
+    two();
+    click(cards()[0]);
+    const replies = () => cards()[0].querySelectorAll('textarea[placeholder="返信…"]').length;
+    const before = replies();
+    click(document.querySelector<HTMLElement>('.mg-rail-own [aria-label="書き直す"]')!);
+    expect(replies()).toBe(0);
+    expect(cards()[0].querySelectorAll("textarea")).toHaveLength(1);
+    const [off, go] = [...cards()[0].querySelectorAll<HTMLElement>(".mg-rail-send button")];
+    expect(off.className).toContain("mg-rail-reply-off");
+    expect(go.className).toContain("mg-rail-reply-send");
+    press(off);
+    expect(replies()).toBe(before);
+  });
 });
 
 describe("札の姿", () => {
