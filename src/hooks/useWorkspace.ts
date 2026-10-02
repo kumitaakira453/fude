@@ -455,11 +455,16 @@ export function useWorkspace() {
       });
       // 永続化 effect に上書きされる前に保存レイアウトを先読みしておく。
       // このウィンドウでの控えが無ければ、ウィンドウを問わない控えを使う。
-      // ただし「そのファイルだけの窓」を頼まれているときは落ちない。他の
-      // ウィンドウで開いていたタブを並べ直すと、窓を複製しただけになる。
-      const saved =
-        store.get(A.savedLayoutsAtom)[activeId] ??
-        (opts.only ? undefined : store.get(A.sessionLayoutsAtom)[activeId]);
+      //
+      // 「そのファイルだけの窓」を頼まれているときは、どちらの控えも使わない。
+      // 他のウィンドウで開いていたタブを並べ直すと窓を複製しただけになり、
+      // このウィンドウの控えも当てにならない（窓の名前は空いている doc-1・
+      // doc-2 … を使い回すので、前に同じ名前で開いていた窓のタブが残っている）。
+      // 使うと、走査の後に頼まれたファイルが前のタブで上書きされる。
+      const saved = opts.only
+        ? undefined
+        : (store.get(A.savedLayoutsAtom)[activeId] ??
+          store.get(A.sessionLayoutsAtom)[activeId]);
       store.set(A.activeFolderIdAtom, activeId);
       resetLayout(store);
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化
