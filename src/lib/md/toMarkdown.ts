@@ -146,6 +146,14 @@ export function toMarkdownParts(
     prevEnd = kept ? kept.span.end : null;
   });
 
+  // 原文にブロックが 1 つも無い文書（本文の無いもの・注釈だけのもの）を、
+  // 何も書かずに書き戻すとき。編集面は空の段落を 1 つ置くので、下の分かれに
+  // 任せると改行を 1 つ足し、開いただけで書き換わってしまう。原文のまま返す。
+  const only = doc.childCount === 1 ? doc.firstChild : null;
+  if (loaded.ranges.size === 0 && only?.isTextblock && only.content.size === 0) {
+    return { text: loaded.source, parts };
+  }
+
   const text =
     prevEnd !== null
       ? out + between(prevEnd, loaded.source.length)
