@@ -38,8 +38,11 @@ afterEach(() => {
   open = null;
 });
 
-const send = (view: EditorView, type: "compositionstart" | "compositionend") =>
-  view.dom.dispatchEvent(new CompositionEvent(type, { bubbles: true }));
+const send = (
+  view: EditorView,
+  type: "compositionstart" | "compositionupdate" | "compositionend",
+  data?: string,
+) => view.dom.dispatchEvent(new CompositionEvent(type, { bubbles: true, data }));
 
 const up = (view: EditorView, init: KeyboardEventInit = {}) =>
   view.dom.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true, ...init }));
@@ -176,6 +179,48 @@ describe("変換の確定のあと", () => {
     send(view, "compositionend");
     expect(kept(view)).toBe(0);
     expect(view.state.doc.child(0).type.name).toBe("codeBlock");
+  });
+
+  it("変換中の字の一部だけを確定したとき（自動確定）は、溜まった変化を捨てない", () => {
+    // 行頭から長く打ち続けると、IME は先頭の文節だけを確定し、残りをすぐ次の
+    // 変換にする。本文はまだ変換中だった字を丸ごと持っているので、描き直すと
+    // その字が画面に戻り、続く変換の字が後ろに足されて二重になる。
+    const view = editor("- [ ] やる\n");
+    caretEnd(view);
+    send(view, "compositionstart");
+    send(view, "compositionupdate", "今日はいいてんき");
+    breakDom(view);
+    send(view, "compositionend", "今日は");
+    expect(kept(view)).toBeGreaterThan(0);
+  });
+
+  it("変換中の字を全部そのまま確定したときは、溜まった変化を捨てる", () => {
+    const view = editor("- [ ] やる\n");
+    caretEnd(view);
+    send(view, "compositionstart");
+    send(view, "compositionupdate", "漢字");
+    breakDom(view);
+    send(view, "compositionend", "漢字");
+    expect(kept(view)).toBe(0);
+  });
+
+  it("確定の字が入ったら、溜まった変化をその場で読む", () => {
+    // WebKit は中身が変換中の字だけだった項目を DOM から外し、確定の字を外に
+    // 入れる。読むのを待つと、組み直すまで行が画面から消えてちらつく。
+    const view = editor("- 一つ目\n");
+    caretEnd(view);
+    send(view, "compositionstart");
+    // 先に消す側が来て、読むのを待たせる。
+    view.dom.dispatchEvent(
+      new InputEvent("beforeinput", { bubbles: true, inputType: "deleteCompositionText" }),
+    );
+    const text = view.dom.querySelector("li p")!.firstChild as Text;
+    text.data = "一つ目字";
+    view.dom.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "insertFromComposition", data: "字" }),
+    );
+    expect(kept(view)).toBe(0);
+    expect(view.state.doc.textContent).toBe("一つ目字");
   });
 
   it("変換の最中には何もしない", () => {

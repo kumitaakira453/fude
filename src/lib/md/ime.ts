@@ -28,7 +28,12 @@ const LONG_AGO = -2e8;
 // 試験で落ちる。
 interface Inner {
   input?: { compositionEndedAt: number };
-  domObserver?: { flushSoon(): void; pendingRecords(): unknown[]; queue: unknown[] };
+  domObserver?: {
+    flushSoon(): void;
+    forceFlush(): void;
+    pendingRecords(): unknown[];
+    queue: unknown[];
+  };
   docView?: { markDirty(from: number, to: number): void };
 }
 
@@ -53,6 +58,17 @@ const holdRead = (view: EditorView): void => {
   (view as EditorView & Inner).domObserver?.flushSoon();
 };
 
+// 待たせていた分を、確定の字が入った直後にその場で読ませる。
+//
+// WebKit は、中身が変換中の字だけだった行（行頭から打ち始めた箇条書きの項目
+// など）では、消すときに項目ごと DOM から外し、確定の字を項目の外へ入れる。
+// 読むのを待ったままにすると、prosemirror が項目を組み直すまで（確定の知らせ
+// のあと、次の変換が始まるまで）行が画面から消え、一瞬差し替わったように
+// ちらつく。確定と同じ処理の中で読めば、外れた姿は描かれない。
+const readNow = (view: EditorView): void => {
+  (view as EditorView & Inner).domObserver?.forceFlush();
+};
+
 // 変換の確定で WebKit が作り替えた DOM は読まず、本文から描き直す。
 //
 // WebKit は確定のとき、中身が変換中の字だけだった器を要素ごと作り替える
@@ -67,6 +83,11 @@ const holdRead = (view: EditorView): void => {
 //
 // 画面の字と本文の字が食い違うときは触らない。確定の字がまだ本文に入って
 // いないので、そのときは今までどおり prosemirror に読ませる。
+//
+// 変換中の字の一部だけを確定したとき（行頭から長く打ち続けたときの自動確定。
+// 先頭の文節だけを確定し、残りはすぐ次の変換になる）も触らない。そのとき
+// 本文はまだ変換中だった字を丸ごと持っていて、確定後の中身ではない。描き直すと
+// その丸ごとの字が画面に戻り、続く変換の字が後ろに足されて二重になる。
 const mendAfterCompose = (view: EditorView): void => {
   const inner = view as EditorView & Inner;
   const watch = inner.domObserver;
@@ -109,18 +130,33 @@ export const composingKeys = () => {
   // 変換中か。WebKit は確定の打鍵の isComposing を false で寄こすことがあるので、
   // 知らせを自分でも数える（useImeSafeEnter と同じ見分け方）。
   let composing = false;
+  // 直前まで変換中だった字。確定した字と同じなら、全部をそのまま確定した。
+  let marked: string | null = null;
 
   return new Plugin({
     props: {
       handleDOMEvents: {
         compositionstart() {
           composing = true;
+          marked = null;
           return false;
         },
-        compositionend(view) {
+        compositionupdate(_view, event) {
+          marked = event.data;
+          return false;
+        },
+        compositionend(view, event) {
           composing = false;
-          mendAfterCompose(view);
+          // 一部だけの確定（自動確定）では描き直さない。上の mendAfterCompose の説明。
+          if (marked === null || event.data === marked) mendAfterCompose(view);
+          marked = null;
           collapseAfterCompose(view);
+          return false;
+        },
+        input(view, event) {
+          // 確定の字が入ったら、その場で読ませる。待たせていた消した側と合わせて
+          // 1 度に読み、器の作り直しを確定と同じ処理の中で済ませる。
+          if ((event as InputEvent).inputType === "insertFromComposition") readNow(view);
           return false;
         },
         beforeinput(view, event) {
