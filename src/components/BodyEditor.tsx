@@ -288,6 +288,10 @@ function selectionBoxes(
   // 間に使う（下の painter を参照）。
   const measure = (live: Span | null): Rect[] => {
     const { selection } = view.state;
+    // 変換中は塗らない。変換中の字には IME の下線が付く。WebKit は自動確定
+    // （先頭の文節だけを確定し、残りをすぐ次の変換にする）の瞬間に、次の変換の
+    // 字を一瞬だけ選択範囲として持つので、塗るとその字が「ぱっ」と光る。
+    if (!live && view.composing) return [];
     if (
       !live &&
       (selection.empty ||
