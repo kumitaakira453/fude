@@ -3247,6 +3247,12 @@ svg[id^="mmd-"] foreignObject p {
   margin: 0 !important;
   padding: 0 !important;
 }
+/* 本文の overflow-wrap: anywhere が図の中まで継がれると、計測（body 直下）では
+   1 行だった長い名前が描画側でだけ語の途中で折れ、枠の高さを超えた行が欠ける。 */
+svg[id^="mmd-"] foreignObject div {
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
 /* 拡大の手がかり（常時表示・控えめ） */
 .mg-mermaid-zoom {
   position: absolute;
