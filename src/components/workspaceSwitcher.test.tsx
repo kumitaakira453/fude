@@ -258,3 +258,12 @@ describe("Claude のセッションの終わり", () => {
     expect(pill(el, "a").textContent).not.toContain("終了");
   });
 });
+
+describe("札の ×", () => {
+  it("× はツールバーから外すだけで、切り替えもしない", async () => {
+    const { el, store } = await show();
+    act(() => pill(el, "b").querySelector<HTMLElement>(".mg-ws-pill-x")!.click());
+    expect(store.get(barAtom)).toEqual(["a"]);
+    expect(calls).toEqual([]);
+  });
+});

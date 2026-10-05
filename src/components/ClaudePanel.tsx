@@ -98,17 +98,18 @@ export function ClaudeFiles() {
     <div className="border-t border-[var(--mg-border)] px-1 pt-1">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1 px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]"
+        title="このセッションで作成・編集したファイル"
+        className="flex w-full items-center gap-1 whitespace-nowrap px-2 py-1 text-left text-[11px] font-medium text-[var(--mg-muted)]"
       >
         <Icon
           name="chevron_right"
           size={16}
-          className={`transition-transform ${open ? "rotate-90" : ""}`}
+          className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
         />
         <ClaudeMark size={12} className="mr-0.5" />
-        このセッションで編集したファイル
+        <span className="min-w-0 truncate">セッションのファイル</span>
         {phase && (
-          <span className="ml-auto flex items-center gap-1 normal-case tracking-normal">
+          <span className="ml-auto flex shrink-0 items-center gap-1 pl-2">
             <span
               className={`h-1.5 w-1.5 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
               style={{ background: PHASE_COLOR[phase] }}

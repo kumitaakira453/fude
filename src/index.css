@@ -8348,3 +8348,26 @@ body.mg-carrying {
 .mg-ws-menu-item.is-made {
   color: var(--mg-fg-dim);
 }
+
+/* 札の ×。指したときと今いる札にだけ出し、出ていないときは幅も取らない。 */
+.mg-ws-pill {
+  cursor: pointer;
+}
+.mg-ws-pill-x {
+  display: none;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  place-items: center;
+  margin-right: -0.35rem;
+  border-radius: 999px;
+  color: var(--mg-muted);
+}
+.mg-ws-pill:hover .mg-ws-pill-x,
+.mg-ws-pill:focus-visible .mg-ws-pill-x {
+  display: grid;
+}
+.mg-ws-pill-x:hover {
+  background: color-mix(in srgb, var(--mg-fg) 12%, transparent);
+  color: var(--mg-fg);
+}

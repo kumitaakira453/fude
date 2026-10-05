@@ -47,8 +47,8 @@ export const PHASE_LABEL: Record<Phase, string> = {
   working: "作業中",
   waiting: "応答待ち",
   idle: "待機中",
-  done: "終わった",
-  ended: "終わった",
+  done: "終了",
+  ended: "終了",
   deleted: "削除済み",
   unknown: "不明",
 };

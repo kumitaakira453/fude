@@ -17,7 +17,7 @@ import { Icon } from "./Icon";
 // ツールバーの中に並べるワークスペースの札。1 回押せば切り替わる。
 // ファイルのタブとは段も形も分ける（同じ形で 2 段に重ねると、どちらがどちらか
 // 読めない）。右押しで手入れのメニュー、末尾の ＋ で作る。
-// 掴んで並べ替え、中クリックで列から外す（⌃1〜9 はこの並びの位置を指す）。
+// 掴んで並べ替え、× か中クリックでツールバーから外す（⌃1〜9 はこの並びの位置を指す）。
 
 const DRAG_TYPE = "application/x-fude-ws";
 
@@ -40,7 +40,7 @@ export function WorkspacePills() {
   // 別のウィンドウで開いているもの。押すとそのウィンドウが前に出る。
   const [elsewhere, setElsewhere] = useState<Set<string>>(new Set());
   const [dropAt, setDropAt] = useState<number | null>(null);
-  const here = useRef<HTMLButtonElement>(null);
+  const here = useRef<HTMLDivElement>(null);
 
   const items = useMemo(() => {
     const byId = new Map(list.map((w) => [w.id, w]));
@@ -103,9 +103,9 @@ export function WorkspacePills() {
         const away = !on && elsewhere.has(ws.id);
         const phase = phaseFor(ws);
         return (
-          <button
+          <div
             key={ws.id}
-            type="button"
+            tabIndex={0}
             data-ws={ws.id}
             ref={on ? here : undefined}
             role="tab"
@@ -117,6 +117,12 @@ export function WorkspacePills() {
             }}
             onClick={() => {
               if (!on) void openWorkspace(ws);
+            }}
+            onKeyDown={(e) => {
+              if ((e.key === "Enter" || e.key === " ") && !on) {
+                e.preventDefault();
+                void openWorkspace(ws);
+              }
             }}
             onAuxClick={(e) => {
               if (e.button === 1) setBar((was) => removeFromBar(was, ws.id));
@@ -149,7 +155,20 @@ export function WorkspacePills() {
             {phase && PHASE_BADGE[phase] && (
               <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_BADGE[phase]}</span>
             )}
-          </button>
+            {/* ツールバーから外すだけ。ワークスペースは消えない（⌘⇧P からまた開ける）。 */}
+            <span
+              role="button"
+              tabIndex={-1}
+              title="ツールバーから外す（ワークスペースは残ります）"
+              onClick={(e) => {
+                e.stopPropagation();
+                setBar((was) => removeFromBar(was, ws.id));
+              }}
+              className="mg-ws-pill-x"
+            >
+              <Icon name="close" size={12} />
+            </span>
+          </div>
         );
       })}
       <button
