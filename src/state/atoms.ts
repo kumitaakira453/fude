@@ -236,6 +236,8 @@ export const ignoresByRootAtom = atom((get) => {
 // Claude のセッションからワークスペースを作る（ベータ）。切っているあいだは
 // セッションの一覧も記録も読まない。
 export const claudeLinkAtom = atomWithStorage<boolean>("fude:claude", false);
+// セッションのファイルの欄を、一覧で出すかフォルダごとの木で出すか。
+export const claudeFilesViewAtom = atomWithStorage<"list" | "tree">("fude:claudefiles", "list");
 // 取り込んだ画像の置き場所。文書と同じところに、この名前のフォルダを作る。
 export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images");
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
