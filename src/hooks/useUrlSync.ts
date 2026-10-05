@@ -1,13 +1,17 @@
 import { useAtomValue, useStore } from "jotai";
 import { useEffect, useRef } from "react";
+import { dropBootCurtain, whenDocShown } from "../lib/boot";
 import { buildHash, parseHash } from "../lib/url";
 import * as A from "../state/atoms";
-import { useWorkspace } from "./useWorkspace";
+import { useWorkspace, whenOpened } from "./useWorkspace";
 
 // URL(hash) と「開いているフォルダ・ファイル」を双方向同期する。
 // - マウント時: 履歴読込後、URL のフォルダを権限 granted なら無確認で復元
 // - 状態変化時: pushState で履歴を積む（ブラウザバック対応）
 // - popstate: URL を解釈して状態へ反映（権限が無ければスタート画面へ）
+// 起動の幕を残しておく上限（ms）。
+const CURTAIN_WAIT = 3000;
+
 export function useUrlSync() {
   const store = useStore();
   const { refreshFolders, openFolder, openDoc, openFile, holdDraft } = useWorkspace();
@@ -74,23 +78,34 @@ export function useUrlSync() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // 復元対象のハッシュを、書き込み effect に潰される前に確定させておく
-      const state = parseHash();
-      await refreshFolders();
-      if (cancelled) return;
-      if (state.folderId || state.doc) {
-        await applyUrl.current(state);
-      } else {
-        // 起動直後は最後に開いていたものへ戻す。フォルダと 1 枚のファイルの
-        // どちらもありうるので、時刻の新しいほうを選ぶ。どちらの履歴も
-        // 新しい順なので、比べるのは先頭どうしでよい。
-        const folder = store.get(A.foldersAtom)[0];
-        const doc = store.get(A.recentDocsAtom)[0];
-        if (doc && (!folder || doc.lastOpened > folder.lastOpened))
-          await openDoc(doc.path);
-        else if (folder) await openFolder(folder.path);
+      try {
+        // 復元対象のハッシュを、書き込み effect に潰される前に確定させておく
+        const state = parseHash();
+        await refreshFolders();
+        if (cancelled) return;
+        if (state.folderId || state.doc) {
+          await applyUrl.current(state);
+        } else {
+          // 起動直後は最後に開いていたものへ戻す。フォルダと 1 枚のファイルの
+          // どちらもありうるので、時刻の新しいほうを選ぶ。どちらの履歴も
+          // 新しい順なので、比べるのは先頭どうしでよい。
+          const folder = store.get(A.foldersAtom)[0];
+          const doc = store.get(A.recentDocsAtom)[0];
+          if (doc && (!folder || doc.lastOpened > folder.lastOpened))
+            await openDoc(doc.path);
+          else if (folder) await openFolder(folder.path);
+        }
+        readyRef.current = true;
+        // 木とタブが並び、開いていた本文が描けるまで幕を残す。大きなフォルダで
+        // 走査が長引いても、幕の裏で待たせ続けはしない。
+        const settled = (async () => {
+          await whenOpened();
+          if (A.activePath(store.get(A.activePaneAtom))) await whenDocShown();
+        })();
+        await Promise.race([settled, new Promise((r) => setTimeout(r, CURTAIN_WAIT))]);
+      } finally {
+        if (!cancelled) dropBootCurtain();
       }
-      readyRef.current = true;
     })();
     return () => {
       cancelled = true;

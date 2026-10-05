@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
+use tauri::Manager;
 
 mod cli;
 #[cfg(target_os = "macos")]
@@ -586,10 +587,16 @@ pub fn run() {
             windows::open_doc_window,
             windows::set_window_title,
             windows::record_recent_folder,
+            windows::remember_look,
             watch::watch_folder,
             watch::unwatch_folder
         ])
         .setup(|app| {
+            // 主窓は隠して作ってある。前回のテーマの明暗と地を当ててから出す。
+            if let Some(main) = app.get_webview_window("main") {
+                windows::apply_look(&main, &windows::saved_look());
+                let _ = main.show();
+            }
             // Dock アイコンのメニュー（macOS のみ。失敗しても起動は続ける）
             #[cfg(target_os = "macos")]
             dock::install(app.handle());

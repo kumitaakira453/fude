@@ -108,6 +108,11 @@ let indexGen = 0;
 // 新しい木を上書きしないよう、戻ってきた時点で自分が最後かを確かめる。
 let treeGen = 0;
 
+// 最後に開いたフォルダの木と、控えのタブが並び終わる時。起動の幕を下ろす
+// 合図に使う（開く操作そのものは、走査を待たずに画面を進める）。
+let opened: Promise<void> = Promise.resolve();
+export const whenOpened = (): Promise<void> => opened;
+
 // 手が空いてから走らせる。requestIdleCallback が無ければ少し待つ。
 function whenIdle(run: () => void) {
   if (typeof requestIdleCallback === "function") {
@@ -478,7 +483,7 @@ export function useWorkspace() {
       if (opts.file && !saved) openFile(opts.file);
       switched();
       // 走査は待たない。待っているあいだ、画面はどの操作も受け付けなくなる。
-      void refreshTree().then(() => {
+      opened = refreshTree().then(() => {
         // 走査のあいだに別のフォルダへ移っていたら、もう当てる先がない。
         if (!saved || store.get(A.activeFolderIdAtom) !== activeId) return;
         const valid = new Set(store.get(A.filesAtom).map((f) => f.path));

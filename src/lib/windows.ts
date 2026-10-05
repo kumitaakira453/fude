@@ -68,3 +68,9 @@ export async function setWindowTitle(title: string): Promise<void> {
 export async function recordRecentFolder(path: string, at: number): Promise<void> {
   await invoke("record_recent_folder", { path, at });
 }
+
+// 窓の見た目の控え。次に窓を出すとき、JS が動く前からこの明暗と地で出る。
+// 開いている窓のタイトルバーも、この明暗に揃う。
+export async function rememberLook(dark: boolean, bg: string): Promise<void> {
+  await invoke("remember_look", { dark, bg });
+}

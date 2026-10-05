@@ -6,10 +6,228 @@
     <!-- バンドラに通して内容から名前を作らせる。public/ に置くと名前が変わらず、
          絵を入れ替えても WebView が古いものを出し続ける -->
     <link rel="icon" type="image/png" href="/src/assets/favicon.png" />
+    <link rel="preload" href="/fonts/lobster-latin.woff2" as="font" type="font/woff2" crossorigin />
     <title>fude</title>
+    <!-- 画面の JS が動くまでの見た目。前回のテーマの地とアクセントだけを当て、
+         起動の幕を出す。色は src/index.css の --mg-bg / --mg-accent と
+         同じ値（bootLook.test.ts で一致を見る）。 -->
+    <script>
+      (function () {
+        var looks = {
+          aurora: ["#0e1116", "#4fd1c5"],
+          midnight: ["#0b1020", "#6ea8fe"],
+          nord: ["#2e3440", "#88c0d0"],
+          forest: ["#0f1a14", "#6ee7a8"],
+          dracula: ["#282a36", "#bd93f9"],
+          tokyonight: ["#1a1b26", "#7aa2f7"],
+          catppuccin: ["#1e1e2e", "#89b4fa"],
+          rosepine: ["#191724", "#9ccfd8"],
+          paper: ["#faf7f0", "#b45309"],
+          sunset: ["#fff7f2", "#f97316"],
+          rose: ["#fdf5f8", "#db2777"],
+          solarized: ["#fdf6e3", "#268bd2"],
+          daylight: ["#fbfcfd", "#2563eb"],
+          latte: ["#eff1f5", "#8839ef"],
+          mint: ["#f5faf7", "#0f766e"],
+          lavender: ["#f8f6fd", "#6d28d9"],
+        };
+        var id = "aurora";
+        try {
+          var saved = JSON.parse(localStorage.getItem("mdglow:theme") || "null");
+          if (saved && looks[saved]) id = saved;
+        } catch (e) {}
+        var root = document.documentElement;
+        root.dataset.theme = id;
+        root.style.setProperty("--boot-bg", looks[id][0]);
+        root.style.setProperty("--boot-accent", looks[id][1]);
+      })();
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        /* 画面の CSS が届いたら、テーマの地（--mg-bg）に替わる。 */
+        background: var(--mg-bg, var(--boot-bg, #0e1116));
+      }
+      /* 名前の書体（src/index.css と同じ同梱の Lobster）。幕の字にも使う。 */
+      @font-face {
+        font-family: "Lobster";
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+        src: url("/fonts/lobster-latin.woff2") format("woff2");
+      }
+      /* 起動の幕。画面が前回の続きを描き終えるまで上にかぶせておき、
+         描けたら下ろす（src/lib/boot.ts）。途中の空の画面を見せない。 */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        background: var(--boot-bg, #0e1116);
+        transition: opacity 0.28s ease;
+      }
+      #boot.is-done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      /* 筆が「fude」と書く。字は筆先の後ろから現れ、書き終えると筆が離れて
+         下に墨の線を引く。少し置いてから消え、また書く。 */
+      /* 動かす要素は描画の層に載り、層は箱の大きさで切られる。Lobster の f は
+         払いが箱の左下へはみ出すので、余白を持たせて箱の中に収める（負の
+         外側余白で、見た目の位置は変えない）。 */
+      .boot-ink {
+        --w: 92px;
+        --loop: 2.8s;
+        position: relative;
+        padding: 18px 28px;
+        color: var(--boot-accent, #4fd1c5);
+        animation: boot-show var(--loop) ease infinite;
+      }
+      .boot-word {
+        display: block;
+        font: 400 46px/1.15 "Lobster", sans-serif;
+        letter-spacing: -0.035em;
+        padding: 14px 22px;
+        margin: -14px -22px;
+        clip-path: inset(0 calc(100% - 22px) 0 0);
+        animation: boot-write var(--loop) linear infinite;
+      }
+      .boot-line {
+        position: absolute;
+        left: 30px;
+        bottom: 8px;
+        width: calc(var(--w) * 0.9);
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          currentColor,
+          color-mix(in srgb, currentColor 30%, transparent)
+        );
+        transform: scaleX(0);
+        transform-origin: left center;
+        animation: boot-line var(--loop) cubic-bezier(0.2, 0.9, 0.3, 1) infinite;
+      }
+      /* 筆。印（src/assets/mark.png）から下の払いを外し、筆だけを小さく
+         切り出した形を埋め込む。dev では起動時に数百の部品を取りに行くので、
+         絵を別に取らせると後ろで待たされて筆が出ない。筆先（左下寄り）が、
+         字の書き終わりの位置に来るように置く。 */
+      .boot-brush {
+        position: absolute;
+        left: 12px;
+        top: 20px;
+        width: 44px;
+        height: 37px;
+        background: currentColor;
+        -webkit-mask: url("data:image/png;base64,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") center / 100% 100% no-repeat;
+        mask: url("data:image/png;base64,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") center / 100% 100% no-repeat;
+        transform-origin: 36% 100%;
+        animation: boot-brush var(--loop) linear infinite;
+      }
+      @keyframes boot-show {
+        0% {
+          opacity: 0;
+        }
+        5%,
+        86% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+      @keyframes boot-write {
+        0% {
+          clip-path: inset(0 calc(100% - 22px) 0 0);
+        }
+        56%,
+        100% {
+          clip-path: inset(0);
+        }
+      }
+      @keyframes boot-brush {
+        0% {
+          transform: translate(0, 0) rotate(-14deg);
+          opacity: 1;
+        }
+        14% {
+          transform: translate(calc(var(--w) * 0.22), -5px) rotate(-6deg);
+        }
+        28% {
+          transform: translate(calc(var(--w) * 0.47), 3px) rotate(-16deg);
+        }
+        42% {
+          transform: translate(calc(var(--w) * 0.72), -4px) rotate(-7deg);
+        }
+        56% {
+          transform: translate(var(--w), 2px) rotate(-13deg);
+          opacity: 1;
+        }
+        68%,
+        100% {
+          transform: translate(calc(var(--w) + 10px), -14px) rotate(6deg);
+          opacity: 0;
+        }
+      }
+      @keyframes boot-line {
+        0%,
+        58% {
+          transform: scaleX(0);
+        }
+        74%,
+        100% {
+          transform: scaleX(1);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-ink,
+        .boot-word,
+        .boot-line,
+        .boot-brush {
+          animation: none;
+        }
+        .boot-word {
+          clip-path: none;
+        }
+        .boot-line {
+          transform: none;
+        }
+        .boot-brush {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot" aria-label="読み込み中">
+      <div class="boot-ink">
+        <span class="boot-word">fude</span>
+        <span class="boot-line"></span>
+        <span class="boot-brush"></span>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var boot = document.getElementById("boot");
+        // 筆が進む幅は、書く字の幅に合わせる（書体が届いてから測る）。
+        var ink = boot.querySelector(".boot-ink");
+        var word = boot.querySelector(".boot-word");
+        var fit = function () {
+          // 字の箱は左右に 22px ずつ余白を持つので、その分を除く。
+          ink.style.setProperty("--w", word.getBoundingClientRect().width - 44 + "px");
+        };
+        fit();
+        if (document.fonts) document.fonts.load('46px "Lobster"').then(fit, function () {});
+        // 画面が幕を下ろせずに終わっても（描画の失敗など）、いつまでも隠さない。
+        setTimeout(function () {
+          boot.remove();
+        }, 8000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

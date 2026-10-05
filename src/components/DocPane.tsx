@@ -115,6 +115,7 @@ import { domSpan } from "../lib/md/domSpan";
 import { CommentComposer } from "./review/CommentComposer";
 import { SelectionAct, SelectionMenu } from "./review/SelectionMenu";
 import { Toc } from "./Toc";
+import { markDocShown } from "../lib/boot";
 import { Tooltip } from "./Tooltip";
 
 // 外の書き換えを取り込むまでの待ち。エージェントは 1 回の作業で何度も書くので、
@@ -230,6 +231,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 遅らせていたが、その間は骨組みも本文も無い白紙になり、押した手応えが
   // まるで無かった。速く読めたときに一瞬光る方を採る。
   const loaded = !!path && raw !== undefined;
+  // 骨組みが外れたら、起動の幕を下ろしてよい合図を出す。
+  const drawn = !!shownPath && !settling && loaded && !opening;
+  useEffect(() => {
+    if (drawn) markDocShown();
+  }, [drawn]);
 
   // 保存の途中が分かるようにする。件数で数えるのは、続けて保存したときに
   // 先に終わった 1 件で印が消えないため。

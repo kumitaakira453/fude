@@ -110,8 +110,15 @@ export const isShownAtom = atomFamily((path: string) =>
 
 // ---- UI / テーマ（永続化） ----
 // 見た目の好みはアプリ全体で 1 つ。どのウィンドウで変えても揃う。
-export const themeAtom = atomWithStorage<string>("mdglow:theme", "aurora");
-export const fontAtom = atomWithStorage<string>("mdglow:font", "sans");
+//
+// テーマと書体は最初の描画から保存済みの値を読む。既定の値で一度描くと、
+// 起動のたびに既定のテーマ（暗い aurora）の画面とタイトルバーが一瞬挟まる。
+export const themeAtom = atomWithStorage<string>("mdglow:theme", "aurora", undefined, {
+  getOnInit: true,
+});
+export const fontAtom = atomWithStorage<string>("mdglow:font", "sans", undefined, {
+  getOnInit: true,
+});
 export const readingWidthAtom = atomWithStorage<"cozy" | "wide" | "full">(
   "mdglow:width",
   "cozy",

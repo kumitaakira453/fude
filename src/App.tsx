@@ -29,7 +29,8 @@ import { watchDragScroll } from "./lib/dragScroll";
 import { watchSpringDetails } from "./lib/spring";
 import { folderDisplayName } from "./lib/idb";
 import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
-import { setWindowTitle } from "./lib/windows";
+import { rememberLook, setWindowTitle } from "./lib/windows";
+import { DARK_THEME_IDS } from "./lib/themes";
 import {
   activeFolderIdAtom,
   foldersAtom,
@@ -76,7 +77,16 @@ export default function App() {
 
   // テーマを html 要素に反映
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    // 窓の地とタイトルバーの明暗も揃え、次の起動のために控える。地の色は
+    // いま当たったテーマの値を読む（色の表を二重に持たない）。
+    const bg = getComputedStyle(root).getPropertyValue("--mg-bg").trim();
+    if (bg) {
+      void rememberLook(DARK_THEME_IDS.has(theme), bg).catch((e: unknown) => {
+        console.error("窓の見た目を控えられません", e);
+      });
+    }
   }, [theme]);
 
   // 書体は字面の高さが書体ごとに違うので、寄せ幅を CSS に渡す。

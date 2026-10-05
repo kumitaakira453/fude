@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::window::Color;
+use tauri::{AppHandle, Manager, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 // 追加ウィンドウの生成と、Dock メニューが読む「最近開いたフォルダ」。
 //
@@ -80,6 +81,79 @@ pub fn record_recent_folder(path: String, at: i64) -> Result<(), String> {
     crate::review::store::write_atomic(&file, &bytes)
 }
 
+// 窓の見た目の控え。テーマの明暗（タイトルバー）と地の色。
+//
+// 窓は画面の JS が動く前に出るので、そのままだと地は白、タイトルバーは OS の
+// 明暗で出る。前回のテーマを Rust から読める形で残し、窓を出す前に当てる。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Look {
+    pub dark: bool,
+    pub bg: String,
+}
+
+// 控えが無いとき。既定のテーマ（aurora）に合わせる。
+fn default_look() -> Look {
+    Look {
+        dark: true,
+        bg: "#0e1116".to_string(),
+    }
+}
+
+fn look_path() -> Result<PathBuf, String> {
+    Ok(app_dir()?.join("look.json"))
+}
+
+pub fn saved_look() -> Look {
+    look_path()
+        .ok()
+        .and_then(|p| fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(default_look)
+}
+
+// "#rrggbb" を色にする。読めない字なら None（地は既定のまま）。
+fn parse_hex(hex: &str) -> Option<Color> {
+    let h = hex.trim().strip_prefix('#')?;
+    if h.len() != 6 {
+        return None;
+    }
+    let at = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+    Some(Color(at(0)?, at(2)?, at(4)?, 255))
+}
+
+fn theme_of(look: &Look) -> Theme {
+    if look.dark {
+        Theme::Dark
+    } else {
+        Theme::Light
+    }
+}
+
+pub fn apply_look(win: &WebviewWindow, look: &Look) {
+    let _ = win.set_theme(Some(theme_of(look)));
+    if let Some(color) = parse_hex(&look.bg) {
+        let _ = win.set_background_color(Some(color));
+    }
+}
+
+// テーマを変えたとき。控えを書き換え、開いている窓すべてに当てる。
+#[tauri::command]
+pub async fn remember_look(app: AppHandle, dark: bool, bg: String) -> Result<(), String> {
+    let look = Look { dark, bg };
+    for win in app.webview_windows().values() {
+        apply_look(win, &look);
+    }
+    if saved_look() == look {
+        return Ok(());
+    }
+    let file = look_path()?;
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("{} を作れません: {e}", dir.display()))?;
+    }
+    let bytes = serde_json::to_vec_pretty(&look).map_err(|e| e.to_string())?;
+    crate::review::store::write_atomic(&file, &bytes)
+}
+
 // application/x-www-form-urlencoded。フロントの URLSearchParams がそのまま解釈できる形にする。
 fn form_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
@@ -146,6 +220,12 @@ pub fn open_doc_window(
         // OS のファイルドロップを掴ませない。掴ませると WebView 内の
         // HTML のドラッグ&ドロップ（タブの移動など）が届かなくなる。
         .disable_drag_drop_handler();
+    // 前回のテーマの明暗と地で出す。白い窓が一瞬見えない。
+    let look = saved_look();
+    builder = builder.theme(Some(theme_of(&look)));
+    if let Some(color) = parse_hex(&look.bg) {
+        builder = builder.background_color(color);
+    }
     let dropped_at = x
         .zip(y)
         .map(|(x, y)| (x + GRAB_OFFSET.0, y + GRAB_OFFSET.1));
@@ -183,6 +263,15 @@ pub fn set_window_title(app: AppHandle, label: String, title: String) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 地の色は_6_桁の_16_進だけ読む() {
+        assert_eq!(parse_hex("#0e1116"), Some(Color(0x0e, 0x11, 0x16, 255)));
+        assert_eq!(parse_hex(" #FBFCFD "), Some(Color(0xfb, 0xfc, 0xfd, 255)));
+        assert_eq!(parse_hex("#fff"), None);
+        assert_eq!(parse_hex("rgb(0,0,0)"), None);
+        assert_eq!(parse_hex("#zzzzzz"), None);
+    }
 
     #[test]
     fn ハッシュは_urlsearchparams_が読める形にする() {
