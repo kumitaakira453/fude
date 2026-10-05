@@ -24,7 +24,8 @@ vi.mock("../lib/drafts", async (real) => {
 const dropped: string[] = [];
 const DIR = "/data/drafts";
 const DRAFT = `${DIR}/20260912-140125-275.md`;
-const REL = "20260912-140125-275.md";
+// 本文の控えは絶対パスで引く。
+const REL = DRAFT;
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =

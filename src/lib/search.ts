@@ -65,7 +65,7 @@ export function quickOpen(
   const { touched, now = Date.now(), limit = 40 } = opts;
   const results: FuzzyResult[] = [];
   for (const node of files) {
-    const m = fuzzyMatch(query, node.path);
+    const m = fuzzyMatch(query, node.rel);
     if (!m) continue;
     const bonus = query ? recencyBonus(m.score, touched?.get(node.path), now) : 0;
     results.push({ node, score: m.score + bonus, matches: m.matches });

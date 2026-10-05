@@ -1,6 +1,7 @@
 import { useAtomValue, useStore } from "jotai";
 import { useEffect, useRef } from "react";
 import { dropBootCurtain, whenDocShown } from "../lib/boot";
+import { absoluteIn } from "../lib/fsAccess";
 import { buildHash, parseHash } from "../lib/url";
 import * as A from "../state/atoms";
 import { useWorkspace, whenOpened } from "./useWorkspace";
@@ -58,16 +59,18 @@ export function useUrlSync() {
           store.set(A.activeFolderIdAtom, null);
           return;
         }
+        // ファイルは絶対パスで載せる。根からの相対で載っていた頃の URL も読む。
+        const target = file ? absoluteIn(file, entry.path) : undefined;
         if (store.get(A.activeFolderIdAtom) !== folderId) {
           // 開くファイルが決まっているなら、ツリーの走査より先に出させる
           // only は「そのファイルだけの窓」として開かれた印。控えの
           // レイアウトを並べ直さず、頼まれたファイルだけを出す。
-          await openFolder(entry.path, { file, only });
+          await openFolder(entry.path, { file: target, only });
         }
         // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
         // 戻る/進む(popstate)では force で必ず切り替える。
-        if (file && (opts.force || !A.activePath(store.get(A.activePaneAtom))))
-          openFile(file);
+        if (target && (opts.force || !A.activePath(store.get(A.activePaneAtom))))
+          openFile(target);
       } finally {
         applyingRef.current = false;
       }

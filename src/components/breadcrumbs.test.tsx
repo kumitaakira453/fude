@@ -39,6 +39,7 @@ beforeAll(() => {
 const file = (abs: string): TreeNode => ({
   name: abs.split("/").pop()!,
   path: abs,
+  rel: abs,
   abs,
   kind: "file",
 });

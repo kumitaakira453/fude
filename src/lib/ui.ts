@@ -1,5 +1,6 @@
 import { type getDefaultStore } from "jotai";
 import { dropDraft, inDrafts } from "./drafts";
+import { absoluteIn } from "./fsAccess";
 import * as A from "../state/atoms";
 import type { LayoutNode, LeafNode, SplitNode } from "../state/atoms";
 
@@ -441,6 +442,19 @@ export function reviveLayout(
   };
   const layout = walk(node);
   return { layout, active: newActive || firstLeafId(layout) };
+}
+
+// 控えのレイアウトのタブを絶対パスに読み替える。根からの相対で控えていた
+// 頃のものも、そのまま開き直せる。
+export function absoluteLayout(node: StoredNode, root: string): StoredNode {
+  if (node.kind === "split") {
+    return { ...node, children: node.children.map((c) => absoluteLayout(c, root)) };
+  }
+  return {
+    ...node,
+    ...(node.tabs ? { tabs: node.tabs.map((t) => absoluteIn(t, root)) } : {}),
+    ...(node.path ? { path: absoluteIn(node.path, root) } : {}),
+  };
 }
 
 export type { SplitNode };

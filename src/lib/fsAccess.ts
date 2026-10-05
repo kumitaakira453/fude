@@ -31,12 +31,25 @@ export function listName(nameOrPath: string, full: boolean): string {
   return full ? (nameOrPath.split("/").pop() ?? nameOrPath) : displayName(nameOrPath);
 }
 
+// ファイルとフォルダは絶対パスで見分ける。根をいくつ並べても同じ相対パスが
+// 2 つの根に居ることがあるので、相対パスは見せ方と絞り込みにだけ使う。
 export interface TreeNode {
   name: string;
-  path: string; // ルートからの相対パス（/ 区切り）
-  abs: string; // 絶対パス
+  path: string; // 絶対パス。タブ・控え・木の開閉の鍵
+  rel: string; // 根からの相対パス（/ 区切り）。一覧に出す道筋
+  abs: string; // 絶対パス（path と同じ）
   kind: "file" | "dir";
   children?: TreeNode[];
+}
+
+// 根からの相対パス。根の外ならそのまま返す（絶対パスで見せる）。
+export function relativeTo(path: string, root: string | null | undefined): string {
+  return root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
+}
+
+// 控えの道筋を絶対パスに読み替える。根からの相対で控えていた頃のものも読める。
+export function absoluteIn(path: string, root: string): string {
+  return path.startsWith("/") ? path : `${root}/${path}`;
 }
 
 export function isMarkdown(name: string): boolean {
@@ -76,10 +89,14 @@ export interface Crumb {
 
 // 道筋を区切りに割る。keep を超える分は、先頭側を「…」1 つに畳む。
 // 絶対パスは先頭の / を保つ。畳むのは、末尾のファイル名を必ず見せるため。
-export function crumbsOf(path: string, keep = Infinity): Crumb[] {
-  const abs = path.startsWith("/");
-  const segs = path.split("/").filter(Boolean);
-  const upto = (n: number) => (abs ? "/" : "") + segs.slice(0, n).join("/");
+//
+// root を渡すと、区切りは根からの相対で出し、道筋は絶対パスで持つ。
+export function crumbsOf(path: string, keep = Infinity, root?: string): Crumb[] {
+  const inside = !!root && path.startsWith(`${root}/`);
+  const abs = inside || path.startsWith("/");
+  const segs = (inside ? path.slice(root.length + 1) : path).split("/").filter(Boolean);
+  const head = inside ? `${root}/` : abs ? "/" : "";
+  const upto = (n: number) => head + segs.slice(0, n).join("/");
   const all: Crumb[] = segs.map((name, i) => ({ name, path: upto(i + 1) }));
   if (all.length <= keep) return all;
   const cut = all.length - keep;
@@ -98,6 +115,7 @@ export async function readLevel(
   const out = nodes.map((entry) => ({
     name: entry.path.slice(entry.path.lastIndexOf("/") + 1),
     path: `${base}/${entry.path}`,
+    rel: `${base}/${entry.path}`,
     abs: `${base}/${entry.path}`,
     kind: entry.dir ? ("dir" as const) : ("file" as const),
     ...(entry.dir ? { children: [] } : {}),
@@ -112,7 +130,7 @@ export function soleTree(abs: string): { root: string; node: TreeNode } {
   const cut = abs.replace(/[/\\]+$/, "").lastIndexOf("/");
   const root = cut > 0 ? abs.slice(0, cut) : "/";
   const name = abs.slice(cut + 1);
-  return { root, node: { name, path: name, abs, kind: "file" } };
+  return { root, node: { name, path: abs, rel: name, abs, kind: "file" } };
 }
 
 // 走査へ渡す、拡張子だけの粗いふるい。only があればその拡張子だけ、skip が
@@ -187,10 +205,12 @@ export function nestEntries(entries: ScanEntry[], rootAbs: string): TreeNode[] {
   const dirs = new Map<string, TreeNode>();
   for (const entry of entries) {
     const cut = entry.path.lastIndexOf("/");
+    const abs = `${rootAbs}/${entry.path}`;
     const node: TreeNode = {
       name: entry.path.slice(cut + 1),
-      path: entry.path,
-      abs: `${rootAbs}/${entry.path}`,
+      path: abs,
+      rel: entry.path,
+      abs,
       kind: entry.dir ? "dir" : "file",
       // 空フォルダも表示する（新規作成フォルダや構成用フォルダのため）
       ...(entry.dir ? { children: [] } : {}),
@@ -224,7 +244,7 @@ export function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
     if (n.kind === "file") {
       if (
         n.name.toLowerCase().includes(lower) ||
-        n.path.toLowerCase().includes(lower)
+        n.rel.toLowerCase().includes(lower)
       )
         out.push(n);
     } else if (n.children) {
@@ -235,7 +255,7 @@ export function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
   return out;
 }
 
-// 相対パスで 1 つ引く。
+// パスで 1 つ引く。
 export function findNode(nodes: TreeNode[], path: string): TreeNode | null {
   for (const n of nodes) {
     if (n.path === path) return n;
@@ -247,16 +267,21 @@ export function findNode(nodes: TreeNode[], path: string): TreeNode | null {
   return null;
 }
 
-// フォルダの中身。空文字はルートを指す。フォルダ以外を渡したら空。
-export function childrenAt(nodes: TreeNode[], dirPath: string): TreeNode[] {
-  if (!dirPath) return nodes;
+// フォルダの中身。空文字か根そのものなら最上段。フォルダ以外を渡したら空。
+export function childrenAt(nodes: TreeNode[], dirPath: string, root?: string | null): TreeNode[] {
+  if (!dirPath || dirPath === root) return nodes;
   const node = findNode(nodes, dirPath);
   if (!node || node.kind !== "dir") return [];
   return node.children ?? [];
 }
 
 // 祖先のパスを浅い方から並べる。自分自身は含めない。
-export function ancestorPaths(path: string): string[] {
+// root を渡すと、根より下のフォルダだけを絶対パスで返す（根の外なら空）。
+export function ancestorPaths(path: string, root?: string | null): string[] {
+  if (root) {
+    if (!path.startsWith(`${root}/`)) return [];
+    return ancestorPaths(path.slice(root.length + 1)).map((dir) => `${root}/${dir}`);
+  }
   const segs = path.split("/").filter(Boolean);
   const out: string[] = [];
   for (let i = 1; i < segs.length; i++) out.push(segs.slice(0, i).join("/"));
@@ -307,7 +332,7 @@ export async function pathExists(abs: string): Promise<boolean> {
   }
 }
 
-// フォルダ配下の Markdown の更新時刻。走査は Rust 側で完結し、1 回の呼び出しで
+// フォルダ配下の Markdown の更新時刻（鍵は絶対パス）。走査は Rust 側で完結し、1 回の呼び出しで
 // 全部返る。ファイルごとに stat を投げると、数百ファイルで往復が積み上がる。
 export async function folderMtimes(
   rootAbs: string,
@@ -317,7 +342,7 @@ export async function folderMtimes(
     root: rootAbs,
     ignore,
   });
-  return new Map(list.map((f) => [f.path, f.mtime]));
+  return new Map(list.map((f) => [`${rootAbs}/${f.path}`, f.mtime]));
 }
 
 // フォルダを見張る。合図は間合いの分だけまとめて、外したもの（ignore）の

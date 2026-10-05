@@ -27,13 +27,15 @@ interface DirNode {
 
 // ファイル別ヒット（パス昇順）からディレクトリ階層ツリーを構築する。
 // 単一ディレクトリの連鎖は "a/b/c" のように 1 ノードへ畳む（VS Code 風）。
+// 階層は label の返す道筋（根からの相対など）で組む。ファイルの path は元のまま。
 export function buildSearchTree(
   files: FileHits[],
   baseOffsets: number[],
+  label: (path: string) => string = (path) => path,
 ): SearchTreeNode[] {
   const root: DirNode = { type: "dir", name: "", path: "", children: [], count: 0 };
   files.forEach((f, fi) => {
-    const segs = f.path.split("/");
+    const segs = label(f.path).split("/");
     let cur = root;
     for (let i = 0; i < segs.length - 1; i++) {
       const p = segs.slice(0, i + 1).join("/");

@@ -46,14 +46,16 @@ beforeAll(() => {
 const file = (name: string, at = ""): TreeNode => ({
   kind: "file",
   name,
-  path: at ? `${at}/${name}` : name,
+  path: `/本/${at ? `${at}/` : ""}${name}`,
+  rel: at ? `${at}/${name}` : name,
   abs: `/本/${at ? `${at}/` : ""}${name}`,
 });
 
 const dir = (name: string, children: TreeNode[]): TreeNode => ({
   kind: "dir",
   name,
-  path: name,
+  path: `/本/${name}`,
+  rel: name,
   abs: `/本/${name}`,
   children,
 });
@@ -84,8 +86,9 @@ const adders = (el: HTMLElement) =>
     (b.getAttribute("title") ?? "").startsWith("ルートに新規"),
   );
 
-const rowOf = (el: HTMLElement, path: string) =>
-  el.querySelector<HTMLElement>(`[data-path="${path}"]`)!;
+// 行は絶対パスで見分ける。試験では根（/本）からの相対で指す。
+const rowOf = (el: HTMLElement, rel: string) =>
+  el.querySelector<HTMLElement>(`[data-path="/本/${rel}"]`)!;
 
 // jsdom は DragEvent を持たないので、種別だけ合わせた催しを投げる。
 function held(names: string[]): DataTransfer {
@@ -128,7 +131,7 @@ describe("外から落とされたもの", () => {
     await act(async () => {
       fire(rowOf(el, "資料"), "drop", held(["a.md"]));
     });
-    expect(brought).toEqual([{ dest: "資料", rels: ["a.md"] }]);
+    expect(brought).toEqual([{ dest: "/本/資料", rels: ["a.md"] }]);
   });
 
   it("ファイルの行へ落とすと、その行のあるフォルダへ入る", async () => {
@@ -140,7 +143,7 @@ describe("外から落とされたもの", () => {
     await act(async () => {
       fire(rowOf(el, "資料/表紙.md"), "drop", held(["a.md"]));
     });
-    expect(brought).toEqual([{ dest: "資料", rels: ["a.md"] }]);
+    expect(brought).toEqual([{ dest: "/本/資料", rels: ["a.md"] }]);
   });
 
   it("行の外へ落とすと、根へ入る", async () => {
@@ -148,7 +151,7 @@ describe("外から落とされたもの", () => {
     await act(async () => {
       fire(rowOf(el, "読み物.md").parentElement!, "drop", held(["a.md"]));
     });
-    expect(brought).toEqual([{ dest: "", rels: ["a.md"] }]);
+    expect(brought).toEqual([{ dest: "/本", rels: ["a.md"] }]);
   });
 
   it("1 件も読めなければ、黙って終わらせない", async () => {
@@ -174,12 +177,12 @@ describe("掴んだまま留まったフォルダ", () => {
     vi.useFakeTimers();
     try {
       const el = show(null, [dir("資料", [file("表紙.md", "資料")])]);
-      expect(el.querySelector('[data-path="資料/表紙.md"]')).toBeNull();
+      expect(el.querySelector('[data-path="/本/資料/表紙.md"]')).toBeNull();
       fire(rowOf(el, "資料"), "dragover", held(["a.md"]));
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(el.querySelector('[data-path="資料/表紙.md"]')).not.toBeNull();
+      expect(el.querySelector('[data-path="/本/資料/表紙.md"]')).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -211,7 +214,7 @@ describe("行に焦点があるときの打鍵", () => {
     expect(document.activeElement).toBe(input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, 2]);
     // 開け閉めはしない。
-    expect(el.querySelector('[data-path="資料/表紙.md"]')).toBeNull();
+    expect(el.querySelector('[data-path="/本/資料/表紙.md"]')).toBeNull();
   });
 
   it("Escape でやめると、焦点が行へ戻る", async () => {

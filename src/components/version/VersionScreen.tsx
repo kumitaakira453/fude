@@ -6,6 +6,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { splitBlocks } from "../../lib/blocks";
 import { fontStack } from "../../lib/fonts";
 import { parseFrontmatter } from "../../lib/frontmatter";
+import { relativeTo } from "../../lib/fsAccess";
 import { readVersion, restoreVersion, type ReviewVersion } from "../../lib/review";
 import { lineDiff } from "../../lib/lineDiff";
 import { WIDTH_CLASS } from "../../lib/ui";
@@ -62,9 +63,10 @@ export function VersionScreen({ path }: { path: string }) {
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
   const close = useSetAtom(versionScreenAtom);
-  const { absOf, reloadFile, resolveAsset, peekAsset } = useWorkspace();
+  const { getRootPath, reloadFile, resolveAsset, peekAsset } = useWorkspace();
 
-  const abs = absOf(path);
+  // 道筋はもともと絶対パス（台帳の鍵と同じ）。
+  const abs = path;
   const current = cache.get(path);
   const list = useMemo(() => (abs ? versionsOf(ledger, abs) : []), [ledger, abs]);
 
@@ -263,7 +265,8 @@ export function VersionScreen({ path }: { path: string }) {
     [abs, current, path, reloadFile, store],
   );
 
-  const parts = path.split("/");
+  // 見出しには根からの相対で出す。絶対パスを並べると場所の部分が長すぎる。
+  const parts = relativeTo(path, getRootPath()).split("/");
   const name = parts.pop() ?? path;
   const dir = parts.join("/");
 

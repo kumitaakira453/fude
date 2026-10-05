@@ -18,6 +18,7 @@ import {
   removePath,
   renamePath,
   soleTree,
+  absoluteIn,
   writeBytes,
   writeFile,
   type TreeNode,
@@ -54,18 +55,19 @@ import {
   resetLayout,
   reviveLayout,
   openInPane,
+  absoluteLayout,
 } from "../lib/ui";
 import * as A from "../state/atoms";
 import { syncLedger } from "../state/review";
 
-// ファイル単位のドキュメント Undo/Redo 履歴（保存＝1ステップ）。
+// ファイル単位のドキュメント Undo/Redo 履歴（保存＝1ステップ）。鍵は絶対パス。
 const contentHistory = new Map<string, { undo: string[]; redo: string[] }>();
 const HISTORY_LIMIT = 80;
-function histFor(rel: string) {
-  let h = contentHistory.get(rel);
+function histFor(path: string) {
+  let h = contentHistory.get(path);
   if (!h) {
     h = { undo: [], redo: [] };
-    contentHistory.set(rel, h);
+    contentHistory.set(path, h);
   }
   return h;
 }
@@ -75,8 +77,8 @@ function baseOf(path: string): string {
   return i === -1 ? path : path.slice(i + 1);
 }
 
-function joinRel(a: string, b: string): string {
-  return a ? `${a}/${b}` : b;
+function joinPath(dir: string, name: string): string {
+  return dir === "/" ? `/${name}` : `${dir}/${name}`;
 }
 
 // 同時に走らせる本数。落としたフォルダの中身を一度に全部投げると、
@@ -138,19 +140,13 @@ export function useWorkspace() {
     return store.get(A.activeFolderIdAtom);
   }, [store]);
 
-  const absOf = useCallback(
-    (rel: string): string | null => {
+  // そのファイルが属する根。根の外なら null。
+  const rootFor = useCallback(
+    (path: string): string | null => {
       const root = getRootPath();
-      return root ? `${root}/${rel}` : null;
+      return root && path.startsWith(`${root}/`) ? root : null;
     },
     [getRootPath],
-  );
-
-  const getFileNode = useCallback(
-    (path: string): TreeNode | null => {
-      return store.get(A.filesAtom).find((f) => f.path === path) ?? null;
-    },
-    [store],
   );
 
   // 全 md を読み込み、全文検索インデックス（生テキストのキャッシュ）を
@@ -289,6 +285,7 @@ export function useWorkspace() {
   // の順で行う。
   const applyPathRemap = useCallback(
     async (remap: (p: string | null) => string | null, moved?: [string, string]) => {
+      // 道筋はどれも絶対パス。動いた元と先も、そのまま台帳やアイコンの鍵になる。
       const cur = new Map(store.get(A.contentCacheAtom));
       for (const [k, v] of [...cur]) {
         const nk = remap(k);
@@ -307,20 +304,14 @@ export function useWorkspace() {
         moveViewpoints(moved[0], moved[1]);
         // 1 枚だけ開いているなら、その 1 枚が動いたときに指す先も連れていく。
         // 置いていくと、次に木を組み直したときに消えたファイルを指す。
+        const [from, to] = moved;
         const sole = store.get(A.soleAtom);
-        if (sole && sole === absOf(moved[0])) {
-          const next = absOf(moved[1]);
-          if (next) store.set(A.soleAtom, next);
-        }
+        if (sole && sole === from) store.set(A.soleAtom, to);
         // 指摘と版は絶対パスで台帳に紐付いている。ここで連れていかないと、
         // 名前を変えた時点でそのファイルの指摘が引けなくなる。
-        const from = absOf(moved[0]);
-        const to = absOf(moved[1]);
-        if (from && to) {
-          void moveReviewFile(from, to).then(() => syncLedger(store));
-          // フォルダに付けたアイコンも、動いた先（と下のフォルダ）へ連れていく。
-          store.set(A.folderIconsAtom, (was) => moveFolderIcons(was, from, to));
-        }
+        void moveReviewFile(from, to).then(() => syncLedger(store));
+        // フォルダに付けたアイコンも、動いた先（と下のフォルダ）へ連れていく。
+        store.set(A.folderIconsAtom, (was) => moveFolderIcons(was, from, to));
       }
       remapLeafPaths(store, remap);
       await refreshTreeStructure();
@@ -330,7 +321,7 @@ export function useWorkspace() {
         new Map([...store.get(A.contentCacheAtom)].filter(([k]) => valid.has(k))),
       );
     },
-    [store, refreshTreeStructure, absOf],
+    [store, refreshTreeStructure],
   );
 
   const refreshFolders = useCallback(async () => {
@@ -347,13 +338,10 @@ export function useWorkspace() {
       // Markdown 以外は本文を読まない。見せ方は種類ごとの画面が持っていて、
       // 本文は要らない（画像やＰＤＦを文字として読むと化けるだけ）。
       if (kindOf(path) !== "markdown") return;
-      // ツリーがまだ無くても読めるようにする。ウィンドウを開いた直後は
+      // ツリーがまだ無くても読める（道筋は絶対パス）。ウィンドウを開いた直後は
       // フォルダ全体の走査が終わっておらず、待つと本文が出るのが遅れる。
-      const root = getRootPath();
-      const abs = getFileNode(path)?.abs ?? (root ? `${root}/${path}` : null);
-      if (!abs) return;
       try {
-        const data = await readFile(abs);
+        const data = await readFile(path);
         const content = new Map(store.get(A.contentCacheAtom));
         const mtime = new Map(store.get(A.mtimeCacheAtom));
         content.set(path, data.text);
@@ -364,7 +352,7 @@ export function useWorkspace() {
         /* noop */
       }
     },
-    [store, getFileNode, getRootPath],
+    [store],
   );
 
   const openFile = useCallback(
@@ -387,8 +375,10 @@ export function useWorkspace() {
       };
       walk(layout);
       if (paths.length === 0) return;
-      const open = new Set(store.get(A.expandedByFolderAtom)[folderId] ?? []);
-      for (const path of paths) for (const dir of ancestorPaths(path)) open.add(dir);
+      const open = new Set(
+        (store.get(A.expandedByFolderAtom)[folderId] ?? []).map((p) => absoluteIn(p, folderId)),
+      );
+      for (const path of paths) for (const dir of ancestorPaths(path, folderId)) open.add(dir);
       store.set(A.expandedByFolderAtom, (prev) => ({
         ...prev,
         [folderId]: [...open],
@@ -421,9 +411,8 @@ export function useWorkspace() {
       if (!sole || !inDrafts(sole, store.get(A.draftsDirAtom))) return false;
       // 控えが「空だと分かっている」ときだけ黙って捨てる。まだ読めていない
       // （鍵が無い）ときは分からないので問う。打った字を黙って消さない。
-      const rel = sole.split("/").pop() ?? "";
       const cache = store.get(A.contentCacheAtom);
-      if (cache.has(rel) && cache.get(rel)!.trim() === "") {
+      if (cache.has(sole) && cache.get(sole)!.trim() === "") {
         void dropDraft(sole);
         return false;
       }
@@ -466,10 +455,12 @@ export function useWorkspace() {
       // このウィンドウの控えも当てにならない（窓の名前は空いている doc-1・
       // doc-2 … を使い回すので、前に同じ名前で開いていた窓のタブが残っている）。
       // 使うと、走査の後に頼まれたファイルが前のタブで上書きされる。
-      const saved = opts.only
+      const kept = opts.only
         ? undefined
         : (store.get(A.savedLayoutsAtom)[activeId] ??
           store.get(A.sessionLayoutsAtom)[activeId]);
+      const saved = kept && { ...kept, layout: absoluteLayout(kept.layout, activeId) };
+      const file = opts.file && absoluteIn(opts.file, activeId);
       store.set(A.activeFolderIdAtom, activeId);
       resetLayout(store);
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化
@@ -480,7 +471,7 @@ export function useWorkspace() {
       store.set(A.treeAtom, []);
       store.set(A.filesAtom, []);
       // 保存レイアウトがあるとこの後それで置き換わるので、先出しは意味が無い
-      if (opts.file && !saved) openFile(opts.file);
+      if (file && !saved) openFile(file);
       switched();
       // 走査は待たない。待っているあいだ、画面はどの操作も受け付けなくなる。
       opened = refreshTree().then(() => {
@@ -530,7 +521,7 @@ export function useWorkspace() {
       store.set(A.mtimeCacheAtom, new Map());
       store.set(A.treeAtom, [node]);
       store.set(A.filesAtom, [node]);
-      openFile(node.path);
+      openFile(abs);
 
       // 実体の確かめと履歴への登録は後ろへ回す。無ければ開いた画面を畳んで
       // 履歴から落とす（先に確かめると、その往復のぶん画面が止まる）。
@@ -610,6 +601,19 @@ export function useWorkspace() {
     [],
   );
 
+  // 文書から書かれた道筋を絶対パスに解く。頭が / なら、その文書の根から。
+  // 根より上へは出ない。根の外の文書は、その文書のフォルダを根として扱う。
+  const resolveFrom = useCallback(
+    (fromDocPath: string, href: string): string | null => {
+      const root = rootFor(fromDocPath) ?? dirOf(fromDocPath);
+      if (!root) return null;
+      const rel = fromDocPath.slice(root.length + 1);
+      const inside = resolvePath(dirOf(rel), href);
+      return inside ? joinPath(root, inside) : null;
+    },
+    [rootFor],
+  );
+
   const navigate = useCallback(
     (fromDocPath: string, href: string) => {
       // 断片（#見出し）は道筋の一部ではない。付けたまま解こうとすると、
@@ -626,23 +630,20 @@ export function useWorkspace() {
       };
       const here = (at: string) => store.get(A.filesAtom).some((f) => f.path === at);
 
-      // 1. 開いているフォルダの中の道筋として解く（相対も、根からの / も）。
-      let target = resolvePath(dirOf(fromDocPath), path);
-      if (!here(target) && !/\.[a-z]+$/i.test(target)) target = `${target}.md`;
-      if (here(target)) {
-        openFile(target);
-        aim(target);
+      // 1. ファイル系の絶対パスとして見る。開いているフォルダの中ならそのまま開く。
+      if (here(path)) {
+        openFile(path);
+        aim(path);
         return;
       }
 
-      // 2. ファイル系の絶対パスとして見る。開いているフォルダの中なら、
-      //    根からの相対に落として開く。
-      const root = getRootPath();
-      if (root && path.startsWith(`${root}/`)) {
-        const inside = path.slice(root.length + 1);
-        if (here(inside)) {
-          openFile(inside);
-          aim(inside);
+      // 2. 書いたファイルの根の中の道筋として解く（相対も、根からの / も）。
+      const target = resolveFrom(fromDocPath, path);
+      if (target) {
+        const found = here(target) ? target : here(`${target}.md`) ? `${target}.md` : null;
+        if (found) {
+          openFile(found);
+          aim(found);
           return;
         }
       }
@@ -650,91 +651,77 @@ export function useWorkspace() {
       // 3. フォルダの外なら、1 枚だけ開く。
       if (path.startsWith("/")) {
         openDocRef.current?.(path);
-        aim(soleTree(path).node.path);
+        aim(path);
         return;
       }
 
       notify(store, "そのファイルは見つかりません");
     },
-    [store, openFile, getRootPath],
+    [store, openFile, resolveFrom],
   );
 
   // 相対パス資産（画像など）: キャッシュ済み blob URL を同期取得。
   const peekAsset = useCallback(
     (fromDocPath: string, src: string): string | null => {
-      const root = getRootPath();
-      if (!root) return null;
-      const full = resolvePath(dirOf(fromDocPath), src);
-      if (!full) return null;
-      return peekImageUrl(`${root}/${full}`);
+      const full = resolveFrom(fromDocPath, src);
+      return full ? peekImageUrl(full) : null;
     },
-    [getRootPath],
+    [resolveFrom],
   );
 
   // 画像を fs 経由で読み blob URL 化（非同期）。
   const resolveAsset = useCallback(
     async (fromDocPath: string, src: string): Promise<string | null> => {
-      const root = getRootPath();
-      if (!root) return null;
-      const full = resolvePath(dirOf(fromDocPath), src);
-      if (!full) return null;
-      return imageUrl(`${root}/${full}`);
+      const full = resolveFrom(fromDocPath, src);
+      return full ? imageUrl(full) : null;
     },
-    [getRootPath],
+    [resolveFrom],
   );
 
   // ---- ファイル操作（Obsidian 風の編集機能） ----
+  // 道筋はどれも絶対パス。行き先のフォルダも絶対パスで受ける。
   // 一意な名前を作る（重複時に連番）。
-  const uniqueRel = useCallback(
-    async (rel: string): Promise<string> => {
-      const abs = absOf(rel);
-      if (!abs || !(await pathExists(abs))) return rel;
-      const dir = dirOf(rel);
-      const base = baseOf(rel);
-      const dot = base.lastIndexOf(".");
-      const stem = dot > 0 ? base.slice(0, dot) : base;
-      const ext = dot > 0 ? base.slice(dot) : "";
-      for (let i = 2; i < 1000; i++) {
-        const cand = joinRel(dir, `${stem} ${i}${ext}`);
-        const a = absOf(cand);
-        if (a && !(await pathExists(a))) return cand;
-      }
-      return rel;
-    },
-    [absOf],
-  );
+  const uniquePath = useCallback(async (path: string): Promise<string> => {
+    if (!(await pathExists(path))) return path;
+    const dir = dirOf(path);
+    const base = baseOf(path);
+    const dot = base.lastIndexOf(".");
+    const stem = dot > 0 ? base.slice(0, dot) : base;
+    const ext = dot > 0 ? base.slice(dot) : "";
+    for (let i = 2; i < 1000; i++) {
+      const cand = joinPath(dir, `${stem} ${i}${ext}`);
+      if (!(await pathExists(cand))) return cand;
+    }
+    return path;
+  }, []);
 
   const createFile = useCallback(
-    async (parentRel: string, name: string) => {
+    async (parentDir: string, name: string) => {
       let fileName = name.trim();
       if (!fileName) return;
       if (!/\.[a-z0-9]+$/i.test(fileName)) fileName += ".md";
-      const rel = await uniqueRel(joinRel(parentRel, fileName));
-      const abs = absOf(rel);
-      if (!abs) return;
+      const path = await uniquePath(joinPath(parentDir, fileName));
       // 中身は空で作る。名前を見出しとして入れると、要らない人は毎回消すことになる。
-      await writeFile(abs, "");
+      await writeFile(path, "");
       const content = new Map(store.get(A.contentCacheAtom));
-      content.set(rel, "");
+      content.set(path, "");
       store.set(A.contentCacheAtom, content);
       await refreshTreeStructure();
-      store.set(A.freshFileAtom, rel);
-      openFile(rel);
+      store.set(A.freshFileAtom, path);
+      openFile(path);
     },
-    [absOf, uniqueRel, refreshTreeStructure, openFile, store],
+    [uniquePath, refreshTreeStructure, openFile, store],
   );
 
   const createFolder = useCallback(
-    async (parentRel: string, name: string) => {
+    async (parentDir: string, name: string) => {
       const n = name.trim();
       if (!n) return;
-      const rel = await uniqueRel(joinRel(parentRel, n));
-      const abs = absOf(rel);
-      if (!abs) return;
-      await createDir(abs);
+      const path = await uniquePath(joinPath(parentDir, n));
+      await createDir(path);
       await refreshTreeStructure();
     },
-    [absOf, uniqueRel, refreshTreeStructure],
+    [uniquePath, refreshTreeStructure],
   );
 
   // 名前が変わったときの写像。そのファイルと、その下に居るものを付け替える。
@@ -756,54 +743,46 @@ export function useWorkspace() {
 
   const renameEntry = useCallback(
     // 名前を変えた後の道筋を返す。変えなかったときは元の道筋。
-    async (rel: string, newName: string, isDir: boolean): Promise<string> => {
+    async (path: string, newName: string, isDir: boolean): Promise<string> => {
       const trimmed = newName.trim();
-      if (!trimmed) return rel;
+      if (!trimmed) return path;
       let base = trimmed;
       if (!isDir && !/\.[a-z0-9]+$/i.test(base)) base += ".md";
-      const newRel = joinRel(dirOf(rel), base);
-      if (newRel === rel) return rel;
-      const oldAbs = absOf(rel);
-      const newAbs = absOf(newRel);
-      if (!oldAbs || !newAbs) return rel;
-      await renamePath(oldAbs, newAbs);
-      await applyPathRemap(remapper(rel, newRel), [rel, newRel]);
-      return newRel;
+      const next = joinPath(dirOf(path), base);
+      if (next === path) return path;
+      await renamePath(path, next);
+      await applyPathRemap(remapper(path, next), [path, next]);
+      return next;
     },
-    [absOf, applyPathRemap],
+    [applyPathRemap],
   );
 
   const deleteEntry = useCallback(
-    async (rel: string, isDir: boolean) => {
-      const abs = absOf(rel);
-      if (!abs) return;
-      await removePath(abs, isDir);
-      if (isDir) store.set(A.folderIconsAtom, (was) => dropFolderIcons(was, abs));
+    async (path: string, isDir: boolean) => {
+      await removePath(path, isDir);
+      if (isDir) store.set(A.folderIconsAtom, (was) => dropFolderIcons(was, path));
       const gone = (p: string | null) =>
-        p === rel || (p && p.startsWith(rel + "/")) ? null : p;
+        p === path || (p && p.startsWith(path + "/")) ? null : p;
       remapLeafPaths(store, gone);
       remapCache((p) => gone(p) ?? null);
       await refreshTreeStructure();
     },
-    [absOf, store, refreshTreeStructure, remapCache],
+    [store, refreshTreeStructure, remapCache],
   );
 
   const moveEntry = useCallback(
-    async (rel: string, destDirRel: string) => {
+    async (path: string, destDir: string) => {
       if (
-        rel === destDirRel ||
-        destDirRel.startsWith(rel + "/") ||
-        dirOf(rel) === destDirRel
+        path === destDir ||
+        destDir.startsWith(path + "/") ||
+        dirOf(path) === destDir
       )
         return;
-      const newRel = await uniqueRel(joinRel(destDirRel, baseOf(rel)));
-      const oldAbs = absOf(rel);
-      const newAbs = absOf(newRel);
-      if (!oldAbs || !newAbs) return;
-      await renamePath(oldAbs, newAbs);
-      await applyPathRemap(remapper(rel, newRel), [rel, newRel]);
+      const next = await uniquePath(joinPath(destDir, baseOf(path)));
+      await renamePath(path, next);
+      await applyPathRemap(remapper(path, next), [path, next]);
     },
-    [absOf, uniqueRel, applyPathRemap],
+    [uniquePath, applyPathRemap],
   );
 
   // 外から落とされたものを、フォルダの中へ写す。元は動かさない。
@@ -811,19 +790,19 @@ export function useWorkspace() {
   // 空きを採り直すのは頭の名前だけ。中まで一つずつ採ると、落としたフォルダの
   // 形が崩れる（中で重なるものは、そもそも新しい場所に入るので重ならない）。
   const intake = useCallback(
-    async (destDirRel: string, brought: Brought[]) => {
-      if (brought.length === 0 || !getRootPath()) return;
+    async (destDir: string, brought: Brought[]) => {
+      if (brought.length === 0 || !destDir) return;
 
       const heads = new Map<string, string>();
       for (const { rel } of brought) {
         const head = rel.split("/")[0];
         if (heads.has(head)) continue;
-        heads.set(head, baseOf(await uniqueRel(joinRel(destDirRel, head))));
+        heads.set(head, baseOf(await uniquePath(joinPath(destDir, head))));
       }
       const targets = brought.map(({ rel, file }) => {
         const [head, ...rest] = rel.split("/");
         return {
-          rel: joinRel(destDirRel, [heads.get(head) ?? head, ...rest].join("/")),
+          path: joinPath(destDir, [heads.get(head) ?? head, ...rest].join("/")),
           file,
         };
       });
@@ -833,18 +812,14 @@ export function useWorkspace() {
       try {
         // 場所を先に作る。浅いものから作るので、親の無いところへは書かない。
         const dirs = [
-          ...new Set(targets.map((t) => (t.file ? dirOf(t.rel) : t.rel))),
+          ...new Set(targets.map((t) => (t.file ? dirOf(t.path) : t.path))),
         ]
-          .filter((dir) => dir !== "")
+          .filter((dir) => dir !== destDir)
           .sort();
-        for (const dir of dirs) {
-          const abs = absOf(dir);
-          if (abs) await createDir(abs);
-        }
+        for (const dir of dirs) await createDir(dir);
         await inTurn(files, WRITE_AT_ONCE, async (t) => {
-          const abs = absOf(t.rel);
-          if (!abs || !t.file) return;
-          await writeBytes(abs, new Uint8Array(await t.file.arrayBuffer()));
+          if (!t.file) return;
+          await writeBytes(t.path, new Uint8Array(await t.file.arrayBuffer()));
         });
         await refreshTreeStructure();
 
@@ -852,7 +827,7 @@ export function useWorkspace() {
         // のか分からないまま終わるのがいちばん困る。
         const shown = new Set(store.get(A.filesAtom).map((f) => f.path));
         const buried =
-          files.length > 0 && !files.some((t) => shown.has(t.rel));
+          files.length > 0 && !files.some((t) => shown.has(t.path));
         settle(
           store,
           at,
@@ -868,64 +843,62 @@ export function useWorkspace() {
         });
       }
     },
-    [getRootPath, absOf, uniqueRel, refreshTreeStructure, store],
+    [uniquePath, refreshTreeStructure, store],
   );
 
   // 履歴を積まずにキャッシュ＋ディスクへ書く（undo/redo の実体）。
   const writeContent = useCallback(
-    async (rel: string, text: string) => {
-      const abs = absOf(rel);
-      if (!abs) return;
+    async (path: string, text: string) => {
       // 先にキャッシュを更新（楽観的）＝ UI を即反映し、ブロック削除時に一瞬
       // 元内容が再表示される「がくっ」を防ぐ。書き込みは後追い。
       const content = new Map(store.get(A.contentCacheAtom));
-      content.set(rel, text);
+      content.set(path, text);
       store.set(A.contentCacheAtom, content);
-      await writeFile(abs, text);
+      await writeFile(path, text);
     },
-    [absOf, store],
+    [store],
   );
 
   // checkpoint: 文書全体の Undo に 1 段積むか。自動保存は積まない
   // （0.5 秒ごとに 1 段になると、⌘Z が実質使えなくなる）。
   const saveFile = useCallback(
-    async (rel: string, text: string, opts?: { checkpoint?: boolean }) => {
+    async (path: string, text: string, opts?: { checkpoint?: boolean }) => {
       if (opts?.checkpoint !== false) {
-        const prev = store.get(A.contentCacheAtom).get(rel);
+        const prev = store.get(A.contentCacheAtom).get(path);
         if (prev !== undefined && prev !== text) {
-          const h = histFor(rel);
+          const h = histFor(path);
           h.undo.push(prev);
           if (h.undo.length > HISTORY_LIMIT) h.undo.shift();
           h.redo = [];
         }
       }
-      await writeContent(rel, text);
+      await writeContent(path, text);
     },
     [store, writeContent],
   );
 
   // ドキュメント全体の Undo/Redo（編集確定後に 1 ステップ単位で巻き戻す）。
   const undoFile = useCallback(
-    async (rel: string) => {
-      const h = contentHistory.get(rel);
+    async (path: string) => {
+      const h = contentHistory.get(path);
       if (!h || h.undo.length === 0) return false;
-      const cur = store.get(A.contentCacheAtom).get(rel) ?? "";
+      const cur = store.get(A.contentCacheAtom).get(path) ?? "";
       const prev = h.undo.pop() as string;
       h.redo.push(cur);
-      await writeContent(rel, prev);
+      await writeContent(path, prev);
       return true;
     },
     [store, writeContent],
   );
 
   const redoFile = useCallback(
-    async (rel: string) => {
-      const h = contentHistory.get(rel);
+    async (path: string) => {
+      const h = contentHistory.get(path);
       if (!h || h.redo.length === 0) return false;
-      const cur = store.get(A.contentCacheAtom).get(rel) ?? "";
+      const cur = store.get(A.contentCacheAtom).get(path) ?? "";
       const next = h.redo.pop() as string;
       h.undo.push(cur);
-      await writeContent(rel, next);
+      await writeContent(path, next);
       return true;
     },
     [store, writeContent],
@@ -933,7 +906,7 @@ export function useWorkspace() {
 
   return {
     getRootPath,
-    absOf,
+    rootFor,
     refreshFolders,
     openFolder,
     openDoc,

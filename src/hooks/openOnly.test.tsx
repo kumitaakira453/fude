@@ -74,7 +74,7 @@ describe("そのファイルだけの窓", () => {
       await r.ws().openFolder("/本", { file: "頼んだ.md", only: true });
       await new Promise((ok) => setTimeout(ok, 30));
     });
-    expect(tabs(r.store)).toEqual(["頼んだ.md"]);
+    expect(tabs(r.store)).toEqual(["/本/頼んだ.md"]);
   });
 
   it("ふつうに開くときは、控えのタブへ戻す", async () => {
@@ -83,6 +83,6 @@ describe("そのファイルだけの窓", () => {
       await r.ws().openFolder("/本");
       await new Promise((ok) => setTimeout(ok, 30));
     });
-    expect(tabs(r.store)).not.toContain("頼んだ.md");
+    expect(tabs(r.store)).not.toContain("/本/頼んだ.md");
   });
 });

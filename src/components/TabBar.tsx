@@ -9,7 +9,7 @@ import {
   setDragPayload,
 } from "../lib/dnd";
 import { setDragChip } from "../lib/dragImage";
-import { findNode, listName, type TreeNode } from "../lib/fsAccess";
+import { findNode, listName, relativeTo, type TreeNode } from "../lib/fsAccess";
 import {
   activateTab,
   closeAll,
@@ -58,11 +58,11 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   const nodeFor = (path: string): TreeNode => {
     const hit = findNode(tree, path);
     if (hit) return hit;
-    const root = getRootPath();
     return {
       name: path.split("/").pop() ?? path,
       path,
-      abs: root ? `${root}/${path}` : path,
+      rel: relativeTo(path, getRootPath()),
+      abs: path,
       kind: "file",
     };
   };

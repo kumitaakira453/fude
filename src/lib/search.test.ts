@@ -11,6 +11,7 @@ import {
 const file = (path: string): TreeNode => ({
   name: path.split("/").pop() ?? path,
   path,
+  rel: path,
   abs: `/root/${path}`,
   kind: "file",
 });

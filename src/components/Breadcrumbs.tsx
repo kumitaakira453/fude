@@ -15,7 +15,12 @@ import {
 } from "../lib/fsAccess";
 import { VIEWABLE_SIEVE } from "../lib/kind";
 import { revealInTree } from "../lib/ui";
-import { activeIgnoreAtom, showOtherFilesAtom, treeAtom } from "../state/atoms";
+import {
+  activeFolderIdAtom,
+  activeIgnoreAtom,
+  showOtherFilesAtom,
+  treeAtom,
+} from "../state/atoms";
 import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
 
@@ -63,6 +68,8 @@ export function Breadcrumbs({
 }) {
   const store = useStore();
   const tree = useAtomValue(treeAtom);
+  // 木を持っているときの根。区切りは根からの相対で出す。
+  const root = useAtomValue(activeFolderIdAtom);
   const { openFile, openDoc } = useWorkspace();
   // 一覧に出すものは設定に合わせる。木と同じ見え方にする。
   const other = useAtomValue(showOtherFilesAtom);
@@ -86,15 +93,15 @@ export function Breadcrumbs({
   const ime = useImeSafeEnter();
 
   const crumbs = useMemo(
-    () => crumbsOf(path ?? "", lazy ? KEEP : Infinity),
-    [path, lazy],
+    () => crumbsOf(path ?? "", lazy ? KEEP : Infinity, lazy ? undefined : (root ?? undefined)),
+    [path, lazy, root],
   );
   const target = picker ? (crumbs[picker.index]?.path ?? "") : "";
   const here = parentPath(target);
   const roots = useMemo(() => {
     if (!picker) return [];
-    return lazy ? (level.get(here) ?? []) : childrenAt(tree, here);
-  }, [picker, lazy, level, here, tree]);
+    return lazy ? (level.get(here) ?? []) : childrenAt(tree, here, root);
+  }, [picker, lazy, level, here, tree, root]);
   const kids = useMemo(
     () => (n: TreeNode) => (lazy ? (level.get(n.path) ?? []) : (n.children ?? [])),
     [lazy, level],

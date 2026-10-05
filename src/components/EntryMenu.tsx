@@ -49,11 +49,10 @@ export function EntryMenu({
   onCloseOthers?: () => void;
   onCloseAll?: () => void;
 }) {
-  const { openInNewWindow, getRootPath, deleteEntry } = useWorkspace();
+  const { openInNewWindow, deleteEntry } = useWorkspace();
   const store = useStore();
   const { node } = menu;
-  const root = getRootPath();
-  const absPath = root ? `${root}/${node.path}` : node.path;
+  const absPath = node.path;
   // 実在するエディタだけを項目に出す（押しても無反応になるのを避ける）
   const [editors, setEditors] = useState<ExternalApp[]>([]);
   useEffect(() => {
@@ -123,7 +122,7 @@ export function EntryMenu({
     {
       icon: "content_copy",
       label: "相対パスをコピー",
-      action: () => copy(node.path),
+      action: () => copy(node.rel),
     },
     {
       icon: "file_copy",

@@ -8,8 +8,8 @@ type Store = ReturnType<typeof getDefaultStore>;
 // 自分が書き込んだ直後に読み直す。
 export const ledgerAtom = atom<Ledger>(EMPTY_LEDGER);
 
-// 未解決件数を、開いているフォルダからの相対パスで引けるようにする。
-// 台帳は絶対パスで持つが、ファイルツリーが扱うのは相対パスなのでここで揃える。
+// 未解決件数を、開いているフォルダの中のファイルごとに引けるようにする。
+// 鍵は台帳と同じ絶対パス。
 export const openCountsAtom = atom((get) => {
   const root = get(activeFolderIdAtom);
   const counts = new Map<string, number>();
@@ -17,8 +17,7 @@ export const openCountsAtom = atom((get) => {
   const prefix = `${root}/`;
   for (const thread of get(ledgerAtom).threads) {
     if (!isOpen(thread) || !thread.file.startsWith(prefix)) continue;
-    const rel = thread.file.slice(prefix.length);
-    counts.set(rel, (counts.get(rel) ?? 0) + 1);
+    counts.set(thread.file, (counts.get(thread.file) ?? 0) + 1);
   }
   return counts;
 });
@@ -27,7 +26,7 @@ export const openCountsAtom = atom((get) => {
 export const reviewScreenAtom = atom(false);
 export const reviewThreadAtom = atom<string | null>(null);
 
-// 版の履歴画面。開くファイル（フォルダからの相対パス。本文キャッシュと同じ鍵）
+// 版の履歴画面。開くファイル（絶対パス。本文キャッシュと同じ鍵）
 // を入れると開く。レビュー画面と同じく本文に重ねずに別画面で出す。差分を
 // 並べて見せるので、読む画面の幅では足りない。
 export const versionScreenAtom = atom<string | null>(null);

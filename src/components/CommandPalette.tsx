@@ -125,7 +125,7 @@ export function CommandPalette() {
                 </span>
               </span>
               <span className="w-full truncate text-[11px] text-[var(--mg-muted)]">
-                {r.node.path}
+                {r.node.rel}
               </span>
             </button>
           ))}

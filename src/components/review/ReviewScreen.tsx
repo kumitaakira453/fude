@@ -22,6 +22,7 @@ import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
 import { inEditable } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
+import { relativeTo } from "../../lib/fsAccess";
 import {
   isOpen,
   readVersion,
@@ -70,18 +71,16 @@ import { Quote } from "./Quote";
 // 指摘がどのブロックのことかも並べて見せられない。
 // 本文は本文として読ませ、やり取りは横に置く。
 
-// フォルダからの相対パス。台帳は絶対パスで持っている。
-function relativeTo(root: string | null, file: string): string | null {
-  if (!root) return null;
-  const prefix = `${root}/`;
-  return file.startsWith(prefix) ? file.slice(prefix.length) : null;
+// 開いているフォルダの中のファイルなら、その道筋（本文の控えの鍵）。外なら null。
+function insideOf(root: string | null, file: string): string | null {
+  return root && file.startsWith(`${root}/`) ? file : null;
 }
 
 // 一覧と見出しに出すファイルの道筋。開いているフォルダの中なら
 // そこからの相対パス、外なら絶対パスをそのまま出す。
 // 同じ名前のファイルが別の節に何枚もあるので、名前だけでは見分けられない。
 function pathLabel(root: string | null, file: string): string {
-  return relativeTo(root, file) ?? file;
+  return relativeTo(file, root);
 }
 
 // 一覧の見出しに出す名前と場所。絶対パスを丸ごと 1 行に流すと 4 行に折り返して
@@ -186,7 +185,7 @@ export function ReviewScreen() {
     () =>
       root === null
         ? all
-        : all.filter((t) => relativeTo(root, t.file) !== null),
+        : all.filter((t) => insideOf(root, t.file) !== null),
     [all, root],
   );
   const elsewhere = all.length - inFolder.length;
@@ -380,8 +379,8 @@ export function ReviewScreen() {
       new Promise<void>((done) => requestAnimationFrame(() => done()));
     void (async () => {
       for (const [file, list] of groups) {
-        const rel = relativeTo(root, file);
-        const raw = rel === null ? undefined : cacheRef.current.get(rel);
+        const key = insideOf(root, file);
+        const raw = key === null ? undefined : cacheRef.current.get(key);
         if (raw !== undefined) {
           const { body } = parseFrontmatter(raw);
           // 本文がファイルの何行目から始まるか（フロントマターの行数）。
@@ -716,7 +715,8 @@ function ThreadDetail({
   // 押すたびに本文を指摘の箇所へ戻す。
   const [focus, setFocus] = useState(0);
 
-  const rel = useMemo(() => relativeTo(root, thread.file), [root, thread.file]);
+  // 本文の控えの鍵（絶対パス）。開いているフォルダの外なら null。
+  const rel = useMemo(() => insideOf(root, thread.file), [root, thread.file]);
   const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
 
   const { body: currentBody, raw, reading } = useFileBody(rel);

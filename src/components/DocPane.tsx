@@ -147,7 +147,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const overlayOpen = settingsOpen || shortcutsOpen || paletteOpen || screenOpen;
   const store = useStore();
   const {
-    absOf,
     navigate,
     openDoc,
     resolveAsset,
@@ -301,7 +300,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     async (name: string) => {
       if (stamping.current || !path) return;
       const text = settled();
-      const abs = absOf(path);
+      const abs = path;
       if (text === null || !abs) return;
       stamping.current = true;
       try {
@@ -318,7 +317,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         stamping.current = false;
       }
     },
-    [absOf, path, settled, store],
+    [path, settled, store],
   );
 
   // 落とされた / 貼られた画像を取り込む。置き場所は設定で決めた名前の
@@ -326,7 +325,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const imageDir = useAtomValue(imageDirAtom);
   const stowImage = useCallback(
     async (incoming: Incoming): Promise<string | null> => {
-      const abs = path ? absOf(path) : null;
+      const abs = path;
       if (!abs) {
         notify(store, "画像を置く場所が決まっていません");
         return null;
@@ -338,13 +337,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         return null;
       }
     },
-    [absOf, imageDir, path, store],
+    [imageDir, path, store],
   );
 
   // 既にあるファイルを取り込む。/image の枠で選んだものと、打たれた道筋。
   const takeImage = useCallback(
     async (input: string): Promise<string | null> => {
-      const abs = path ? absOf(path) : null;
+      const abs = path;
       if (!abs) {
         notify(store, "画像を置く場所が決まっていません");
         return null;
@@ -361,7 +360,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         return null;
       }
     },
-    [absOf, imageDir, path, store],
+    [imageDir, path, store],
   );
 
   // 本文の道筋が指す画像を写し取る。読むときと同じ経路で解く。
@@ -399,7 +398,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const canCopy = !!path && kind !== "image" && kind !== "pdf";
   const copyAll = useCallback(async () => {
     if (!path) return;
-    const abs = absOf(path);
+    const abs = path;
     // 書きかけを先に流してから読む。それ以外はファイルから読む。
     const text = isDoc ? settled() : abs ? await readText(abs).catch(() => null) : null;
     if (text === null) {
@@ -407,7 +406,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       return;
     }
     notify(store, (await copyText(text)) ? "全文をコピーしました" : "コピーできませんでした");
-  }, [absOf, isDoc, path, settled, store]);
+  }, [isDoc, path, settled, store]);
 
   // 読む面の見た目のまま、1 枚の HTML にして渡す。組み直さず、いま組まれて
   // いるものを写す（本文の組版は組む DOM 自体を変える）。
@@ -679,7 +678,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   }, [isActive, overlayOpen, path, undoFile, redoFile, store]);
 
   const { data, body, broken } = useMemo(() => parseFrontmatter(raw ?? ""), [raw]);
-  const absPath = useMemo(() => (path ? absOf(path) : null), [path, absOf]);
+  // 道筋はもともと絶対パス。
+  const absPath = path;
   // 横の欄で片付いた指摘まで出しているか。出すと決めたときだけ、その居場所を
   // 引かせる（解決済みは溜まる一方で、1 件ごとに基準版の読み込みと差分が要る）。
   // コメント欄の絞り込み。既定は「未対応」——読み返して手を付けるものだけが残る。
@@ -1346,7 +1346,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 見出しの外の塗は、その塗を含む節を指す（md には見出しにしか id が無い）。
   const copyLink = useCallback(
     async (section: Section | null) => {
-      const abs = path ? absOf(path) : null;
+      const abs = path;
       if (!abs) return;
       const label = section?.text || displayName(path ?? "");
       const link = `[${label}](${section ? `${abs}#${section.id}` : abs})`;
@@ -1356,7 +1356,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       }
       notify(store, `「${label}」へのリンクを写しました`);
     },
-    [absOf, path, store],
+    [path, store],
   );
 
   // 道筋つきのリンクで開かれたとき。自分のファイルの分だけ拾う。

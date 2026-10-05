@@ -2,6 +2,7 @@ import { createStore } from "jotai";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as A from "../state/atoms";
 import {
+  absoluteLayout,
   activateTab,
   closeAll,
   closeOthers,
@@ -419,5 +420,27 @@ describe("ツリーで出す合図", () => {
   it("名前の変更に入る印はそのまま渡る", () => {
     markInTree(store, "a/b.md", { edit: true });
     expect(store.get(A.revealInTreeAtom)?.edit).toBe(true);
+  });
+});
+
+describe("控えのレイアウトを絶対パスに読み替える", () => {
+  it("根からの相対で控えたタブは根を足し、絶対パスのものはそのまま", () => {
+    const stored = {
+      kind: "split" as const,
+      id: "s1",
+      dir: "row" as const,
+      sizes: [0.5, 0.5],
+      children: [
+        { kind: "leaf" as const, id: "p1", tabs: ["a.md", "/外/b.md"], active: 1 },
+        { kind: "leaf" as const, id: "p2", path: "c/d.md" },
+      ],
+    };
+    expect(absoluteLayout(stored, "/根")).toEqual({
+      ...stored,
+      children: [
+        { kind: "leaf", id: "p1", tabs: ["/根/a.md", "/外/b.md"], active: 1 },
+        { kind: "leaf", id: "p2", path: "/根/c/d.md" },
+      ],
+    });
   });
 });

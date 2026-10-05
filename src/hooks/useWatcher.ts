@@ -20,10 +20,10 @@ function renamedPair(event: WatchEvent, root: string): [string, string] | null {
   if (!mod || mod.kind !== "rename" || mod.mode !== "both") return null;
   if (event.paths.length !== 2) return null;
   const [from, to] = event.paths;
-  if (!from.startsWith(root) || !to.startsWith(root)) return null;
+  if (!from.startsWith(`${root}/`) || !to.startsWith(`${root}/`)) return null;
   // 本文かフォルダのときだけ。画像などの付け替えは開いているタブに関わらない。
   if (!isMarkdown(to) && /\.[a-z0-9]+$/i.test(to)) return null;
-  return [from.slice(root.length + 1), to.slice(root.length + 1)];
+  return [from, to];
 }
 
 // そのパスが消えた合図か（消滅、または名前の変更の「古い方」）。
@@ -94,23 +94,22 @@ export function useWatcher() {
         if (sole && !event.paths.includes(sole)) continue;
         const gone = vanished(event);
         for (const abs of event.paths) {
-          if (!abs.startsWith(root)) continue;
-          const rel = abs.slice(root.length + 1);
-          if (isMarkdown(rel)) {
+          if (!abs.startsWith(`${root}/`)) continue;
+          if (isMarkdown(abs)) {
             // 触られた時刻を今にしておく。クイックオープンの並び順が、
             // 外から書き換わった分（エージェントの編集など）も追いかける。
-            touched.set(rel, Date.now());
+            touched.set(abs, Date.now());
             // 消えた合図なら読み直しても意味が無い。木を取り直して、
             // 現れた名前と組にできるか見る。
-            if (!gone && known.has(rel)) void reloadFile(rel);
+            if (!gone && known.has(abs)) void reloadFile(abs);
             else structural = true;
-          } else if (kindOf(rel) !== "other") {
+          } else if (kindOf(abs) !== "other") {
             // 画像はキャッシュを捨てて取り直させる。HTML・PDF・字のファイルは
             // 描いている器が中身を抱えているので、版を上げて貼り直す。
-            if (isImage(rel)) invalidateImage(abs);
+            if (isImage(abs)) invalidateImage(abs);
             assetChanged = true;
             // 一覧に並べているのに木がまだ知らない名前なら、並べ直す。
-            if (shown && (gone || !known.has(rel))) structural = true;
+            if (shown && (gone || !known.has(abs))) structural = true;
           } else {
             structural = true; // ディレクトリ変化など
           }

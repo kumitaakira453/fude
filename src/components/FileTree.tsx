@@ -17,6 +17,7 @@ import { bringIn, INTAKE_LIMIT } from "../lib/intake";
 import { makeSpring } from "../lib/spring";
 import { dirOf } from "../lib/paths";
 import {
+  absoluteIn,
   ancestorPaths,
   listName,
   filterTree,
@@ -45,7 +46,7 @@ const hasFiles = (data: DataTransfer): boolean =>
   data.types.includes("Files");
 
 interface Creating {
-  parentPath: string;
+  parentPath: string; // 作る先のフォルダ（絶対パス）。根に作るときは根そのもの
   kind: "file" | "dir";
 }
 
@@ -69,7 +70,7 @@ interface ItemCtx {
   commitCreate: (name: string) => void;
   cancelCreate: () => void;
   dragOverPath: string | null;
-  // 入れる先を印す。"" は根、null は外れたとき。
+  // 入れる先を印す。根そのものなら根、null は外れたとき。
   markOver: (dest: string | null) => void;
   // 畳んだフォルダの上に留まったら開く（掴んだまま奥へ降りられる）。
   springOver: (path: string | null) => void;
@@ -455,23 +456,32 @@ export function FileTree() {
     setExpandedByFolder((prev) => ({ ...prev, [activeFolderId]: [] }));
   }, [activeFolderId, tree, expandedByFolder, setExpandedByFolder]);
 
+  // 根からの相対で控えていた頃の分も、絶対パスに読み替えて使う。
   const expanded = useMemo(
     () =>
-      new Set(activeFolderId ? (expandedByFolder[activeFolderId] ?? []) : []),
+      new Set(
+        activeFolderId
+          ? (expandedByFolder[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId))
+          : [],
+      ),
     [expandedByFolder, activeFolderId],
   );
 
-  // 入れる先の印。行に当たっていれば行を、枠に当たっていれば根を光らせる。
-  const markOver = useCallback((dest: string | null) => {
-    setDragOverPath(dest || null);
-    setRootDragOver(dest === "");
-  }, []);
+  // 入れる先の印。行に当たっていれば行を、枠（根）に当たっていれば根を光らせる。
+  const markOver = useCallback(
+    (dest: string | null) => {
+      const atRoot = dest !== null && dest === activeFolderId;
+      setDragOverPath(atRoot ? null : dest);
+      setRootDragOver(atRoot);
+    },
+    [activeFolderId],
+  );
 
   const setExpandedOpen = useCallback(
     (path: string) => {
       if (!activeFolderId) return;
       setExpandedByFolder((prev) => {
-        const set = new Set(prev[activeFolderId] ?? []);
+        const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         set.add(path);
         return { ...prev, [activeFolderId]: [...set] };
       });
@@ -521,18 +531,18 @@ export function FileTree() {
           });
           return;
         }
-        if (destDir) setExpandedOpen(destDir);
+        if (destDir !== activeFolderId) setExpandedOpen(destDir);
         await intake(destDir, brought);
       })();
     },
-    [noAdd, intake, setExpandedOpen],
+    [noAdd, intake, setExpandedOpen, activeFolderId],
   );
 
   const toggle = useCallback(
     (path: string) => {
       if (!activeFolderId) return;
       setExpandedByFolder((prev) => {
-        const set = new Set(prev[activeFolderId] ?? []);
+        const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         if (set.has(path)) set.delete(path);
         else set.add(path);
         return { ...prev, [activeFolderId]: [...set] };
@@ -547,10 +557,10 @@ export function FileTree() {
   useEffect(() => {
     if (!reveal || !activeFolderId) return;
     const target = reveal.path;
-    const ancestors = ancestorPaths(target);
+    const ancestors = ancestorPaths(target, activeFolderId);
     if (ancestors.length) {
       setExpandedByFolder((prev) => {
-        const set = new Set(prev[activeFolderId] ?? []);
+        const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         ancestors.forEach((a) => set.add(a));
         return { ...prev, [activeFolderId]: [...set] };
       });
@@ -583,10 +593,10 @@ export function FileTree() {
 
   const startCreate = useCallback(
     (parentPath: string, kind: "file" | "dir") => {
-      if (parentPath) setExpandedOpen(parentPath);
+      if (parentPath !== activeFolderId) setExpandedOpen(parentPath);
       setCreating({ parentPath, kind });
     },
-    [setExpandedOpen],
+    [setExpandedOpen, activeFolderId],
   );
 
   // 行へ焦点を戻す。入力欄から行へ戻るときは、行が描き直されるのを待つ。
@@ -693,15 +703,16 @@ export function FileTree() {
   const onRootDrop = (e: React.DragEvent) => {
     markOver(null);
     spring.stop();
+    if (!activeFolderId) return;
     if (hasFiles(e.dataTransfer)) {
       e.preventDefault();
-      onBringIn("", e.dataTransfer);
+      onBringIn(activeFolderId, e.dataTransfer);
       return;
     }
     if (!e.dataTransfer.types.includes(DND_MIME)) return;
     const payload = readDragPayload(e.dataTransfer);
     e.preventDefault();
-    if (payload && !payload.from) void moveEntry(payload.path, ""); // ルートへ移動
+    if (payload && !payload.from) void moveEntry(payload.path, activeFolderId); // ルートへ移動
   };
 
   return (
@@ -714,14 +725,14 @@ export function FileTree() {
         {!noAdd && (
           <>
             <button
-              onClick={() => startCreate("", "file")}
+              onClick={() => activeFolderId && startCreate(activeFolderId, "file")}
               title="ルートに新規ファイル"
               className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
             >
               <Icon name="note_add" size={16} />
             </button>
             <button
-              onClick={() => startCreate("", "dir")}
+              onClick={() => activeFolderId && startCreate(activeFolderId, "dir")}
               title="ルートに新規フォルダ"
               className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
             >
@@ -739,7 +750,7 @@ export function FileTree() {
           if (!outside && !e.dataTransfer.types.includes(DND_MIME)) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = outside ? "copy" : "move";
-          markOver("");
+          markOver(activeFolderId);
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) markOver(null);
@@ -750,7 +761,7 @@ export function FileTree() {
           rootDragOver ? "ring-1 ring-inset ring-[var(--mg-accent)]" : ""
         }`}
       >
-        {creating?.parentPath === "" && (
+        {creating && creating.parentPath === activeFolderId && (
           <NameInput
             initial=""
             placeholder={

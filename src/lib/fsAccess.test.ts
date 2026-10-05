@@ -14,11 +14,11 @@ import {
 // ルート直下に requirements/ と README.md、requirements の下に 2 つのフォルダ。
 function dir(path: string, children: TreeNode[]): TreeNode {
   const name = path.split("/").pop() ?? path;
-  return { name, path, abs: `/root/${path}`, kind: "dir", children };
+  return { name, path, rel: path, abs: `/root/${path}`, kind: "dir", children };
 }
 function file(path: string): TreeNode {
   const name = path.split("/").pop() ?? path;
-  return { name, path, abs: `/root/${path}`, kind: "file" };
+  return { name, path, rel: path, abs: `/root/${path}`, kind: "file" };
 }
 
 const TREE: TreeNode[] = [
@@ -141,14 +141,15 @@ describe("1 枚だけ開くときのファイル一覧", () => {
     expect(root).toBe("/Users/me/docs");
     expect(node).toEqual({
       name: "設計.md",
-      path: "設計.md",
+      path: "/Users/me/docs/設計.md",
+      rel: "設計.md",
       abs: "/Users/me/docs/設計.md",
       kind: "file",
     });
   });
 
-  it("path は root からの相対なので、そのままファイル名になる", () => {
-    expect(soleTree("/a/b/c/めも.md").node.path).toBe("めも.md");
+  it("rel は root からの相対なので、そのままファイル名になる", () => {
+    expect(soleTree("/a/b/c/めも.md").node.rel).toBe("めも.md");
   });
 
   it("root 直下のファイルでも root が消えない", () => {
