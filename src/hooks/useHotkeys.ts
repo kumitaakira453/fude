@@ -7,6 +7,7 @@ import { isJsonPath } from "../lib/jsonTree";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
+import { barAtom, barTarget, visitedAtom } from "../state/workspaceBar";
 import { reviewScreenAtom, versionScreenAtom } from "../state/review";
 
 // 入力欄以外で選択中のテキストを検索語プリフィル用に取得する。
@@ -33,7 +34,9 @@ function railRoom(panes: number): boolean {
 export function useHotkeys() {
   const store = useStore();
   // 新しいメモを作る口。効果の依存を増やさないよう控えから呼ぶ。
-  const { newDraft } = useWorkspace();
+  const { newDraft, openWorkspace } = useWorkspace();
+  const openRef = useRef(openWorkspace);
+  openRef.current = openWorkspace;
   const draft = useRef(newDraft);
   draft.current = newDraft;
 
@@ -47,6 +50,27 @@ export function useHotkeys() {
       return isJsonPath(path) ? "json" : null;
     };
     const onKey = (e: KeyboardEvent) => {
+      // ⌃Tab・⌃1〜9 はワークスペースの切り替え。⌘ とは分けて見る（⌘ の割り当てを
+      // 奪わない）。書いている最中でも効かせる（編集面はこの組を使っていない）。
+      if (e.ctrlKey && !e.metaKey && !e.altKey) {
+        const go = (id: string | undefined) => {
+          const ws = id
+            ? (store.get(A.workspacesAtom).find((w) => w.id === id) ??
+              (store.get(A.workspaceAtom)?.id === id ? store.get(A.workspaceAtom) : null))
+            : null;
+          if (ws && ws.id !== store.get(A.workspaceAtom)?.id) void openRef.current(ws);
+        };
+        if (e.key === "Tab" && !e.shiftKey) {
+          e.preventDefault();
+          go(store.get(visitedAtom)[1]);
+          return;
+        }
+        if (!e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
+          e.preventDefault();
+          go(barTarget(store.get(barAtom), Number(e.code.slice(5))));
+          return;
+        }
+      }
       const mod = e.metaKey || e.ctrlKey;
       // プレビュー（非編集）で本文を選択して Backspace/Delete を押すと、
       // WKWebView の既定動作で「戻る」が発火し、直前に見ていた別ファイルへ

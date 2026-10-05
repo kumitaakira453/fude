@@ -50,6 +50,7 @@ import {
   sameList,
   upsertWorkspace,
 } from "../state/workspace";
+import { addToBar, barAtom, visit, visitedAtom } from "../state/workspaceBar";
 import { moveReviewFile } from "../lib/review";
 import {
   draftsDir,
@@ -563,6 +564,9 @@ export function useWorkspace() {
       void bindWindow(label, next.id).catch((e: unknown) => {
         console.error("窓の控えを書けません", e);
       });
+      // ワークスペースの列の末尾に入れ、このウィンドウで開いた順に積む。
+      store.set(barAtom, (list) => addToBar(list, next.id));
+      store.set(visitedAtom, (list) => visit(list, next.id));
       enter({
         workspace: next,
         roots: next.roots,

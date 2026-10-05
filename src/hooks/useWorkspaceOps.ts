@@ -19,6 +19,7 @@ import {
 import * as A from "../state/atoms";
 import { notify, notifyBusy, settle } from "../state/toast";
 import { upsertWorkspace } from "../state/workspace";
+import { barAtom, removeFromBar } from "../state/workspaceBar";
 import { useWorkspace } from "./useWorkspace";
 
 // ワークスペースそのものの操作（作る・名前・色・根の出し入れ・消す）。
@@ -183,6 +184,7 @@ export function useWorkspaceOps() {
         return false;
       }
       store.set(A.workspacesAtom, (list) => list.filter((w) => w.id !== id));
+      store.set(barAtom, (list) => removeFromBar(list, id));
       await dropWorkspaceFile(id).catch((e: unknown) => {
         console.error("ワークスペースを消せません", e);
       });

@@ -26,6 +26,7 @@ import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
+import { WorkspaceBar } from "./components/WorkspaceBar";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { watchDragScroll } from "./lib/dragScroll";
@@ -248,6 +249,7 @@ export default function App() {
           }`}
         >
           <Toolbar />
+          <WorkspaceBar />
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
               <>
