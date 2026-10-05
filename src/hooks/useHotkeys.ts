@@ -189,8 +189,12 @@ export function useHotkeys() {
         const pane = store.get(A.panesAtom).find((p) => p.id === paneId);
         if (pane && pane.tabs.length > 0) closeTab(store, paneId, pane.active);
       } else if (mod && e.key === "/") {
+        // ⌘/: 設定のキー操作の面。開いていれば閉じる。
         e.preventDefault();
-        store.set(A.shortcutsOpenAtom, !store.get(A.shortcutsOpenAtom));
+        const showing =
+          store.get(A.settingsOpenAtom) && store.get(A.settingsFaceAtom) === "keys";
+        store.set(A.settingsFaceAtom, "keys");
+        store.set(A.settingsOpenAtom, !showing);
       } else if (mod && e.key === ",") {
         e.preventDefault();
         store.set(A.settingsOpenAtom, !store.get(A.settingsOpenAtom));
@@ -205,7 +209,6 @@ export function useHotkeys() {
         history.forward();
       } else if (e.key === "Escape") {
         store.set(A.paletteOpenAtom, false);
-        store.set(A.shortcutsOpenAtom, false);
         store.set(A.settingsOpenAtom, false);
         store.set(A.highlightAtom, null);
       }

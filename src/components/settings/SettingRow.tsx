@@ -4,32 +4,40 @@ import { useOptimisticSetting } from "../../hooks/useOptimisticSetting";
 import { ignoreLines } from "../../lib/ignore";
 import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
 import { AutoTextarea } from "../AutoTextarea";
-import { Icon } from "../Icon";
 import { TaskBox } from "../TaskBox";
 import { EXTRA_MARKS } from "../../lib/md/taskMarks";
 import type { MarksRow, SwitchRow, WordsRow } from "./rows";
 
-// 設定の 1 行。切り替えと打ち込みの 2 つだけをここで描く。
-// 見本を出して選ぶもの（テーマ・書体・幅）と、このアプリの欄は形が違うので
+// 設定の 1 行。切り替えと打ち込みと印の選択をここで描く。
+// 見本を出して選ぶもの（テーマ・書体・幅）と、面ひとつ分の部品は形が違うので
 // Settings の側が持つ。
+//
+// 行は「左に名前と説明、右に操作」。打ち込む欄や印の並びは、名前の下に置く。
+// 行ごとの絵は持たない（絵は左の面の一覧だけ。並ぶと目が散る）。
+
+export function RowName({ name, beta }: { name: string; beta?: boolean }) {
+  return (
+    <span className="mg-set-row-name">
+      {name}
+      {beta && <span className="mg-set-beta">Beta</span>}
+    </span>
+  );
+}
 
 export function Switch({ row }: { row: SwitchRow }) {
   const [stored, store] = useAtom(row.atom);
   // 押した瞬間に切り替える（反映に伴う描き直しを待たせない）。
   const [on, set] = useOptimisticSetting(stored, store);
   return (
-    <button type="button" onClick={() => set(!on)} className="mg-set-row">
-      <Icon
-        name={row.icon}
-        size={18}
-        fill={on}
-        className={on ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"}
-      />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => set(!on)}
+      className="mg-set-row"
+    >
       <span className="mg-set-row-main">
-        <span className="mg-set-row-name">
-          {row.name}
-          {row.beta && <span className="mg-set-beta">Beta</span>}
-        </span>
+        <RowName name={row.name} beta={row.beta} />
         <span className="mg-set-note">{row.note}</span>
       </span>
       <span className={`mg-switch${on ? " is-on" : ""}`}>
@@ -46,13 +54,9 @@ export function Marks({ row }: { row: MarksRow }) {
   const toggle = (ch: string) =>
     set(on.includes(ch) ? on.filter((c) => c !== ch) : [...on, ch]);
   return (
-    <div className="mg-set-drop is-boxed">
-      <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
+    <div className="mg-set-drop">
       <div className="mg-set-drop-main">
-        <span className="mg-set-row-name">
-          {row.name}
-          {row.beta && <span className="mg-set-beta">Beta</span>}
-        </span>
+        <RowName name={row.name} beta={row.beta} />
         <span className="mg-set-note">{row.note}</span>
         <div className="mg-set-marks">
           {EXTRA_MARKS.map((mark) => (
@@ -84,9 +88,8 @@ export function Words({
   const [value, set] = useAtom(row.atom);
   return (
     <div className="mg-set-drop">
-      <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
       <div className="mg-set-drop-main">
-        <span className="mg-set-row-name">{row.name}</span>
+        <RowName name={row.name} beta={row.beta} />
         <span className="mg-set-note">{row.note}</span>
       {row.lines === "many" ? (
         <AutoTextarea
@@ -148,9 +151,8 @@ export function IgnoreWords({ row }: { row: WordsRow }) {
 
   return (
     <div className="mg-set-drop">
-      <Icon name={row.icon} size={18} className="mg-set-drop-ico text-[var(--mg-muted)]" />
       <div className="mg-set-drop-main">
-        <span className="mg-set-row-name">{row.name}</span>
+        <RowName name={row.name} beta={row.beta} />
         <span className="mg-set-note">{row.note}</span>
         <div className="mg-rail-pick mg-set-sides">
           <button

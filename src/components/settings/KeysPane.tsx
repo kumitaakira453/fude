@@ -1,24 +1,11 @@
-import { useAtom } from "jotai";
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { shortcutsOpenAtom } from "../state/atoms";
-import { Icon } from "./Icon";
+import { useMemo } from "react";
 
-// キー操作の一覧。⌘/ で開く。
-// 操作のそばに常に出しておくと本文の邪魔になるので、ここに集める。
+// キー操作の一覧（設定の面のひとつ）。⌘/ でここが開く。
 //
 // 場面で分ける。同じキーが場面で別のものを指すことがある（⌘I は読むときの
 // コメントで、書いている最中は斜体）ので、混ぜると読み違える。
 
 type Face = "move" | "read" | "write" | "review" | "misc";
-
-const FACES: { id: Face; label: string; icon: string }[] = [
-  { id: "move", label: "開く・移動", icon: "swap_horiz" },
-  { id: "read", label: "読む", icon: "menu_book" },
-  { id: "write", label: "書く", icon: "edit_note" },
-  { id: "review", label: "コメントと版", icon: "rate_review" },
-  { id: "misc", label: "そのほか", icon: "more_vert" },
-];
 
 const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
   {
@@ -133,82 +120,52 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
     face: "misc",
     rows: [
       ["⌘,", "設定"],
-      ["⌘/", "この一覧"],
-      ["↑ ↓", "この一覧の面を移る"],
+      ["⌘/", "設定のキー操作（この一覧）"],
+      ["⌘F", "設定の中を探す（設定を開いているとき）"],
+      ["↑ ↓", "設定の面を移る"],
     ],
   },
 ];
 
-export function Shortcuts() {
-  const [open, setOpen] = useAtom(shortcutsOpenAtom);
-  const [face, setFace] = useState<Face>("move");
+// 打った字で絞る。キーの字か、何をするかに含むものを残す。まとまりの名前に
+// 当たったら、そのまとまりを丸ごと出す。
+export function filterKeys(query: string): typeof GROUPS {
+  const q = query.trim().toLowerCase();
+  if (!q) return GROUPS;
+  const hit = (text: string) =>
+    q.split(/\s+/).every((word) => text.toLowerCase().includes(word));
+  return GROUPS.flatMap((g) => {
+    if (hit(g.title)) return [g];
+    const rows = g.rows.filter(([key, what]) => hit(`${key} ${what}`));
+    return rows.length ? [{ ...g, rows }] : [];
+  });
+}
 
-  // 探しにくる場所なので、開くたびに先頭の面から。
-  useEffect(() => {
-    if (open) setFace("move");
-  }, [open]);
+// 絞り込みが当てるための言葉（面の行の別名に入れる）。
+export const KEY_WORDS: string[] = GROUPS.flatMap((g) => [g.title, ...g.rows.map(([, what]) => what)]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-      // 面は上下で移る。
-      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-      e.preventDefault();
-      const at = FACES.findIndex((f) => f.id === face);
-      const step = e.key === "ArrowDown" ? 1 : FACES.length - 1;
-      setFace(FACES[(at + step) % FACES.length].id);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, setOpen, face]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div className="mg-keys-back" onClick={() => setOpen(false)}>
-      <div className="mg-keys" onClick={(e) => e.stopPropagation()}>
-        <nav className="mg-set-tabs">
-          {FACES.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFace(f.id)}
-              className={`mg-set-tab${f.id === face ? " is-on" : ""}`}
-            >
-              <Icon name={f.icon} size={16} />
-              {f.label}
-            </button>
-          ))}
-        </nav>
-        <div className="mg-keys-main">
-          <div className="mg-keys-head">
-            <span className="mg-keys-title">キー操作</span>
-            <button
-              type="button"
-              className="mg-set-close"
-              onClick={() => setOpen(false)}
-              title="閉じる（Esc）"
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
-          <div className="mg-keys-body">
-            {GROUPS.filter((group) => group.face === face).map((group) => (
-              <section key={group.title}>
-                <h3>{group.title}</h3>
-                {group.rows.map(([key, label]) => (
-                  <div key={key + label} className="mg-keys-row">
-                    <kbd>{key}</kbd>
-                    <span>{label}</span>
-                  </div>
-                ))}
-              </section>
+export function KeysPane({ query = "" }: { query?: string }) {
+  const groups = useMemo(() => filterKeys(query), [query]);
+  if (groups.length === 0) {
+    return <p className="mg-set-none">「{query}」に当たるキー操作はありません</p>;
+  }
+  return (
+    <>
+      {groups.map((g) => (
+        <section key={g.title} className="mg-set-group">
+          <h3 className="mg-set-group-title">{g.title}</h3>
+          <div className="mg-set-card">
+            {g.rows.map(([key, what]) => (
+              <div key={`${key} ${what}`} className="mg-set-row is-static mg-set-key">
+                <span className="mg-set-row-main">
+                  <span className="mg-set-key-what">{what}</span>
+                </span>
+                <kbd className="mg-set-kbd">{key}</kbd>
+              </div>
             ))}
           </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </section>
+      ))}
+    </>
   );
 }

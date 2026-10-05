@@ -56,6 +56,10 @@ export const PHASE_LABEL: Record<Phase, string> = {
 // 書いたファイルのうち、ワークスペースを作るときにタブとして開くもの。
 export const FIRST_TABS = 10;
 
+export async function claudeBinPath(): Promise<string | null> {
+  return invoke<string | null>("claude_bin_path");
+}
+
 export async function claudeSessions(): Promise<ClaudeSession[]> {
   return invoke<ClaudeSession[]>("claude_sessions");
 }

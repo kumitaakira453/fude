@@ -26,6 +26,7 @@ import {
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { refreshWorkspaces } from "../state/workspace";
 import { FolderChooser, type ChooseMode } from "./FolderChooser";
+import { ClaudeMark } from "./ClaudeMark";
 import { Icon } from "./Icon";
 
 // ワークスペースを切り替える一覧（⌘⇧P）。最後に開いた順に並び、打てば絞り込む。
@@ -406,6 +407,7 @@ export function WorkspaceSwitcher() {
           {claudeOn && (
             <div className="mt-1 border-t border-[var(--mg-border)] pt-1">
               <div className="flex items-center gap-1.5 px-4 py-1 text-[10.5px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
+                <ClaudeMark size={12} />
                 Claude のセッション
                 <span className="mg-set-beta">Beta</span>
               </div>
@@ -511,7 +513,7 @@ function SessionRow({
       title="このセッションからワークスペースを作る"
       className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 ${active ? "bg-[var(--mg-accent-soft)]" : ""}`}
     >
-      <Icon name="smart_toy" size={16} className="shrink-0 text-[var(--mg-muted)]" />
+      <ClaudeMark size={15} className="text-[var(--mg-muted)]" />
       <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--mg-fg)]">
         {session.name || session.sessionId.slice(0, 8)}
       </span>

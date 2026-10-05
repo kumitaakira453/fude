@@ -2,7 +2,6 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Settings } from "./components/Settings";
-import { Shortcuts } from "./components/Shortcuts";
 import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
 import { Sidebar } from "./components/Sidebar";
@@ -278,13 +277,13 @@ export default function App() {
             <PaneGroup />
           </div>
           <CommandPalette />
-          <Shortcuts />
-          <Settings />
         </div>
       )}
 
       {/* スタート画面からも切り替えられるよう、どちらの画面でも出せる位置に置く。 */}
       <WorkspaceSwitcher />
+      {/* 設定はウィンドウ全体を覆う画面。スタート画面からも開ける。 */}
+      <Settings />
 
       {/* バージョンの履歴は専用画面。前と後を並べるので、読む画面の幅には
           収まらない。隠しているあいだも同じファイルを持ち続ける（閉じた

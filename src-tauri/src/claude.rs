@@ -108,6 +108,16 @@ fn transcript_of(claude_dir: &Path, session_id: &str) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+// 見つけた claude コマンドの場所。見つからなければ None。設定の画面が、
+// 読めているかを見せるのに使う。
+#[tauri::command]
+pub async fn claude_bin_path() -> Option<String> {
+    tauri::async_runtime::spawn_blocking(|| claude_bin().map(|p| p.to_string_lossy().into_owned()))
+        .await
+        .ok()
+        .flatten()
+}
+
 #[tauri::command]
 pub async fn claude_sessions() -> Result<Vec<Session>, String> {
     tauri::async_runtime::spawn_blocking(|| {

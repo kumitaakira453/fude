@@ -16,6 +16,7 @@ import {
 } from "../state/atoms";
 import { dropWorkspaceSave } from "../state/workspace";
 import { PHASE_COLOR, phaseForAtom, seenTab } from "../state/claude";
+import { ClaudeMark } from "./ClaudeMark";
 import { Icon } from "./Icon";
 
 // Claude のセッションに結びついたワークスペースの、サイドバーの欄（ベータ）。
@@ -104,6 +105,7 @@ export function ClaudeFiles() {
           size={16}
           className={`transition-transform ${open ? "rotate-90" : ""}`}
         />
+        <ClaudeMark size={12} className="mr-0.5" />
         このセッションが書いたファイル
         {phase && (
           <span className="ml-auto flex items-center gap-1 normal-case tracking-normal">

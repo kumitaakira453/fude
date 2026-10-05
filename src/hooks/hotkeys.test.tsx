@@ -10,6 +10,8 @@ import {
   layoutAtom,
   metaOpenAtom,
   railAtom,
+  settingsFaceAtom,
+  settingsOpenAtom,
 } from "../state/atoms";
 import { useHotkeys } from "./useHotkeys";
 
@@ -182,5 +184,16 @@ describe("⌘⇧V（JSON）", () => {
     expect(store.get(csvViewAtom)).toBe("rainbow");
     press("V", { shift: true });
     expect(store.get(jsonViewAtom)).toBe("tree");
+  });
+});
+
+describe("⌘/", () => {
+  it("設定のキー操作の面を開き、もう一度で閉じる", () => {
+    const store = rig();
+    press("/");
+    expect(store.get(settingsOpenAtom)).toBe(true);
+    expect(store.get(settingsFaceAtom)).toBe("keys");
+    press("/");
+    expect(store.get(settingsOpenAtom)).toBe(false);
   });
 });

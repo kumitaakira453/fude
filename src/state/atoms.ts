@@ -313,10 +313,12 @@ export const revealInTreeAtom = atom<{
 export const treeFilterAtom = atom<string>("");
 export const sidebarTabAtom = atom<"files" | "search">("files");
 export const paletteOpenAtom = atom<boolean>(false);
-// ⌘/ で開くキー操作の一覧
-export const shortcutsOpenAtom = atom<boolean>(false);
-// ⌘, で開く表示設定
+// ⌘, で開く設定（⌘/ はその中のキー操作の面）
 export const settingsOpenAtom = atom<boolean>(false);
+// 設定で開いている面。
+export const settingsFaceAtom = atom<
+  "look" | "write" | "files" | "workspaces" | "claude" | "keys" | "app"
+>("look");
 // ⌘⇧M で開くメタ情報の小窓。開いているペインの id を持つ。
 export const metaOpenAtom = atom<string | null>(null);
 

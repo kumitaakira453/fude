@@ -2,27 +2,63 @@
 import { createStore, Provider } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Workspace } from "../lib/workspaces";
 import {
-  activeFolderIdAtom,
-  folderIgnoresAtom,
-  ignoreAtom,
+  claudeLinkAtom,
   imageDirAtom,
   liveEditAtom,
+  settingsFaceAtom,
   settingsOpenAtom,
-  shortcutsOpenAtom,
+  workspaceAtom,
+  workspacesAtom,
 } from "../state/atoms";
+import { barAtom } from "../state/workspaceBar";
 import { Settings } from "./Settings";
 
-// 設定。面は責務で分け、面をまたいで探せる。
+// 設定。ウィンドウ全体を使う画面で、面は責務で分け、面をまたいで探せる。
 //
-// 見たいのは「探している設定に辿り着けること」。面の切り替えと絞り込みが
-// その 2 つの道なので、両方を押さえる。
+// 見たいのは「探している設定に辿り着けること」と「触ったら効くこと」。
+
+const renamed: [string, string][] = [];
+const deleted: string[] = [];
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("9.9.9") }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ confirm: async () => true }));
+vi.mock("../hooks/useWorkspace", () => ({
+  useWorkspace: () => ({ openWorkspace: async () => {} }),
+}));
+vi.mock("../hooks/useWorkspaceOps", () => ({
+  useWorkspaceOps: () => ({
+    renameWorkspace: (id: string, name: string) => void renamed.push([id, name]),
+    recolorWorkspace: () => {},
+    deleteWorkspace: async (id: string) => void deleted.push(id),
+    removeRoot: async () => {},
+    addRoots: async () => {},
+    pickOtherFolder: async () => null,
+  }),
+}));
+vi.mock("../lib/workspaces", async (real) => ({
+  ...(await real<typeof import("../lib/workspaces")>()),
+  listWorkspaces: async () => [],
+}));
+vi.mock("../lib/claude", async (real) => ({
+  ...(await real<typeof import("../lib/claude")>()),
+  claudeBinPath: async () => null,
+  claudeSessions: async () => {
+    throw new Error("claude コマンドが見つかりません");
+  },
+}));
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+  if (!Element.prototype.scrollTo) Element.prototype.scrollTo = () => {};
+});
+
+beforeEach(() => {
+  renamed.length = 0;
+  deleted.length = 0;
 });
 
 let root: Root | null = null;
@@ -56,10 +92,11 @@ afterEach(() => {
 });
 
 const box = () => document.querySelector<HTMLElement>(".mg-set")!;
-const text = () => box().textContent ?? "";
+const page = () => box().querySelector<HTMLElement>(".mg-set-page")!;
+const text = () => page().textContent ?? "";
 // Beta の札も同じ入れ物に入るので、名前だけを見る。
 const names = () =>
-  Array.from(box().querySelectorAll(".mg-set-row-name")).map((el) =>
+  Array.from(page().querySelectorAll(".mg-set-row-name")).map((el) =>
     (el.textContent ?? "").replace(/Beta$/, ""),
   );
 const face = (label: string) =>
@@ -68,8 +105,7 @@ const face = (label: string) =>
   )!;
 const find = () => box().querySelector<HTMLInputElement>(".mg-set-find input")!;
 
-const type = (value: string) => {
-  const field = find();
+const type = (field: HTMLInputElement, value: string) => {
   act(() => {
     const setter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype,
@@ -79,6 +115,36 @@ const type = (value: string) => {
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
+const search = (value: string) => type(find(), value);
+const press = (init: KeyboardEventInit) =>
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
+  });
+
+describe("画面", () => {
+  it("暗くして重ねる小窓ではなく、ウィンドウ全体の画面で出す", () => {
+    open();
+    expect(box()).not.toBeNull();
+    expect(document.querySelector(".mg-set-back")).toBeNull();
+    expect(box().querySelector(".mg-set-leave")?.textContent).toContain("戻る");
+  });
+
+  it("「戻る」で閉じる", () => {
+    open();
+    act(() => box().querySelector<HTMLElement>(".mg-set-leave")!.click());
+    expect(store.get(settingsOpenAtom)).toBe(false);
+  });
+
+  it("Esc は、探しているときは探す字を消し、そうでなければ閉じる", () => {
+    open();
+    search("画像");
+    press({ key: "Escape" });
+    expect(store.get(settingsOpenAtom)).toBe(true);
+    expect(find().value).toBe("");
+    press({ key: "Escape" });
+    expect(store.get(settingsOpenAtom)).toBe(false);
+  });
+});
 
 describe("面を責務で分ける", () => {
   it("はじめは見た目の面", () => {
@@ -92,63 +158,61 @@ describe("面を責務で分ける", () => {
     act(() => face("書く").click());
     expect(names()).toContain("リアルタイム編集");
     expect(names()).toContain("画像の置き場所");
-    // ファイル一覧の設定は混ぜない。
     expect(names()).not.toContain("Markdown 以外も並べる");
-  });
-
-  it("ファイルの面には、一覧まわりだけを出す", () => {
-    open();
-    act(() => face("ファイル").click());
-    expect(names()).toContain("Markdown 以外も並べる");
-    expect(names()).toContain("一覧から外すもの");
   });
 
   it("試験中という面は持たない（熟し具合は札で示す）", () => {
     open();
-    expect(text()).not.toContain("試験中");
+    expect(box().textContent).not.toContain("試験中");
     act(() => face("書く").click());
-    expect(box().querySelector(".mg-set-beta")).not.toBeNull();
+    expect(page().querySelector(".mg-set-beta")).not.toBeNull();
+  });
+
+  it("行ごとの絵は出さない（絵は面の一覧だけ）", () => {
+    open();
+    act(() => face("書く").click());
+    const row = page().querySelector(".mg-set-row")!;
+    expect(row.querySelector(".material-symbols-rounded")).toBeNull();
   });
 });
 
 describe("設定を探す", () => {
-  it("面をまたいで当てる", () => {
+  it("面をまたいで当て、面ごとに見出しを添える", () => {
     open();
-    type("画像");
-    // 「書く」の画像の置き場所と、「ファイル」の Markdown 以外も並べる
+    search("画像");
     expect(names()).toContain("画像の置き場所");
     expect(names()).toContain("Markdown 以外も並べる");
+    const wheres = Array.from(page().querySelectorAll(".mg-set-where")).map((el) => el.textContent);
+    expect(wheres.some((w) => w?.includes("書く"))).toBe(true);
+    expect(wheres.some((w) => w?.includes("ファイル"))).toBe(true);
   });
 
-  it("当たった項目がどの面のものかを添える", () => {
+  it("面の見出しを押すとその面へ移る", () => {
     open();
-    type("画像の置き場所");
-    expect(box().querySelector(".mg-set-where")?.textContent).toBe("書く");
+    search("画像の置き場所");
+    act(() => page().querySelector<HTMLElement>(".mg-set-where")!.click());
+    expect(store.get(settingsFaceAtom)).toBe("write");
+    expect(find().value).toBe("");
   });
 
   it("別名でも当たる", () => {
     open();
-    type("wysiwyg");
+    search("wysiwyg");
     expect(names()).toContain("リアルタイム編集");
   });
 
-  it("絞り込んでいるあいだは面の切り替えを出さない", () => {
+  it("キー操作も探せる（何をするかで当て、そのキーだけを出す）", () => {
     open();
-    type("画像");
-    expect(box().querySelector(".mg-set-tabs")).toBeNull();
+    search("太字");
+    const keys = Array.from(page().querySelectorAll("kbd")).map((el) => el.textContent);
+    expect(keys).toContain("⌘B");
+    expect(keys).not.toContain("⌘O");
   });
 
   it("当たりが無ければその旨を出す（黙って空にしない）", () => {
     open();
-    type("そんな設定はない");
-    expect(box().querySelector(".mg-set-none")?.textContent).toContain("ありません");
-  });
-
-  it("消せば面の並びへ戻る", () => {
-    open();
-    type("画像");
-    type("");
-    expect(box().querySelector(".mg-set-tabs")).not.toBeNull();
+    search("そんな設定はない");
+    expect(page().querySelector(".mg-set-none")?.textContent).toContain("ありません");
   });
 });
 
@@ -157,7 +221,7 @@ describe("触ったら効く", () => {
     open();
     act(() => face("書く").click());
     expect(store.get(liveEditAtom)).toBe(false);
-    const row = Array.from(box().querySelectorAll<HTMLElement>(".mg-set-row")).find((el) =>
+    const row = Array.from(page().querySelectorAll<HTMLElement>(".mg-set-row")).find((el) =>
       el.textContent?.includes("リアルタイム編集"),
     )!;
     act(() => row.click());
@@ -167,158 +231,75 @@ describe("触ったら効く", () => {
   it("打ち込みの欄がそのまま設定になる", () => {
     open();
     act(() => face("書く").click());
-    const field = box().querySelector<HTMLInputElement>(".mg-set-drop input")!;
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )!.set!;
-      setter.call(field, "素材");
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    type(page().querySelector<HTMLInputElement>(".mg-set-drop input")!, "素材");
     expect(store.get(imageDirAtom)).toBe("素材");
   });
+});
 
-  it("キー操作の一覧へ渡す（設定は閉じる）", () => {
-    open();
-    act(() => face("このアプリ").click());
-    const row = Array.from(box().querySelectorAll<HTMLElement>(".mg-set-row")).find((el) =>
-      el.textContent?.includes("キー操作"),
-    )!;
-    act(() => row.click());
-    expect(store.get(settingsOpenAtom)).toBe(false);
-    expect(store.get(shortcutsOpenAtom)).toBe(true);
-  });
-
-  it("Esc で閉じる", () => {
-    open();
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    });
-    expect(store.get(settingsOpenAtom)).toBe(false);
+describe("キー操作の面", () => {
+  it("一覧を面の中に出す（別の小窓にしない）", () => {
+    open((s) => s.set(settingsFaceAtom, "keys"));
+    const keys = Array.from(page().querySelectorAll("kbd")).map((el) => el.textContent);
+    expect(keys).toContain("⌘P");
+    expect(keys).toContain("⌃Tab");
   });
 });
 
-describe("一覧から外すもの", () => {
-  const side = (label: string) =>
-    Array.from(box().querySelectorAll<HTMLElement>(".mg-set-sides button")).find(
-      (el) => el.textContent === label,
-    )!;
-  const field = () => box().querySelector<HTMLTextAreaElement>(".mg-set-drop textarea")!;
-  const foot = () => box().querySelector<HTMLElement>(".mg-set-sides-foot")!;
-  const act_ = (label: string) =>
-    Array.from(foot().querySelectorAll<HTMLElement>("button")).find(
-      (el) => el.textContent === label,
-    )!;
-  const write = (value: string) =>
-    act(() => {
-      const el = field();
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype,
-        "value",
-      )!.set!;
-      setter.call(el, value);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  const toFiles = () => act(() => face("ファイル").click());
-
-  it("フォルダを開いていなければ、そのフォルダだけの決まりは選べない", () => {
-    open((s) => s.set(activeFolderIdAtom, null));
-    toFiles();
-    expect(side("いまのフォルダ").hasAttribute("disabled")).toBe(true);
+describe("ワークスペースの面", () => {
+  const ws = (id: string, name: string): Workspace => ({
+    id,
+    name,
+    color: "teal",
+    roots: [`/w/${id}`],
+    lastOpened: 1,
   });
 
-  it("決まりが無いフォルダでは共通を読むだけにする", () => {
+  function openWorkspaces() {
     open((s) => {
-      s.set(activeFolderIdAtom, "/work/ark");
-      s.set(ignoreAtom, "node_modules/");
+      s.set(settingsFaceAtom, "workspaces");
+      s.set(workspacesAtom, [ws("a", "要件定義"), ws("b", "Slack 対応")]);
+      s.set(workspaceAtom, ws("a", "要件定義"));
+      s.set(barAtom, ["a"]);
     });
-    toFiles();
-    act(() => side("いまのフォルダ").click());
-    expect(field().value).toBe("node_modules/");
-    expect(field().readOnly).toBe(true);
-    expect(foot().textContent).toContain("共通の決まりで外しています");
+  }
+
+  it("名前をその場で変える", () => {
+    openWorkspaces();
+    const field = page().querySelectorAll<HTMLInputElement>(".mg-set-ws-name")[1];
+    type(field, "Slack");
+    act(() => field.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(renamed).toEqual([["b", "Slack"]]);
   });
 
-  it("決まりを作ると、そのフォルダにだけ入る", () => {
-    open((s) => {
-      s.set(activeFolderIdAtom, "/work/ark");
-      s.set(ignoreAtom, "node_modules/");
-    });
-    toFiles();
-    act(() => side("いまのフォルダ").click());
-    act(() => act_("このフォルダだけの決まりを作る").click());
-    write("target/");
-    expect(store.get(folderIgnoresAtom)).toEqual({ "/work/ark": "target/" });
-    // 共通は動かさない。
-    expect(store.get(ignoreAtom)).toBe("node_modules/");
+  it("列に出すかを切り替える", () => {
+    openWorkspaces();
+    const toggles = page().querySelectorAll<HTMLElement>(".mg-set-ws-bar");
+    act(() => toggles[1].click());
+    expect(store.get(barAtom)).toEqual(["a", "b"]);
   });
 
-  it("共通に戻すと、そのフォルダの決まりが消える", () => {
-    open((s) => {
-      s.set(activeFolderIdAtom, "/work/ark");
-      s.set(folderIgnoresAtom, { "/work/ark": "target/", "/work/other": "*.bak" });
+  it("開いているものは消せず、ほかは消せる", async () => {
+    openWorkspaces();
+    const dels = page().querySelectorAll<HTMLButtonElement>(".mg-set-ws-del");
+    expect(dels[0].disabled).toBe(true);
+    await act(async () => {
+      dels[1].click();
+      await new Promise((ok) => setTimeout(ok, 0));
     });
-    toFiles();
-    act(() => side("いまのフォルダ").click());
-    act(() => act_("共通に戻す").click());
-    expect(store.get(folderIgnoresAtom)).toEqual({ "/work/other": "*.bak" });
-  });
-
-  it("そのフォルダに決まりがあれば、その面で開く", () => {
-    open((s) => {
-      s.set(activeFolderIdAtom, "/work/ark");
-      s.set(ignoreAtom, "node_modules/\n*.lock");
-      s.set(folderIgnoresAtom, { "/work/ark": "target/" });
-    });
-    toFiles();
-    expect(side("いまのフォルダ").className).toContain("is-on");
-    expect(field().value).toBe("target/");
-    expect(field().readOnly).toBe(false);
-  });
-
-  it("決まりが無ければ共通の面で開く", () => {
-    open((s) => {
-      s.set(activeFolderIdAtom, "/work/ark");
-      s.set(ignoreAtom, "node_modules/");
-    });
-    toFiles();
-    expect(side("すべてのフォルダ").className).toContain("is-on");
-    expect(field().value).toBe("node_modules/");
-  });
-
-  it("共通の面では、そのフォルダが別の決まりで動いていることを出す", () => {
-    open((s) => {
-      s.set(activeFolderIdAtom, "/work/ark");
-      s.set(ignoreAtom, "node_modules/\n*.lock");
-      s.set(folderIgnoresAtom, { "/work/ark": "target/" });
-    });
-    toFiles();
-    act(() => side("すべてのフォルダ").click());
-    expect(foot().textContent).toContain("別の決まりで動いています");
-    // 共通の本文の数（2 件）を、効いている数として言い切らない。
-    expect(foot().textContent).not.toContain("2 件で外しています");
-    act(() => act_("いまのフォルダの決まりを見る").click());
-    expect(field().value).toBe("target/");
-  });
-
-  it("共通の面では共通を書く", () => {
-    open((s) => s.set(activeFolderIdAtom, "/work/ark"));
-    toFiles();
-    write("*.lock");
-    expect(store.get(ignoreAtom)).toBe("*.lock");
-    expect(store.get(folderIgnoresAtom)).toEqual({});
+    expect(deleted).toEqual(["b"]);
   });
 });
 
-describe("リアルタイム編集", () => {
-  it("ベータの札は付かない", () => {
-    open();
-    act(() => face("書く").click());
-    const row = Array.from(box().querySelectorAll<HTMLElement>(".mg-set-row")).find((el) =>
-      el.textContent?.includes("リアルタイム編集"),
-    )!;
-    expect(row.querySelector(".mg-set-beta")).toBeNull();
+describe("Claude の面", () => {
+  it("読めないときは、その理由を出す", async () => {
+    open((s) => {
+      s.set(settingsFaceAtom, "claude");
+      s.set(claudeLinkAtom, true);
+    });
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, 10));
+    });
+    expect(text()).toContain("見つかりません");
+    expect(text()).toContain("読めません");
   });
 });
-

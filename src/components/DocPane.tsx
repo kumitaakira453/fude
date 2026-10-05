@@ -59,7 +59,6 @@ import {
   pendingAnchorAtom,
   readingWidthAtom,
   settingsOpenAtom,
-  shortcutsOpenAtom,
   soleAtom,
   themeAtom,
   wideTableAtom,
@@ -141,10 +140,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // コメント・バージョンの画面が出ているあいだ、読む画面は隠れているだけで
   // 生きているので、ここで止めないとキー操作がその画面の上でも効いてしまう。
   const settingsOpen = useAtomValue(settingsOpenAtom);
-  const shortcutsOpen = useAtomValue(shortcutsOpenAtom);
   const paletteOpen = useAtomValue(paletteOpenAtom);
   const screenOpen = useAtomValue(screenOpenAtom);
-  const overlayOpen = settingsOpen || shortcutsOpen || paletteOpen || screenOpen;
+  const overlayOpen = settingsOpen || paletteOpen || screenOpen;
   const store = useStore();
   const {
     navigate,
