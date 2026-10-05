@@ -8361,12 +8361,10 @@ body.mg-carrying {
   color: var(--mg-fg-dim);
 }
 
-/* 札の ×。指したときと今いる札にだけ出し、出ていないときは幅も取らない。 */
 .mg-ws-pill {
   cursor: pointer;
 }
-/* 札の幅は決め打ち。× は場所を取ったまま見せ隠しするだけなので、指しても
-   札の長さは変わらない（隣の札が動かない）。 */
+/* 札の ×。指していなくても常に出す（どこを押せば外れるかを探させない）。 */
 .mg-ws-pill-x {
   display: grid;
   width: 1rem;
@@ -8377,11 +8375,6 @@ body.mg-carrying {
   margin-right: -0.35rem;
   border-radius: 999px;
   color: var(--mg-muted);
-  visibility: hidden;
-}
-.mg-ws-pill:hover .mg-ws-pill-x,
-.mg-ws-pill:focus-visible .mg-ws-pill-x {
-  visibility: visible;
 }
 .mg-ws-pill-x:hover {
   background: color-mix(in srgb, var(--mg-fg) 12%, transparent);

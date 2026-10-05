@@ -390,8 +390,9 @@ export async function readText(abs: string): Promise<string> {
   return readTextFile(abs);
 }
 
+// 時刻は読む前に取る。読むあいだに書き換わっても、時刻のほうが古くなるだけで
+// （次に比べたときに読み直しになる）、古い本文に新しい時刻が付くことはない。
 export async function readFile(abs: string): Promise<FileData> {
-  const text = await readTextFile(abs);
   let lastModified = 0;
   try {
     const s = await stat(abs);
@@ -399,6 +400,7 @@ export async function readFile(abs: string): Promise<FileData> {
   } catch {
     /* mtime 取得失敗は無視 */
   }
+  const text = await readTextFile(abs);
   return { text, lastModified };
 }
 

@@ -51,6 +51,7 @@ import {
   upsertWorkspace,
 } from "../state/workspace";
 import { addToBar, barAtom, visit, visitedAtom } from "../state/workspaceBar";
+import { stashRoots, takeStash } from "../state/rootStash";
 import { moveReviewFile } from "../lib/review";
 import {
   draftsDir,
@@ -151,12 +152,32 @@ async function scanRoots(store: Store): Promise<TreeNode[]> {
   const roots = store.get(A.rootsAtom);
   const ignores = store.get(A.ignoresByRootAtom);
   const sieve = sieveOf(store);
-  const forest = await Promise.all(
+  const forests = await Promise.all(
     roots.map((root) => buildTree(root, sieve, ignores.get(root) ?? "")),
   );
-  if (roots.length === 1) return forest[0];
+  return plant(store, roots, forests);
+}
+
+function plant(store: Store, roots: string[], forests: TreeNode[][]): TreeNode[] {
+  if (roots.length === 1) return forests[0];
   const folders = store.get(A.foldersAtom);
-  return roots.map((root, i) => rootNode(root, rootName(folders, root), forest[i]));
+  return roots.map((root, i) => rootNode(root, rootName(folders, root), forests[i]));
+}
+
+// 木の形（フォルダも含めた並び）が同じか。
+function sameShape(a: TreeNode[], b: TreeNode[]): boolean {
+  const lines = (tree: TreeNode[]) => {
+    const out: string[] = [];
+    const walk = (list: TreeNode[]) => {
+      for (const node of list) {
+        out.push(`${node.kind}:${node.path}:${node.name}`);
+        if (node.children) walk(node.children);
+      }
+    };
+    walk(tree);
+    return out.join("\n");
+  };
+  return lines(a) === lines(b);
 }
 
 export function useWorkspace() {
@@ -176,8 +197,21 @@ export function useWorkspace() {
 
   // 全 md を読み込み、全文検索インデックス（生テキストのキャッシュ）を
   // バックグラウンドで構築する。UI はツリー表示直後から操作可能。
+  //
+  // stamps は読む前に取った各ファイルの更新時刻。控えの本文の時刻と同じものは
+  // 読まない（ワークスペースを行き来したとき、変わったものだけを読み直す）。
   const indexContents = useCallback(
-    async (files: TreeNode[], gen: number) => {
+    async (docs: TreeNode[], gen: number, stamps: Map<string, number>) => {
+      const cache = store.get(A.contentCacheAtom);
+      const times = store.get(A.mtimeCacheAtom);
+      const files = docs.filter((f) => {
+        if (!cache.has(f.path)) return true;
+        const now = stamps.get(f.path);
+        return now !== undefined && times.get(f.path) !== now;
+      });
+      if (files.length === 0) return;
+      // 読み直すものは、読んでいるあいだに書き換えられていなければ差し替える。
+      const before = new Map(files.map((f) => [f.path, cache.get(f.path)]));
       const total = files.length;
       // 読み込んだ分を「ライブキャッシュへマージ」する（自前 Map で上書きしない）。
       // 索引中のファイル操作/編集の変更を潰さず、白フラッシュも起きない。
@@ -185,8 +219,15 @@ export function useWorkspace() {
       const flush = (done: number, active: boolean) => {
         if (batch.size) {
           const merged = new Map(store.get(A.contentCacheAtom));
-          for (const [k, v] of batch) if (!merged.has(k)) merged.set(k, v);
+          const stamped = new Map(store.get(A.mtimeCacheAtom));
+          for (const [k, v] of batch) {
+            if (merged.get(k) !== before.get(k)) continue;
+            merged.set(k, v);
+            const at = stamps.get(k);
+            if (at !== undefined) stamped.set(k, at);
+          }
           store.set(A.contentCacheAtom, merged);
+          store.set(A.mtimeCacheAtom, stamped);
           batch = new Map();
         }
         store.set(A.loadingAtom, {
@@ -201,7 +242,7 @@ export function useWorkspace() {
       for (let i = 0; i < files.length; i++) {
         if (gen !== indexGen) return; // 新しい構築に置き換えられたら中断
         const node = files[i];
-        if (!store.get(A.contentCacheAtom).has(node.path) && !batch.has(node.path)) {
+        if (store.get(A.contentCacheAtom).get(node.path) === before.get(node.path)) {
           try {
             batch.set(node.path, await readText(node.abs));
           } catch {
@@ -217,7 +258,9 @@ export function useWorkspace() {
     [store],
   );
 
-  const refreshTree = useCallback(async () => {
+  // quiet：控えの木を出したまま確かめるとき。読み込み中の表示を出さず、
+  // 形が変わっていなければ木を置き直さない（開いているフォルダが揺れない）。
+  const refreshTree = useCallback(async (opts: { quiet?: boolean } = {}) => {
     const root = getRootPath();
     if (!root) return;
     // 1 枚だけ開いているときはフォルダを走査しない。数千のファイルを辿っても
@@ -231,45 +274,77 @@ export function useWorkspace() {
     }
     // 走査の間も何か出しておく。数百のフォルダを辿るので、無言で止まると
     // 固まったように見える。
-    store.set(A.loadingAtom, {
-      active: true,
-      message: "フォルダを読み込み中",
-      done: 0,
-      total: 0,
-    });
+    if (!opts.quiet) {
+      store.set(A.loadingAtom, {
+        active: true,
+        message: "フォルダを読み込み中",
+        done: 0,
+        total: 0,
+      });
+    }
     const scan = ++treeGen;
     const walked = span("走査");
-    const tree = await scanRoots(store);
-    if (scan !== treeGen) return;
-    const files = flattenFiles(tree);
-    walked(`${files.length} 件`);
-    const laid = span("木を置く");
-    store.set(A.treeAtom, tree);
-    store.set(A.filesAtom, files);
-    store.set(A.loadingAtom, { active: false, message: "", done: 0, total: 0 });
-    laid();
-    // 更新時刻は並び順にしか使わないので、待たずに後から入れる。
-    const stamped = span("更新時刻");
+    // 時刻は木と同時に取りに行き、索引の前に揃える。読む前の時刻を本文に
+    // 付けておけば、次に戻ったとき変わったものだけを読み直せる。
     const ignores = store.get(A.ignoresByRootAtom);
-    void Promise.all(
+    const stamped = span("更新時刻");
+    const stampsOf = Promise.all(
       [...ignores].map(([at, ignore]) => folderMtimes(at, ignore)),
     ).then(
       (parts) => {
         const m = new Map(parts.flatMap((part) => [...part]));
         stamped(`${m.size} 件`);
-        store.set(A.touchedAtom, m);
+        return m;
       },
       (e: unknown) => {
         console.error("更新時刻を読めません", e);
+        return new Map<string, number>();
       },
     );
+    const tree = await scanRoots(store);
+    if (scan !== treeGen) return;
+    const files = flattenFiles(tree);
+    walked(`${files.length} 件`);
+    const was = store.get(A.filesAtom);
+    if (!opts.quiet || !sameShape(store.get(A.treeAtom), tree)) {
+      const laid = span("木を置く");
+      store.set(A.treeAtom, tree);
+      store.set(A.filesAtom, files);
+      laid();
+    }
+    if (!opts.quiet) {
+      store.set(A.loadingAtom, { active: false, message: "", done: 0, total: 0 });
+    }
+    // 無くなったファイルの本文と時刻を落とす。控えから戻したときは、離れている
+    // あいだに消えたものがここで初めて分かる。
+    const roots = store.get(A.rootsAtom);
+    const present = new Set(files.map((f) => f.path));
+    const gone = (path: string) =>
+      rootOf(roots, path) !== null && kindOf(path) === "markdown" && !present.has(path);
+    const cache = store.get(A.contentCacheAtom);
+    if ([...cache.keys()].some(gone)) {
+      store.set(A.contentCacheAtom, new Map([...cache].filter(([k]) => !gone(k))));
+      store.set(
+        A.mtimeCacheAtom,
+        new Map([...store.get(A.mtimeCacheAtom)].filter(([k]) => !gone(k))),
+      );
+    }
+    // 開いていたタブのうち、前の一覧にはあって今は無いものは閉じる。
+    const vanished = new Set(was.map((f) => f.path).filter((path) => !present.has(path)));
+    if (vanished.size > 0) remapLeafPaths(store, (path) => (vanished.has(path) ? null : path));
     // インデックスは全ファイルを読むので、最初の描画と取り合いにならないよう
     // 手が空いてから始める（await もしない）
     const gen = ++indexGen;
     // 索引に入れるのは Markdown だけ。画像や PDF を文字として読んでも中身は
     // 引けないし、大きいものを丸ごと抱えることになる。
     const docs = files.filter((f) => kindOf(f.name) === "markdown");
-    whenIdle(() => void indexContents(docs, gen));
+    void stampsOf.then((stamps) => {
+      if (gen !== indexGen) return;
+      store.set(A.touchedAtom, stamps);
+      // 確かめのときは、すでに手が空いてから走っている。
+      if (opts.quiet) void indexContents(docs, gen, stamps);
+      else whenIdle(() => void indexContents(docs, gen, stamps));
+    });
   }, [store, getRootPath, indexContents]);
 
   // ツリー構造だけ更新（全文再インデックスしない）。ファイル操作用。
@@ -481,6 +556,8 @@ export function useWorkspace() {
         !wasSole &&
         store.get(A.treeAtom).length > 0 &&
         sameList(store.get(A.rootsAtom), to.roots);
+      // 離れる根の木と本文を控えておく（戻ってきたとき、その場で描く）。
+      if (!same && !wasSole) stashRoots(store, store.get(A.rootsAtom));
       store.set(A.soleAtom, null);
       store.set(A.layoutOwnerAtom, null);
       store.set(A.workspaceAtom, to.workspace);
@@ -511,9 +588,36 @@ export function useWorkspace() {
         opened = Promise.resolve();
         return;
       }
-      // 前の根の内容が検索/キャッシュに残らないよう初期化
-      store.set(A.contentCacheAtom, new Map());
-      store.set(A.mtimeCacheAtom, new Map());
+      // 入る根の控えを引き当てる。前の根の本文は控えへ移ったので、ここで
+      // 組み直すのは入る根の分だけ（検索に前の根のものが混ざらない）。
+      const showOther = store.get(A.showOtherFilesAtom);
+      const ignores = store.get(A.ignoresByRootAtom);
+      const kept = to.roots.map((root) => takeStash(root, showOther, ignores.get(root) ?? ""));
+      const texts = new Map<string, string>();
+      const stamps = new Map<string, number>();
+      const touched = new Map<string, number>();
+      for (const k of kept) {
+        if (!k) continue;
+        for (const [p, v] of k.texts) texts.set(p, v);
+        for (const [p, v] of k.stamps) stamps.set(p, v);
+        for (const [p, v] of k.touched) touched.set(p, v);
+      }
+      store.set(A.contentCacheAtom, texts);
+      store.set(A.mtimeCacheAtom, stamps);
+      store.set(A.touchedAtom, touched);
+      // 全部の根に控えがあれば、それで木を組んでその場でタブまで戻す。
+      // 離れているあいだの変化は、手が空いてから確かめて読み直す。
+      if (kept.every((k) => k !== null)) {
+        const tree = plant(store, to.roots, kept.map((k) => k!.forest));
+        store.set(A.treeAtom, tree);
+        store.set(A.filesAtom, flattenFiles(tree));
+        lay();
+        if (to.file) openFile(to.file);
+        switched();
+        opened = Promise.resolve();
+        whenIdle(() => void refreshTree({ quiet: true }));
+        return;
+      }
       // 前の一覧は、ここで畳む。残したまま走査を待つと、押しても
       // 何も起きていないように見える。
       store.set(A.treeAtom, []);
@@ -640,6 +744,8 @@ export function useWorkspace() {
       // できて、反応していないように見える。
       // 1 枚だけのときはワークスペースにしない（控えを残さない）。
       flushWorkspaceSave();
+      // 並べていた根は控えておく（ワークスペースへ戻ったとき読み直さない）。
+      if (store.get(A.soleAtom) === null) stashRoots(store, store.get(A.rootsAtom));
       store.set(A.workspaceAtom, null);
       store.set(A.layoutOwnerAtom, null);
       void bindWindow(currentWindowLabel(), null).catch(() => {});
@@ -649,6 +755,7 @@ export function useWorkspace() {
       resetLayout(store);
       store.set(A.contentCacheAtom, new Map());
       store.set(A.mtimeCacheAtom, new Map());
+      store.set(A.touchedAtom, new Map());
       store.set(A.treeAtom, [node]);
       store.set(A.filesAtom, [node]);
       openFile(abs);
