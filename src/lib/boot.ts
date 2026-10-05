@@ -16,6 +16,37 @@ export function markDocShown(): void {
 
 export const whenDocShown = (): Promise<void> => shownOnce;
 
+// 幕が下りきるまでの時間（index.html の #boot.is-done と合わせる）。
+const LEAVE_MS = 420;
+
+// 字の並びの外枠（余白を含まない、書かれている字そのものの箱）。
+function textBox(el: Element): DOMRect | null {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const box = range.getBoundingClientRect();
+  return box.width > 0 && box.height > 0 ? box : null;
+}
+
+// 幕の「fude」を、画面の中の同じ字（ツールバーやスタート画面の名前）の位置へ
+// 動かしながら下ろす。そのまま薄くすると、真ん中の字が消えるのと同時に左上の
+// 同じ字が現れ、字が左上へ跳んだように見える。動かして重ねれば、1 つの字が
+// 持ち場へ収まったように見える。
+function flyToWordmark(curtain: HTMLElement): void {
+  const word = curtain.querySelector<HTMLElement>(".boot-word");
+  const target = document.querySelector(".mg-wordmark");
+  if (!word || !target) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  // 書いている途中の形（字の途中で切れた見え方）から動かさない。書き終えた形で止める。
+  curtain.classList.add("is-landing");
+  const from = textBox(word);
+  const to = textBox(target);
+  if (!from || !to) return;
+  const scale = to.height / from.height;
+  const box = word.getBoundingClientRect();
+  word.style.transformOrigin = `${from.left - box.left}px ${from.top - box.top}px`;
+  word.style.transform = `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${scale})`;
+}
+
 // 幕を下ろす。React が反映しただけでは、まだ塗られていないので、2 回先の
 // 描画の頭まで待つ。
 export function dropBootCurtain(): void {
@@ -23,10 +54,10 @@ export function dropBootCurtain(): void {
   if (!curtain) return;
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
+      flyToWordmark(curtain);
       curtain.classList.add("is-done");
-      curtain.addEventListener("transitionend", () => curtain.remove(), { once: true });
-      // 動きを止めている環境では transitionend が来ないことがある。
-      window.setTimeout(() => curtain.remove(), 500);
+      // 動きを止めている環境では transitionend が来ないことがある。時間で外す。
+      window.setTimeout(() => curtain.remove(), LEAVE_MS + 80);
     }),
   );
 }

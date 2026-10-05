@@ -66,12 +66,33 @@
         z-index: 2147483647;
         display: grid;
         place-items: center;
-        background: var(--boot-bg, #0e1116);
-        transition: opacity 0.28s ease;
+        background-color: var(--boot-bg, #0e1116);
       }
+      /* 下ろすときは、地を先に薄くして下の画面を見せ、字が画面の中の名前の位置へ
+         収まってから全体を消す（src/lib/boot.ts。合わせて 420ms）。 */
       #boot.is-done {
+        background-color: transparent;
         opacity: 0;
         pointer-events: none;
+        transition:
+          background-color 0.3s ease,
+          opacity 0.12s ease 0.3s;
+      }
+      /* 動かす前に書く動きを止め、書き終えた形にする。筆と線は先に消す。 */
+      #boot.is-landing .boot-ink {
+        animation: none;
+        opacity: 1;
+      }
+      #boot.is-landing .boot-word {
+        animation: none;
+        clip-path: inset(0);
+        transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      #boot.is-landing .boot-brush,
+      #boot.is-landing .boot-line {
+        animation: none;
+        opacity: 0;
+        transition: opacity 0.12s ease;
       }
       /* 筆が「fude」と書く。字は筆先の後ろから現れ、書き終えると筆が離れて
          下に墨の線を引く。少し置いてから消え、また書く。 */

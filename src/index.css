@@ -8193,7 +8193,11 @@ body.mg-carrying {
 .mg-ws-pill:hover {
   background: var(--mg-hover);
 }
+/* 今いる札は名前を全部見せる（長さが変わるのは切り替えたときだけ）。 */
 .mg-ws-pill.is-on {
+  width: auto;
+  min-width: 12.5rem;
+  max-width: 28rem;
   border-color: transparent;
   background: var(--mg-accent-soft);
   font-weight: 600;
