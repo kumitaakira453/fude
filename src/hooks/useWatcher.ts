@@ -34,18 +34,20 @@ function vanished(event: WatchEvent): boolean {
   return mod?.kind === "rename" && mod.mode === "from";
 }
 
-// Tauri の OS ネイティブ file watcher でアクティブフォルダを監視し、変更を即反映する。
+// Tauri の OS ネイティブ file watcher で並べている根をそれぞれ監視し、変更を即反映する。
 export function useWatcher() {
   const store = useStore();
-  const activeFolderId = useAtomValue(A.activeFolderIdAtom);
-  const { getRootPath, reloadFile, refreshTreeStructure, adoptRename } = useWorkspace();
+  const roots = useAtomValue(A.rootsAtom);
+  const ignores = useAtomValue(A.ignoresByRootAtom);
+  const { reloadFile, refreshTreeStructure, adoptRename } = useWorkspace();
+  // 根の並びと決まりが変わったときだけ見張り直す。配列は毎回作り直されるので字で比べる。
+  const watchKey = JSON.stringify(roots.map((root) => [root, ignores.get(root) ?? ""]));
 
   useEffect(() => {
-    const root = getRootPath();
-    if (!root) return;
+    if (roots.length === 0) return;
 
     let disposed = false;
-    let unwatch: (() => void) | null = null;
+    const unwatchers: (() => void)[] = [];
     let treeTimer: number | undefined;
     // 名前の変更は届き方が一定しない。両方まとめて届くこともあれば、
     // 「古い名前が消えた」「新しい名前が現れた」が別々の回に届くこともある。
@@ -72,7 +74,7 @@ export function useWatcher() {
 
     // 合図は束で届く。知っている名前の集まりや触った時刻の写しは、束ごとに
     // 1 回だけ作る（git の切り替えなどでは、1 束に数百の合図が入る）。
-    const onBatch = (events: WatchEvent[]) => {
+    const onBatchOf = (root: string) => (events: WatchEvent[]) => {
       if (disposed) return;
       const sole = store.get(A.soleAtom);
       const known = new Set(store.get(A.filesAtom).map((f) => f.path));
@@ -124,24 +126,28 @@ export function useWatcher() {
 
     // 1 枚だけ開いているときは下の階層まで見張らない。見るのはその 1 枚で、
     // 親が ~/Downloads のような大きなフォルダだと丸ごと見張る意味が無い。
-    watchFolder(root, store.get(A.activeIgnoreAtom), !store.get(A.soleAtom), onBatch)
-      .then((fn) => {
-        if (disposed) fn();
-        else {
-          unwatch = fn;
-          store.set(A.watchModeAtom, "observer");
-        }
-      })
-      .catch(() => {
-        store.set(A.watchModeAtom, "off");
-      });
+    const recursive = !store.get(A.soleAtom);
+    void Promise.allSettled(
+      roots.map((root) =>
+        watchFolder(root, ignores.get(root) ?? "", recursive, onBatchOf(root)),
+      ),
+    ).then((settled) => {
+      let any = false;
+      for (const result of settled) {
+        if (result.status !== "fulfilled") continue;
+        any = true;
+        if (disposed) result.value();
+        else unwatchers.push(result.value);
+      }
+      if (!disposed) store.set(A.watchModeAtom, any ? "observer" : "off");
+    });
 
     return () => {
       disposed = true;
       window.clearTimeout(treeTimer);
-      unwatch?.();
+      for (const unwatch of unwatchers) unwatch();
       store.set(A.watchModeAtom, "off");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFolderId]);
+  }, [watchKey]);
 }

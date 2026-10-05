@@ -15,6 +15,12 @@ export function folderDisplayName(f: FolderEntry): string {
   return a || f.name;
 }
 
+// 根の名前。登録フォルダに別名があればそれ、無ければフォルダ名。
+export function rootName(folders: FolderEntry[], root: string): string {
+  const entry = folders.find((f) => f.path === root);
+  return entry ? folderDisplayName(entry) : basename(root);
+}
+
 const KEY = "mdglow:folders";
 const DOCS_KEY = "fude:docs";
 

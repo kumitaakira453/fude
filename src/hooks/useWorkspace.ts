@@ -19,6 +19,8 @@ import {
   renamePath,
   soleTree,
   absoluteIn,
+  rootNode,
+  rootOf,
   writeBytes,
   writeFile,
   type TreeNode,
@@ -31,6 +33,7 @@ import {
   registerDoc,
   registerFolder,
   removeDoc,
+  rootName,
 } from "../lib/idb";
 import {
   openDocWindow,
@@ -131,6 +134,20 @@ type Store = ReturnType<typeof getDefaultStore>;
 const sieveOf = (store: Store) =>
   store.get(A.showOtherFilesAtom) ? VIEWABLE_SIEVE : MARKDOWN_SIEVE;
 
+// 並べている根をそれぞれの決まりで走査して、木に組む。根が 1 つなら今どおり
+// 中身を最上段に、2 つ以上なら根を行として並べてその下に吊るす。
+async function scanRoots(store: Store): Promise<TreeNode[]> {
+  const roots = store.get(A.rootsAtom);
+  const ignores = store.get(A.ignoresByRootAtom);
+  const sieve = sieveOf(store);
+  const forest = await Promise.all(
+    roots.map((root) => buildTree(root, sieve, ignores.get(root) ?? "")),
+  );
+  if (roots.length === 1) return forest[0];
+  const folders = store.get(A.foldersAtom);
+  return roots.map((root, i) => rootNode(root, rootName(folders, root), forest[i]));
+}
+
 export function useWorkspace() {
   const store = useStore();
 
@@ -142,11 +159,8 @@ export function useWorkspace() {
 
   // そのファイルが属する根。根の外なら null。
   const rootFor = useCallback(
-    (path: string): string | null => {
-      const root = getRootPath();
-      return root && path.startsWith(`${root}/`) ? root : null;
-    },
-    [getRootPath],
+    (path: string): string | null => rootOf(store.get(A.rootsAtom), path),
+    [store],
   );
 
   // 全 md を読み込み、全文検索インデックス（生テキストのキャッシュ）を
@@ -214,7 +228,7 @@ export function useWorkspace() {
     });
     const scan = ++treeGen;
     const walked = span("走査");
-    const tree = await buildTree(root, sieveOf(store), store.get(A.activeIgnoreAtom));
+    const tree = await scanRoots(store);
     if (scan !== treeGen) return;
     const files = flattenFiles(tree);
     walked(`${files.length} 件`);
@@ -225,8 +239,12 @@ export function useWorkspace() {
     laid();
     // 更新時刻は並び順にしか使わないので、待たずに後から入れる。
     const stamped = span("更新時刻");
-    void folderMtimes(root, store.get(A.activeIgnoreAtom)).then(
-      (m) => {
+    const ignores = store.get(A.ignoresByRootAtom);
+    void Promise.all(
+      [...ignores].map(([at, ignore]) => folderMtimes(at, ignore)),
+    ).then(
+      (parts) => {
+        const m = new Map(parts.flatMap((part) => [...part]));
         stamped(`${m.size} 件`);
         store.set(A.touchedAtom, m);
       },
@@ -256,7 +274,7 @@ export function useWorkspace() {
       return;
     }
     const scan = ++treeGen;
-    const tree = await buildTree(root, sieveOf(store), store.get(A.activeIgnoreAtom));
+    const tree = await scanRoots(store);
     if (scan !== treeGen) return;
     store.set(A.treeAtom, tree);
     store.set(A.filesAtom, flattenFiles(tree));
@@ -378,7 +396,14 @@ export function useWorkspace() {
       const open = new Set(
         (store.get(A.expandedByFolderAtom)[folderId] ?? []).map((p) => absoluteIn(p, folderId)),
       );
-      for (const path of paths) for (const dir of ancestorPaths(path, folderId)) open.add(dir);
+      // 根を行として並べているときは、根の行も開く。
+      const roots = store.get(A.rootsAtom);
+      for (const path of paths) {
+        const root = rootOf(roots, path);
+        if (!root) continue;
+        if (roots.length > 1) open.add(root);
+        for (const dir of ancestorPaths(path, root)) open.add(dir);
+      }
       store.set(A.expandedByFolderAtom, (prev) => ({
         ...prev,
         [folderId]: [...open],
@@ -462,6 +487,7 @@ export function useWorkspace() {
       const saved = kept && { ...kept, layout: absoluteLayout(kept.layout, activeId) };
       const file = opts.file && absoluteIn(opts.file, activeId);
       store.set(A.activeFolderIdAtom, activeId);
+      store.set(A.extraRootsAtom, []);
       resetLayout(store);
       // 前フォルダの内容が検索/キャッシュに残らないよう初期化
       store.set(A.contentCacheAtom, new Map());
@@ -516,6 +542,7 @@ export function useWorkspace() {
       // できて、反応していないように見える。
       store.set(A.soleAtom, abs);
       store.set(A.activeFolderIdAtom, root);
+      store.set(A.extraRootsAtom, []);
       resetLayout(store);
       store.set(A.contentCacheAtom, new Map());
       store.set(A.mtimeCacheAtom, new Map());

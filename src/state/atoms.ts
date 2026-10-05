@@ -1,7 +1,7 @@
 import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
-import type { TreeNode } from "../lib/fsAccess";
-import type { DocEntry, FolderEntry } from "../lib/idb";
+import { rootOf, type TreeNode } from "../lib/fsAccess";
+import { rootName, type DocEntry, type FolderEntry } from "../lib/idb";
 import { RAIL_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
@@ -13,6 +13,28 @@ export const activeFolderIdAtom = atom<string | null>(null);
 // 親フォルダが activeFolderId に入るが、履歴には登録しない。
 export const soleAtom = atom<string | null>(null);
 export const recentDocsAtom = atom<DocEntry[]>([]); // 1 枚で開いたファイル（履歴）
+// 主のフォルダのほかに並べる根（絶対パス）。窓 1 枚で、いくつものフォルダの
+// ファイルを 1 つのタブの並びに混ぜられる。
+export const extraRootsAtom = atom<string[]>([]);
+// 並べている根。先頭が主のフォルダ（activeFolderId）。何も開いていなければ空。
+export const rootsAtom = atom<string[]>((get) => {
+  const main = get(activeFolderIdAtom);
+  if (!main) return [];
+  return [main, ...get(extraRootsAtom).filter((root) => root !== main)];
+});
+
+// 一覧・見出しに出す道筋。根が 1 つならそこからの相対、2 つ以上なら根の名前を
+// 頭に付ける（同じ相対パスが 2 つの根に居ても見分けられる）。根の外は絶対パス。
+export const pathLabelAtom = atom((get) => {
+  const roots = get(rootsAtom);
+  const folders = get(foldersAtom);
+  return (path: string): string => {
+    const root = rootOf(roots, path);
+    if (!root) return path;
+    const rel = path.slice(root.length + 1);
+    return roots.length > 1 ? `${rootName(folders, root)}/${rel}` : rel;
+  };
+});
 // 開くものを選ぶ画面。フォルダも 1 枚のファイルも行き先はここひとつ。
 export const openPickerAtom = atom(false);
 export const treeAtom = atom<TreeNode[]>([]);
@@ -172,6 +194,13 @@ export const activeIgnoreAtom = atom((get) => {
   const id = get(activeFolderIdAtom);
   const own = id === null ? undefined : get(folderIgnoresAtom)[id];
   return own ?? get(ignoreAtom);
+});
+
+// 根ごとに効く決まり。並べた根はそれぞれ自分の決まりで走査・見張りをする。
+export const ignoresByRootAtom = atom((get) => {
+  const own = get(folderIgnoresAtom);
+  const common = get(ignoreAtom);
+  return new Map(get(rootsAtom).map((root) => [root, own[root] ?? common]));
 });
 // 取り込んだ画像の置き場所。文書と同じところに、この名前のフォルダを作る。
 export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images");

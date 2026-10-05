@@ -39,7 +39,7 @@ import {
   notionKeysAtom,
   taskMarksAtom,
   wideTableAtom,
-  activeIgnoreAtom,
+  ignoresByRootAtom,
   showOtherFilesAtom,
   fontAtom,
   themeAtom,
@@ -62,7 +62,9 @@ export default function App() {
   const marks = useAtomValue(taskMarksAtom);
   const wideTable = useAtomValue(wideTableAtom);
   const showOther = useAtomValue(showOtherFilesAtom);
-  const ignore = useAtomValue(activeIgnoreAtom);
+  // 根ごとの外すもの。根の並びが同じまま決まりだけ変わったときに並べ直す。
+  const ignores = useAtomValue(ignoresByRootAtom);
+  const ignore = JSON.stringify([...ignores]);
   const { refreshTreeStructure } = useWorkspace();
   const reviewOpen = useAtomValue(reviewScreenAtom);
   const versionFile = useAtomValue(versionScreenAtom);
@@ -121,8 +123,16 @@ export default function App() {
   // 外すものを書き換えたときも並べ直す。打っている途中で走らせると 1 文字ごとに
   // 木を読み直すので、手が止まってから動かす。
   const ignoreWas = useRef(ignore);
+  const rootsWere = useRef(JSON.stringify([...ignores.keys()]));
   useEffect(() => {
     if (ignoreWas.current === ignore) return;
+    // 根の並びが変わった（フォルダを開き直した）ときは、開く側が走査する。
+    const roots = JSON.stringify([...ignores.keys()]);
+    if (rootsWere.current !== roots) {
+      rootsWere.current = roots;
+      ignoreWas.current = ignore;
+      return;
+    }
     const wait = window.setTimeout(() => {
       ignoreWas.current = ignore;
       void refreshTreeStructure();

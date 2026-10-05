@@ -11,12 +11,13 @@ import {
   MARKDOWN_SIEVE,
   parentPath,
   readLevel,
+  rootOf,
   type TreeNode,
 } from "../lib/fsAccess";
 import { VIEWABLE_SIEVE } from "../lib/kind";
 import { revealInTree } from "../lib/ui";
 import {
-  activeFolderIdAtom,
+  rootsAtom,
   activeIgnoreAtom,
   showOtherFilesAtom,
   treeAtom,
@@ -68,8 +69,9 @@ export function Breadcrumbs({
 }) {
   const store = useStore();
   const tree = useAtomValue(treeAtom);
-  // 木を持っているときの根。区切りは根からの相対で出す。
-  const root = useAtomValue(activeFolderIdAtom);
+  // 木を持っているときの、このファイルの根。区切りは根からの相対で出す。
+  const allRoots = useAtomValue(rootsAtom);
+  const root = path ? rootOf(allRoots, path) : null;
   const { openFile, openDoc } = useWorkspace();
   // 一覧に出すものは設定に合わせる。木と同じ見え方にする。
   const other = useAtomValue(showOtherFilesAtom);

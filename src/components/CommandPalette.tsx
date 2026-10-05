@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { filesAtom, paletteOpenAtom, touchedAtom } from "../state/atoms";
+import { filesAtom, paletteOpenAtom, pathLabelAtom, touchedAtom } from "../state/atoms";
 import { quickOpen } from "../lib/search";
 import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -24,6 +24,7 @@ export function CommandPalette() {
   const [open, setOpen] = useAtom(paletteOpenAtom);
   const files = useAtomValue(filesAtom);
   const touched = useAtomValue(touchedAtom);
+  const label = useAtomValue(pathLabelAtom);
   const { openFile } = useWorkspace();
   const store = useStore();
   const [query, setQuery] = useState("");
@@ -125,7 +126,7 @@ export function CommandPalette() {
                 </span>
               </span>
               <span className="w-full truncate text-[11px] text-[var(--mg-muted)]">
-                {r.node.rel}
+                {label(r.node.path)}
               </span>
             </button>
           ))}

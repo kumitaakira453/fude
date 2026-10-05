@@ -1,6 +1,7 @@
 import { atom, type getDefaultStore } from "jotai";
 import { EMPTY_LEDGER, isOpen, readLedger, type Ledger } from "../lib/review";
-import { activeFolderIdAtom } from "./atoms";
+import { rootOf } from "../lib/fsAccess";
+import { rootsAtom } from "./atoms";
 
 type Store = ReturnType<typeof getDefaultStore>;
 
@@ -8,15 +9,13 @@ type Store = ReturnType<typeof getDefaultStore>;
 // 自分が書き込んだ直後に読み直す。
 export const ledgerAtom = atom<Ledger>(EMPTY_LEDGER);
 
-// 未解決件数を、開いているフォルダの中のファイルごとに引けるようにする。
+// 未解決件数を、並べている根の中のファイルごとに引けるようにする。
 // 鍵は台帳と同じ絶対パス。
 export const openCountsAtom = atom((get) => {
-  const root = get(activeFolderIdAtom);
+  const roots = get(rootsAtom);
   const counts = new Map<string, number>();
-  if (!root) return counts;
-  const prefix = `${root}/`;
   for (const thread of get(ledgerAtom).threads) {
-    if (!isOpen(thread) || !thread.file.startsWith(prefix)) continue;
+    if (!isOpen(thread) || !rootOf(roots, thread.file)) continue;
     counts.set(thread.file, (counts.get(thread.file) ?? 0) + 1);
   }
   return counts;

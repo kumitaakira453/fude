@@ -30,7 +30,7 @@ import { Icon } from "./Icon";
 
 export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }) {
   const store = useStore();
-  const { openInNewWindow, getRootPath } = useWorkspace();
+  const { openInNewWindow, rootFor } = useWorkspace();
   const tree = useAtomValue(treeAtom);
   const draftRel = useAtomValue(draftRelAtom);
   const draftName = useAtomValue(draftNameAtom);
@@ -61,7 +61,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
     return {
       name: path.split("/").pop() ?? path,
       path,
-      rel: relativeTo(path, getRootPath()),
+      rel: relativeTo(path, rootFor(path)),
       abs: path,
       kind: "file",
     };

@@ -7,6 +7,8 @@ import {
   findNode,
   crumbsOf,
   parentPath,
+  rootNode,
+  rootOf,
   soleTree,
   type TreeNode,
 } from "./fsAccess";
@@ -200,3 +202,37 @@ describe("listName", () => {
   });
 });
 
+
+describe("根を並べたとき", () => {
+  const A = rootNode("/a", "a", [
+    { name: "README.md", path: "/a/README.md", rel: "README.md", abs: "/a/README.md", kind: "file" },
+  ]);
+  const B = rootNode("/b", "b", [
+    { name: "README.md", path: "/b/README.md", rel: "README.md", abs: "/b/README.md", kind: "file" },
+  ]);
+
+  it("同じ相対パスでも、根ごとに別のファイルとして引ける", () => {
+    expect(findNode([A, B], "/a/README.md")).not.toBe(findNode([A, B], "/b/README.md"));
+    expect(findNode([A, B], "/b/README.md")?.path).toBe("/b/README.md");
+  });
+
+  it("根の中身は根の行の下から引く", () => {
+    expect(childrenAt([A, B], "/b", "/b").map((n) => n.path)).toEqual(["/b/README.md"]);
+  });
+
+  it("根が 1 つで最上段に中身を置いているときは、根を指すと最上段", () => {
+    const top = A.children!;
+    expect(childrenAt(top, "/a", "/a")).toBe(top);
+  });
+
+  it("属する根は、入れ子なら深い方を選ぶ", () => {
+    expect(rootOf(["/a", "/a/b"], "/a/b/c.md")).toBe("/a/b");
+    expect(rootOf(["/a", "/a/b"], "/a/c.md")).toBe("/a");
+    expect(rootOf(["/a"], "/ab/c.md")).toBeNull();
+  });
+
+  it("祖先は根より下だけを絶対パスで返す", () => {
+    expect(ancestorPaths("/a/x/y/z.md", "/a")).toEqual(["/a/x", "/a/x/y"]);
+    expect(ancestorPaths("/b/z.md", "/a")).toEqual([]);
+  });
+});

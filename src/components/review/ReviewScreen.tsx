@@ -22,7 +22,7 @@ import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
 import { inEditable } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
-import { relativeTo } from "../../lib/fsAccess";
+import { rootOf } from "../../lib/fsAccess";
 import {
   isOpen,
   readVersion,
@@ -44,7 +44,8 @@ import { runReviewUndo, setReviewUndo } from "../../lib/reviewUndo";
 import { ago, whenText } from "../../lib/when";
 import { notify } from "../../state/toast";
 import {
-  activeFolderIdAtom,
+  pathLabelAtom,
+  rootsAtom,
   reviewSideWidthAtom,
   contentCacheAtom,
   fontAtom,
@@ -71,16 +72,9 @@ import { Quote } from "./Quote";
 // 指摘がどのブロックのことかも並べて見せられない。
 // 本文は本文として読ませ、やり取りは横に置く。
 
-// 開いているフォルダの中のファイルなら、その道筋（本文の控えの鍵）。外なら null。
-function insideOf(root: string | null, file: string): string | null {
-  return root && file.startsWith(`${root}/`) ? file : null;
-}
-
-// 一覧と見出しに出すファイルの道筋。開いているフォルダの中なら
-// そこからの相対パス、外なら絶対パスをそのまま出す。
-// 同じ名前のファイルが別の節に何枚もあるので、名前だけでは見分けられない。
-function pathLabel(root: string | null, file: string): string {
-  return relativeTo(file, root);
+// 並べている根の中のファイルなら、その道筋（本文の控えの鍵）。外なら null。
+function insideOf(roots: readonly string[], file: string): string | null {
+  return rootOf(roots, file) ? file : null;
 }
 
 // 一覧の見出しに出す名前と場所。絶対パスを丸ごと 1 行に流すと 4 行に折り返して
@@ -88,8 +82,11 @@ function pathLabel(root: string | null, file: string): string {
 // 全体は title で読める。
 const DIR_TAIL = 2;
 
-function fileLabel(root: string | null, file: string): { name: string; dir: string } {
-  const path = pathLabel(root, file);
+// 一覧と見出しに出すファイルの道筋は label が決める。根の中なら根からの相対、
+// 外なら絶対パスをそのまま出す。同じ名前のファイルが別の節に何枚もあるので、
+// 名前だけでは見分けられない。
+function fileLabel(label: (path: string) => string, file: string): { name: string; dir: string } {
+  const path = label(file);
   const parts = path.split("/");
   const name = parts.pop() ?? path;
   const tail = parts.filter(Boolean).slice(-DIR_TAIL);
@@ -148,7 +145,8 @@ function countLines(text: string): number {
 export function ReviewScreen() {
   const ledger = useAtomValue(ledgerAtom);
   const cache = useAtomValue(contentCacheAtom);
-  const root = useAtomValue(activeFolderIdAtom);
+  const roots = useAtomValue(rootsAtom);
+  const label = useAtomValue(pathLabelAtom);
   const [selectedId, setSelectedId] = useAtom(reviewThreadAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
   const store = useStore();
@@ -183,10 +181,10 @@ export function ReviewScreen() {
   const all = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
   const inFolder = useMemo(
     () =>
-      root === null
+      roots.length === 0
         ? all
-        : all.filter((t) => insideOf(root, t.file) !== null),
-    [all, root],
+        : all.filter((t) => insideOf(roots, t.file) !== null),
+    [all, roots],
   );
   const elsewhere = all.length - inFolder.length;
   // 解決にすると押した瞬間から一覧に出さない。台帳への書き込みと読み直しは
@@ -343,7 +341,7 @@ export function ReviewScreen() {
   // 突き合わせの結果は一覧づくりで既に組んであるので、押した瞬間に組み直さない。
   const copyPrompt = useCallback(
     (file: string, list: ReviewThread[]) => {
-      const text = reviewPrompt(pathLabel(root, file), list, (t) =>
+      const text = reviewPrompt(label(file), list, (t) =>
         factsRef.current.get(t.id),
       );
       void copyText(text).then((done) => {
@@ -357,7 +355,7 @@ export function ReviewScreen() {
         copyTimer.current = window.setTimeout(() => setCopiedFile(null), 1400);
       });
     },
-    [root, store],
+    [label, store],
   );
 
   // 一覧に出す「どこの話か」と「その箇所が今どうなっているか」。文書をブロックへ
@@ -379,7 +377,7 @@ export function ReviewScreen() {
       new Promise<void>((done) => requestAnimationFrame(() => done()));
     void (async () => {
       for (const [file, list] of groups) {
-        const key = insideOf(root, file);
+        const key = insideOf(roots, file);
         const raw = key === null ? undefined : cacheRef.current.get(key);
         if (raw !== undefined) {
           const { body } = parseFrontmatter(raw);
@@ -390,7 +388,7 @@ export function ReviewScreen() {
             // 版の本文は id で覚えているので、2 度目からは取りに行かない。
             const base = await readVersion(t.base_version);
             if (!alive) return;
-            found.set(t.id, factsOf(t, pathLabel(root, file), blocks, body, shift, base));
+            found.set(t.id, factsOf(t, label(file), blocks, body, shift, base));
           }
         }
         await yieldFrame();
@@ -401,7 +399,7 @@ export function ReviewScreen() {
     return () => {
       alive = false;
     };
-  }, [ready, groups, root]);
+  }, [ready, groups, roots, label]);
 
   return (
     <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
@@ -442,7 +440,7 @@ export function ReviewScreen() {
             </p>
           )}
           {groups.map(([file, list]) => {
-            const where = fileLabel(root, file);
+            const where = fileLabel(label, file);
             return (
               <section key={file} className="mg-review-set">
                 <h2 className="mg-review-group">
@@ -686,7 +684,8 @@ function ThreadDetail({
   const store = useStore();
   const setSelectedId = useSetAtom(reviewThreadAtom);
   const ledger = useAtomValue(ledgerAtom);
-  const root = useAtomValue(activeFolderIdAtom);
+  const roots = useAtomValue(rootsAtom);
+  const label = useAtomValue(pathLabelAtom);
   const font = useAtomValue(fontAtom);
   const setScreen = useSetAtom(reviewScreenAtom);
   const { openFile, navigate, resolveAsset, peekAsset } = useWorkspace();
@@ -716,8 +715,8 @@ function ThreadDetail({
   const [focus, setFocus] = useState(0);
 
   // 本文の控えの鍵（絶対パス）。開いているフォルダの外なら null。
-  const rel = useMemo(() => insideOf(root, thread.file), [root, thread.file]);
-  const where = useMemo(() => fileLabel(root, thread.file), [root, thread.file]);
+  const rel = useMemo(() => insideOf(roots, thread.file), [roots, thread.file]);
+  const where = useMemo(() => fileLabel(label, thread.file), [label, thread.file]);
 
   const { body: currentBody, raw, reading } = useFileBody(rel);
   // 右の欄の幅。掴んでいるあいだは仕切りが DOM へ直に書き、離したら控える。

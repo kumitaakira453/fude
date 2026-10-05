@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
-  activeFolderIdAtom,
+  pathLabelAtom,
   contentCacheAtom,
   docFindOpenAtom,
   highlightAtom,
@@ -19,7 +19,6 @@ import {
 } from "../state/atoms";
 import { type ContentHit, searchContents, type SearchOptions } from "../lib/search";
 import { buildSearchTree, type SearchTreeNode } from "../lib/searchTree";
-import { relativeTo } from "../lib/fsAccess";
 import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { FileIcon } from "./FileIcon";
@@ -45,7 +44,7 @@ function HitPreview({ text, col, len }: { text: string; col: number; len: number
 
 export function SearchPanel() {
   const cache = useAtomValue(contentCacheAtom);
-  const root = useAtomValue(activeFolderIdAtom);
+  const label = useAtomValue(pathLabelAtom);
   const setHighlight = useSetAtom(highlightAtom);
   const setActiveHit = useSetAtom(searchActiveHitAtom);
   const setDocFindOpen = useSetAtom(docFindOpenAtom);
@@ -128,8 +127,8 @@ export function SearchPanel() {
 
   // ツリー表示用の階層構造と、折り畳み中ディレクトリ（既定は全展開）
   const tree = useMemo(
-    () => buildSearchTree(shown, baseOffsets, (path) => relativeTo(path, root)),
-    [shown, baseOffsets, root],
+    () => buildSearchTree(shown, baseOffsets, label),
+    [shown, baseOffsets, label],
   );
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -382,7 +381,7 @@ export function SearchPanel() {
                 <div className="sticky top-0 flex items-center gap-1.5 bg-[var(--mg-panel)] px-2 py-1 text-[12px] font-medium text-[var(--mg-fg-dim)]">
                   <span className="truncate">{basename(fh.path)}</span>
                   <span className="truncate text-[11px] text-[var(--mg-muted)]">
-                    {relativeTo(fh.path, root)}
+                    {label(fh.path)}
                   </span>
                   <span className="ml-auto shrink-0 rounded-full bg-[var(--mg-hover)] px-1.5 text-[10px] text-[var(--mg-muted)]">
                     {fh.hits.length}

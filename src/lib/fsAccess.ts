@@ -47,6 +47,22 @@ export function relativeTo(path: string, root: string | null | undefined): strin
   return root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
 }
 
+// そのパスが属する根。根が入れ子になっていれば深い方。どれにも入らなければ null。
+export function rootOf(roots: readonly string[], path: string): string | null {
+  let hit: string | null = null;
+  for (const root of roots) {
+    if ((path === root || path.startsWith(`${root}/`)) && (!hit || root.length > hit.length)) {
+      hit = root;
+    }
+  }
+  return hit;
+}
+
+// 根を 1 行として木に置く。根を 2 つ以上並べるとき、その下に中身を吊るす。
+export function rootNode(root: string, name: string, children: TreeNode[]): TreeNode {
+  return { name, path: root, rel: "", abs: root, kind: "dir", children };
+}
+
 // 控えの道筋を絶対パスに読み替える。根からの相対で控えていた頃のものも読める。
 export function absoluteIn(path: string, root: string): string {
   return path.startsWith("/") ? path : `${root}/${path}`;
@@ -268,11 +284,12 @@ export function findNode(nodes: TreeNode[], path: string): TreeNode | null {
 }
 
 // フォルダの中身。空文字か根そのものなら最上段。フォルダ以外を渡したら空。
+// 根を行として並べている木では、根の行の下を返す。
 export function childrenAt(nodes: TreeNode[], dirPath: string, root?: string | null): TreeNode[] {
-  if (!dirPath || dirPath === root) return nodes;
+  if (!dirPath) return nodes;
   const node = findNode(nodes, dirPath);
-  if (!node || node.kind !== "dir") return [];
-  return node.children ?? [];
+  if (node) return node.kind === "dir" ? (node.children ?? []) : [];
+  return dirPath === root ? nodes : [];
 }
 
 // 祖先のパスを浅い方から並べる。自分自身は含めない。

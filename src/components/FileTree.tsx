@@ -19,6 +19,7 @@ import { dirOf } from "../lib/paths";
 import {
   absoluteIn,
   ancestorPaths,
+  rootOf,
   listName,
   filterTree,
   type TreeNode,
@@ -26,6 +27,7 @@ import {
 import {
   activeFolderIdAtom,
   expandedByFolderAtom,
+  rootsAtom,
   loadingAtom,
   revealInTreeAtom,
   showOtherFilesAtom,
@@ -225,7 +227,8 @@ const TreeItem = memo(function TreeItem({
           <div
             role="button"
             tabIndex={0}
-            draggable
+            // 根の行（根を並べているとき）は掴ませない。フォルダごと動いてしまう。
+            draggable={node.rel !== ""}
             data-path={node.path}
             data-row="dir"
             onDragStart={startDrag}
@@ -279,7 +282,11 @@ const TreeItem = memo(function TreeItem({
               className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
             />
             <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
-            <span className="truncate font-medium">{node.name}</span>
+            <span
+              className={`truncate ${node.rel === "" ? "font-semibold text-[var(--mg-fg)]" : "font-medium"}`}
+            >
+              {node.name}
+            </span>
             {/* ホバー時に「このフォルダ内に作成」アクション */}
             <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
               <span
@@ -424,6 +431,12 @@ export function FileTree() {
   const noAdd = draftRoot || sole;
   const filter = useAtomValue(treeFilterAtom);
   const activeFolderId = useAtomValue(activeFolderIdAtom);
+  // 並べている根。2 つ以上なら、根を行として並べる（木の最上段が根の行になる）。
+  const roots = useAtomValue(rootsAtom);
+  const multi = roots.length > 1;
+  // 根そのものへ入れる口（枠への落とし込み・上の作る口）。根が 1 つのときだけ。
+  // 2 つ以上なら、どの根に入れるかは根の行で選ぶ。
+  const lone = multi ? null : activeFolderId;
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
   const [menu, setMenu] = useState<EntryMenuState | null>(null);
   const [iconFor, setIconFor] = useState<IconPickerState | null>(null);
@@ -450,11 +463,12 @@ export function FileTree() {
 
   // 初回は畳んだ状態で出す。1,000 ファイル規模のフォルダで最上位を全部
   // 開くと、最初の描画で数百行を一度に組むことになり画面が固まる。
+  // 根を行として並べているときは、根の行だけ開いて出す。
   useEffect(() => {
     if (!activeFolderId || tree.length === 0) return;
     if (activeFolderId in expandedByFolder) return;
-    setExpandedByFolder((prev) => ({ ...prev, [activeFolderId]: [] }));
-  }, [activeFolderId, tree, expandedByFolder, setExpandedByFolder]);
+    setExpandedByFolder((prev) => ({ ...prev, [activeFolderId]: multi ? roots : [] }));
+  }, [activeFolderId, tree, expandedByFolder, setExpandedByFolder, multi, roots]);
 
   // 根からの相対で控えていた頃の分も、絶対パスに読み替えて使う。
   const expanded = useMemo(
@@ -470,11 +484,11 @@ export function FileTree() {
   // 入れる先の印。行に当たっていれば行を、枠（根）に当たっていれば根を光らせる。
   const markOver = useCallback(
     (dest: string | null) => {
-      const atRoot = dest !== null && dest === activeFolderId;
+      const atRoot = dest !== null && dest === lone;
       setDragOverPath(atRoot ? null : dest);
       setRootDragOver(atRoot);
     },
-    [activeFolderId],
+    [lone],
   );
 
   const setExpandedOpen = useCallback(
@@ -531,11 +545,11 @@ export function FileTree() {
           });
           return;
         }
-        if (destDir !== activeFolderId) setExpandedOpen(destDir);
+        if (destDir !== lone) setExpandedOpen(destDir);
         await intake(destDir, brought);
       })();
     },
-    [noAdd, intake, setExpandedOpen, activeFolderId],
+    [noAdd, intake, setExpandedOpen, lone],
   );
 
   const toggle = useCallback(
@@ -557,7 +571,12 @@ export function FileTree() {
   useEffect(() => {
     if (!reveal || !activeFolderId) return;
     const target = reveal.path;
-    const ancestors = ancestorPaths(target, activeFolderId);
+    // 根を行として並べているときは、根の行も開く。
+    const root = rootOf(roots, target);
+    const ancestors = [
+      ...(multi && root && root !== target ? [root] : []),
+      ...ancestorPaths(target, root),
+    ];
     if (ancestors.length) {
       setExpandedByFolder((prev) => {
         const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
@@ -589,14 +608,14 @@ export function FileTree() {
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [reveal, activeFolderId, setExpandedByFolder]);
+  }, [reveal, activeFolderId, setExpandedByFolder, roots, multi]);
 
   const startCreate = useCallback(
     (parentPath: string, kind: "file" | "dir") => {
-      if (parentPath !== activeFolderId) setExpandedOpen(parentPath);
+      if (parentPath !== lone) setExpandedOpen(parentPath);
       setCreating({ parentPath, kind });
     },
-    [setExpandedOpen, activeFolderId],
+    [setExpandedOpen, lone],
   );
 
   // 行へ焦点を戻す。入力欄から行へ戻るときは、行が描き直されるのを待つ。
@@ -703,16 +722,16 @@ export function FileTree() {
   const onRootDrop = (e: React.DragEvent) => {
     markOver(null);
     spring.stop();
-    if (!activeFolderId) return;
+    if (!lone) return;
     if (hasFiles(e.dataTransfer)) {
       e.preventDefault();
-      onBringIn(activeFolderId, e.dataTransfer);
+      onBringIn(lone, e.dataTransfer);
       return;
     }
     if (!e.dataTransfer.types.includes(DND_MIME)) return;
     const payload = readDragPayload(e.dataTransfer);
     e.preventDefault();
-    if (payload && !payload.from) void moveEntry(payload.path, activeFolderId); // ルートへ移動
+    if (payload && !payload.from) void moveEntry(payload.path, lone); // ルートへ移動
   };
 
   return (
@@ -722,17 +741,17 @@ export function FileTree() {
         <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
           エクスプローラー
         </span>
-        {!noAdd && (
+        {!noAdd && lone && (
           <>
             <button
-              onClick={() => activeFolderId && startCreate(activeFolderId, "file")}
+              onClick={() => startCreate(lone, "file")}
               title="ルートに新規ファイル"
               className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
             >
               <Icon name="note_add" size={16} />
             </button>
             <button
-              onClick={() => activeFolderId && startCreate(activeFolderId, "dir")}
+              onClick={() => startCreate(lone, "dir")}
               title="ルートに新規フォルダ"
               className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
             >
@@ -746,11 +765,11 @@ export function FileTree() {
         ref={listRef}
         onDragOver={(e) => {
           const outside = hasFiles(e.dataTransfer);
-          if (outside && noAdd) return;
+          if (!lone || (outside && noAdd)) return;
           if (!outside && !e.dataTransfer.types.includes(DND_MIME)) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = outside ? "copy" : "move";
-          markOver(activeFolderId);
+          markOver(lone);
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) markOver(null);
@@ -761,7 +780,7 @@ export function FileTree() {
           rootDragOver ? "ring-1 ring-inset ring-[var(--mg-accent)]" : ""
         }`}
       >
-        {creating && creating.parentPath === activeFolderId && (
+        {creating && creating.parentPath === lone && (
           <NameInput
             initial=""
             placeholder={

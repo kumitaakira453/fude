@@ -34,6 +34,7 @@ export function EntryMenu({
   onNewFolder,
   onCloseOthers,
   onCloseAll,
+  onRemoveRoot,
 }: {
   menu: EntryMenuState;
   onClose: () => void;
@@ -48,11 +49,15 @@ export function EntryMenu({
   // タブの並びから出したときだけ渡る。ツリーの行には閉じるものが無い。
   onCloseOthers?: () => void;
   onCloseAll?: () => void;
+  // 根の行から、その根を並びから外す。
+  onRemoveRoot?: (n: TreeNode) => void;
 }) {
   const { openInNewWindow, deleteEntry } = useWorkspace();
   const store = useStore();
   const { node } = menu;
   const absPath = node.path;
+  // 根を行として並べているときの、根の行。
+  const isRoot = node.kind === "dir" && node.rel === "";
   // 実在するエディタだけを項目に出す（押しても無反応になるのを避ける）
   const [editors, setEditors] = useState<ExternalApp[]>([]);
   useEffect(() => {
@@ -152,18 +157,32 @@ export function EntryMenu({
           } satisfies MI,
         ]
       : []),
-    {
-      icon: "drive_file_rename_outline",
-      label: "名前を変更",
-      tone: "edit",
-      action: () => onRename(node),
-    },
-    {
-      icon: "delete",
-      label: "削除",
-      tone: "drop",
-      action: () => void askDelete(),
-    },
+    // 根の行は並べているフォルダそのもの。名前を変えたり消したりはここからはしない。
+    ...(isRoot
+      ? onRemoveRoot
+        ? [
+            {
+              icon: "playlist_remove",
+              label: "ワークスペースから外す",
+              tone: "drop",
+              action: () => onRemoveRoot(node),
+            } satisfies MI,
+          ]
+        : []
+      : [
+          {
+            icon: "drive_file_rename_outline",
+            label: "名前を変更",
+            tone: "edit",
+            action: () => onRename(node),
+          } satisfies MI,
+          {
+            icon: "delete",
+            label: "削除",
+            tone: "drop",
+            action: () => void askDelete(),
+          } satisfies MI,
+        ]),
     "sep",
     ...externalItems,
     "sep",
