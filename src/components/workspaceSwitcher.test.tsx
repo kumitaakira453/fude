@@ -224,7 +224,7 @@ describe("作る：＋", () => {
     expect(document.body.textContent).not.toContain("Claude のセッションから作成");
   });
 
-  it("連携を入れていれば、まだワークスペースの無いセッションを並べる", async () => {
+  it("連携を入れていれば、セッションを並べる（作成済みのものは印を付け、押すと開く）", async () => {
     const { el } = await show((s) => {
       s.set(A.claudeLinkAtom, true);
       s.set(A.claudeSessionsAtom, {
@@ -237,10 +237,24 @@ describe("作る：＋", () => {
       });
     });
     act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
-    const body = document.body.textContent ?? "";
-    expect(body).toContain("[V]新しいセッション");
-    expect(body).not.toContain("結びつき済み");
+    const made = button("結びつき済み");
+    expect(made.textContent).toContain("作成済み");
+    expect(button("[V]新しいセッション").textContent).not.toContain("作成済み");
     act(() => button("[V]新しいセッション").click());
     expect(calls).toEqual([{ op: "fromSession", arg: "t" }]);
+    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    act(() => button("結びつき済み").click());
+    expect(calls.at(-1)).toEqual({ op: "open", arg: "b" });
+  });
+});
+
+describe("Claude のセッションの終わり", () => {
+  it("ワークスペースのあるセッションが終わったら、札に「終了」と出す", async () => {
+    const { el } = await show((s) => {
+      s.set(A.claudeLinkAtom, true);
+      s.set(A.claudeSessionsAtom, { sessions: [], error: null, gone: new Set<string>() });
+    });
+    expect(pill(el, "b").textContent).toContain("終了");
+    expect(pill(el, "a").textContent).not.toContain("終了");
   });
 });

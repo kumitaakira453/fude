@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { PHASE_LABEL } from "../lib/claude";
+import { PHASE_LABEL, type Phase } from "../lib/claude";
 import { currentWindowLabel } from "../lib/windows";
 import { colorVar, liveWorkspaces } from "../lib/workspaces";
 import {
@@ -20,6 +20,14 @@ import { Icon } from "./Icon";
 // 掴んで並べ替え、中クリックで列から外す（⌃1〜9 はこの並びの位置を指す）。
 
 const DRAG_TYPE = "application/x-fude-ws";
+
+// 札に言葉で添える状態。作業中・待機中は点だけで足りる。
+const PHASE_BADGE: Partial<Record<Phase, string>> = {
+  waiting: "応答待ち",
+  done: "終了",
+  ended: "終了",
+  deleted: "削除済み",
+};
 
 export function WorkspacePills() {
   const [bar, setBar] = useAtom(barAtom);
@@ -136,6 +144,10 @@ export function WorkspacePills() {
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
                 style={{ background: PHASE_COLOR[phase] }}
               />
+            )}
+            {/* 返事を待っているもの・終わったものは、点だけでは見落とすので言葉でも出す。 */}
+            {phase && PHASE_BADGE[phase] && (
+              <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_BADGE[phase]}</span>
             )}
           </button>
         );

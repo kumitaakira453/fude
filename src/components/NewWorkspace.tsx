@@ -4,7 +4,8 @@ import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
 import { PHASE_LABEL, phaseOf } from "../lib/claude";
 import { rootName } from "../lib/idb";
 import { ago } from "../lib/when";
-import { rootsSummary } from "../lib/workspaces";
+import { rootsSummary, type Workspace } from "../lib/workspaces";
+import { useWorkspace } from "../hooks/useWorkspace";
 import {
   claudeLinkAtom,
   claudeSessionsAtom,
@@ -32,6 +33,7 @@ export function NewWorkspace() {
   const claudeOn = useAtomValue(claudeLinkAtom);
   const claude = useAtomValue(claudeSessionsAtom);
   const ops = useWorkspaceOps();
+  const { openWorkspace } = useWorkspace();
   const [choosing, setChoosing] = useState(false);
   const now = useMemo(() => Date.now(), [at]);
 
@@ -48,15 +50,17 @@ export function NewWorkspace() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [at, setAt]);
 
-  // まだワークスペースになっていないセッション。新しく始めた順。
+  // セッションを新しく始めた順に。すでにワークスペースがあるものは、そのワーク
+  // スペースを添える（押すと作らずにそれを開く）。
   const sessions = useMemo(() => {
     if (!claudeOn || !claude) return [];
-    const linked = new Set(
-      [...list, ...(current ? [current] : [])].flatMap((w) => (w.claude ? [w.claude.sessionId] : [])),
-    );
+    const byId = new Map<string, Workspace>();
+    for (const w of [...list, ...(current ? [current] : [])]) {
+      if (w.claude) byId.set(w.claude.sessionId, w);
+    }
     return claude.sessions
-      .filter((s) => !linked.has(s.sessionId))
-      .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+      .map((s) => ({ s, ws: byId.get(s.sessionId) }))
+      .sort((a, b) => (b.s.startedAt ?? 0) - (a.s.startedAt ?? 0))
       .slice(0, SESSIONS_SHOWN);
   }, [claudeOn, claude, list, current]);
 
@@ -131,19 +135,21 @@ export function NewWorkspace() {
                   </p>
                 )}
                 {claude && !claude.error && sessions.length === 0 && (
-                  <p className="mg-ws-menu-quiet">追加できるセッションはありません</p>
+                  <p className="mg-ws-menu-quiet">セッションはありません</p>
                 )}
                 <div className="max-h-[36vh] overflow-y-auto">
-                  {sessions.map((s) => {
+                  {sessions.map(({ s, ws }) => {
                     const phase = phaseOf(s, { readable: true, transcriptGone: false });
                     return (
                       <button
                         key={s.sessionId}
                         type="button"
-                        className="mg-ws-menu-item"
+                        className={`mg-ws-menu-item${ws ? " is-made" : ""}`}
+                        title={ws ? `ワークスペース「${ws.name}」を開く` : "このセッションからワークスペースを作成"}
                         onClick={() => {
                           close();
-                          void ops.createFromSession(s);
+                          if (ws) void openWorkspace(ws);
+                          else void ops.createFromSession(s);
                         }}
                       >
                         <span
@@ -154,6 +160,7 @@ export function NewWorkspace() {
                         <span className="min-w-0 flex-1 truncate">
                           {s.name || s.sessionId.slice(0, 8)}
                         </span>
+                        {ws && <span className="mg-set-tag">作成済み</span>}
                         {s.startedAt ? (
                           <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
                             {ago(s.startedAt, now)}

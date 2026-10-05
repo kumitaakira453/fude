@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue } from "jotai";
-import { loadingAtom, sidebarTabAtom, treeFilterAtom } from "../state/atoms";
+import { loadingAtom, sidebarTabAtom, treeFilterAtom, workspaceAtom } from "../state/atoms";
 import { ClaudeBanner, ClaudeFiles } from "./ClaudePanel";
 import { FileTree } from "./FileTree";
 import { FolderSwitcher } from "./FolderSwitcher";
@@ -10,12 +10,17 @@ export function Sidebar() {
   const [tab, setTab] = useAtom(sidebarTabAtom);
   const [filter, setFilter] = useAtom(treeFilterAtom);
   const loading = useAtomValue(loadingAtom);
+  const ws = useAtomValue(workspaceAtom);
 
   return (
     <aside className="flex h-full min-h-0 flex-col bg-[var(--mg-panel)]">
-      <div className="border-b border-[var(--mg-border)] p-2">
-        <FolderSwitcher />
-      </div>
+      {/* ワークスペースを開いているときは、ツールバーの札が名前と手入れの入口を
+          持っているので、ここには出さない（同じものを 2 か所に置かない）。 */}
+      {!ws && (
+        <div className="border-b border-[var(--mg-border)] p-2">
+          <FolderSwitcher />
+        </div>
+      )}
       <ClaudeBanner />
 
       <div className="flex gap-1 px-2 pt-2">
