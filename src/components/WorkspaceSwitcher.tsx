@@ -49,6 +49,14 @@ export function WorkspaceSwitcher() {
   // 別のウィンドウで開いているもの（ID → ウィンドウの名前）。
   const [elsewhere, setElsewhere] = useState<Map<string, string>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
+  // 塗りは CSS の :hover で即座に出す。状態はキー操作を続ける起点だけに使う。
+  const byMouse = useRef(false);
+  const hover = (i: number) =>
+    setActive((a) => {
+      if (a === i) return a;
+      byMouse.current = true;
+      return i;
+    });
   const ime = useImeSafeEnter();
   // 並べる時刻は開いたときに 1 度だけ決める。
   const now = useMemo(() => Date.now(), [open]);
@@ -96,6 +104,11 @@ export function WorkspaceSwitcher() {
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
+    // マウスで当てた行はもう見えている。スクロールさせない。
+    if (byMouse.current) {
+      byMouse.current = false;
+      return;
+    }
     listRef.current
       ?.querySelector<HTMLElement>(`[data-idx="${active}"]`)
       ?.scrollIntoView({ block: "nearest" });
@@ -158,7 +171,7 @@ export function WorkspaceSwitcher() {
           />
         </div>
 
-        <div ref={listRef} className="max-h-[56vh] overflow-y-auto py-1">
+        <div ref={listRef} className="mg-pick-list max-h-[56vh] overflow-y-auto py-1">
           {total === 0 && (
             <div className="px-4 py-6 text-center text-[12.5px] text-[var(--mg-muted)]">
               {list.length === 0 && folders.length === 0
@@ -174,15 +187,14 @@ export function WorkspaceSwitcher() {
               <div
                 key={ws.id}
                 data-idx={i}
-                onMouseMove={() => setActive(i)}
+                onMouseMove={() => hover(i)}
                 onClick={(e) => choose(i, e.metaKey)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
                 }}
-                className={`flex cursor-pointer items-center gap-3 px-4 py-2 ${
-                  i === active ? "bg-[var(--mg-accent-soft)]" : ""
-                }`}
+                data-on={i === active || undefined}
+                className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-2"
               >
                 <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
                 <div className="min-w-0 flex-1">
@@ -235,12 +247,11 @@ export function WorkspaceSwitcher() {
                   <div
                     key={f.path}
                     data-idx={i}
-                    onMouseMove={() => setActive(i)}
+                    onMouseMove={() => hover(i)}
                     onClick={(e) => choose(i, e.metaKey)}
                     title="開くと、このフォルダのワークスペースができます"
-                    className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 ${
-                      i === active ? "bg-[var(--mg-accent-soft)]" : ""
-                    }`}
+                    data-on={i === active || undefined}
+                    className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5"
                   >
                     <Icon name="folder" size={16} className="shrink-0 text-[var(--mg-muted)]" />
                     <div className="min-w-0 flex-1">

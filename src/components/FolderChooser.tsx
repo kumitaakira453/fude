@@ -46,6 +46,14 @@ export function FolderChooser({
   );
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  // 塗りは CSS の :hover で即座に出す。状態はキー操作を続ける起点だけに使う。
+  const byMouse = useRef(false);
+  const hover = (i: number) =>
+    setActive((a) => {
+      if (a === i) return a;
+      byMouse.current = true;
+      return i;
+    });
   const ime = useImeSafeEnter();
   const now = useMemo(() => Date.now(), []);
 
@@ -61,6 +69,11 @@ export function FolderChooser({
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
+    // マウスで当てた行はもう見えている。スクロールさせない。
+    if (byMouse.current) {
+      byMouse.current = false;
+      return;
+    }
     listRef.current
       ?.querySelector<HTMLElement>(`[data-idx="${active}"]`)
       ?.scrollIntoView({ block: "nearest" });
@@ -158,7 +171,7 @@ export function FolderChooser({
         </div>
       )}
 
-      <div ref={listRef} className="max-h-[46vh] overflow-y-auto py-1">
+      <div ref={listRef} className="mg-pick-list max-h-[46vh] overflow-y-auto py-1">
         {rows.length === 0 && (
           <div className="px-4 py-4 text-center text-[12.5px] text-[var(--mg-muted)]">
             {folders.length === 0 ? "以前開いたフォルダはまだありません" : "一致するフォルダがありません"}
@@ -171,11 +184,10 @@ export function FolderChooser({
             <div
               key={f.path}
               data-idx={i}
-              onMouseMove={() => setActive(i)}
+              onMouseMove={() => hover(i)}
               onClick={() => toggle(f.path)}
-              className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 ${
-                i === active ? "bg-[var(--mg-accent-soft)]" : ""
-              }`}
+              data-on={i === active || undefined}
+              className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5"
             >
               <Icon
                 name={on ? "check_box" : "check_box_outline_blank"}
@@ -204,11 +216,10 @@ export function FolderChooser({
         })}
         <div
           data-idx={rows.length}
-          onMouseMove={() => setActive(rows.length)}
+          onMouseMove={() => hover(rows.length)}
           onClick={() => void other()}
-          className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 text-[13px] text-[var(--mg-fg-dim)] ${
-            active === rows.length ? "bg-[var(--mg-accent-soft)]" : ""
-          }`}
+          data-on={active === rows.length || undefined}
+          className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5 text-[13px] text-[var(--mg-fg-dim)]"
         >
           <Icon name="folder_open" size={18} className="text-[var(--mg-muted)]" />
           その他のフォルダ…

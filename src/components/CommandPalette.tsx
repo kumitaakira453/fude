@@ -30,6 +30,14 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  // 塗りは CSS の :hover で即座に出す。状態はキー操作を続ける起点だけに使う。
+  const byMouse = useRef(false);
+  const hover = (i: number) =>
+    setActive((a) => {
+      if (a === i) return a;
+      byMouse.current = true;
+      return i;
+    });
   const ime = useImeSafeEnter();
 
   // 開いた時刻は開くたびに 1 度だけ決める。1 文字打つたびに now が動くと、
@@ -50,6 +58,11 @@ export function CommandPalette() {
   useEffect(() => setActive(0), [query]);
 
   useEffect(() => {
+    // マウスで当てた行はもう見えている。スクロールさせない。
+    if (byMouse.current) {
+      byMouse.current = false;
+      return;
+    }
     const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`);
     el?.scrollIntoView({ block: "nearest" });
   }, [active]);
@@ -103,18 +116,17 @@ export function CommandPalette() {
             className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
           />
         </div>
-        <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
+        <div ref={listRef} className="mg-pick-list max-h-[50vh] overflow-y-auto py-1">
           {results.map((r, i) => (
             <button
               key={r.node.path}
               data-idx={i}
               // 手が動いたときだけ選び直す。入った・出たで決めると、打つたびに
               // 並びが変わったとき、動いていないマウスの下へ当たりが飛ぶ。
-              onMouseMove={() => setActive(i)}
+              onMouseMove={() => hover(i)}
               onClick={() => choose(i)}
-              className={`flex w-full flex-col items-start px-4 py-1.5 text-left transition ${
-                i === active ? "bg-[var(--mg-accent-soft)]" : ""
-              }`}
+              data-on={i === active || undefined}
+              className="mg-pick-row flex w-full flex-col items-start px-4 py-1.5 text-left"
             >
               <span className="flex w-full items-baseline gap-2 text-[13.5px] text-[var(--mg-fg)]">
                 <span className="min-w-0 flex-1 truncate">
