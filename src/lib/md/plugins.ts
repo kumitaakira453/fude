@@ -1,4 +1,4 @@
-import { baseKeymap, chainCommands, lift } from "prosemirror-commands";
+import { baseKeymap, chainCommands, lift, splitBlock } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { inputRules } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
@@ -20,6 +20,7 @@ import {
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 import { canJoin, type Transform } from "prosemirror-transform";
+import { CALLOUT_RE } from "../callout";
 import { fromMarkdown } from "./fromMarkdown";
 import { highlightCode } from "./highlight";
 import { rules } from "./inputRules";
@@ -150,6 +151,32 @@ export const splitItem: Command = (state, dispatch, view) => {
     // 印の付いた項目を割ったら、続きは未了から始める。
     box === null ? undefined : { box: BLANK },
   )(state, dispatch, view);
+};
+
+// 行を割るとき、割った先の頭に来る空白を落とす。
+//
+// 段落の中の改行は空白として並ぶので、改行の直後で割ると新しい行が空白から
+// 始まる。Markdown は段落の頭の空白を読まないので、残しても見た目がずれる
+// だけになる。
+export const splitTrimmed: Command = (state, dispatch, view) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parent.type.spec.code) return false;
+  const rest = $from.parent.textBetween($from.parentOffset, $from.parent.content.size);
+  const lead = rest.length - rest.trimStart().length;
+  if (lead === 0 || lead === rest.length) return false;
+  const trimmed = state.tr.delete($from.pos, $from.pos + lead);
+  let split: Transaction | null = null;
+  if (!splitBlock(state.apply(trimmed), (tr) => (split = tr), view)) return false;
+  if (dispatch && split) {
+    const done: Transaction = split;
+    for (const step of done.steps) trimmed.step(step);
+    dispatch(
+      trimmed
+        .setSelection(TextSelection.create(trimmed.doc, done.selection.from))
+        .scrollIntoView(),
+    );
+  }
+  return true;
 };
 
 // ⌘⏎。タスクの項目の中ならチェックを入れ替える。
@@ -490,6 +517,27 @@ export const plainDetailsHead: Command = (state, dispatch) => {
   return true;
 };
 
+// 引用の 2 つ目以降の塊の先頭で Backspace。その塊を引用の外へ出す。
+//
+// 既定は手前の塊へ継ぐので、引用の中で Enter を押して割った行は、何度押しても
+// 引用から出られない。Notion と同じく「Enter で割って Backspace で外す」で
+// 抜けられるようにする。後ろに続く塊は引用のまま残る（引用は 2 つに分かれる）。
+//
+// callout は対象にしない。目印の下に段落が並ぶのが普通の形で、手前へ継ぐ方が
+// 書き手の意図に合う。
+export const outOfQuoteBack: Command = (state, dispatch, view) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset !== 0) return false;
+  if ($from.depth < 2) return false;
+  const depth = $from.depth - 1;
+  const holder = $from.node(depth);
+  if (holder.type !== schema.nodes.blockquote || CALLOUT_RE.test(holder.textContent)) {
+    return false;
+  }
+  if ($from.index(depth) === 0) return false;
+  return lift(state, dispatch, view);
+};
+
 // トグルの中身の先頭で Backspace。その塊を囲みの外へ出す。
 //
 // 既定（joinBackward）は囲みごと畳んでしまい、トグルでは見出し（<summary> の
@@ -709,6 +757,7 @@ const backAtHead: Command[] = [
   plainDetailsHead,
   toDetailsHead,
   outOfDetailsBack,
+  outOfQuoteBack,
   dropEmptyBack,
   joinItemBack,
   outdentBack,
@@ -1037,7 +1086,14 @@ export function editorPlugins({
       "Mod-z": undo,
       "Shift-Mod-z": redo,
       "Mod-y": redo,
-      Enter: chainCommands(cellEnter, outOfDetailsHead, fenceOnEnter, outEnter, splitItem),
+      Enter: chainCommands(
+        cellEnter,
+        outOfDetailsHead,
+        fenceOnEnter,
+        outEnter,
+        splitItem,
+        splitTrimmed,
+      ),
       ArrowUp: cellUp,
       ArrowDown: cellDown,
       ArrowLeft: cellLeft,
