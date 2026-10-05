@@ -259,14 +259,17 @@ describe("フォルダを複数並べているとき", () => {
     expect(el.querySelectorAll(".mg-tree-root-group")).toHaveLength(2);
   });
 
-  it("上端に並べている数を出し、押すとまとめて畳む・開く", () => {
+  it("上端のボタンで、すべてのフォルダをまとめて畳む・開く", () => {
     const el = showTwo();
     const count = el.querySelector<HTMLElement>(".mg-tree-roots")!;
-    expect(count.textContent).toBe("フォルダ 2");
     // 最初は根の行だけ開いている。
     expect(count.title).toBe("すべてのフォルダを畳む");
     act(() => count.click());
     expect(el.querySelector<HTMLElement>(".mg-tree-roots")!.title).toBe("すべてのフォルダを開く");
+  });
+
+  it("「エクスプローラー」の字は出さない", () => {
+    expect(showTwo().textContent).not.toContain("エクスプローラー");
   });
 
   it("根が 1 つのときは見出しにしない", () => {

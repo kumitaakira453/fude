@@ -295,7 +295,7 @@ const TreeItem = memo(function TreeItem({
             />
             <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
             <span
-              className={`truncate ${heading ? "shrink-0 font-semibold text-[var(--mg-fg)]" : "font-medium"}`}
+              className={`min-w-0 truncate ${heading ? "mg-tree-root-name" : "font-medium"}`}
             >
               {node.name}
             </span>
@@ -770,39 +770,38 @@ export function FileTree() {
 
   return (
     <div className="flex min-h-0 flex-col">
-      {/* ルート操作ツールバー（VSCode Explorer 風） */}
-      <div className="flex items-center gap-0.5 px-2 pb-1">
-        <span className="mr-auto flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
-          エクスプローラー
+      {/* 木そのものへの操作。押せるものが無ければ段ごと出さない。 */}
+      {((!noAdd && lone) || multi) && (
+        <div className="flex items-center justify-end gap-0.5 px-2 pb-1">
           {multi && (
             <button
               onClick={toggleRoots}
               title={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
-              className="mg-tree-roots rounded px-1.5 py-0.5 normal-case tracking-normal hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              className="mg-tree-roots grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
             >
-              フォルダ {roots.length}
+              <Icon name={allRootsOpen ? "unfold_less" : "unfold_more"} size={16} />
             </button>
           )}
-        </span>
-        {!noAdd && lone && (
-          <>
-            <button
-              onClick={() => startCreate(lone, "file")}
-              title="ルートに新規ファイル"
-              className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-            >
-              <Icon name="note_add" size={16} />
-            </button>
-            <button
-              onClick={() => startCreate(lone, "dir")}
-              title="ルートに新規フォルダ"
-              className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-            >
-              <Icon name="create_new_folder" size={16} />
-            </button>
-          </>
-        )}
-      </div>
+          {!noAdd && lone && (
+            <>
+              <button
+                onClick={() => startCreate(lone, "file")}
+                title="ルートに新規ファイル"
+                className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              >
+                <Icon name="note_add" size={16} />
+              </button>
+              <button
+                onClick={() => startCreate(lone, "dir")}
+                title="ルートに新規フォルダ"
+                className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              >
+                <Icon name="create_new_folder" size={16} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div
         ref={listRef}
