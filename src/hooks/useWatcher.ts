@@ -1,7 +1,7 @@
-import { watch, type UnwatchFn, type WatchEvent } from "@tauri-apps/plugin-fs";
+import type { WatchEvent } from "@tauri-apps/plugin-fs";
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
-import { invalidateImage, isImage, isMarkdown } from "../lib/fsAccess";
+import { invalidateImage, isImage, isMarkdown, watchFolder } from "../lib/fsAccess";
 import { kindOf } from "../lib/kind";
 import { matchRenames, newRenameMemo } from "../lib/renames";
 import * as A from "../state/atoms";
@@ -45,7 +45,7 @@ export function useWatcher() {
     if (!root) return;
 
     let disposed = false;
-    let unwatch: UnwatchFn | null = null;
+    let unwatch: (() => void) | null = null;
     let treeTimer: number | undefined;
     // 名前の変更は届き方が一定しない。両方まとめて届くこともあれば、
     // 「古い名前が消えた」「新しい名前が現れた」が別々の回に届くこともある。
@@ -70,28 +70,29 @@ export function useWatcher() {
       }, 400);
     };
 
-    watch(
-      root,
-      (event) => {
-        if (disposed) return;
+    // 合図は束で届く。知っている名前の集まりや触った時刻の写しは、束ごとに
+    // 1 回だけ作る（git の切り替えなどでは、1 束に数百の合図が入る）。
+    const onBatch = (events: WatchEvent[]) => {
+      if (disposed) return;
+      const sole = store.get(A.soleAtom);
+      const known = new Set(store.get(A.filesAtom).map((f) => f.path));
+      const shown = store.get(A.showOtherFilesAtom);
+      const touched = new Map(store.get(A.touchedAtom));
+      let structural = false;
+      let assetChanged = false;
+      for (const event of events) {
         // 名前の変更として届いたなら、当てずっぽうに頼らずそのまま組める。
         const both = renamedPair(event, root);
         if (both) {
           void adoptRename(both[0], both[1]);
-          scheduleTreeRefresh();
-          return;
+          structural = true;
+          continue;
         }
         // 1 枚だけ開いているときは、その 1 枚に当たる合図だけを通す。
         // 親フォルダには他のファイルがいくらでもあり、それで木を組み直しても
         // 出すものは変わらない。
-        const sole = store.get(A.soleAtom);
-        if (sole && !event.paths.includes(sole)) return;
-        const known = new Set(store.get(A.filesAtom).map((f) => f.path));
-        const shown = store.get(A.showOtherFilesAtom);
-        const touched = new Map(store.get(A.touchedAtom));
+        if (sole && !event.paths.includes(sole)) continue;
         const gone = vanished(event);
-        let structural = false;
-        let assetChanged = false;
         for (const abs of event.paths) {
           if (!abs.startsWith(root)) continue;
           const rel = abs.slice(root.length + 1);
@@ -114,16 +115,17 @@ export function useWatcher() {
             structural = true; // ディレクトリ変化など
           }
         }
-        store.set(A.touchedAtom, touched);
-        if (assetChanged) {
-          store.set(A.assetVersionAtom, store.get(A.assetVersionAtom) + 1);
-        }
-        if (structural) scheduleTreeRefresh();
-      },
-      // 1 枚だけ開いているときは下の階層まで見張らない。見るのはその 1 枚で、
-      // 親が ~/Downloads のような大きなフォルダだと丸ごと見張る意味が無い。
-      { recursive: !store.get(A.soleAtom), delayMs: 250 },
-    )
+      }
+      store.set(A.touchedAtom, touched);
+      if (assetChanged) {
+        store.set(A.assetVersionAtom, store.get(A.assetVersionAtom) + 1);
+      }
+      if (structural) scheduleTreeRefresh();
+    };
+
+    // 1 枚だけ開いているときは下の階層まで見張らない。見るのはその 1 枚で、
+    // 親が ~/Downloads のような大きなフォルダだと丸ごと見張る意味が無い。
+    watchFolder(root, store.get(A.activeIgnoreAtom), !store.get(A.soleAtom), onBatch)
       .then((fn) => {
         if (disposed) fn();
         else {

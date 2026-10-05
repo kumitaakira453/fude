@@ -5,6 +5,7 @@ mod cli;
 #[cfg(target_os = "macos")]
 mod dock;
 pub mod review;
+mod watch;
 mod windows;
 
 // 第 1 引数が review のときは CLI として動き、Tauri を初期化せずに終了する。
@@ -559,6 +560,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .manage(watch::Watches::default())
         .invoke_handler(tauri::generate_handler![
             open_in_app,
             open_in_terminal,
@@ -583,7 +585,9 @@ pub fn run() {
             review_edit_comment,
             windows::open_doc_window,
             windows::set_window_title,
-            windows::record_recent_folder
+            windows::record_recent_folder,
+            watch::watch_folder,
+            watch::unwatch_folder
         ])
         .setup(|app| {
             // Dock アイコンのメニュー（macOS のみ。失敗しても起動は続ける）

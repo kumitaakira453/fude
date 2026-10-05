@@ -1,7 +1,8 @@
 // Tauri ネイティブ FS 経由でローカルフォルダを走査・読込する。
 // ブラウザの File System Access API は使わない（許可プロンプト不要・絶対パス取得可）。
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import type { WatchEvent } from "@tauri-apps/plugin-fs";
 import {
   exists,
   mkdir,
@@ -317,6 +318,29 @@ export async function folderMtimes(
     ignore,
   });
   return new Map(list.map((f) => [f.path, f.mtime]));
+}
+
+// フォルダを見張る。合図は間合いの分だけまとめて、外したもの（ignore）の
+// 下の分を除いてから届く。返す関数で見張りをやめる。
+export async function watchFolder(
+  rootAbs: string,
+  ignore: string,
+  recursive: boolean,
+  onBatch: (events: WatchEvent[]) => void,
+): Promise<() => void> {
+  const channel = new Channel<WatchEvent[]>();
+  channel.onmessage = onBatch;
+  const id = await invoke<number>("watch_folder", {
+    root: rootAbs,
+    ignore,
+    recursive,
+    onEvent: channel,
+  });
+  return () => {
+    void invoke("unwatch_folder", { id }).catch((e: unknown) => {
+      console.error("見張りを止められません", e);
+    });
+  };
 }
 
 // 全文検索インデックス用。mtime を使わない経路では stat を省いて IPC を半減させる。

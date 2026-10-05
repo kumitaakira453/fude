@@ -122,6 +122,7 @@ dependencies = [
  "flate2",
  "ignore",
  "log",
+ "notify",
  "objc2",
  "serde",
  "serde_json",
