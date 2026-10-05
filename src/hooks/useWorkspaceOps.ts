@@ -12,6 +12,7 @@ import {
   freeColor,
   newWorkspaceId,
   saveWorkspace,
+  uniqueName,
   type Workspace,
   type WorkspaceColor,
 } from "../lib/workspaces";
@@ -50,26 +51,25 @@ export function useWorkspaceOps() {
   );
 
   // 新しく作って開く。copy を立てると今のタブの並びと根を写す（作業の途中で
-  // 用途が分かれたとき）。立てなければ、選んだフォルダ 1 つで始める。
+  // 用途が分かれたとき）。立てなければ、渡されたフォルダで空のタブから始める。
   const createWorkspace = useCallback(
-    async (opts: { name?: string; copy?: boolean; newWindow?: boolean } = {}) => {
+    async (
+      opts: { roots?: string[]; name?: string; copy?: boolean; newWindow?: boolean } = {},
+    ) => {
       const now = nowMs();
       const current = store.get(A.workspaceAtom);
-      let roots: string[];
-      if (opts.copy && current) {
-        roots = [...current.roots];
-      } else {
-        const dir = await pickDirectory();
-        if (!dir) return;
-        roots = [dir];
-        void registerFolder(dir, now).then((list) => store.set(A.foldersAtom, list));
-      }
+      const roots = opts.copy && current ? [...current.roots] : [...(opts.roots ?? [])];
+      if (roots.length === 0) return;
       const folders = store.get(A.foldersAtom);
+      const taken = store.get(A.workspacesAtom).map((w) => w.name);
       const ws: Workspace = {
         id: newWorkspaceId(now),
         name:
           opts.name?.trim() ||
-          (opts.copy && current ? `${current.name} のコピー` : rootName(folders, roots[0])),
+          uniqueName(
+            opts.copy && current ? `${current.name} のコピー` : rootName(folders, roots[0]),
+            taken,
+          ),
         color: freeColor(store.get(A.workspacesAtom)),
         roots,
         lastOpened: now,
@@ -125,24 +125,36 @@ export function useWorkspaceOps() {
     [store, put, refreshTree],
   );
 
-  // 今のワークスペースにフォルダを足す。
-  const addRoot = useCallback(async () => {
-    const ws = store.get(A.workspaceAtom);
-    if (!ws) return;
+  // 今のワークスペースにフォルダを足す。既に並んでいるもの（とその下）は除く。
+  const addRoots = useCallback(
+    async (dirs: string[]) => {
+      const ws = store.get(A.workspaceAtom);
+      if (!ws) return;
+      const fresh = dirs.filter(
+        (dir) => !ws.roots.some((r) => dir === r || dir.startsWith(`${r}/`)),
+      );
+      if (fresh.length === 0) {
+        notify(store, "そのフォルダはもう並んでいます");
+        return;
+      }
+      // 足したフォルダは開いた状態で出す。
+      store.set(A.expandedByFolderAtom, (prev) => ({
+        ...prev,
+        [ws.id]: [...new Set([...(prev[ws.id] ?? []), ...ws.roots, ...fresh])],
+      }));
+      await setRoots(ws, [...ws.roots, ...fresh]);
+    },
+    [store, setRoots],
+  );
+
+  // 開いたことの無いフォルダを OS のダイアログで選ぶ。選んだものは履歴に載せる
+  // （次からは一覧から選べる）。
+  const pickOtherFolder = useCallback(async (): Promise<string | null> => {
     const dir = await pickDirectory();
-    if (!dir) return;
-    if (ws.roots.some((r) => dir === r || dir.startsWith(`${r}/`))) {
-      notify(store, "そのフォルダはもう並んでいます");
-      return;
-    }
-    void registerFolder(dir, nowMs()).then((list) => store.set(A.foldersAtom, list));
-    // 足したフォルダは開いた状態で出す。
-    store.set(A.expandedByFolderAtom, (prev) => ({
-      ...prev,
-      [ws.id]: [...new Set([...(prev[ws.id] ?? []), ...ws.roots, dir])],
-    }));
-    await setRoots(ws, [...ws.roots, dir]);
-  }, [store, setRoots]);
+    if (!dir) return null;
+    store.set(A.foldersAtom, await registerFolder(dir, nowMs()));
+    return dir;
+  }, [store]);
 
   // 今のワークスペースから根を外す。最後の 1 つは外さない。その根のタブは閉じる。
   const removeRoot = useCallback(
@@ -261,7 +273,8 @@ export function useWorkspaceOps() {
     createWorkspace,
     renameWorkspace,
     recolorWorkspace,
-    addRoot,
+    addRoots,
+    pickOtherFolder,
     removeRoot,
     deleteWorkspace,
     openInNewWindow,

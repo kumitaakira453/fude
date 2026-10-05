@@ -25,6 +25,7 @@ import {
 } from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { refreshWorkspaces } from "../state/workspace";
+import { FolderChooser, type ChooseMode } from "./FolderChooser";
 import { Icon } from "./Icon";
 
 // ワークスペースを切り替える一覧（⌘⇧P）。最後に開いた順に並び、打てば絞り込む。
@@ -58,6 +59,8 @@ export function WorkspaceSwitcher() {
   const [elsewhere, setElsewhere] = useState<Map<string, string>>(new Map());
   const [editing, setEditing] = useState<string | null>(null);
   const [painting, setPainting] = useState<string | null>(null);
+  // 一覧か、フォルダを選ぶ段（作る・足す）か。
+  const [mode, setMode] = useState<"list" | ChooseMode>("list");
   const listRef = useRef<HTMLDivElement>(null);
   const ime = useImeSafeEnter();
   // 並べる時刻は開いたときに 1 度だけ決める。
@@ -69,6 +72,7 @@ export function WorkspaceSwitcher() {
     setActive(0);
     setEditing(null);
     setPainting(null);
+    setMode("list");
     void refreshWorkspaces(store);
     const me = currentWindowLabel();
     void liveWorkspaces()
@@ -131,6 +135,33 @@ export function WorkspaceSwitcher() {
     );
     if (ok) await ops.deleteWorkspace(ws.id);
   };
+
+  if (mode !== "list") {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[12vh] backdrop-blur-sm"
+        onClick={close}
+      >
+        <div
+          className="w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FolderChooser
+            mode={mode}
+            initial={mode === "create" ? (current?.roots ?? []) : []}
+            hidden={mode === "add" ? (current?.roots ?? []) : []}
+            pickOther={ops.pickOtherFolder}
+            onBack={() => setMode("list")}
+            onDone={(roots, name, newWindow) => {
+              close();
+              if (mode === "create") void ops.createWorkspace({ roots, name, newWindow });
+              else void ops.addRoots(roots);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -346,10 +377,7 @@ export function WorkspaceSwitcher() {
           <FootButton
             icon="add"
             label="新しく作る"
-            onClick={() => {
-              close();
-              void ops.createWorkspace();
-            }}
+            onClick={() => setMode("create")}
           />
           {current && (
             <FootButton
@@ -365,10 +393,7 @@ export function WorkspaceSwitcher() {
             <FootButton
               icon="create_new_folder"
               label="フォルダを足す"
-              onClick={() => {
-                close();
-                void ops.addRoot();
-              }}
+              onClick={() => setMode("add")}
             />
           )}
           <span className="ml-auto px-2 text-[10.5px] text-[var(--mg-muted)]">

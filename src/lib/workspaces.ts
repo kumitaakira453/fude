@@ -117,6 +117,16 @@ export function asWorkspace(value: unknown): Workspace | null {
   };
 }
 
+// 名前が既にあるものと重なるなら番号を付ける（「monorepo-docs 2」）。
+export function uniqueName(base: string, taken: readonly string[]): string {
+  const used = new Set(taken);
+  if (!used.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const name = `${base} ${n}`;
+    if (!used.has(name)) return name;
+  }
+}
+
 // 根の並びを人に見せる形に。「monorepo-docs ほか 2」。
 export function rootsSummary(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";

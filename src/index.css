@@ -20,7 +20,7 @@
 
 :root {
   /* ワークスペースの色。どのテーマの地でも見分けがつく、明るさを中ほどに
-     そろえた値。窓の上端の帯・名前の前の点に使う。 */
+     そろえた値。名前の前の点に使う。 */
   --mg-ws-teal: #2ea596;
   --mg-ws-sky: #3d8fd6;
   --mg-ws-violet: #9f68d0;
@@ -8041,11 +8041,6 @@ body.mg-carrying {
   font-size: 11px;
 }
 
-/* 窓の上端の帯。今どのワークスペースにいるかを、名前を読まずに分からせる。 */
-.mg-ws-strip {
-  height: 3px;
-  flex-shrink: 0;
-}
 .mg-ws-dot {
   width: 9px;
   height: 9px;

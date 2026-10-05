@@ -26,7 +26,6 @@ import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
-import { colorVar } from "./lib/workspaces";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { watchDragScroll } from "./lib/dragScroll";
@@ -194,7 +193,6 @@ export default function App() {
   // ウィンドウが何かを名前で選べる。
   const ws = useAtomValue(workspaceAtom);
   const wsName = ws?.name ?? null;
-  const wsColor = ws?.color ?? null;
   useEffect(() => {
     const entry = folders.find((f) => f.id === activeFolderId);
     const title = wsName ?? (entry ? folderDisplayName(entry) : "fude");
@@ -249,8 +247,6 @@ export default function App() {
             over ? "invisible" : ""
           }`}
         >
-          {/* 今どのワークスペースにいるかを、色で窓の上端に出す。 */}
-          {wsColor && <div className="mg-ws-strip" style={{ background: colorVar(wsColor) }} />}
           <Toolbar />
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (

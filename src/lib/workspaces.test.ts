@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { asWorkspace, freeColor, newWorkspaceId, rootsSummary, type Workspace } from "./workspaces";
+import {
+  asWorkspace,
+  freeColor,
+  newWorkspaceId,
+  rootsSummary,
+  uniqueName,
+  type Workspace,
+} from "./workspaces";
 
 const ws = (id: string, color: Workspace["color"]): Workspace => ({
   id,
@@ -53,5 +60,13 @@ describe("ワークスペースの控え", () => {
   it("根の並びは先頭と残りの数で見せる", () => {
     expect(rootsSummary(["a"])).toBe("a");
     expect(rootsSummary(["a", "b", "c"])).toBe("a ほか 2");
+  });
+});
+
+describe("名前の重なり", () => {
+  it("重なれば番号を付け、空いている番号を使う", () => {
+    expect(uniqueName("docs", [])).toBe("docs");
+    expect(uniqueName("docs", ["docs"])).toBe("docs 2");
+    expect(uniqueName("docs", ["docs", "docs 2"])).toBe("docs 3");
   });
 });
