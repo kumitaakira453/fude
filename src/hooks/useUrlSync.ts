@@ -2,7 +2,10 @@ import { useAtomValue, useStore } from "jotai";
 import { useEffect, useRef } from "react";
 import { dropBootCurtain, whenDocShown } from "../lib/boot";
 import { absoluteIn } from "../lib/fsAccess";
-import { buildHash, parseHash } from "../lib/url";
+import { buildHash, parseHash, type UrlState } from "../lib/url";
+import { currentWindowLabel, MAIN_LABEL, openWorkspaceWindow } from "../lib/windows";
+import { takeRestore, type Workspace } from "../lib/workspaces";
+import { refreshWorkspaces } from "../state/workspace";
 import * as A from "../state/atoms";
 import { useWorkspace, whenOpened } from "./useWorkspace";
 
@@ -15,7 +18,9 @@ const CURTAIN_WAIT = 3000;
 
 export function useUrlSync() {
   const store = useStore();
-  const { refreshFolders, openFolder, openDoc, openFile, holdDraft } = useWorkspace();
+  const { refreshFolders, openFolder, openWorkspace, openDoc, openFile, holdDraft } =
+    useWorkspace();
+  const wsId = useAtomValue(A.workspaceAtom)?.id ?? null;
   // 引き止める道具。効果の中から呼ぶので控えで持つ。
   const hold = useRef(holdDraft);
   hold.current = holdDraft;
@@ -34,18 +39,39 @@ export function useUrlSync() {
     store.set(A.canForwardAtom, navIdx.current < navMax.current);
   });
 
+  // 控えのワークスペース。一覧に無ければ読み直してから探す（他の窓で作ったもの）。
+  const findWorkspace = async (id: string): Promise<Workspace | undefined> => {
+    const known = store.get(A.workspacesAtom).find((w) => w.id === id);
+    if (known) return known;
+    await refreshWorkspaces(store);
+    return store.get(A.workspacesAtom).find((w) => w.id === id);
+  };
+
   const applyUrl = useRef(
     async (
-      state: { folderId?: string; file?: string; only?: boolean; doc?: string },
+      state: UrlState,
       opts: { force?: boolean } = {},
     ) => {
       applyingRef.current = true;
       try {
-        const { folderId, file, only, doc } = state;
+        const { folderId, file, only, doc, ws } = state;
         // 1 枚だけの窓。親フォルダは履歴に無いので、フォルダの枝には乗せない。
         if (doc) {
           if (store.get(A.soleAtom) !== doc) await openDoc(doc);
           return;
+        }
+        // ワークスペースの窓。消されていたら、フォルダの道へ落ちる（無ければスタート画面）。
+        if (ws) {
+          const found = await findWorkspace(ws);
+          if (found) {
+            const target = file ? absoluteIn(file, found.roots[0]) : undefined;
+            if (store.get(A.workspaceAtom)?.id !== ws) {
+              await openWorkspace(found, { file: target });
+            } else if (target && opts.force) {
+              openFile(target);
+            }
+            return;
+          }
         }
         if (!folderId) {
           // 下書きを開いたまま起動画面へ戻らない。行き先を決めてから。
@@ -86,8 +112,23 @@ export function useUrlSync() {
         const state = parseHash();
         await refreshFolders();
         if (cancelled) return;
-        if (state.folderId || state.doc) {
+        const restore =
+          state.folderId || state.doc || state.ws || currentWindowLabel() !== MAIN_LABEL
+            ? []
+            : await takeRestore().catch(() => []);
+        if (cancelled) return;
+        if (state.folderId || state.doc || state.ws) {
           await applyUrl.current(state);
+        } else if (restore.length > 0) {
+          // 終了したときに開いていた窓を戻す。主窓は自分の分を開き、
+          // 残りは窓を作って開かせる。
+          const [mine, ...rest] = restore;
+          for (const [, id] of rest) {
+            const ws = await findWorkspace(id);
+            if (ws) void openWorkspaceWindow(ws.id, ws.name).catch(() => {});
+          }
+          const ws = await findWorkspace(mine[1]);
+          if (ws) await openWorkspace(ws);
         } else {
           // 起動直後は最後に開いていたものへ戻す。フォルダと 1 枚のファイルの
           // どちらもありうるので、時刻の新しいほうを選ぶ。どちらの履歴も
@@ -131,7 +172,7 @@ export function useUrlSync() {
   // 状態変化を URL へ反映
   useEffect(() => {
     if (!readyRef.current || applyingRef.current) return;
-    const desired = buildHash(activeFolderId, activeFile, false, sole);
+    const desired = buildHash(activeFolderId, activeFile, false, sole, wsId);
     if (
       location.hash !== desired &&
       !(location.hash === "" && desired === "#")
@@ -141,5 +182,5 @@ export function useUrlSync() {
       history.pushState({ fudeIdx: navIdx.current }, "", desired);
       updateNav.current();
     }
-  }, [activeFolderId, activeFile, sole]);
+  }, [activeFolderId, activeFile, sole, wsId]);
 }

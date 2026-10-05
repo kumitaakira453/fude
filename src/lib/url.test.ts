@@ -43,3 +43,13 @@ describe("1 枚だけの窓", () => {
     expect(got.file).toBe("設計.md");
   });
 });
+
+describe("ワークスペース", () => {
+  it("ws を載せたときはフォルダを載せない", () => {
+    const h = buildHash("/root", "/root/a.md", false, null, "ws-1");
+    expect(h).toBe("#ws=ws-1&file=%2Froot%2Fa.md");
+    at(h);
+    expect(parseHash()).toMatchObject({ ws: "ws-1", file: "/root/a.md" });
+    expect(parseHash().folderId).toBeUndefined();
+  });
+});

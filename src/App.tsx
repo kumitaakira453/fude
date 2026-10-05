@@ -24,6 +24,9 @@ import { setNotionKeys } from "./lib/md/inputRules";
 import { setTaskMarks } from "./lib/md/taskMarks";
 import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
+import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
+import { colorVar } from "./lib/workspaces";
+import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { watchDragScroll } from "./lib/dragScroll";
 import { watchSpringDetails } from "./lib/spring";
@@ -43,6 +46,7 @@ import {
   showOtherFilesAtom,
   fontAtom,
   themeAtom,
+  workspaceAtom,
 } from "./state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "./state/review";
 
@@ -76,6 +80,7 @@ export default function App() {
   useUrlSync();
   useReviewLedger();
   useKeepLayout();
+  useKeepWorkspace();
 
   // テーマを html 要素に反映
   useEffect(() => {
@@ -182,15 +187,19 @@ export default function App() {
     return () => window.removeEventListener("click", onClick);
   }, []);
 
-  // ウィンドウのタイトルは開いているフォルダ名。macOS はこれを Dock メニューの
-  // ウィンドウ一覧にそのまま並べるので、どのウィンドウが何かを名前で選べる。
+  // ウィンドウのタイトルは開いているワークスペースの名前（無ければフォルダ名）。
+  // macOS はこれを Dock メニューのウィンドウ一覧にそのまま並べるので、どの
+  // ウィンドウが何かを名前で選べる。
+  const ws = useAtomValue(workspaceAtom);
+  const wsName = ws?.name ?? null;
+  const wsColor = ws?.color ?? null;
   useEffect(() => {
     const entry = folders.find((f) => f.id === activeFolderId);
-    const title = entry ? folderDisplayName(entry) : "fude";
+    const title = wsName ?? (entry ? folderDisplayName(entry) : "fude");
     void setWindowTitle(title).catch((e: unknown) => {
       console.error("ウィンドウのタイトルを設定できません", e);
     });
-  }, [activeFolderId, folders]);
+  }, [activeFolderId, folders, wsName]);
 
   // どの画面を出すか。
   //
@@ -238,6 +247,8 @@ export default function App() {
             over ? "invisible" : ""
           }`}
         >
+          {/* 今どのワークスペースにいるかを、色で窓の上端に出す。 */}
+          {wsColor && <div className="mg-ws-strip" style={{ background: colorVar(wsColor) }} />}
           <Toolbar />
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
@@ -271,6 +282,9 @@ export default function App() {
           <Settings />
         </div>
       )}
+
+      {/* スタート画面からも切り替えられるよう、どちらの画面でも出せる位置に置く。 */}
+      <WorkspaceSwitcher />
 
       {/* バージョンの履歴は専用画面。前と後を並べるので、読む画面の幅には
           収まらない。隠しているあいだも同じファイルを持ち続ける（閉じた

@@ -11,6 +11,8 @@ export interface UrlState {
   // フォルダを開かずに 1 枚だけ開いているときの、そのファイルの絶対パス。
   // folder と file の組とは別の道（親フォルダは履歴に登録しない）。
   doc?: string;
+  // 開いているワークスペースの ID。載っていればフォルダより先に見る。
+  ws?: string;
 }
 
 // ハッシュを読む。追加ウィンドウの起動 URL はここを経由して復元されるため、
@@ -24,6 +26,7 @@ export function parseHash(): UrlState {
     file: pick("file"),
     only: pick("only") === "1",
     doc: pick("doc"),
+    ws: pick("ws"),
   };
 }
 
@@ -32,11 +35,13 @@ export function buildHash(
   file?: string | null,
   only = false,
   doc?: string | null,
+  ws?: string | null,
 ): string {
   const p = new URLSearchParams();
   // 1 枚で開いているときはそれだけを載せる。親フォルダは履歴に登録しないので、
   // folder として書いても開き直せない。
   if (doc) p.set("doc", doc);
+  else if (ws) p.set("ws", ws);
   else {
     if (folderId) p.set("folder", folderId);
     if (only) p.set("only", "1");

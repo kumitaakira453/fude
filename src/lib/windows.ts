@@ -60,6 +60,16 @@ export async function openDocWindow(
   });
 }
 
+// ワークスペースを新しい窓で開く。
+export async function openWorkspaceWindow(id: string, title: string, at?: DropPoint): Promise<void> {
+  await invoke("open_doc_window", {
+    url: `index.html${buildHash(null, null, false, null, id)}`,
+    title,
+    x: at?.x ?? null,
+    y: at?.y ?? null,
+  });
+}
+
 export async function setWindowTitle(title: string): Promise<void> {
   await invoke("set_window_title", { label: currentWindowLabel(), title });
 }

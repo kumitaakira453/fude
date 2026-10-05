@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
 import type { DropPoint } from "../lib/windows";
 import { openCountsAtom } from "../state/review";
 import {
@@ -28,6 +29,7 @@ import {
   activeFolderIdAtom,
   expandedByFolderAtom,
   rootsAtom,
+  treeKeyAtom,
   loadingAtom,
   revealInTreeAtom,
   showOtherFilesAtom,
@@ -431,6 +433,8 @@ export function FileTree() {
   const noAdd = draftRoot || sole;
   const filter = useAtomValue(treeFilterAtom);
   const activeFolderId = useAtomValue(activeFolderIdAtom);
+  // 木の開閉を控える鍵（ワークスペースがあればその ID）。
+  const treeKey = useAtomValue(treeKeyAtom);
   // 並べている根。2 つ以上なら、根を行として並べる（木の最上段が根の行になる）。
   const roots = useAtomValue(rootsAtom);
   const multi = roots.length > 1;
@@ -459,26 +463,27 @@ export function FileTree() {
   // たびに ctx の識別が変わり、行の memo が素通りして全行が描き直される。
   // 行は自分の分（isShownAtom）だけを購読する。
   const counts = useAtomValue(openCountsAtom);
+  const { removeRoot } = useWorkspaceOps();
   const filtered = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
   // 初回は畳んだ状態で出す。1,000 ファイル規模のフォルダで最上位を全部
   // 開くと、最初の描画で数百行を一度に組むことになり画面が固まる。
   // 根を行として並べているときは、根の行だけ開いて出す。
   useEffect(() => {
-    if (!activeFolderId || tree.length === 0) return;
-    if (activeFolderId in expandedByFolder) return;
-    setExpandedByFolder((prev) => ({ ...prev, [activeFolderId]: multi ? roots : [] }));
-  }, [activeFolderId, tree, expandedByFolder, setExpandedByFolder, multi, roots]);
+    if (!treeKey || tree.length === 0) return;
+    if (treeKey in expandedByFolder) return;
+    setExpandedByFolder((prev) => ({ ...prev, [treeKey]: multi ? roots : [] }));
+  }, [treeKey, tree, expandedByFolder, setExpandedByFolder, multi, roots]);
 
   // 根からの相対で控えていた頃の分も、絶対パスに読み替えて使う。
   const expanded = useMemo(
     () =>
       new Set(
-        activeFolderId
-          ? (expandedByFolder[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId))
+        treeKey && activeFolderId
+          ? (expandedByFolder[treeKey] ?? []).map((p) => absoluteIn(p, activeFolderId))
           : [],
       ),
-    [expandedByFolder, activeFolderId],
+    [expandedByFolder, treeKey, activeFolderId],
   );
 
   // 入れる先の印。行に当たっていれば行を、枠（根）に当たっていれば根を光らせる。
@@ -493,14 +498,14 @@ export function FileTree() {
 
   const setExpandedOpen = useCallback(
     (path: string) => {
-      if (!activeFolderId) return;
+      if (!treeKey || !activeFolderId) return;
       setExpandedByFolder((prev) => {
-        const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
+        const set = new Set((prev[treeKey] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         set.add(path);
-        return { ...prev, [activeFolderId]: [...set] };
+        return { ...prev, [treeKey]: [...set] };
       });
     },
-    [activeFolderId, setExpandedByFolder],
+    [treeKey, activeFolderId, setExpandedByFolder],
   );
 
   // 掴んだまま畳んだフォルダの上に留まったら開く。掴み直さずに奥の階層まで
@@ -554,22 +559,22 @@ export function FileTree() {
 
   const toggle = useCallback(
     (path: string) => {
-      if (!activeFolderId) return;
+      if (!treeKey || !activeFolderId) return;
       setExpandedByFolder((prev) => {
-        const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
+        const set = new Set((prev[treeKey] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         if (set.has(path)) set.delete(path);
         else set.add(path);
-        return { ...prev, [activeFolderId]: [...set] };
+        return { ...prev, [treeKey]: [...set] };
       });
     },
-    [activeFolderId, setExpandedByFolder],
+    [treeKey, activeFolderId, setExpandedByFolder],
   );
 
   // パンくず等からの「ツリーで表示」: 祖先を展開し、対象行へスクロール＋強調
   const listRef = useRef<HTMLDivElement>(null);
   const reveal = useAtomValue(revealInTreeAtom);
   useEffect(() => {
-    if (!reveal || !activeFolderId) return;
+    if (!reveal || !treeKey || !activeFolderId) return;
     const target = reveal.path;
     // 根を行として並べているときは、根の行も開く。
     const root = rootOf(roots, target);
@@ -579,9 +584,9 @@ export function FileTree() {
     ];
     if (ancestors.length) {
       setExpandedByFolder((prev) => {
-        const set = new Set((prev[activeFolderId] ?? []).map((p) => absoluteIn(p, activeFolderId)));
+        const set = new Set((prev[treeKey] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         ancestors.forEach((a) => set.add(a));
-        return { ...prev, [activeFolderId]: [...set] };
+        return { ...prev, [treeKey]: [...set] };
       });
     }
     // 名前の変更に入るときは入力欄が行と入れ替わる。探す相手が居なくなるので、
@@ -608,7 +613,7 @@ export function FileTree() {
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [reveal, activeFolderId, setExpandedByFolder, roots, multi]);
+  }, [reveal, treeKey, activeFolderId, setExpandedByFolder, roots, multi]);
 
   const startCreate = useCallback(
     (parentPath: string, kind: "file" | "dir") => {
@@ -820,6 +825,7 @@ export function FileTree() {
           onNewFile={noAdd ? undefined : (n) => startCreate(n.path, "file")}
           onNewFolder={noAdd ? undefined : (n) => startCreate(n.path, "dir")}
           onRename={(n) => setEditingPath(n.path)}
+          onRemoveRoot={multi ? (n) => void removeRoot(n.path) : undefined}
           onIcon={(n, at) => setIconFor({ ...at, abs: n.abs, name: n.name })}
           iconOpen={!!iconFor}
         />

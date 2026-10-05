@@ -8,8 +8,8 @@ use tauri::AppHandle;
 // Dock アイコンのメニュー。
 //
 // 開いているウィンドウの一覧は macOS が勝手に並べる（ウィンドウのタイトルを
-// フォルダ名にしてあるので、そのままフォルダの一覧になる）。ここで足すのは
-// 「新しいウィンドウ」と「最近開いたフォルダ」だけ。
+// ワークスペースの名前にしてあるので、そのまま開いているものの一覧になる）。
+// ここで足すのは「新しいウィンドウ」「ワークスペース」「最近開いたフォルダ」だけ。
 //
 // Tauri v2 に Dock メニューの API は無いので、tao が作ったアプリケーション
 // デリゲートのクラスに applicationDockMenu: を後付けする。tao はこのセレクタを
@@ -22,6 +22,9 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 
 // 「最近開いたフォルダ」以外の項目を表すタグ。
 const TAG_NEW_WINDOW: isize = -1;
+
+// Dock に並べるワークスペースの数。
+const WORKSPACE_LIMIT: usize = 8;
 
 type MenuFn = extern "C-unwind" fn(&AnyObject, Sel, *mut AnyObject) -> *mut AnyObject;
 type ActionFn = extern "C-unwind" fn(&AnyObject, Sel, *mut AnyObject);
@@ -45,10 +48,12 @@ pub fn install(app: &AppHandle) {
         let menu: Imp = std::mem::transmute::<MenuFn, Imp>(dock_menu);
         let new_window: Imp = std::mem::transmute::<ActionFn, Imp>(new_window);
         let open_recent: Imp = std::mem::transmute::<ActionFn, Imp>(open_recent);
+        let open_workspace: Imp = std::mem::transmute::<ActionFn, Imp>(open_workspace);
         // 型エンコーディング: @=オブジェクト, v=戻り値なし, :=セレクタ
         add_method(class, sel!(applicationDockMenu:), menu, b"@@:@\0");
         add_method(class, sel!(fudeNewWindow:), new_window, b"v@:@\0");
         add_method(class, sel!(fudeOpenRecent:), open_recent, b"v@:@\0");
+        add_method(class, sel!(fudeOpenWorkspace:), open_workspace, b"v@:@\0");
     }
 }
 
@@ -88,6 +93,16 @@ extern "C-unwind" fn dock_menu(this: &AnyObject, _cmd: Sel, _sender: *mut AnyObj
             target,
             TAG_NEW_WINDOW,
         );
+        // ワークスペースは最近開いた順に、いくつかだけ。
+        let spaces = crate::workspaces::all();
+        if !spaces.is_empty() {
+            let separator: *mut AnyObject = msg_send![class!(NSMenuItem), separatorItem];
+            let _: () = msg_send![&*menu, addItem: separator];
+        }
+        for (i, ws) in spaces.iter().take(WORKSPACE_LIMIT).enumerate() {
+            let name = ws.get("name").and_then(|v| v.as_str()).unwrap_or("ワークスペース");
+            add_item(&menu, name, sel!(fudeOpenWorkspace:), target, i as isize);
+        }
         let recent = crate::windows::recent_folders();
         if !recent.is_empty() {
             let separator: *mut AnyObject = msg_send![class!(NSMenuItem), separatorItem];
@@ -129,5 +144,26 @@ extern "C-unwind" fn open_recent(_this: &AnyObject, _cmd: Sel, sender: *mut AnyO
     let Some(app) = APP.get() else { return };
     if let Err(e) = crate::windows::open_folder_window(app, &folder.path) {
         log::warn!("Dock メニューからフォルダを開けません: {e}");
+    }
+}
+
+extern "C-unwind" fn open_workspace(_this: &AnyObject, _cmd: Sel, sender: *mut AnyObject) {
+    if sender.is_null() {
+        return;
+    }
+    let tag: isize = unsafe { msg_send![sender, tag] };
+    let Ok(index) = usize::try_from(tag) else {
+        return;
+    };
+    let spaces = crate::workspaces::all();
+    let Some(ws) = spaces.get(index) else {
+        return;
+    };
+    let (Some(id), Some(app)) = (ws.get("id").and_then(|v| v.as_str()), APP.get()) else {
+        return;
+    };
+    let name = ws.get("name").and_then(|v| v.as_str()).unwrap_or("fude");
+    if let Err(e) = crate::workspaces::open_workspace_window(app, id, name) {
+        log::warn!("Dock メニューからワークスペースを開けません: {e}");
     }
 }

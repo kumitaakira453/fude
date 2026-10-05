@@ -36,10 +36,20 @@ import {
   rootName,
 } from "../lib/idb";
 import {
+  currentWindowLabel,
   openDocWindow,
+  openWorkspaceWindow,
   recordRecentFolder,
   type DropPoint,
 } from "../lib/windows";
+import { bindWindow, focusWorkspace, saveWorkspace, type Workspace } from "../lib/workspaces";
+import {
+  flushWorkspaceSave,
+  folderWorkspace,
+  refreshWorkspaces,
+  sameList,
+  upsertWorkspace,
+} from "../state/workspace";
 import { moveReviewFile } from "../lib/review";
 import {
   draftsDir,
@@ -58,7 +68,7 @@ import {
   resetLayout,
   reviveLayout,
   openInPane,
-  absoluteLayout,
+  type StoredNode,
 } from "../lib/ui";
 import * as A from "../state/atoms";
 import { syncLedger } from "../state/review";
@@ -348,6 +358,7 @@ export function useWorkspace() {
     // 下書きの置き場は、ここで 1 度だけ求めて覚える。分かるまでは
     // 「下書きかどうか」を判定しない（道筋を人に見せてしまわないように）。
     store.set(A.draftsDirAtom, await draftsDir());
+    await refreshWorkspaces(store);
   }, [store]);
 
 
@@ -451,6 +462,124 @@ export function useWorkspace() {
     ((path: string, opts?: { file?: string; only?: boolean; force?: boolean }) => void) | null
   >(null);
 
+  // 根を並べて、タブの並びを当てる。フォルダ・ワークスペースを開く道はここに集まる。
+  //
+  // 根の並びが今と同じなら走査し直さない。木と本文の控えをそのまま使い、
+  // タブの並びだけを差し替える（同じフォルダのワークスペースどうしの切り替えは
+  // 待たずに替わる）。
+  const enter = useCallback(
+    (to: {
+      workspace: Workspace | null;
+      roots: string[];
+      saved?: { layout: StoredNode; active: string };
+      file?: string;
+    }) => {
+      const switched = span("画面を切り替え");
+      const wasSole = store.get(A.soleAtom) !== null;
+      const same =
+        !wasSole &&
+        store.get(A.treeAtom).length > 0 &&
+        sameList(store.get(A.rootsAtom), to.roots);
+      store.set(A.soleAtom, null);
+      store.set(A.layoutOwnerAtom, null);
+      store.set(A.workspaceAtom, to.workspace);
+      const key = to.workspace?.id ?? to.roots[0];
+      if (to.workspace?.expanded) {
+        const expanded = to.workspace.expanded;
+        store.set(A.expandedByFolderAtom, (prev) => ({ ...prev, [key]: expanded }));
+      }
+      store.set(A.activeFolderIdAtom, to.roots[0]);
+      store.set(A.extraRootsAtom, to.roots.slice(1));
+      resetLayout(store);
+      const lay = () => {
+        if (to.saved) {
+          const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
+          const { layout, active } = reviveLayout(to.saved.layout, valid, to.saved.active);
+          store.set(A.layoutAtom, layout);
+          store.set(A.activePaneIdAtom, active);
+          revealTabs(key, layout);
+        }
+        // ここからのタブの動きは、このワークスペースの控えに書いてよい。
+        store.set(A.layoutOwnerAtom, key);
+      };
+      // 保存レイアウトがあるとこの後それで置き換わるので、先出しは意味が無い
+      if (same) {
+        lay();
+        if (to.file) openFile(to.file);
+        switched();
+        opened = Promise.resolve();
+        return;
+      }
+      // 前の根の内容が検索/キャッシュに残らないよう初期化
+      store.set(A.contentCacheAtom, new Map());
+      store.set(A.mtimeCacheAtom, new Map());
+      // 前の一覧は、ここで畳む。残したまま走査を待つと、押しても
+      // 何も起きていないように見える。
+      store.set(A.treeAtom, []);
+      store.set(A.filesAtom, []);
+      if (to.file && !to.saved) openFile(to.file);
+      switched();
+      // 走査は待たない。待っているあいだ、画面はどの操作も受け付けなくなる。
+      const rootsKey = to.roots.join("\n");
+      opened = refreshTree().then(() => {
+        // 走査のあいだに別のところへ移っていたら、もう当てる先がない。
+        if (
+          store.get(A.workspaceAtom)?.id !== to.workspace?.id ||
+          store.get(A.rootsAtom).join("\n") !== rootsKey
+        ) {
+          return;
+        }
+        lay();
+        if (to.file && to.saved) openFile(to.file);
+      });
+    },
+    [store, refreshTree, openFile, revealTabs],
+  );
+
+  // ワークスペースを開く。別の窓で開いていれば、その窓を前に出すだけ。
+  const openWorkspace = useCallback(
+    async (ws: Workspace, opts: { file?: string; force?: boolean } = {}): Promise<void> => {
+      if (
+        !opts.force &&
+        holdDraft(() => void openWorkspaceRef.current?.(ws, { ...opts, force: true }))
+      ) {
+        return;
+      }
+      const label = currentWindowLabel();
+      if (store.get(A.workspaceAtom)?.id === ws.id) {
+        if (opts.file) openFile(opts.file);
+        return;
+      }
+      const elsewhere = await focusWorkspace(ws.id, label).catch(() => false);
+      if (elsewhere) return;
+      // 今のワークスペースの書きかけの控えを先に書き切る。
+      flushWorkspaceSave();
+      const now = Math.floor(performance.timeOrigin + performance.now());
+      const next: Workspace = { ...ws, lastOpened: now };
+      store.set(A.workspacesAtom, (list) => upsertWorkspace(list, next));
+      void saveWorkspace(next).catch((e: unknown) => {
+        console.error("ワークスペースを控えられません", e);
+      });
+      void bindWindow(label, next.id).catch((e: unknown) => {
+        console.error("窓の控えを書けません", e);
+      });
+      enter({
+        workspace: next,
+        roots: next.roots,
+        saved: next.layout ? { layout: next.layout, active: next.active ?? "" } : undefined,
+        file: opts.file,
+      });
+    },
+    [store, holdDraft, openFile, enter],
+  );
+  const openWorkspaceRef = useRef(openWorkspace);
+  openWorkspaceRef.current = openWorkspace;
+
+  // フォルダを開く。そのフォルダのワークスペースを開く（無ければ作る）。
+  // file を渡すと、そのファイルはツリーの走査を待たずに出す。
+  //
+  // only を渡すと「そのファイルだけの窓」として開く。ワークスペースにはせず、
+  // 控えのタブも使わない（別の窓へ引き出したファイルを、その窓で開き直すため）。
   const openFolder = useCallback(
     async (
       path: string,
@@ -462,59 +591,24 @@ export function useWorkspace() {
       ) {
         return;
       }
-      const switched = span("画面を切り替え");
       const now = Math.floor(performance.timeOrigin + performance.now());
-      store.set(A.soleAtom, null);
-      const activeId = path;
       // 履歴への登録は画面を進めてからでよい。待つと、押してから何も変わらない
       // 間ができる。Dock メニューから読めるよう Rust 側にも残す。
       void registerFolder(path, now).then((list) => store.set(A.foldersAtom, list));
       void recordRecentFolder(path, now).catch((e: unknown) => {
         console.error("最近開いたフォルダを記録できません", e);
       });
-      // 永続化 effect に上書きされる前に保存レイアウトを先読みしておく。
-      // このウィンドウでの控えが無ければ、ウィンドウを問わない控えを使う。
-      //
-      // 「そのファイルだけの窓」を頼まれているときは、どちらの控えも使わない。
-      // 他のウィンドウで開いていたタブを並べ直すと窓を複製しただけになり、
-      // このウィンドウの控えも当てにならない（窓の名前は空いている doc-1・
-      // doc-2 … を使い回すので、前に同じ名前で開いていた窓のタブが残っている）。
-      // 使うと、走査の後に頼まれたファイルが前のタブで上書きされる。
-      const kept = opts.only
-        ? undefined
-        : (store.get(A.savedLayoutsAtom)[activeId] ??
-          store.get(A.sessionLayoutsAtom)[activeId]);
-      const saved = kept && { ...kept, layout: absoluteLayout(kept.layout, activeId) };
-      const file = opts.file && absoluteIn(opts.file, activeId);
-      store.set(A.activeFolderIdAtom, activeId);
-      store.set(A.extraRootsAtom, []);
-      resetLayout(store);
-      // 前フォルダの内容が検索/キャッシュに残らないよう初期化
-      store.set(A.contentCacheAtom, new Map());
-      store.set(A.mtimeCacheAtom, new Map());
-      // 前のフォルダの一覧は、ここで畳む。残したまま走査を待つと、押しても
-      // 何も起きていないように見える。
-      store.set(A.treeAtom, []);
-      store.set(A.filesAtom, []);
-      // 保存レイアウトがあるとこの後それで置き換わるので、先出しは意味が無い
-      if (file && !saved) openFile(file);
-      switched();
-      // 走査は待たない。待っているあいだ、画面はどの操作も受け付けなくなる。
-      opened = refreshTree().then(() => {
-        // 走査のあいだに別のフォルダへ移っていたら、もう当てる先がない。
-        if (!saved || store.get(A.activeFolderIdAtom) !== activeId) return;
-        const valid = new Set(store.get(A.filesAtom).map((f) => f.path));
-        const { layout, active } = reviveLayout(
-          saved.layout,
-          valid,
-          saved.active,
-        );
-        store.set(A.layoutAtom, layout);
-        store.set(A.activePaneIdAtom, active);
-        revealTabs(activeId, layout);
-      });
+      const file = opts.file && absoluteIn(opts.file, path);
+      if (opts.only) {
+        flushWorkspaceSave();
+        void bindWindow(currentWindowLabel(), null).catch(() => {});
+        enter({ workspace: null, roots: [path], file });
+        return;
+      }
+      const ws = await folderWorkspace(store, path, now);
+      await openWorkspace(ws, { file, force: true });
     },
-    [store, refreshTree, openFile, revealTabs],
+    [store, holdDraft, enter, openWorkspace],
   );
 
   // Markdown を 1 枚だけ開く。
@@ -540,6 +634,11 @@ export function useWorkspace() {
       const { root, node } = soleTree(abs);
       // 画面を先に進める。ここに await を挟むと、押してから何も変わらない間が
       // できて、反応していないように見える。
+      // 1 枚だけのときはワークスペースにしない（控えを残さない）。
+      flushWorkspaceSave();
+      store.set(A.workspaceAtom, null);
+      store.set(A.layoutOwnerAtom, null);
+      void bindWindow(currentWindowLabel(), null).catch(() => {});
       store.set(A.soleAtom, abs);
       store.set(A.activeFolderIdAtom, root);
       store.set(A.extraRootsAtom, []);
@@ -612,10 +711,14 @@ export function useWorkspace() {
   );
 
   // 登録フォルダを別のウィンドウで開く。作用中のフォルダとは関係なく開ける。
+  // そのフォルダのワークスペースを開いている窓があれば、その窓を前に出す。
   const openFolderInNewWindow = useCallback(
     async (folderId: string, title: string): Promise<boolean> => {
       try {
-        await openDocWindow(folderId, null, title);
+        const now = Math.floor(performance.timeOrigin + performance.now());
+        const ws = await folderWorkspace(store, folderId, now);
+        if (await focusWorkspace(ws.id, "").catch(() => false)) return true;
+        await openWorkspaceWindow(ws.id, ws.name || title);
         return true;
       } catch (e) {
         void message(`新しいウィンドウを開けませんでした。\n${String(e)}`, {
@@ -625,7 +728,7 @@ export function useWorkspace() {
         return false;
       }
     },
-    [],
+    [store],
   );
 
   // 文書から書かれた道筋を絶対パスに解く。頭が / なら、その文書の根から。
@@ -936,6 +1039,7 @@ export function useWorkspace() {
     rootFor,
     refreshFolders,
     openFolder,
+    openWorkspace,
     openDoc,
     newDraft,
     holdDraft,

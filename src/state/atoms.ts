@@ -5,6 +5,7 @@ import { rootName, type DocEntry, type FolderEntry } from "../lib/idb";
 import { RAIL_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
+import type { Workspace } from "../lib/workspaces";
 
 // ---- ワークスペース ----
 export const foldersAtom = atom<FolderEntry[]>([]); // 登録フォルダ（履歴）
@@ -22,6 +23,22 @@ export const rootsAtom = atom<string[]>((get) => {
   if (!main) return [];
   return [main, ...get(extraRootsAtom).filter((root) => root !== main)];
 });
+
+// この窓が開いているワークスペース。フォルダを開くと、そのフォルダの
+// ワークスペースになる。1 枚だけ開いているとき・別の窓へ引き出したファイル
+// だけの窓では null（控えを残さない）。
+export const workspaceAtom = atom<Workspace | null>(null);
+// 今のタブの並びが、どのワークスペース（無ければフォルダ）のものか。開いた直後の
+// 空の並びや、控えを並べ直している途中の並びを控えに書かないための印。
+export const layoutOwnerAtom = atom<string | null>(null);
+// 控えてあるワークスペースの一覧（新しく開いた順）。切り替えの一覧が出す。
+export const workspacesAtom = atom<Workspace[]>([]);
+// ワークスペースを切り替える一覧（⌘⇧P）。
+export const workspaceSwitcherOpenAtom = atom(false);
+// 木の開閉を控える鍵。ワークスペースがあればその ID、無ければフォルダ。
+export const treeKeyAtom = atom<string | null>(
+  (get) => get(workspaceAtom)?.id ?? get(activeFolderIdAtom),
+);
 
 // 一覧・見出しに出す道筋。根が 1 つならそこからの相対、2 つ以上なら根の名前を
 // 頭に付ける（同じ相対パスが 2 つの根に居ても見分けられる）。根の外は絶対パス。

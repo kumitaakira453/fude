@@ -8,6 +8,7 @@ mod dock;
 pub mod review;
 mod watch;
 mod windows;
+mod workspaces;
 
 // 第 1 引数が review のときは CLI として動き、Tauri を初期化せずに終了する。
 // エージェントは GUI が起動していない状態でも指摘を読み書きする。
@@ -589,8 +590,21 @@ pub fn run() {
             windows::record_recent_folder,
             windows::remember_look,
             watch::watch_folder,
-            watch::unwatch_folder
+            watch::unwatch_folder,
+            workspaces::list_workspaces,
+            workspaces::save_workspace,
+            workspaces::delete_workspace,
+            workspaces::bind_window,
+            workspaces::take_restore,
+            workspaces::focus_workspace,
+            workspaces::live_workspaces
         ])
+        // 窓が閉じたら控えに時刻を付ける。起動し直したときに戻す窓を決めるのに使う。
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                workspaces::window_closed(window.label());
+            }
+        })
         .setup(|app| {
             // 主窓は隠して作ってある。前回のテーマの明暗と地を当ててから出す。
             if let Some(main) = app.get_webview_window("main") {

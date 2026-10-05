@@ -66,6 +66,10 @@ export function useHotkeys() {
       } else if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         store.set(A.paletteOpenAtom, !store.get(A.paletteOpenAtom));
+      } else if (mod && e.shiftKey && (e.key === "p" || e.key === "P")) {
+        // ⌘⇧P: ワークスペースを切り替える一覧。
+        e.preventDefault();
+        store.set(A.workspaceSwitcherOpenAtom, !store.get(A.workspaceSwitcherOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
         // ⌘⇧F: ディレクトリ全体検索（サイドバー）。選択語をプリフィルし入力欄へフォーカス。
         e.preventDefault();
