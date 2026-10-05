@@ -124,6 +124,50 @@ describe("ワークスペースを切り替えるキー", () => {
   });
 });
 
+describe("⌘J で一覧を送る", () => {
+  it("すぐ離すと、直前に開いていたものへ", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    up({ key: "Meta" });
+    expect(opened).toEqual(["c"]);
+  });
+
+  it("⌘ を押したまま J を 2 回押して離すと、3 番目へ", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    up({ key: "Meta" });
+    expect(opened).toEqual(["b"]);
+  });
+
+  it("⌘J で始めたときは、⌃ を離しても移らない", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    up({ key: "Control" });
+    expect(opened).toEqual([]);
+    up({ key: "Meta" });
+    expect(opened).toEqual(["c"]);
+  });
+});
+
+describe("⌘T で作るメニュー", () => {
+  it("開き、もう一度押すと閉じる", () => {
+    const store = rig();
+    key({ key: "t", code: "KeyT", metaKey: true });
+    expect(store.get(A.newWorkspaceAtom)).not.toBeNull();
+    key({ key: "t", code: "KeyT", metaKey: true });
+    expect(store.get(A.newWorkspaceAtom)).toBeNull();
+  });
+
+  it("⌘⇧T は閉じたタブを開き直す（作るメニューは開かない）", () => {
+    const store = rig();
+    store.set(A.closedTabsAtom, [{ path: "/w/a.md", paneId: "p1", index: 0 }]);
+    key({ key: "T", code: "KeyT", metaKey: true, shiftKey: true });
+    expect(store.get(A.newWorkspaceAtom)).toBeNull();
+    expect(store.get(A.closedTabsAtom)).toEqual([]);
+  });
+});
+
 describe("一覧の並び", () => {
   it("今いるものが先頭、続いて最近開いた順、残りは札の並び順", () => {
     expect(cycleOrder(["a", "b", "c", "d"], ["b", "d", "a"], "b")).toEqual(["b", "d", "a", "c"]);

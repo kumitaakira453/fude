@@ -188,7 +188,7 @@ export function WorkspacePills() {
       </div>
       <button
         type="button"
-        title="ワークスペースを新規作成"
+        title="ワークスペースを新規作成（⌘T）"
         aria-expanded={!!making}
         onClick={(e) => {
           const box = e.currentTarget.getBoundingClientRect();

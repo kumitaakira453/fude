@@ -7,8 +7,8 @@ import * as A from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { barAtom, visitedAtom } from "../state/workspaceBar";
 
-// ⌃Tab の一覧。macOS の ⌘Tab と同じく、⌃ を押したまま Tab で送り、⌃ を離した
-// ところで移る。すぐ離せば直前のワークスペースへ（一覧は出さない）。
+// ⌘J（または ⌃Tab）の一覧。macOS の ⌘Tab と同じく、⌘ を押したまま J で送り、
+// ⌘ を離したところで移る。すぐ離せば直前のワークスペースへ（一覧は出さない）。
 // 並べるのはツールバーの札と同じもので、最近開いた順。
 
 // 押してからこの間に離せば、一覧を出さずに移る（素早い行き来でちらつかせない）。
@@ -24,6 +24,16 @@ export function cycleOrder(
   const head = current && bar.includes(current) ? [current] : [];
   const rest = [...seen, ...bar].filter((id) => !head.includes(id));
   return [...head, ...new Set(rest)];
+}
+
+// 一覧を送るキーなら、押したままにしている修飾キーを返す。
+function holdOf(e: KeyboardEvent): "Meta" | "Control" | null {
+  if (e.altKey) return null;
+  if (e.metaKey && !e.ctrlKey && (e.code === "KeyJ" || e.key.toLowerCase() === "j")) {
+    return "Meta";
+  }
+  if (e.ctrlKey && !e.metaKey && e.key === "Tab") return "Control";
+  return null;
 }
 
 // ⌃1〜9 の番号（札の並びでの位置。9 は最後）。
@@ -45,7 +55,12 @@ export function WorkspaceCycler() {
   const [at, setAt] = useState(0);
   const [shown, setShown] = useState(false);
   // キーの扱いは描画をまたぐので、控えで持つ。
-  const live = useRef<{ list: Workspace[]; at: number; timer: number } | null>(null);
+  const live = useRef<{
+    list: Workspace[];
+    at: number;
+    timer: number;
+    hold: "Meta" | "Control";
+  } | null>(null);
 
   useEffect(() => {
     const end = () => {
@@ -66,7 +81,8 @@ export function WorkspaceCycler() {
         end();
         return;
       }
-      if (e.key !== "Tab" || !e.ctrlKey || e.metaKey || e.altKey) return;
+      const hold = holdOf(e);
+      if (!hold) return;
       e.preventDefault();
       e.stopPropagation();
       if (cur) {
@@ -86,6 +102,7 @@ export function WorkspaceCycler() {
       live.current = {
         list: found,
         at: start,
+        hold,
         timer: window.setTimeout(() => setShown(true), SHOW_AFTER_MS),
       };
       setList(found);
@@ -93,7 +110,7 @@ export function WorkspaceCycler() {
     };
     const onUp = (e: KeyboardEvent) => {
       const cur = live.current;
-      if (cur && e.key === "Control") go(cur.list[cur.at]);
+      if (cur && e.key === cur.hold) go(cur.list[cur.at]);
     };
     // ほかのアプリへ移ったら、⌃ を離したことが届かない。そのまま閉じる。
     const onBlur = () => end();

@@ -152,6 +152,20 @@ export function useHotkeys() {
       } else if (mod && e.shiftKey && (e.key === "t" || e.key === "T")) {
         e.preventDefault();
         reopenTab(store);
+      } else if (mod && !e.shiftKey && (e.key === "t" || e.key === "T")) {
+        // ⌘T: ワークスペースを作るメニュー（札の ＋ と同じもの）。
+        e.preventDefault();
+        if (store.get(A.newWorkspaceAtom)) {
+          store.set(A.newWorkspaceAtom, null);
+          return;
+        }
+        const add = document.querySelector(".mg-ws-pill-add")?.getBoundingClientRect();
+        store.set(
+          A.newWorkspaceAtom,
+          add
+            ? { left: add.left, top: add.bottom + 6 }
+            : { left: Math.max(16, window.innerWidth / 2 - 220), top: 56 },
+        );
       } else if (mod && !e.shiftKey && (e.key === "n" || e.key === "N")) {
         // ⌘N: 保存先の決まっていないメモを作って開く。
         e.preventDefault();
