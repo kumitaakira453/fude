@@ -55,7 +55,11 @@ export function WorkspacePills() {
     const me = currentWindowLabel();
     const read = () =>
       void liveWorkspaces()
-        .then((live) => setElsewhere(new Set(live.filter(([l]) => l !== me).map(([, id]) => id))))
+        .then((live) =>
+          setElsewhere(
+            new Set(live.filter(([l]) => l !== me).map(([, id]) => id)),
+          ),
+        )
         .catch(() => setElsewhere(new Set()));
     read();
     window.addEventListener("focus", read);
@@ -67,7 +71,9 @@ export function WorkspacePills() {
   }, [current?.id, items.length]);
 
   const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
-    const pills = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-ws]"));
+    const pills = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>("[data-ws]"),
+    );
     for (let i = 0; i < pills.length; i++) {
       const box = pills[i].getBoundingClientRect();
       if (e.clientX < box.left + box.width / 2) return i;
@@ -76,101 +82,110 @@ export function WorkspacePills() {
   };
 
   return (
-    <div
-      role="tablist"
-      aria-label="ワークスペース"
-      className="mg-ws-pills"
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        setDropAt(indexAt(e));
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAt(null);
-      }}
-      onDrop={(e) => {
-        const id = e.dataTransfer.getData(DRAG_TYPE);
-        const at = dropAt;
-        setDropAt(null);
-        if (!id || at === null) return;
-        e.preventDefault();
-        setBar((was) => moveInBar(was, id, at));
-      }}
-    >
-      {items.map((ws, i) => {
-        const on = ws.id === current?.id;
-        const away = !on && elsewhere.has(ws.id);
-        const phase = phaseFor(ws);
-        return (
-          <div
-            key={ws.id}
-            tabIndex={0}
-            data-ws={ws.id}
-            ref={on ? here : undefined}
-            role="tab"
-            aria-selected={on}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_TYPE, ws.id);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onClick={() => {
-              if (!on) void openWorkspace(ws);
-            }}
-            onKeyDown={(e) => {
-              if ((e.key === "Enter" || e.key === " ") && !on) {
-                e.preventDefault();
-                void openWorkspace(ws);
-              }
-            }}
-            onAuxClick={(e) => {
-              if (e.button === 1) setBar((was) => removeFromBar(was, ws.id));
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
-            }}
-            title={
-              away
-                ? `${ws.name}（別のウィンドウで開いています）`
-                : i < 9
-                  ? `${ws.name}（⌃${i + 1}）`
-                  : ws.name
-            }
-            className={`mg-ws-pill${on ? " is-on" : ""}${away ? " is-away" : ""}${
-              dropAt === i ? " drop-before" : ""
-            }${dropAt === i + 1 && i === items.length - 1 ? " drop-after" : ""}`}
-          >
-            <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
-            <span className="truncate">{ws.name}</span>
-            {phase && (
-              <span
-                title={`Claude のセッション：${PHASE_LABEL[phase]}`}
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
-                style={{ background: PHASE_COLOR[phase] }}
-              />
-            )}
-            {/* 返事を待っているもの・終わったものは、点だけでは見落とすので言葉でも出す。 */}
-            {phase && PHASE_BADGE[phase] && (
-              <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_BADGE[phase]}</span>
-            )}
-            {/* ツールバーから外すだけ。ワークスペースは消えない（⌘⇧P からまた開ける）。 */}
-            <span
-              role="button"
-              tabIndex={-1}
-              title="ツールバーから外す（ワークスペースは残ります）"
-              onClick={(e) => {
-                e.stopPropagation();
-                setBar((was) => removeFromBar(was, ws.id));
+    // 札の並びだけを横に送る。＋ は送る箱の外に置き、端で切れないようにする。
+    <div className="mg-ws-pills-wrap">
+      <div
+        role="tablist"
+        aria-label="ワークスペース"
+        className="mg-ws-pills"
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setDropAt(indexAt(e));
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node))
+            setDropAt(null);
+        }}
+        onDrop={(e) => {
+          const id = e.dataTransfer.getData(DRAG_TYPE);
+          const at = dropAt;
+          setDropAt(null);
+          if (!id || at === null) return;
+          e.preventDefault();
+          setBar((was) => moveInBar(was, id, at));
+        }}
+      >
+        {items.map((ws, i) => {
+          const on = ws.id === current?.id;
+          const away = !on && elsewhere.has(ws.id);
+          const phase = phaseFor(ws);
+          return (
+            <div
+              key={ws.id}
+              tabIndex={0}
+              data-ws={ws.id}
+              ref={on ? here : undefined}
+              role="tab"
+              aria-selected={on}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_TYPE, ws.id);
+                e.dataTransfer.effectAllowed = "move";
               }}
-              className="mg-ws-pill-x"
+              onClick={() => {
+                if (!on) void openWorkspace(ws);
+              }}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && !on) {
+                  e.preventDefault();
+                  void openWorkspace(ws);
+                }
+              }}
+              onAuxClick={(e) => {
+                if (e.button === 1) setBar((was) => removeFromBar(was, ws.id));
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
+              }}
+              title={
+                away
+                  ? `${ws.name}（別のウィンドウで開いています）`
+                  : i < 9
+                    ? `${ws.name}（⌃${i + 1}）`
+                    : ws.name
+              }
+              className={`mg-ws-pill${on ? " is-on" : ""}${away ? " is-away" : ""}${
+                dropAt === i ? " drop-before" : ""
+              }${dropAt === i + 1 && i === items.length - 1 ? " drop-after" : ""}`}
             >
-              <Icon name="close" size={12} />
-            </span>
-          </div>
-        );
-      })}
+              <span
+                className="mg-ws-dot"
+                style={{ background: colorVar(ws.color) }}
+              />
+              <span className="truncate">{ws.name}</span>
+              {phase && (
+                <span
+                  title={`Claude のセッション：${PHASE_LABEL[phase]}`}
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
+                  style={{ background: PHASE_COLOR[phase] }}
+                />
+              )}
+              {/* 返事を待っているもの・終わったものは、点だけでは見落とすので言葉でも出す。 */}
+              {phase && PHASE_BADGE[phase] && (
+                <span className={`mg-ws-pill-badge is-${phase}`}>
+                  {PHASE_BADGE[phase]}
+                </span>
+              )}
+              {/* ツールバーから外すだけ。ワークスペースは消えない（⌘⇧P からまた開ける）。 */}
+              <span
+                role="button"
+                tabIndex={-1}
+                title="ツールバーから外す（ワークスペースは残ります）"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBar((was) => removeFromBar(was, ws.id));
+                }}
+                className="mg-ws-pill-x"
+              >
+                <Icon name="close" size={12} />
+              </span>
+            </div>
+          );
+        })}
+      </div>
       <button
         type="button"
         title="ワークスペースを新規作成"

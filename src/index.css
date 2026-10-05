@@ -8151,13 +8151,21 @@ body.mg-carrying {
 
 /* ツールバーの中のワークスペースの札。ファイルのタブ（角の四角）と取り違えない
    よう、丸い札にして段も分ける。今いるものは塗り、ほかは輪郭だけ。 */
-.mg-ws-pills {
+.mg-ws-pills-wrap {
   display: flex;
   min-width: 0;
   flex: 1;
   gap: 0.3rem;
   align-items: center;
   margin: 0 0.6rem;
+}
+.mg-ws-pills {
+  display: flex;
+  min-width: 0;
+  gap: 0.3rem;
+  align-items: center;
+  /* 送る箱は札の上下を切るので、輪郭や塗りが欠けないだけの余白を持たせる。 */
+  padding: 2px 1px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -8167,7 +8175,7 @@ body.mg-carrying {
 .mg-ws-pill {
   position: relative;
   display: inline-flex;
-  max-width: 13rem;
+  width: 12.5rem;
   height: 1.75rem;
   flex: none;
   gap: 0.4rem;
@@ -8353,19 +8361,23 @@ body.mg-carrying {
 .mg-ws-pill {
   cursor: pointer;
 }
+/* 札の幅は決め打ち。× は場所を取ったまま見せ隠しするだけなので、指しても
+   札の長さは変わらない（隣の札が動かない）。 */
 .mg-ws-pill-x {
-  display: none;
+  display: grid;
   width: 1rem;
   height: 1rem;
   flex: none;
   place-items: center;
+  margin-left: auto;
   margin-right: -0.35rem;
   border-radius: 999px;
   color: var(--mg-muted);
+  visibility: hidden;
 }
 .mg-ws-pill:hover .mg-ws-pill-x,
 .mg-ws-pill:focus-visible .mg-ws-pill-x {
-  display: grid;
+  visibility: visible;
 }
 .mg-ws-pill-x:hover {
   background: color-mix(in srgb, var(--mg-fg) 12%, transparent);
