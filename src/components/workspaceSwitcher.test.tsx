@@ -11,9 +11,14 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const created: unknown[] = [];
 const added: string[][] = [];
+const opened: string[] = [];
 
 vi.mock("../hooks/useWorkspace", () => ({
-  useWorkspace: () => ({ openWorkspace: async () => {} }),
+  useWorkspace: () => ({
+    openWorkspace: async () => {},
+    openFolder: async (path: string) => void opened.push(path),
+    openFolderInNewWindow: async () => true,
+  }),
 }));
 vi.mock("../hooks/useWorkspaceOps", () => ({
   useWorkspaceOps: () => ({
@@ -42,6 +47,7 @@ beforeAll(() => {
 beforeEach(() => {
   created.length = 0;
   added.length = 0;
+  opened.length = 0;
 });
 
 let root: Root | null = null;
@@ -54,7 +60,14 @@ afterEach(() => {
   host = null;
 });
 
-const here: Workspace = { id: "ws-1", name: "docs", color: "teal", roots: ["/w/docs"], lastOpened: 3 };
+const here: Workspace = {
+  id: "ws-1",
+  name: "docs",
+  color: "teal",
+  roots: ["/w/docs"],
+  lastOpened: 3,
+  folder: "/w/docs",
+};
 
 async function show() {
   const store = createStore();
@@ -121,5 +134,30 @@ describe("フォルダを足す", () => {
     expect(el.textContent).not.toContain("/w/docs");
     press(el.querySelector("input")!, "Enter");
     expect(added).toEqual([["/w/repo"]]);
+  });
+});
+
+describe("まだワークスペースになっていないフォルダ", () => {
+  it("開いたことのあるフォルダを「フォルダ」の区切りに並べ、ワークスペースのあるものは出さない", async () => {
+    const el = await show();
+    const loose = [...el.querySelectorAll("[data-idx]")]
+      .map((r) => r.textContent ?? "")
+      .filter((t) => t.includes("/w/"));
+    expect(loose).toHaveLength(1);
+    expect(loose[0]).toContain("/w/repo");
+  });
+
+  it("選ぶとそのフォルダを開く", async () => {
+    const el = await show();
+    const input = el.querySelector("input")!;
+    press(input, "ArrowDown");
+    press(input, "Enter");
+    expect(opened).toEqual(["/w/repo"]);
+  });
+
+  it("画面の言葉は「ウィンドウ」で、「窓」と書かない", async () => {
+    const el = await show();
+    expect(el.textContent).toContain("このウィンドウ");
+    expect(el.textContent).not.toContain("窓");
   });
 });

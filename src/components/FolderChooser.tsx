@@ -220,7 +220,7 @@ export function FolderChooser({
           {picked.length > 0 ? `${picked.length} 個のフォルダ` : "印が無ければ選んでいる行のフォルダ"}
         </span>
         <span className="ml-auto text-[10.5px] text-[var(--mg-muted)]">
-          {mode === "create" ? "⏎ 作る　⌘⏎ 新しい窓に作る" : "⏎ 足す"}
+          {mode === "create" ? "⏎ 作る　⌘⏎ 新しいウィンドウに作る" : "⏎ 足す"}
         </span>
         <button
           onClick={() => done(false)}

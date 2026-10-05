@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
-import { rootName } from "../lib/idb";
+import { folderDisplayName, rootName } from "../lib/idb";
 import { ago } from "../lib/when";
 import { currentWindowLabel } from "../lib/windows";
 import {
@@ -51,7 +51,7 @@ export function WorkspaceSwitcher() {
   const claude = useAtomValue(claudeSessionsAtom);
   const phaseFor = useAtomValue(phaseForAtom);
   const store = useStore();
-  const { openWorkspace } = useWorkspace();
+  const { openWorkspace, openFolder, openFolderInNewWindow } = useWorkspace();
   const ops = useWorkspaceOps();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -82,7 +82,12 @@ export function WorkspaceSwitcher() {
 
   const rows = useMemo(() => {
     // 今の窓で開いているものは、控えの一覧より新しい中身を持っている。
-    const merged = current ? list.map((w) => (w.id === current.id ? current : w)) : list;
+    // 控えをまだ書き終えていなくても、今開いているものは必ず並べる。
+    const merged = current
+      ? list.some((w) => w.id === current.id)
+        ? list.map((w) => (w.id === current.id ? current : w))
+        : [current, ...list]
+      : list;
     return merged
       .map((ws) => ({ ws, names: ws.roots.map((r) => rootName(folders, r)) }))
       .filter(({ ws, names }) => matches(ws, names, query.trim()));
@@ -101,7 +106,23 @@ export function WorkspaceSwitcher() {
       .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
       .slice(0, SESSIONS_SHOWN);
   }, [claudeOn, claude, list, current, query]);
-  const total = rows.length + sessions.length;
+  // 開いたことはあるが、まだワークスペースになっていないフォルダ。選ぶとその
+  // フォルダのワークスペースができる（この版より前に開いていたフォルダもここに出る）。
+  const loose = useMemo(() => {
+    const owned = new Set(
+      [...list, ...(current ? [current] : [])].flatMap((w) => (w.folder ? [w.folder] : [])),
+    );
+    const q = query.trim().toLowerCase();
+    return [...folders]
+      .filter((f) => !owned.has(f.path))
+      .filter((f) => {
+        if (!q) return true;
+        const hay = `${folderDisplayName(f)} ${f.path}`.toLowerCase();
+        return q.split(/\s+/).every((word) => hay.includes(word));
+      })
+      .sort((a, b) => b.lastOpened - a.lastOpened);
+  }, [folders, list, current, query]);
+  const total = rows.length + loose.length + sessions.length;
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
@@ -116,8 +137,15 @@ export function WorkspaceSwitcher() {
 
   const choose = (i: number, newWindow: boolean) => {
     const row = rows[i];
+    const folder = row ? undefined : loose[i - rows.length];
+    if (folder) {
+      close();
+      if (newWindow) void openFolderInNewWindow(folder.path, folderDisplayName(folder));
+      else void openFolder(folder.path);
+      return;
+    }
     if (!row) {
-      const session = sessions[i - rows.length];
+      const session = sessions[i - rows.length - loose.length];
       if (!session) return;
       close();
       void ops.createFromSession(session);
@@ -202,7 +230,7 @@ export function WorkspaceSwitcher() {
         </div>
 
         <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
-          {rows.length === 0 && sessions.length === 0 && (
+          {rows.length === 0 && loose.length === 0 && sessions.length === 0 && (
             <div className="px-4 py-6 text-center text-[12.5px] text-[var(--mg-muted)]">
               {list.length === 0
                 ? "ワークスペースはまだありません。フォルダを開くと、そのフォルダのワークスペースができます"
@@ -260,12 +288,12 @@ export function WorkspaceSwitcher() {
                       <span className="truncate text-[13.5px] text-[var(--mg-fg)]">{ws.name}</span>
                       {here && (
                         <span className="shrink-0 rounded bg-[var(--mg-accent-soft)] px-1 text-[10px] font-medium text-[var(--mg-accent)]">
-                          この窓
+                          このウィンドウ
                         </span>
                       )}
                       {!here && other && (
                         <span className="shrink-0 rounded bg-[var(--mg-hover)] px-1 text-[10px] text-[var(--mg-muted)]">
-                          別の窓
+                          別のウィンドウ
                         </span>
                       )}
                       {phase && <PhaseMark phase={phase} />}
@@ -292,7 +320,7 @@ export function WorkspaceSwitcher() {
                     <Icon name="edit" size={15} />
                   </button>
                   <button
-                    title="新しい窓で開く (⌘⏎)"
+                    title="新しいウィンドウで開く (⌘⏎)"
                     onClick={(e) => {
                       e.stopPropagation();
                       choose(i, true);
@@ -339,6 +367,42 @@ export function WorkspaceSwitcher() {
               </div>
             );
           })}
+          {loose.length > 0 && (
+            <div className="mt-1 border-t border-[var(--mg-border)] pt-1">
+              <div className="px-4 py-1 text-[10.5px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
+                フォルダ
+              </div>
+              {loose.map((f, j) => {
+                const i = rows.length + j;
+                return (
+                  <div
+                    key={f.path}
+                    data-idx={i}
+                    onMouseMove={() => setActive(i)}
+                    onClick={(e) => choose(i, e.metaKey)}
+                    title="開くと、このフォルダのワークスペースができます"
+                    className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 ${
+                      i === active ? "bg-[var(--mg-accent-soft)]" : ""
+                    }`}
+                  >
+                    <Icon name="folder" size={16} className="shrink-0 text-[var(--mg-muted)]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] text-[var(--mg-fg)]">
+                        {folderDisplayName(f)}
+                      </div>
+                      <div className="truncate text-[11px] text-[var(--mg-muted)]" title={f.path}>
+                        {f.path}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
+                      {ago(f.lastOpened, now)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {claudeOn && (
             <div className="mt-1 border-t border-[var(--mg-border)] pt-1">
               <div className="flex items-center gap-1.5 px-4 py-1 text-[10.5px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
@@ -362,11 +426,11 @@ export function WorkspaceSwitcher() {
                 <SessionRow
                   key={session.sessionId}
                   session={session}
-                  index={rows.length + j}
-                  active={rows.length + j === active}
+                  index={rows.length + loose.length + j}
+                  active={rows.length + loose.length + j === active}
                   now={now}
-                  onHover={() => setActive(rows.length + j)}
-                  onChoose={() => choose(rows.length + j, false)}
+                  onHover={() => setActive(rows.length + loose.length + j)}
+                  onChoose={() => choose(rows.length + loose.length + j, false)}
                 />
               ))}
             </div>
@@ -397,7 +461,7 @@ export function WorkspaceSwitcher() {
             />
           )}
           <span className="ml-auto px-2 text-[10.5px] text-[var(--mg-muted)]">
-            ⏎ 切り替え　⌘⏎ 新しい窓
+            ⏎ 切り替え　⌘⏎ 新しいウィンドウ
           </span>
         </div>
       </div>

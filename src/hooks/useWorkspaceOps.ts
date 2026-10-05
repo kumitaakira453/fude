@@ -179,7 +179,7 @@ export function useWorkspaceOps() {
         return false;
       }
       if (await focusWorkspace(id, currentWindowLabel()).catch(() => false)) {
-        notify(store, "別の窓で開いています。その窓を閉じてから消してください");
+        notify(store, "別のウィンドウで開いています。そのウィンドウを閉じてから消してください");
         return false;
       }
       store.set(A.workspacesAtom, (list) => list.filter((w) => w.id !== id));
