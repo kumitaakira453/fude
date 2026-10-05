@@ -7,7 +7,7 @@ import { isJsonPath } from "../lib/jsonTree";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
-import { barAtom, barTarget, visitedAtom } from "../state/workspaceBar";
+import { barAtom, barTarget } from "../state/workspaceBar";
 import { reviewScreenAtom, versionScreenAtom } from "../state/review";
 
 // 入力欄以外で選択中のテキストを検索語プリフィル用に取得する。
@@ -50,8 +50,9 @@ export function useHotkeys() {
       return isJsonPath(path) ? "json" : null;
     };
     const onKey = (e: KeyboardEvent) => {
-      // ⌃Tab・⌃1〜9 はワークスペースの切り替え。⌘ とは分けて見る（⌘ の割り当てを
-      // 奪わない）。書いている最中でも効かせる（編集面はこの組を使っていない）。
+      // ⌃1〜9 はワークスペースの切り替え（⌃Tab は WorkspaceCycler が持つ）。⌘ とは
+      // 分けて見る（⌘ の割り当てを奪わない）。書いている最中でも効かせる（編集面は
+      // この組を使っていない）。
       if (e.ctrlKey && !e.metaKey && !e.altKey) {
         const go = (id: string | undefined) => {
           const ws = id
@@ -60,11 +61,6 @@ export function useHotkeys() {
             : null;
           if (ws && ws.id !== store.get(A.workspaceAtom)?.id) void openRef.current(ws);
         };
-        if (e.key === "Tab" && !e.shiftKey) {
-          e.preventDefault();
-          go(store.get(visitedAtom)[1]);
-          return;
-        }
         if (!e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
           e.preventDefault();
           go(barTarget(store.get(barAtom), Number(e.code.slice(5))));

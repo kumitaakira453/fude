@@ -7,8 +7,10 @@ import type { Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
 import { barAtom, visitedAtom } from "../state/workspaceBar";
 import { useHotkeys } from "./useHotkeys";
+import { cycleOrder, WorkspaceCycler } from "../components/WorkspaceCycler";
 
-// ⌃Tab で直前のワークスペースへ、⌃1〜9 で列の位置へ。⌘ の組は奪わない。
+// ⌃Tab で一覧を送り ⌃ を離して移る（すぐ離せば直前のワークスペースへ）。
+// ⌃1〜9 で列の位置へ。⌘ の組は奪わない。
 
 const opened: string[] = [];
 vi.mock("./useWorkspace", () => ({
@@ -44,7 +46,7 @@ function rig() {
   store.set(visitedAtom, ["a", "c"]);
   function Keys() {
     useHotkeys();
-    return null;
+    return <WorkspaceCycler />;
   }
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -59,16 +61,47 @@ function rig() {
   return store;
 }
 
+const up = (init: KeyboardEventInit) =>
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, cancelable: true, ...init }));
+  });
 const key = (init: KeyboardEventInit) =>
   act(() => {
     window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
   });
 
 describe("ワークスペースを切り替えるキー", () => {
-  it("⌃Tab で直前に開いていたものへ", () => {
+  it("⌃Tab をすぐ離すと、直前に開いていたものへ（一覧は出さない）", () => {
     rig();
     key({ key: "Tab", ctrlKey: true });
+    up({ key: "Control" });
     expect(opened).toEqual(["c"]);
+    expect(document.querySelector(".mg-ws-cycler")).toBeNull();
+  });
+
+  it("⌃ を押したまま Tab を 2 回押して離すと、3 番目へ", () => {
+    rig();
+    key({ key: "Tab", ctrlKey: true });
+    key({ key: "Tab", ctrlKey: true });
+    expect(opened).toEqual([]);
+    up({ key: "Control" });
+    expect(opened).toEqual(["b"]);
+  });
+
+  it("押したままにすると一覧が出て、Esc で何もせず閉じる", async () => {
+    rig();
+    key({ key: "Tab", ctrlKey: true });
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, 200));
+    });
+    const names = Array.from(document.querySelectorAll(".mg-ws-cycler [role=option]")).map(
+      (el) => el.textContent,
+    );
+    expect(names.map((n) => n?.slice(0, 1))).toEqual(["a", "c", "b"]);
+    key({ key: "Escape" });
+    up({ key: "Control" });
+    expect(opened).toEqual([]);
+    expect(document.querySelector(".mg-ws-cycler")).toBeNull();
   });
 
   it("⌃2 で列の 2 番目、⌃9 で最後", () => {
@@ -88,5 +121,15 @@ describe("ワークスペースを切り替えるキー", () => {
     rig();
     key({ key: "2", code: "Digit2", metaKey: true });
     expect(opened).toEqual([]);
+  });
+});
+
+describe("一覧の並び", () => {
+  it("今いるものが先頭、続いて最近開いた順、残りは札の並び順", () => {
+    expect(cycleOrder(["a", "b", "c", "d"], ["b", "d", "a"], "b")).toEqual(["b", "d", "a", "c"]);
+  });
+
+  it("札から外したものは並べない", () => {
+    expect(cycleOrder(["a", "b"], ["x", "a"], "a")).toEqual(["a", "b"]);
   });
 });

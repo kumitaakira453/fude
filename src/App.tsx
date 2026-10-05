@@ -25,6 +25,7 @@ import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
+import { WorkspaceCycler } from "./components/WorkspaceCycler";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { NewWorkspace } from "./components/NewWorkspace";
@@ -282,6 +283,7 @@ export default function App() {
 
       {/* スタート画面からも切り替えられるよう、どちらの画面でも出せる位置に置く。 */}
       <WorkspaceSwitcher />
+      <WorkspaceCycler />
       {/* 設定はウィンドウ全体を覆う画面。スタート画面からも開ける。 */}
       <Settings />
       {/* ワークスペースの右押しのメニューと、作る一覧。どこから出しても同じもの。 */}
