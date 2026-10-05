@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { copyText } from "../lib/clip";
 import { Icon } from "./Icon";
@@ -8,6 +8,9 @@ import { Tooltip } from "./Tooltip";
 //
 // 本文の中のリンクは、選び直さないと行き先を確かめられなかった（帯は文字を
 // 選んでから出るので、リンクそのものを相手にできない）。
+
+// 窓の縁から空けておく幅。
+const EDGE = 8;
 
 export function LinkCard({
   href,
@@ -23,6 +26,14 @@ export function LinkCard({
   onEdit: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  // 窓の右端に近いリンクでは、左下に置くと札がはみ出す。測ってから内側へ寄せる。
+  const [left, setLeft] = useState(at.left);
+  useLayoutEffect(() => {
+    const width = ref.current?.offsetWidth ?? 0;
+    const room = window.innerWidth - EDGE;
+    setLeft(Math.max(EDGE, Math.min(at.left, room - width)));
+  }, [at.left, href]);
 
   const copy = async () => {
     if (!(await copyText(href))) return;
@@ -31,7 +42,7 @@ export function LinkCard({
   };
 
   return createPortal(
-    <div className="mg-link-card" style={{ left: at.left, top: at.top }}>
+    <div ref={ref} className="mg-link-card" style={{ left, top: at.top }}>
       <Icon name="language" size={15} className="mg-link-globe" />
       <button type="button" className="mg-link-href" onClick={onOpen} title="開く">
         {href}
