@@ -5,159 +5,242 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
+import { barAtom } from "../state/workspaceBar";
+import { NewWorkspace } from "./NewWorkspace";
+import { WorkspaceMenu } from "./WorkspaceMenu";
+import { WorkspacePills } from "./WorkspacePills";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
-// ⌘⇧P の一覧の「新しく作る」「フォルダを足す」。開いたことのあるフォルダから選べる。
+// ワークスペースの入口。やりたいことごとに入口を 1 つに決めてある。
+//   切り替える   ツールバーの札
+//   探して開く   ⌘⇧P の一覧（作る口・Claude の区切りは持たない）
+//   作る         札の並びの末尾の ＋
+//   手入れ       どこで右クリックしても同じメニュー
 
-const created: unknown[] = [];
-const added: string[][] = [];
-const opened: string[] = [];
+const calls: { op: string; arg: unknown }[] = [];
+const log = (op: string) => (arg?: unknown) => {
+  calls.push({ op, arg });
+};
 
 vi.mock("../hooks/useWorkspace", () => ({
   useWorkspace: () => ({
-    openWorkspace: async () => {},
-    openFolder: async (path: string) => void opened.push(path),
+    openWorkspace: async (ws: Workspace) => log("open")(ws.id),
+    openFolder: async (path: string) => log("openFolder")(path),
     openFolderInNewWindow: async () => true,
   }),
 }));
 vi.mock("../hooks/useWorkspaceOps", () => ({
   useWorkspaceOps: () => ({
-    createWorkspace: async (opts: unknown) => void created.push(opts),
-    addRoots: async (roots: string[]) => void added.push(roots),
+    createWorkspace: async (opts: unknown) => log("create")(opts),
+    createFromSession: async (s: { sessionId: string }) => log("fromSession")(s.sessionId),
+    addRoots: async (roots: string[], id?: string) => log("addRoots")({ roots, id }),
     pickOtherFolder: async () => null,
     openInNewWindow: async () => {},
-    renameWorkspace: () => {},
-    recolorWorkspace: () => {},
-    deleteWorkspace: async () => true,
-    createFromSession: async () => {},
+    renameWorkspace: (id: string, name: string) => log("rename")({ id, name }),
+    recolorWorkspace: (id: string, color: string) => log("recolor")({ id, color }),
+    deleteWorkspace: async (id: string) => log("delete")(id),
+    unlinkSession: (id: string) => log("unlink")(id),
   }),
 }));
+// 控えの一覧を読み直すと、試験で入れた一覧がそのまま返る。
+let stored: Workspace[] = [];
 vi.mock("../lib/workspaces", async (real) => ({
   ...(await real<typeof import("../lib/workspaces")>()),
   liveWorkspaces: async () => [],
-  listWorkspaces: async () => [],
+  listWorkspaces: async () => stored,
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ confirm: async () => false }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ confirm: async () => true }));
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 });
-
 beforeEach(() => {
-  created.length = 0;
-  added.length = 0;
-  opened.length = 0;
+  calls.length = 0;
 });
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
-
 afterEach(() => {
   act(() => root?.unmount());
   host?.remove();
   root = null;
   host = null;
+  localStorage.clear();
 });
 
-const here: Workspace = {
-  id: "ws-1",
-  name: "docs",
+const ws = (id: string, name: string, extra: Partial<Workspace> = {}): Workspace => ({
+  id,
+  name,
   color: "teal",
-  roots: ["/w/docs"],
-  lastOpened: 3,
-  folder: "/w/docs",
-};
+  roots: [`/w/${id}`],
+  lastOpened: 1,
+  ...extra,
+});
 
-async function show() {
+async function show(setup?: (s: ReturnType<typeof createStore>) => void) {
   const store = createStore();
+  const here = ws("a", "要件定義", { folder: "/w/a" });
+  stored = [here, ws("b", "Slack 対応", { claude: { sessionId: "s", nameFollows: true } })];
+  store.set(A.workspacesAtom, stored);
+  store.set(A.workspaceAtom, here);
   store.set(A.foldersAtom, [
-    { id: "/w/docs", name: "docs", path: "/w/docs", lastOpened: 3 },
+    { id: "/w/a", name: "a", path: "/w/a", lastOpened: 3 },
     { id: "/w/repo", name: "repo", path: "/w/repo", lastOpened: 2 },
   ]);
-  store.set(A.workspaceAtom, here);
-  store.set(A.workspacesAtom, [here]);
-  store.set(A.workspaceSwitcherOpenAtom, true);
+  store.set(barAtom, ["a", "b"]);
+  setup?.(store);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
     root!.render(
       <Provider store={store}>
+        <WorkspacePills />
         <WorkspaceSwitcher />
+        <WorkspaceMenu />
+        <NewWorkspace />
       </Provider>,
     );
   });
-  return host;
+  return { store, el: host };
 }
 
-const press = (el: Element, key: string, meta = false) =>
+const pill = (el: HTMLElement, id: string) => el.querySelector<HTMLElement>(`[data-ws="${id}"]`)!;
+const rightClick = (target: Element) =>
   act(() => {
-    el.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: meta, bubbles: true }));
+    target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+  });
+// 絵の字（material-symbols の名前）を除いた、項目の言葉。
+const menuItems = () =>
+  Array.from(document.querySelectorAll('[role="menu"] [role="menuitem"]')).map((b) =>
+    Array.from(b.childNodes)
+      .filter((n) => !(n instanceof HTMLElement && n.classList.contains("material-symbols-rounded")))
+      .map((n) => n.textContent)
+      .join(""),
+  );
+const button = (label: string) =>
+  Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) =>
+    b.textContent?.includes(label),
+  )!;
+
+describe("切り替える：ツールバーの札", () => {
+  it("札を押すと切り替わる", async () => {
+    const { el } = await show();
+    act(() => pill(el, "b").click());
+    expect(calls).toEqual([{ op: "open", arg: "b" }]);
+  });
+});
+
+describe("手入れ：どこで右クリックしても同じメニュー", () => {
+  it("札を右クリックすると手入れのメニューが出る", async () => {
+    const { el } = await show();
+    rightClick(pill(el, "b"));
+    expect(menuItems()).toEqual([
+      "名前を変更",
+      "フォルダを追加…",
+      "新しいウィンドウで開く",
+      "ツールバーから外す",
+      "Claude のセッションとの連携を解除",
+      "削除",
+    ]);
   });
 
-const button = (el: HTMLElement, label: string) =>
-  [...el.querySelectorAll("button")].find((b) => b.textContent?.includes(label))!;
+  it("⌘⇧P の行を右クリックしても、同じメニューが出る", async () => {
+    const { el } = await show((s) => s.set(A.workspaceSwitcherOpenAtom, true));
+    const row = Array.from(el.querySelectorAll("[data-idx]")).find((r) =>
+      r.textContent?.includes("Slack 対応"),
+    )!;
+    rightClick(row);
+    expect(menuItems()[0]).toBe("名前を変更");
+    expect(menuItems()).toContain("削除");
+  });
 
-describe("新しく作る", () => {
-  it("開いたことのあるフォルダが並び、今のフォルダに印が付いている", async () => {
-    const el = await show();
-    act(() => button(el, "新しく作る").click());
+  it("開いているワークスペースは、メニューから削除できない", async () => {
+    const { el } = await show();
+    rightClick(pill(el, "a"));
+    expect(menuItems()).not.toContain("削除");
+    expect(menuItems()).not.toContain("新しいウィンドウで開く");
+  });
+
+  it("メニューから名前・色・ツールバー・削除が効く", async () => {
+    const { el, store } = await show();
+    rightClick(pill(el, "b"));
+    act(() => button("名前を変更").click());
+    const input = document.querySelector<HTMLInputElement>('[role="menu"] input')!;
+    act(() => {
+      input.value = "Slack";
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(calls.at(-1)).toEqual({ op: "rename", arg: { id: "b", name: "Slack" } });
+
+    rightClick(pill(el, "b"));
+    act(() => document.querySelectorAll<HTMLElement>(".mg-ws-menu-colors button")[3].click());
+    expect(calls.at(-1)?.op).toBe("recolor");
+
+    rightClick(pill(el, "b"));
+    act(() => button("ツールバーから外す").click());
+    expect(store.get(barAtom)).toEqual(["a"]);
+
+    rightClick(pill(el, "a"));
+    expect(menuItems()).toContain("ツールバーから外す");
+  });
+});
+
+describe("探して開く：⌘⇧P", () => {
+  it("作る口も Claude の区切りも持たない", async () => {
+    const { el } = await show((s) => {
+      s.set(A.workspaceSwitcherOpenAtom, true);
+      s.set(A.claudeLinkAtom, true);
+    });
     const text = el.textContent ?? "";
-    expect(text).toContain("/w/docs");
-    expect(text).toContain("/w/repo");
-    expect(text).toContain("1 個のフォルダ");
+    expect(text).not.toContain("新規作成");
+    expect(text).not.toContain("Claude のセッションから");
   });
 
-  it("Enter だけで、今のフォルダの空のワークスペースを作る", async () => {
-    const el = await show();
-    act(() => button(el, "新しく作る").click());
-    press(el.querySelector("input")!, "Enter");
-    expect(created).toEqual([{ roots: ["/w/docs"], name: "", newWindow: false }]);
-  });
-
-  it("印を足すと、その順に並べる", async () => {
-    const el = await show();
-    act(() => button(el, "新しく作る").click());
-    const input = el.querySelector("input")!;
-    press(input, "ArrowDown");
-    press(input, " ");
-    press(input, "Enter", true);
-    expect(created).toEqual([{ roots: ["/w/docs", "/w/repo"], name: "", newWindow: true }]);
+  it("まだワークスペースの無いフォルダも並び、選ぶと開く", async () => {
+    const { el } = await show((s) => s.set(A.workspaceSwitcherOpenAtom, true));
+    const row = Array.from(el.querySelectorAll<HTMLElement>("[data-idx]")).find((r) =>
+      r.textContent?.includes("/w/repo"),
+    )!;
+    act(() => row.click());
+    expect(calls).toEqual([{ op: "openFolder", arg: "/w/repo" }]);
   });
 });
 
-describe("フォルダを足す", () => {
-  it("既に並んでいるフォルダは出さず、選んだものを足す", async () => {
-    const el = await show();
-    act(() => button(el, "フォルダを足す").click());
-    expect(el.textContent).not.toContain("/w/docs");
-    press(el.querySelector("input")!, "Enter");
-    expect(added).toEqual([["/w/repo"]]);
-  });
-});
-
-describe("まだワークスペースになっていないフォルダ", () => {
-  it("開いたことのあるフォルダを「フォルダ」の区切りに並べ、ワークスペースのあるものは出さない", async () => {
-    const el = await show();
-    const loose = [...el.querySelectorAll("[data-idx]")]
-      .map((r) => r.textContent ?? "")
-      .filter((t) => t.includes("/w/"));
-    expect(loose).toHaveLength(1);
-    expect(loose[0]).toContain("/w/repo");
+describe("作る：＋", () => {
+  it("作り方を並べ、今のフォルダで作るのは 1 回押すだけ", async () => {
+    const { el } = await show();
+    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    expect(document.body.textContent).toContain("フォルダを選んで新規作成");
+    expect(document.body.textContent).toContain("今のタブを複製して新規作成");
+    act(() => button("今のフォルダで新規作成").click());
+    expect(calls).toEqual([{ op: "create", arg: { roots: ["/w/a"] } }]);
   });
 
-  it("選ぶとそのフォルダを開く", async () => {
-    const el = await show();
-    const input = el.querySelector("input")!;
-    press(input, "ArrowDown");
-    press(input, "Enter");
-    expect(opened).toEqual(["/w/repo"]);
+  it("Claude の連携を切っていれば、セッションから作る項目は出さない", async () => {
+    const { el } = await show();
+    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    expect(document.body.textContent).not.toContain("Claude のセッションから作成");
   });
 
-  it("画面の言葉は「ウィンドウ」で、「窓」と書かない", async () => {
-    const el = await show();
-    expect(el.textContent).toContain("このウィンドウ");
-    expect(el.textContent).not.toContain("窓");
+  it("連携を入れていれば、まだワークスペースの無いセッションを並べる", async () => {
+    const { el } = await show((s) => {
+      s.set(A.claudeLinkAtom, true);
+      s.set(A.claudeSessionsAtom, {
+        sessions: [
+          { sessionId: "s", name: "結びつき済み", kind: "background" },
+          { sessionId: "t", name: "[V]新しいセッション", kind: "background", state: "working" },
+        ],
+        error: null,
+        gone: new Set<string>(),
+      });
+    });
+    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    const body = document.body.textContent ?? "";
+    expect(body).toContain("[V]新しいセッション");
+    expect(body).not.toContain("結びつき済み");
+    act(() => button("[V]新しいセッション").click());
+    expect(calls).toEqual([{ op: "fromSession", arg: "t" }]);
   });
 });

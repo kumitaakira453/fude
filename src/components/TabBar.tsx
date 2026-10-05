@@ -182,7 +182,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               </button>
               {fresh.has(path) && (
                 <span
-                  title="Claude のセッションが書き足しました"
+                  title="Claude のセッションが追加したファイル"
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mg-accent)]"
                 />
               )}

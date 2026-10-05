@@ -36,15 +36,15 @@ export function ClaudeBanner() {
   if (phase === "unknown") {
     return (
       <div className="mx-2 mt-2 rounded-lg bg-[var(--mg-hover)] px-2.5 py-2 text-[11.5px] text-[var(--mg-muted)]">
-        Claude のセッションを読めません。最後に分かっていた状態のまま出しています
+        Claude のセッションを読み込めません。最後に確認できた状態を表示しています
       </div>
     );
   }
 
   const dropAll = async () => {
     const ok = await confirm(
-      `ワークスペース「${ws.name}」も消しますか？\nフォルダとファイルはそのまま残ります。`,
-      { title: "ワークスペースを消す", kind: "warning" },
+      `ワークスペース「${ws.name}」も削除しますか？\nフォルダとファイルは削除されません。`,
+      { title: "ワークスペースの削除", kind: "warning" },
     );
     if (!ok) return;
     // 開いているものは消せないので、窓をスタート画面へ戻してから消す。
@@ -60,23 +60,23 @@ export function ClaudeBanner() {
     <div className="mx-2 mt-2 rounded-lg border border-[var(--mg-border)] px-2.5 py-2 text-[11.5px]">
       <div className="flex items-center gap-1.5 font-medium text-[var(--mg-fg)]">
         <Icon name="link_off" size={15} className="text-[var(--mg-muted)]" />
-        Claude のセッションは削除されました
+        Claude のセッションは削除されています
       </div>
       <div className="mt-1 text-[var(--mg-muted)]">
-        タブと書いたファイルの一覧はこのまま残っています
+        タブとファイルの一覧は残っています
       </div>
       <div className="mt-1.5 flex gap-1">
         <button
           onClick={() => ops.unlinkSession(ws.id)}
           className="rounded-md bg-[var(--mg-accent-soft)] px-2 py-1 text-[var(--mg-accent)] hover:opacity-80"
         >
-          ふつうのワークスペースにする
+          連携を解除して残す
         </button>
         <button
           onClick={() => void dropAll()}
           className="rounded-md px-2 py-1 text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
         >
-          ワークスペースも消す
+          ワークスペースも削除
         </button>
       </div>
     </div>
@@ -106,7 +106,7 @@ export function ClaudeFiles() {
           className={`transition-transform ${open ? "rotate-90" : ""}`}
         />
         <ClaudeMark size={12} className="mr-0.5" />
-        このセッションが書いたファイル
+        このセッションで編集したファイル
         {phase && (
           <span className="ml-auto flex items-center gap-1 normal-case tracking-normal">
             <span
@@ -121,7 +121,7 @@ export function ClaudeFiles() {
         <div className="max-h-[38vh] overflow-y-auto pb-2">
           {wrote.length === 0 && (
             <div className="px-3 py-2 text-[11.5px] text-[var(--mg-muted)]">
-              まだ何も書いていません
+              まだありません
             </div>
           )}
           {wrote.slice(0, SHOWN).map((w) => (

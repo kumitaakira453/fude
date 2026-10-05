@@ -160,16 +160,16 @@ export function IgnoreWords({ row }: { row: WordsRow }) {
             onClick={() => setSide("shared")}
             className={side === "shared" ? "is-on" : ""}
           >
-            すべてのフォルダ
+            すべてのフォルダ共通
           </button>
           <button
             type="button"
             onClick={() => setSide("folder")}
             disabled={folderId === null}
-            title={folderId === null ? "フォルダを開いてから" : undefined}
+            title={folderId === null ? "フォルダを開いてから選べます" : undefined}
             className={side === "folder" ? "is-on" : ""}
           >
-            いまのフォルダ
+            このフォルダだけ
           </button>
         </div>
         <AutoTextarea
@@ -184,25 +184,25 @@ export function IgnoreWords({ row }: { row: WordsRow }) {
         <span className="mg-set-note mg-set-sides-foot">
           {reading ? (
             <>
-              このフォルダは共通の決まりで外しています
+              このフォルダは共通の設定を使っています
               <button type="button" onClick={start}>
-                このフォルダだけの決まりを作る
+                このフォルダ専用の設定を作る
               </button>
             </>
           ) : bypassed ? (
             <>
-              いまのフォルダは別の決まりで動いています（
+              このフォルダには専用の設定があります（
               {ignoreLines(own).length} 件）
               <button type="button" onClick={() => setSide("folder")}>
-                いまのフォルダの決まりを見る
+                このフォルダの設定を見る
               </button>
             </>
           ) : (
             <>
-              {count > 0 ? `${count} 件で外しています` : "いまは何も外していません"}
+              {count > 0 ? `${count} 件を除外しています` : "除外しているものはありません"}
               {here && (
                 <button type="button" onClick={drop}>
-                  共通に戻す
+                  共通の設定に戻す
                 </button>
               )}
             </>

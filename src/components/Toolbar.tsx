@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { WorkspacePills } from "./WorkspacePills";
 import { RAIL_ROOM } from "../lib/sidebar";
 import { closePane, splitInto } from "../lib/ui";
 import {
@@ -129,7 +130,10 @@ export function Toolbar() {
         disabled={!canForward}
       />
 
-      <div className="ml-auto flex items-center gap-0.5">
+      {/* ワークスペースの札。真ん中の空きを使い、溢れたら横に送る。 */}
+      <WorkspacePills />
+
+      <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <IconButton
           onClick={() => setPalette(true)}
           title="クイックオープン (⌘P)"

@@ -5,7 +5,7 @@ import {
   openPickerAtom,
   soleAtom,
   workspaceAtom,
-  workspaceSwitcherOpenAtom,
+  workspaceMenuAtom,
 } from "../state/atoms";
 import { draftNameAtom } from "../state/drafts";
 import { displayName } from "../lib/fsAccess";
@@ -17,8 +17,8 @@ import { Icon } from "./Icon";
 
 // いま何を開いているかを出す釦。
 //
-// ワークスペースを開いているときは、その名前と色を出す。押すとワークスペースを
-// 切り替える一覧（⌘⇧P）が出る。1 枚だけ開いているときは、開くものを選ぶ画面
+// ワークスペースを開いているときは、その名前と色を出す。押す（右押しでも）と
+// ワークスペースのメニューが出る。1 枚だけ開いているときは、開くものを選ぶ画面
 // （OpenPicker）が出る。
 //
 // 一覧そのものはここに持たない。数が増えるほど狭いプルダウンの中を
@@ -32,7 +32,7 @@ export function FolderSwitcher() {
   // 下書きは置き場も名前も人に見せるものではない。中身から採った名前を出す。
   const draftName = useAtomValue(draftNameAtom);
   const setPicker = useSetAtom(openPickerAtom);
-  const setSwitcher = useSetAtom(workspaceSwitcherOpenAtom);
+  const openMenu = useSetAtom(workspaceMenuAtom);
 
   const active = folders.find((f) => f.id === activeId);
   const phase = useAtomValue(phaseForAtom)(ws);
@@ -40,8 +40,15 @@ export function FolderSwitcher() {
   if (ws && !sole) {
     return (
       <button
-        onClick={() => setSwitcher(true)}
-        title="ワークスペースを切り替える (⌘⇧P)"
+        onClick={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          openMenu({ id: ws.id, x: box.left, y: box.bottom + 4 });
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
+        }}
+        title="ワークスペースのメニュー"
         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
       >
         <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
@@ -53,7 +60,7 @@ export function FolderSwitcher() {
             style={{ background: PHASE_COLOR[phase] }}
           />
         )}
-        <Icon name="unfold_more" size={17} className="ml-auto text-[var(--mg-muted)]" />
+        <Icon name="expand_more" size={17} className="ml-auto text-[var(--mg-muted)]" />
       </button>
     );
   }

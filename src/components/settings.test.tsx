@@ -3,17 +3,13 @@ import { createStore, Provider } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Workspace } from "../lib/workspaces";
 import {
   claudeLinkAtom,
   imageDirAtom,
   liveEditAtom,
   settingsFaceAtom,
   settingsOpenAtom,
-  workspaceAtom,
-  workspacesAtom,
 } from "../state/atoms";
-import { barAtom } from "../state/workspaceBar";
 import { Settings } from "./Settings";
 
 // 設定。ウィンドウ全体を使う画面で、面は責務で分け、面をまたいで探せる。
@@ -150,27 +146,27 @@ describe("面を責務で分ける", () => {
   it("はじめは見た目の面", () => {
     open();
     expect(text()).toContain("テーマ");
-    expect(text()).toContain("書体");
+    expect(text()).toContain("フォント");
   });
 
-  it("書く面には、書くときの設定だけを出す", () => {
+  it("編集の面には、書くときの設定だけを出す", () => {
     open();
-    act(() => face("書く").click());
+    act(() => face("編集").click());
     expect(names()).toContain("リアルタイム編集");
-    expect(names()).toContain("画像の置き場所");
-    expect(names()).not.toContain("Markdown 以外も並べる");
+    expect(names()).toContain("画像の保存先フォルダ");
+    expect(names()).not.toContain("Markdown 以外のファイルも表示する");
   });
 
   it("試験中という面は持たない（熟し具合は札で示す）", () => {
     open();
     expect(box().textContent).not.toContain("試験中");
-    act(() => face("書く").click());
+    act(() => face("編集").click());
     expect(page().querySelector(".mg-set-beta")).not.toBeNull();
   });
 
   it("行ごとの絵は出さない（絵は面の一覧だけ）", () => {
     open();
-    act(() => face("書く").click());
+    act(() => face("編集").click());
     const row = page().querySelector(".mg-set-row")!;
     expect(row.querySelector(".material-symbols-rounded")).toBeNull();
   });
@@ -180,16 +176,16 @@ describe("設定を探す", () => {
   it("面をまたいで当て、面ごとに見出しを添える", () => {
     open();
     search("画像");
-    expect(names()).toContain("画像の置き場所");
-    expect(names()).toContain("Markdown 以外も並べる");
+    expect(names()).toContain("画像の保存先フォルダ");
+    expect(names()).toContain("Markdown 以外のファイルも表示する");
     const wheres = Array.from(page().querySelectorAll(".mg-set-where")).map((el) => el.textContent);
-    expect(wheres.some((w) => w?.includes("書く"))).toBe(true);
+    expect(wheres.some((w) => w?.includes("編集"))).toBe(true);
     expect(wheres.some((w) => w?.includes("ファイル"))).toBe(true);
   });
 
   it("面の見出しを押すとその面へ移る", () => {
     open();
-    search("画像の置き場所");
+    search("画像の保存先フォルダ");
     act(() => page().querySelector<HTMLElement>(".mg-set-where")!.click());
     expect(store.get(settingsFaceAtom)).toBe("write");
     expect(find().value).toBe("");
@@ -219,7 +215,7 @@ describe("設定を探す", () => {
 describe("触ったら効く", () => {
   it("スイッチを押すと設定が変わる", () => {
     open();
-    act(() => face("書く").click());
+    act(() => face("編集").click());
     expect(store.get(liveEditAtom)).toBe(false);
     const row = Array.from(page().querySelectorAll<HTMLElement>(".mg-set-row")).find((el) =>
       el.textContent?.includes("リアルタイム編集"),
@@ -230,7 +226,7 @@ describe("触ったら効く", () => {
 
   it("打ち込みの欄がそのまま設定になる", () => {
     open();
-    act(() => face("書く").click());
+    act(() => face("編集").click());
     type(page().querySelector<HTMLInputElement>(".mg-set-drop input")!, "素材");
     expect(store.get(imageDirAtom)).toBe("素材");
   });
@@ -245,48 +241,20 @@ describe("キー操作の面", () => {
   });
 });
 
-describe("ワークスペースの面", () => {
-  const ws = (id: string, name: string): Workspace => ({
-    id,
-    name,
-    color: "teal",
-    roots: [`/w/${id}`],
-    lastOpened: 1,
+describe("重複を持たない", () => {
+  it("ワークスペースの面は無い（手入れは右クリックのメニューだけ）", () => {
+    open();
+    const tabs = Array.from(box().querySelectorAll(".mg-set-tab")).map((el) => el.textContent);
+    expect(tabs.some((t) => t?.includes("ワークスペース"))).toBe(false);
   });
 
-  function openWorkspaces() {
-    open((s) => {
-      s.set(settingsFaceAtom, "workspaces");
-      s.set(workspacesAtom, [ws("a", "要件定義"), ws("b", "Slack 対応")]);
-      s.set(workspaceAtom, ws("a", "要件定義"));
-      s.set(barAtom, ["a"]);
-    });
-  }
-
-  it("名前をその場で変える", () => {
-    openWorkspaces();
-    const field = page().querySelectorAll<HTMLInputElement>(".mg-set-ws-name")[1];
-    type(field, "Slack");
-    act(() => field.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
-    expect(renamed).toEqual([["b", "Slack"]]);
-  });
-
-  it("列に出すかを切り替える", () => {
-    openWorkspaces();
-    const toggles = page().querySelectorAll<HTMLElement>(".mg-set-ws-bar");
-    act(() => toggles[1].click());
-    expect(store.get(barAtom)).toEqual(["a", "b"]);
-  });
-
-  it("開いているものは消せず、ほかは消せる", async () => {
-    openWorkspaces();
-    const dels = page().querySelectorAll<HTMLButtonElement>(".mg-set-ws-del");
-    expect(dels[0].disabled).toBe(true);
-    await act(async () => {
-      dels[1].click();
-      await new Promise((ok) => setTimeout(ok, 0));
-    });
-    expect(deleted).toEqual(["b"]);
+  it("Claude の連携の入切は設定の中で 1 か所だけ", () => {
+    open();
+    search("claude");
+    const rows = Array.from(page().querySelectorAll(".mg-set-row-name")).filter((el) =>
+      el.textContent?.includes("Claude のセッションからワークスペースを作る"),
+    );
+    expect(rows).toHaveLength(1);
   });
 });
 
@@ -300,6 +268,6 @@ describe("Claude の面", () => {
       await new Promise((ok) => setTimeout(ok, 10));
     });
     expect(text()).toContain("見つかりません");
-    expect(text()).toContain("読めません");
+    expect(text()).toContain("読み込めません");
   });
 });

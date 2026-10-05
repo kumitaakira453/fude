@@ -43,7 +43,11 @@ export const freshTabsAtom = atom<ReadonlySet<string>>(new Set<string>());
 export const layoutOwnerAtom = atom<string | null>(null);
 // 控えてあるワークスペースの一覧（新しく開いた順）。切り替えの一覧が出す。
 export const workspacesAtom = atom<Workspace[]>([]);
-// ワークスペースを切り替える一覧（⌘⇧P）。
+// ワークスペースの右押しのメニュー。どこで右押ししても同じものが出る。
+export const workspaceMenuAtom = atom<{ id: string; x: number; y: number } | null>(null);
+// ワークスペースを作る小さな一覧（札の並びの末尾の ＋）。出す位置を持つ。
+export const newWorkspaceAtom = atom<{ left: number; top: number } | null>(null);
+// ワークスペースを探して開く一覧（⌘⇧P）。
 export const workspaceSwitcherOpenAtom = atom(false);
 // 木の開閉を控える鍵。ワークスペースがあればその ID、無ければフォルダ。
 export const treeKeyAtom = atom<string | null>(
@@ -317,7 +321,7 @@ export const paletteOpenAtom = atom<boolean>(false);
 export const settingsOpenAtom = atom<boolean>(false);
 // 設定で開いている面。
 export const settingsFaceAtom = atom<
-  "look" | "write" | "files" | "workspaces" | "claude" | "keys" | "app"
+  "look" | "write" | "files" | "claude" | "keys" | "app"
 >("look");
 // ⌘⇧M で開くメタ情報の小窓。開いているペインの id を持つ。
 export const metaOpenAtom = atom<string | null>(null);

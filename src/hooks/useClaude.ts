@@ -9,7 +9,7 @@ import { upsertWorkspace } from "../state/workspace";
 
 // Claude のセッションを追いかける（ベータ）。
 //
-// 読むのは、設定で入れていて、かつ要るとき（切り替えの一覧を開いているか、
+// 読むのは、設定で入れていて、かつ要るとき（作る一覧を開いているか、
 // セッションに結びついたワークスペースがあるとき）だけ。間を置いて一覧を
 // 取り直し、名前が変わっていればワークスペースの名前も替える。今開いている
 // ワークスペースなら、そのセッションが新しく書いたファイルをタブに足す。
@@ -27,11 +27,12 @@ function put(store: ReturnType<typeof useStore>, ws: Workspace): void {
 export function useClaude(): void {
   const store = useStore();
   const on = useAtomValue(A.claudeLinkAtom);
-  const switcher = useAtomValue(A.workspaceSwitcherOpenAtom);
+  // セッションを並べるのは、作る一覧（＋）を開いているとき。
+  const making = useAtomValue(A.newWorkspaceAtom) !== null;
   const list = useAtomValue(A.workspacesAtom);
   const current = useAtomValue(A.workspaceAtom);
   const linked = !!current?.claude || list.some((w) => w.claude);
-  const need = on && (switcher || linked);
+  const need = on && (making || linked);
 
   useEffect(() => {
     if (!need) return;

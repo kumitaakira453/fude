@@ -126,16 +126,18 @@ export function useWorkspaceOps() {
     [store, put, refreshTree],
   );
 
-  // 今のワークスペースにフォルダを足す。既に並んでいるもの（とその下）は除く。
+  // ワークスペースにフォルダを足す（id を省けば今のもの）。既に並んでいるもの
+  // （とその下）は除く。開いていないワークスペースなら控えを書き換えるだけ。
   const addRoots = useCallback(
-    async (dirs: string[]) => {
-      const ws = store.get(A.workspaceAtom);
+    async (dirs: string[], id?: string) => {
+      const here = store.get(A.workspaceAtom);
+      const ws = id && id !== here?.id ? find(id) : here;
       if (!ws) return;
       const fresh = dirs.filter(
         (dir) => !ws.roots.some((r) => dir === r || dir.startsWith(`${r}/`)),
       );
       if (fresh.length === 0) {
-        notify(store, "そのフォルダはもう並んでいます");
+        notify(store, "そのフォルダはすでに追加されています");
         return;
       }
       // 足したフォルダは開いた状態で出す。
@@ -143,9 +145,13 @@ export function useWorkspaceOps() {
         ...prev,
         [ws.id]: [...new Set([...(prev[ws.id] ?? []), ...ws.roots, ...fresh])],
       }));
+      if (ws.id !== here?.id) {
+        put({ ...ws, roots: [...ws.roots, ...fresh] });
+        return;
+      }
       await setRoots(ws, [...ws.roots, ...fresh]);
     },
-    [store, setRoots],
+    [store, setRoots, find, put],
   );
 
   // 開いたことの無いフォルダを OS のダイアログで選ぶ。選んだものは履歴に載せる
@@ -176,11 +182,11 @@ export function useWorkspaceOps() {
   const deleteWorkspace = useCallback(
     async (id: string): Promise<boolean> => {
       if (store.get(A.workspaceAtom)?.id === id) {
-        notify(store, "開いているワークスペースは消せません。別のものに切り替えてから消してください");
+        notify(store, "開いているワークスペースは削除できません。別のワークスペースに切り替えてから削除してください");
         return false;
       }
       if (await focusWorkspace(id, currentWindowLabel()).catch(() => false)) {
-        notify(store, "別のウィンドウで開いています。そのウィンドウを閉じてから消してください");
+        notify(store, "別のウィンドウで開いています。そのウィンドウを閉じてから削除してください");
         return false;
       }
       store.set(A.workspacesAtom, (list) => list.filter((w) => w.id !== id));
@@ -201,16 +207,16 @@ export function useWorkspaceOps() {
     async (session: ClaudeSession): Promise<void> => {
       const transcript = session.transcript;
       if (!transcript) {
-        notify(store, "このセッションの記録が見つかりません");
+        notify(store, "このセッションの履歴が見つかりません");
         return;
       }
-      const at = notifyBusy(store, "セッションが書いたファイルを読んでいます…");
+      const at = notifyBusy(store, "セッションのファイルを読み込んでいます…");
       let wrote: Wrote[];
       try {
         ({ wrote } = await claudeSessionFiles(session.sessionId, transcript));
-        settle(store, at, `${wrote.length} 件のファイルを見つけました`);
+        settle(store, at, `${wrote.length} 件のファイルが見つかりました`);
       } catch (e) {
-        settle(store, at, "セッションの記録を読めませんでした");
+        settle(store, at, "セッションの履歴を読み込めませんでした");
         console.error("セッションの記録を読めません", e);
         return;
       }
@@ -223,7 +229,7 @@ export function useWorkspaceOps() {
       if (roots.length === 0 && session.cwd) roots.push(session.cwd);
       if (roots.length === 0 && wrote[0]) roots.push(dirOf(wrote[0].path));
       if (roots.length === 0) {
-        notify(store, "並べるフォルダが決まりません");
+        notify(store, "フォルダを決められませんでした");
         return;
       }
       const tabs = wrote.slice(0, FIRST_TABS).map((w) => w.path);

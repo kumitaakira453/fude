@@ -6,16 +6,15 @@ import type { WritableAtom } from "jotai";
 // 貼り付けが増え、面をまたいで探すこともできない。形を型で決めておけば、描くのは
 // 1 つの部品で済み、絞り込みも表を舐めるだけになる。
 
-export type Face = "look" | "write" | "files" | "workspaces" | "claude" | "keys" | "app";
+export type Face = "look" | "write" | "files" | "claude" | "keys" | "app";
 
 export const FACES: { id: Face; label: string; icon: string; beta?: boolean }[] = [
   { id: "look", label: "見た目", icon: "palette" },
-  { id: "write", label: "書く", icon: "edit_note" },
+  { id: "write", label: "編集", icon: "edit_note" },
   { id: "files", label: "ファイル", icon: "folder" },
-  { id: "workspaces", label: "ワークスペース", icon: "workspaces" },
   // 絵は Claude のロゴ（Settings の側で描く）。
   { id: "claude", label: "Claude", icon: "", beta: true },
-  { id: "keys", label: "キー操作", icon: "keyboard" },
+  { id: "keys", label: "ショートカット", icon: "keyboard" },
   { id: "app", label: "このアプリ", icon: "info" },
 ];
 
@@ -66,7 +65,7 @@ export interface PickRow extends Base {
 // 中身は専用の部品が描く。絞り込みに当たれば、その部品が自分の中をさらに絞る。
 export interface PaneRow extends Base {
   kind: "pane";
-  pane: "workspaces" | "claude" | "keys";
+  pane: "claude" | "keys";
 }
 
 // このアプリの版と説明。

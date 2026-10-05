@@ -25,8 +25,9 @@ import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
-import { WorkspaceBar } from "./components/WorkspaceBar";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
+import { WorkspaceMenu } from "./components/WorkspaceMenu";
+import { NewWorkspace } from "./components/NewWorkspace";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { watchDragScroll } from "./lib/dragScroll";
 import { watchSpringDetails } from "./lib/spring";
@@ -248,7 +249,6 @@ export default function App() {
           }`}
         >
           <Toolbar />
-          <WorkspaceBar />
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
               <>
@@ -284,6 +284,9 @@ export default function App() {
       <WorkspaceSwitcher />
       {/* 設定はウィンドウ全体を覆う画面。スタート画面からも開ける。 */}
       <Settings />
+      {/* ワークスペースの右押しのメニューと、作る一覧。どこから出しても同じもの。 */}
+      <WorkspaceMenu />
+      <NewWorkspace />
 
       {/* バージョンの履歴は専用画面。前と後を並べるので、読む画面の幅には
           収まらない。隠しているあいだも同じファイルを持ち続ける（閉じた

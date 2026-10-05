@@ -9,7 +9,7 @@ import { Icon } from "./Icon";
 // ワークスペースに並べるフォルダを、開いたことのあるフォルダから選ぶ段。
 // ⌘⇧P の一覧の中で、「新しく作る」と「フォルダを足す」に使う。
 //
-// OS のダイアログは、一覧に無いフォルダを選ぶときだけ（末尾の「ほかのフォルダ…」）。
+// OS のダイアログは、一覧に無いフォルダを選ぶときだけ（末尾の「その他のフォルダ…」）。
 
 export type ChooseMode = "create" | "add";
 
@@ -56,7 +56,7 @@ export function FolderChooser({
         .sort((a, b) => b.lastOpened - a.lastOpened),
     [folders, hidden, query],
   );
-  // 末尾の「ほかのフォルダ…」も選べる行として数える。
+  // 末尾の「その他のフォルダ…」も選べる行として数える。
   const total = rows.length + 1;
 
   useEffect(() => setActive(0), [query]);
@@ -125,8 +125,8 @@ export function FolderChooser({
           onKeyDown={onKey}
           placeholder={
             mode === "create"
-              ? "並べるフォルダを選ぶ…（Space で印、Enter で作る）"
-              : "足すフォルダを選ぶ…（Space で印、Enter で足す）"
+              ? "フォルダを選択…（Space で選択、Enter で作成）"
+              : "追加するフォルダを選択…（Space で選択、Enter で追加）"
           }
           className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
         />
@@ -152,7 +152,7 @@ export function FolderChooser({
                 onBack();
               }
             }}
-            placeholder="空なら先頭のフォルダの名前"
+            placeholder="空欄なら最初のフォルダ名になります"
             className="min-w-0 flex-1 rounded bg-transparent px-1 text-[13px] outline-none placeholder:text-[var(--mg-muted)]"
           />
         </div>
@@ -161,7 +161,7 @@ export function FolderChooser({
       <div ref={listRef} className="max-h-[46vh] overflow-y-auto py-1">
         {rows.length === 0 && (
           <div className="px-4 py-4 text-center text-[12.5px] text-[var(--mg-muted)]">
-            {folders.length === 0 ? "開いたことのあるフォルダはまだありません" : "一致するフォルダがありません"}
+            {folders.length === 0 ? "以前開いたフォルダはまだありません" : "一致するフォルダがありません"}
           </div>
         )}
         {rows.map((f, i) => {
@@ -189,7 +189,7 @@ export function FolderChooser({
                     {folderDisplayName(f)}
                   </span>
                   {mode === "create" && order === 0 && picked.length > 1 && (
-                    <span className="shrink-0 text-[10px] text-[var(--mg-muted)]">主</span>
+                    <span className="shrink-0 text-[10px] text-[var(--mg-muted)]">メイン</span>
                   )}
                 </div>
                 <div className="truncate text-[11px] text-[var(--mg-muted)]" title={f.path}>
@@ -211,23 +211,23 @@ export function FolderChooser({
           }`}
         >
           <Icon name="folder_open" size={18} className="text-[var(--mg-muted)]" />
-          ほかのフォルダ…
+          その他のフォルダ…
         </div>
       </div>
 
       <div className="flex items-center gap-2 border-t border-[var(--mg-border)] px-3 py-1.5">
         <span className="text-[11px] text-[var(--mg-muted)]">
-          {picked.length > 0 ? `${picked.length} 個のフォルダ` : "印が無ければ選んでいる行のフォルダ"}
+          {picked.length > 0 ? `${picked.length} 個のフォルダを選択中` : "未選択の場合はカーソルのあるフォルダを使います"}
         </span>
         <span className="ml-auto text-[10.5px] text-[var(--mg-muted)]">
-          {mode === "create" ? "⏎ 作る　⌘⏎ 新しいウィンドウに作る" : "⏎ 足す"}
+          {mode === "create" ? "⏎ 作成　⌘⏎ 新しいウィンドウで作成" : "⏎ 追加"}
         </span>
         <button
           onClick={() => done(false)}
           disabled={picked.length === 0 && !rows[active]}
           className="rounded-md bg-[var(--mg-accent-soft)] px-2.5 py-1 text-[12px] font-medium text-[var(--mg-accent)] hover:opacity-80 disabled:opacity-40"
         >
-          {mode === "create" ? "作る" : "足す"}
+          {mode === "create" ? "作成" : "追加"}
         </button>
       </div>
     </>

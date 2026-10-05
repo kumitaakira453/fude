@@ -29,7 +29,6 @@ import { Icon } from "./Icon";
 import { ClaudePane } from "./settings/ClaudePane";
 import { KEY_WORDS, KeysPane } from "./settings/KeysPane";
 import { IgnoreWords, Marks, Switch, Words } from "./settings/SettingRow";
-import { WorkspacesPane } from "./settings/WorkspacesPane";
 import { FACES, grouped, matches, type Face, type Row, type SwitchRow } from "./settings/rows";
 
 // 設定。⌘, で開く。読む画面の代わりに、ウィンドウ全体がこの画面になる
@@ -53,7 +52,7 @@ const CLAUDE_TOGGLE: SwitchRow = {
   beta: true,
   atom: claudeLinkAtom,
   name: "Claude のセッションからワークスペースを作る",
-  note: "⌘⇧P の一覧に、動いている Claude Code のセッションを並べる。選ぶと、そのセッションが書いたファイルをタブにしたワークスペースができ、書き足すたびに追いかける。名前と状態も追う",
+  note: "ツールバーの ＋ に、実行中の Claude Code のセッションが表示されます。選ぶと、そのセッションが作成・編集したファイルをタブで開いたワークスペースを作成します。その後もファイルの追加、セッション名の変更、作業状態が自動で反映されます",
 };
 
 const ROWS: Row[] = [
@@ -64,7 +63,7 @@ const ROWS: Row[] = [
     face: "look",
     group: "テーマ",
     name: "テーマ",
-    note: "明るい / 暗いの配色を選ぶ",
+    note: "画面の配色を選びます",
     aliases: ["theme", "color", "配色", "色", "ダーク", "ライト"],
   },
   {
@@ -72,9 +71,9 @@ const ROWS: Row[] = [
     pick: "font",
     id: "font",
     face: "look",
-    group: "書体",
-    name: "書体",
-    note: "本文の書体を選ぶ",
+    group: "フォント",
+    name: "フォント",
+    note: "本文のフォントを選びます",
     aliases: ["font", "typeface", "フォント", "ゴシック", "明朝"],
   },
   {
@@ -84,7 +83,7 @@ const ROWS: Row[] = [
     face: "look",
     group: "本文幅",
     name: "本文幅",
-    note: "1 行の長さを決める",
+    note: "本文の 1 行の長さを選びます",
     aliases: ["width", "幅", "余白"],
   },
   {
@@ -94,8 +93,8 @@ const ROWS: Row[] = [
     group: "表示",
     beta: true,
     atom: wideTableAtom,
-    name: "幅の長い表を読みやすくする",
-    note: "横に送っても先頭の列を置いていく。溢れている表には「大きく開く」を出し、画面いっぱいで見渡せるようにする",
+    name: "横に長い表を見やすくする",
+    note: "横にスクロールしても先頭の列を固定します。はみ出す表には「拡大表示」ボタンを出し、画面いっぱいに表示できるようにします",
     aliases: ["table", "表", "テーブル", "横スクロール", "列"],
   },
   {
@@ -105,7 +104,7 @@ const ROWS: Row[] = [
     group: "編集",
     atom: liveEditAtom,
     name: "リアルタイム編集",
-    note: "組版されたまま直接書ける編集面でファイルを開く。切ると読む面で開く（書き換えるのはチェックとコールアウトだけ）",
+    note: "表示された見た目のまま、直接編集できる画面でファイルを開きます。オフにすると閲覧用の画面で開きます（閲覧用の画面で変更できるのは、チェックボックスとコールアウトだけです）",
     aliases: ["live", "編集", "wysiwyg"],
   },
   {
@@ -115,8 +114,8 @@ const ROWS: Row[] = [
     group: "編集",
     beta: true,
     atom: notionKeysAtom,
-    name: "Notion 風の打ち込み",
-    note: "`>` でトグル、`|` で引用を作る。切ると Markdown どおり `>` が引用",
+    name: "Notion 風の入力",
+    note: "`>` でトグル、`|` で引用を作成します。オフにすると Markdown の書き方どおり `>` で引用になります",
     aliases: ["notion", "打鍵", "shortcut"],
   },
   {
@@ -126,8 +125,8 @@ const ROWS: Row[] = [
     group: "タスク",
     beta: true,
     atom: taskMarksAtom,
-    name: "タスクの特殊な印",
-    note: "`- [/] ` のように書いた印を、四角の中にそのまま出す。入れた印だけが読まれ、切ってあるものは今までどおり字のまま",
+    name: "タスクの追加の記号",
+    note: "`- [/] ` のように書いた記号を、チェックボックスの中に表示します。オンにした記号だけが対象で、それ以外はそのまま文字として表示されます",
     aliases: ["task", "todo", "タスク", "チェック", "印", "進行中", "取りやめ", "先送り", "疑問", "重要"],
   },
   {
@@ -138,41 +137,31 @@ const ROWS: Row[] = [
     lines: "one",
     atom: imageDirAtom,
     placeholder: DEFAULT_DIR,
-    name: "画像の置き場所",
-    note: "貼った画像・落とした画像は、文書と同じところに作ったこの名前のフォルダへ入る",
+    name: "画像の保存先フォルダ",
+    note: "貼り付けた画像やドロップした画像は、文書と同じ場所にあるこの名前のフォルダに保存されます",
     aliases: ["image", "画像", "写真", "フォルダ", "images"],
   },
   {
     kind: "switch",
     id: "showother",
     face: "files",
-    group: "一覧",
+    group: "ファイル一覧",
     atom: showOtherFilesAtom,
-    name: "Markdown 以外も並べる",
-    note: "画像・HTML・PDF と字で書かれたファイルをツリーに出す。切ると読み物だけの一覧になる（1 枚だけ開く経路はどちらでも通る）",
+    name: "Markdown 以外のファイルも表示する",
+    note: "画像・HTML・PDF・テキストファイルもファイル一覧に表示します。オフにすると Markdown だけを表示します（ファイルを単体で開く場合はどちらでも開けます）",
     aliases: ["tree", "一覧", "ツリー", "画像", "html", "pdf"],
   },
   {
     kind: "words",
     id: "ignore",
     face: "files",
-    group: "一覧",
+    group: "ファイル一覧",
     lines: "many",
     atom: ignoreAtom,
     placeholder: "node_modules/\n*.lock\n.DS_Store",
-    name: "一覧から外すもの",
-    note: ".gitignore と同じ書き方。末尾の / は置き場ごと（worktrees/ なら中身も箱も）、途中に / があれば根からの道筋、!残す.md で戻せる。外したものは検索にも出ない",
+    name: "ファイル一覧から除外するもの",
+    note: ".gitignore と同じ書き方です。末尾に / を付けるとフォルダごと除外し（worktrees/ ならフォルダと中身すべて）、途中に / を含むとフォルダの先頭からのパスとして扱います。!残す.md のように書くと除外を取り消せます。除外したファイルは検索にも出ません",
     aliases: ["exclude", "ignore", "除外", "隠す"],
-  },
-  {
-    kind: "pane",
-    pane: "workspaces",
-    id: "workspaces",
-    face: "workspaces",
-    group: "",
-    name: "ワークスペース",
-    note: "名前・色・並べるフォルダ・列に出すか・消す",
-    aliases: ["workspace", "ワークスペース", "列", "フォルダ", "色", "名前", "消す"],
   },
   {
     kind: "pane",
@@ -191,8 +180,8 @@ const ROWS: Row[] = [
     id: "keys",
     face: "keys",
     group: "",
-    name: "キー操作",
-    note: "キーボードでの操作の一覧",
+    name: "キーボードショートカット",
+    note: "キーボードショートカットの一覧",
     aliases: ["key", "shortcut", "キー", "ショートカット", ...KEY_WORDS],
   },
   {
@@ -201,7 +190,7 @@ const ROWS: Row[] = [
     face: "app",
     group: "",
     name: "fude",
-    note: "版を確かめ、更新を取りに行く",
+    note: "バージョンの確認とアップデート",
     aliases: ["version", "update", "版", "更新", "about"],
   },
 ];
@@ -395,7 +384,7 @@ export function Settings() {
       case "words":
         // 一覧から外すものは、共通とフォルダごとを切り替えて書く。
         if (row.id === "ignore") return <IgnoreWords row={row} />;
-        return <Words row={row} foot={`本文には ./${cleanDir(imageDir)}/… として書かれる`} />;
+        return <Words row={row} foot={`本文には ./${cleanDir(imageDir)}/… と書き込まれます`} />;
       case "marks":
         return <Marks row={row} />;
       case "pick":
@@ -410,8 +399,8 @@ export function Settings() {
                 {isTauri
                   ? version
                     ? `v${version}`
-                    : "バージョンを取得中…"
-                  : "ブラウザで動かしています"}
+                    : "バージョンを確認しています…"
+                  : "ブラウザで実行しています"}
               </span>
             </span>
             {isTauri && (
@@ -428,16 +417,16 @@ export function Settings() {
                   <Icon name="progress_activity" size={14} className="mg-spin" />
                 )}
                 {!checked
-                  ? "更新を確認"
+                  ? "アップデートを確認"
                   : updateStatus === "checking"
                     ? "確認中…"
                     : updateStatus === "uptodate"
-                      ? "最新です"
+                      ? "最新版です"
                       : updateStatus === "available"
-                        ? "更新あり"
+                        ? "アップデートがあります"
                         : updateStatus === "error"
-                          ? "確認できず"
-                          : "更新を確認"}
+                          ? "確認できませんでした"
+                          : "アップデートを確認"}
               </button>
             )}
           </div>
@@ -450,8 +439,6 @@ export function Settings() {
   // 面ひとつ分を受け持つ部品。自分で見出しと箱を持つ。
   const pane = (row: Row & { kind: "pane" }, q: string) => {
     switch (row.pane) {
-      case "workspaces":
-        return <WorkspacesPane query={q} />;
       case "claude":
         return <ClaudePane toggle={CLAUDE_TOGGLE} />;
       case "keys":
@@ -486,8 +473,8 @@ export function Settings() {
           </div>
           {inGroup[0].kind === "about" && (
             <p className="mg-set-about">
-              ローカルの Markdown を読み、コメントを書き残すための道具です。
-              読み込みもコメントの保存も、すべて端末の中で完結します。
+              ローカルの Markdown を読んだり、コメントを残したりするためのアプリです。
+              ファイルの読み込みもコメントの保存も、すべてこのパソコンの中で行います。
             </p>
           )}
         </section>
@@ -560,7 +547,7 @@ export function Settings() {
                         type="button"
                         className="mg-set-where"
                         onClick={() => jump(rows[0])}
-                        title={`${f.label} の面へ`}
+                        title={`${f.label} を開く`}
                       >
                         <FaceIcon face={f.id} size={14} />
                         {f.label}

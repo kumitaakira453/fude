@@ -1,0 +1,157 @@
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useWorkspace } from "../hooks/useWorkspace";
+import { PHASE_LABEL } from "../lib/claude";
+import { currentWindowLabel } from "../lib/windows";
+import { colorVar, liveWorkspaces } from "../lib/workspaces";
+import {
+  newWorkspaceAtom,
+  workspaceAtom,
+  workspaceMenuAtom,
+  workspacesAtom,
+} from "../state/atoms";
+import { PHASE_COLOR, phaseForAtom } from "../state/claude";
+import { barAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
+import { Icon } from "./Icon";
+
+// ツールバーの中に並べるワークスペースの札。1 回押せば切り替わる。
+// ファイルのタブとは段も形も分ける（同じ形で 2 段に重ねると、どちらがどちらか
+// 読めない）。右押しで手入れのメニュー、末尾の ＋ で作る。
+// 掴んで並べ替え、中クリックで列から外す（⌃1〜9 はこの並びの位置を指す）。
+
+const DRAG_TYPE = "application/x-fude-ws";
+
+export function WorkspacePills() {
+  const [bar, setBar] = useAtom(barAtom);
+  const list = useAtomValue(workspacesAtom);
+  const current = useAtomValue(workspaceAtom);
+  const phaseFor = useAtomValue(phaseForAtom);
+  const openMenu = useSetAtom(workspaceMenuAtom);
+  const [making, setMaking] = useAtom(newWorkspaceAtom);
+  const { openWorkspace } = useWorkspace();
+  // 別のウィンドウで開いているもの。押すとそのウィンドウが前に出る。
+  const [elsewhere, setElsewhere] = useState<Set<string>>(new Set());
+  const [dropAt, setDropAt] = useState<number | null>(null);
+  const here = useRef<HTMLButtonElement>(null);
+
+  const items = useMemo(() => {
+    const byId = new Map(list.map((w) => [w.id, w]));
+    if (current) byId.set(current.id, current);
+    return bar.flatMap((id) => {
+      const ws = byId.get(id);
+      return ws ? [ws] : [];
+    });
+  }, [bar, list, current]);
+
+  useEffect(() => {
+    const me = currentWindowLabel();
+    const read = () =>
+      void liveWorkspaces()
+        .then((live) => setElsewhere(new Set(live.filter(([l]) => l !== me).map(([, id]) => id))))
+        .catch(() => setElsewhere(new Set()));
+    read();
+    window.addEventListener("focus", read);
+    return () => window.removeEventListener("focus", read);
+  }, [bar, current?.id]);
+
+  useEffect(() => {
+    here.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [current?.id, items.length]);
+
+  const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
+    const pills = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-ws]"));
+    for (let i = 0; i < pills.length; i++) {
+      const box = pills[i].getBoundingClientRect();
+      if (e.clientX < box.left + box.width / 2) return i;
+    }
+    return pills.length;
+  };
+
+  return (
+    <div
+      role="tablist"
+      aria-label="ワークスペース"
+      className="mg-ws-pills"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setDropAt(indexAt(e));
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAt(null);
+      }}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData(DRAG_TYPE);
+        const at = dropAt;
+        setDropAt(null);
+        if (!id || at === null) return;
+        e.preventDefault();
+        setBar((was) => moveInBar(was, id, at));
+      }}
+    >
+      {items.map((ws, i) => {
+        const on = ws.id === current?.id;
+        const away = !on && elsewhere.has(ws.id);
+        const phase = phaseFor(ws);
+        return (
+          <button
+            key={ws.id}
+            type="button"
+            data-ws={ws.id}
+            ref={on ? here : undefined}
+            role="tab"
+            aria-selected={on}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_TYPE, ws.id);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onClick={() => {
+              if (!on) void openWorkspace(ws);
+            }}
+            onAuxClick={(e) => {
+              if (e.button === 1) setBar((was) => removeFromBar(was, ws.id));
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
+            }}
+            title={
+              away
+                ? `${ws.name}（別のウィンドウで開いています）`
+                : i < 9
+                  ? `${ws.name}（⌃${i + 1}）`
+                  : ws.name
+            }
+            className={`mg-ws-pill${on ? " is-on" : ""}${away ? " is-away" : ""}${
+              dropAt === i ? " drop-before" : ""
+            }${dropAt === i + 1 && i === items.length - 1 ? " drop-after" : ""}`}
+          >
+            <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
+            <span className="truncate">{ws.name}</span>
+            {phase && (
+              <span
+                title={`Claude のセッション：${PHASE_LABEL[phase]}`}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
+                style={{ background: PHASE_COLOR[phase] }}
+              />
+            )}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        title="ワークスペースを新規作成"
+        aria-expanded={!!making}
+        onClick={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          setMaking(making ? null : { left: box.left, top: box.bottom + 6 });
+        }}
+        className="mg-ws-pill-add"
+      >
+        <Icon name="add" size={16} />
+      </button>
+    </div>
+  );
+}

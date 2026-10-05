@@ -90,8 +90,9 @@ export function useHotkeys() {
       } else if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         store.set(A.paletteOpenAtom, !store.get(A.paletteOpenAtom));
-      } else if (mod && e.shiftKey && (e.key === "p" || e.key === "P")) {
-        // ⌘⇧P: ワークスペースを切り替える一覧。
+      } else if (mod && e.shiftKey && (e.key === "p" || e.key === "P") && !e.defaultPrevented) {
+        // ⌘⇧P: ワークスペースを探して開く一覧。コメントを書いている欄では同じキーが
+        // 下書きのプレビューなので、そちらが受けたら（defaultPrevented）開かない。
         e.preventDefault();
         store.set(A.workspaceSwitcherOpenAtom, !store.get(A.workspaceSwitcherOpenAtom));
       } else if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
