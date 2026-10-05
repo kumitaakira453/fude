@@ -1,5 +1,6 @@
 import { useAtom, useAtomValue } from "jotai";
 import { loadingAtom, sidebarTabAtom, treeFilterAtom } from "../state/atoms";
+import { ClaudeBanner, ClaudeFiles } from "./ClaudePanel";
 import { FileTree } from "./FileTree";
 import { FolderSwitcher } from "./FolderSwitcher";
 import { Icon } from "./Icon";
@@ -15,6 +16,7 @@ export function Sidebar() {
       <div className="border-b border-[var(--mg-border)] p-2">
         <FolderSwitcher />
       </div>
+      <ClaudeBanner />
 
       <div className="flex gap-1 px-2 pt-2">
         {(
@@ -58,6 +60,7 @@ export function Sidebar() {
           <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
             <FileTree />
           </div>
+          <ClaudeFiles />
         </div>
       ) : (
         <div className="min-h-0 flex-1">

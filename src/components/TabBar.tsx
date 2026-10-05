@@ -20,7 +20,8 @@ import {
   openInPane,
   revealInTree,
 } from "../lib/ui";
-import { type LeafNode, showOtherFilesAtom, treeAtom } from "../state/atoms";
+import { freshTabsAtom, type LeafNode, showOtherFilesAtom, treeAtom } from "../state/atoms";
+import { seenTab } from "../state/claude";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { Icon } from "./Icon";
@@ -43,6 +44,12 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
   useEffect(() => {
     here.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active, pane.tabs.length]);
+
+  // 外から足されたばかりのタブ（Claude のセッションが書いたもの）。開いたら印を外す。
+  const fresh = useAtomValue(freshTabsAtom);
+  useEffect(() => {
+    if (active && fresh.has(active)) seenTab(store, active);
+  }, [active, fresh, store]);
 
   // タブに出す名前。下書きは置き場で採った機械的な名前を持っているので、
   // 書いた中身から採り直す。
@@ -173,6 +180,12 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               >
                 {label(path)}
               </button>
+              {fresh.has(path) && (
+                <span
+                  title="Claude のセッションが書き足しました"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mg-accent)]"
+                />
+              )}
               {/* 閉じるボタンは常に出す。ホバーで現れる作りだと、閉じられる
                   ことに気付けないうえ、狙って触るまで的が見えない。
                   普段は色を落として、名前より前に出ないようにする。 */}

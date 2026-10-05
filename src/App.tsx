@@ -25,6 +25,7 @@ import { setTaskMarks } from "./lib/md/taskMarks";
 import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
+import { useClaude } from "./hooks/useClaude";
 import { colorVar } from "./lib/workspaces";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { useWorkspace } from "./hooks/useWorkspace";
@@ -81,6 +82,7 @@ export default function App() {
   useReviewLedger();
   useKeepLayout();
   useKeepWorkspace();
+  useClaude();
 
   // テーマを html 要素に反映
   useEffect(() => {

@@ -45,6 +45,7 @@ describe("ワークスペースの控え", () => {
       sessionId: "s",
       nameFollows: true,
       lastName: undefined,
+      transcript: undefined,
       wrote: [{ path: "/x/a.md", at: 1 }],
     });
   });

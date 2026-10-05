@@ -7,6 +7,7 @@ mod cli;
 mod dock;
 pub mod review;
 mod watch;
+mod claude;
 mod windows;
 mod workspaces;
 
@@ -597,7 +598,9 @@ pub fn run() {
             workspaces::bind_window,
             workspaces::take_restore,
             workspaces::focus_workspace,
-            workspaces::live_workspaces
+            workspaces::live_workspaces,
+            claude::claude_sessions,
+            claude::claude_session_files
         ])
         // 窓が閉じたら控えに時刻を付ける。起動し直したときに戻す窓を決めるのに使う。
         .on_window_event(|window, event| {

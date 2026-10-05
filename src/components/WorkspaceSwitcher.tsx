@@ -14,12 +14,16 @@ import {
   WORKSPACE_COLORS,
   type Workspace,
 } from "../lib/workspaces";
+import { PHASE_LABEL, phaseOf, type ClaudeSession, type Phase } from "../lib/claude";
 import {
+  claudeLinkAtom,
+  claudeSessionsAtom,
   foldersAtom,
   workspaceAtom,
   workspacesAtom,
   workspaceSwitcherOpenAtom,
 } from "../state/atoms";
+import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { refreshWorkspaces } from "../state/workspace";
 import { Icon } from "./Icon";
 
@@ -42,6 +46,9 @@ export function WorkspaceSwitcher() {
   const list = useAtomValue(workspacesAtom);
   const current = useAtomValue(workspaceAtom);
   const folders = useAtomValue(foldersAtom);
+  const claudeOn = useAtomValue(claudeLinkAtom);
+  const claude = useAtomValue(claudeSessionsAtom);
+  const phaseFor = useAtomValue(phaseForAtom);
   const store = useStore();
   const { openWorkspace } = useWorkspace();
   const ops = useWorkspaceOps();
@@ -77,6 +84,21 @@ export function WorkspaceSwitcher() {
       .filter(({ ws, names }) => matches(ws, names, query.trim()));
   }, [list, current, folders, query]);
 
+  // まだワークスペースになっていない Claude のセッション（ベータ）。新しく始めた順。
+  const sessions = useMemo(() => {
+    if (!claudeOn || !claude) return [];
+    const linked = new Set(
+      [...list, ...(current ? [current] : [])].flatMap((w) => (w.claude ? [w.claude.sessionId] : [])),
+    );
+    const q = query.trim().toLowerCase();
+    return claude.sessions
+      .filter((s) => !linked.has(s.sessionId))
+      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+      .slice(0, SESSIONS_SHOWN);
+  }, [claudeOn, claude, list, current, query]);
+  const total = rows.length + sessions.length;
+
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
     listRef.current
@@ -90,7 +112,13 @@ export function WorkspaceSwitcher() {
 
   const choose = (i: number, newWindow: boolean) => {
     const row = rows[i];
-    if (!row) return;
+    if (!row) {
+      const session = sessions[i - rows.length];
+      if (!session) return;
+      close();
+      void ops.createFromSession(session);
+      return;
+    }
     close();
     if (newWindow) void ops.openInNewWindow(row.ws);
     else void openWorkspace(row.ws);
@@ -126,7 +154,7 @@ export function WorkspaceSwitcher() {
               if (ime.isComposing(e)) return;
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setActive((a) => Math.min(a + 1, rows.length - 1));
+                setActive((a) => Math.min(a + 1, total - 1));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setActive((a) => Math.max(a - 1, 0));
@@ -143,7 +171,7 @@ export function WorkspaceSwitcher() {
         </div>
 
         <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
-          {rows.length === 0 && (
+          {rows.length === 0 && sessions.length === 0 && (
             <div className="px-4 py-6 text-center text-[12.5px] text-[var(--mg-muted)]">
               {list.length === 0
                 ? "ワークスペースはまだありません。フォルダを開くと、そのフォルダのワークスペースができます"
@@ -153,6 +181,7 @@ export function WorkspaceSwitcher() {
           {rows.map(({ ws, names }, i) => {
             const here = current?.id === ws.id;
             const other = elsewhere.get(ws.id);
+            const phase = phaseFor(ws);
             return (
               <div
                 key={ws.id}
@@ -208,6 +237,7 @@ export function WorkspaceSwitcher() {
                           別の窓
                         </span>
                       )}
+                      {phase && <PhaseMark phase={phase} />}
                     </div>
                   )}
                   <div className="flex gap-2 text-[11px] text-[var(--mg-muted)]">
@@ -278,6 +308,38 @@ export function WorkspaceSwitcher() {
               </div>
             );
           })}
+          {claudeOn && (
+            <div className="mt-1 border-t border-[var(--mg-border)] pt-1">
+              <div className="flex items-center gap-1.5 px-4 py-1 text-[10.5px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
+                Claude のセッション
+                <span className="mg-set-beta">Beta</span>
+              </div>
+              {!claude && (
+                <div className="px-4 py-2 text-[12px] text-[var(--mg-muted)]">読み込んでいます…</div>
+              )}
+              {claude?.error && (
+                <div className="px-4 py-2 text-[12px] text-[var(--mg-muted)]" title={claude.error}>
+                  Claude のセッションを読めません（claude コマンドが見つからないか、出力の形が変わりました）
+                </div>
+              )}
+              {claude && !claude.error && sessions.length === 0 && (
+                <div className="px-4 py-2 text-[12px] text-[var(--mg-muted)]">
+                  ワークスペースになっていないセッションはありません
+                </div>
+              )}
+              {sessions.map((session, j) => (
+                <SessionRow
+                  key={session.sessionId}
+                  session={session}
+                  index={rows.length + j}
+                  active={rows.length + j === active}
+                  now={now}
+                  onHover={() => setActive(rows.length + j)}
+                  onChoose={() => choose(rows.length + j, false)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-1 border-t border-[var(--mg-border)] px-2 py-1.5">
@@ -314,6 +376,62 @@ export function WorkspaceSwitcher() {
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// 切り替えの一覧に並べるセッションの数。
+const SESSIONS_SHOWN = 20;
+
+function PhaseMark({ phase }: { phase: Phase }) {
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1 text-[10.5px] text-[var(--mg-muted)]"
+      title={`Claude のセッション：${PHASE_LABEL[phase]}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
+        style={{ background: PHASE_COLOR[phase] }}
+      />
+      {PHASE_LABEL[phase]}
+    </span>
+  );
+}
+
+function SessionRow({
+  session,
+  index,
+  active,
+  now,
+  onHover,
+  onChoose,
+}: {
+  session: ClaudeSession;
+  index: number;
+  active: boolean;
+  now: number;
+  onHover: () => void;
+  onChoose: () => void;
+}) {
+  const phase = phaseOf(session, { readable: true, transcriptGone: false });
+  return (
+    <div
+      data-idx={index}
+      onMouseMove={onHover}
+      onClick={onChoose}
+      title="このセッションからワークスペースを作る"
+      className={`flex cursor-pointer items-center gap-3 px-4 py-1.5 ${active ? "bg-[var(--mg-accent-soft)]" : ""}`}
+    >
+      <Icon name="smart_toy" size={16} className="shrink-0 text-[var(--mg-muted)]" />
+      <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--mg-fg)]">
+        {session.name || session.sessionId.slice(0, 8)}
+      </span>
+      <PhaseMark phase={phase} />
+      {session.startedAt ? (
+        <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
+          {ago(session.startedAt, now)}
+        </span>
+      ) : null}
     </div>
   );
 }

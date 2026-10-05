@@ -51,6 +51,13 @@ export function flushWorkspaceSave(): void {
   if (ws) write(ws);
 }
 
+// 消すものの書きかけは捨てる。書き出すと、消した後に控えが戻ってくる。
+export function dropWorkspaceSave(id: string): void {
+  if (pending?.id !== id) return;
+  clearTimeout(timer);
+  pending = null;
+}
+
 // ---- フォルダのワークスペース ----
 
 // そのフォルダを開いてできたワークスペース。無ければ作る。

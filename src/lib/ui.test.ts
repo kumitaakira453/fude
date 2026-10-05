@@ -4,6 +4,7 @@ import * as A from "../state/atoms";
 import {
   absoluteLayout,
   activateTab,
+  appendTab,
   closeAll,
   closeOthers,
   closePane,
@@ -442,5 +443,31 @@ describe("控えのレイアウトを絶対パスに読み替える", () => {
         { kind: "leaf", id: "p2", path: "/根/c/d.md" },
       ],
     });
+  });
+});
+
+describe("外から足すタブ", () => {
+  it("今のペインの末尾に足し、見ているタブは替えない", () => {
+    const store = createStore();
+    store.set(A.layoutAtom, { kind: "leaf", id: "p1", tabs: ["/a.md", "/b.md"], active: 0 });
+    store.set(A.activePaneIdAtom, "p1");
+    expect(appendTab(store, "/c.md")).toBe(true);
+    expect(store.get(A.layoutAtom)).toMatchObject({ tabs: ["/a.md", "/b.md", "/c.md"], active: 0 });
+  });
+
+  it("どこかのペインに既にあれば足さない", () => {
+    const store = createStore();
+    store.set(A.layoutAtom, {
+      kind: "split",
+      id: "s1",
+      dir: "row",
+      sizes: [0.5, 0.5],
+      children: [
+        { kind: "leaf", id: "p1", tabs: ["/a.md"], active: 0 },
+        { kind: "leaf", id: "p2", tabs: ["/b.md"], active: 0 },
+      ],
+    });
+    store.set(A.activePaneIdAtom, "p1");
+    expect(appendTab(store, "/b.md")).toBe(false);
   });
 });

@@ -12,8 +12,10 @@ export interface ClaudeLink {
   // セッションの名前が変わったら、ワークスペースの名前も変えるか。
   // 自分で名前を付け直したら追うのをやめる。
   nameFollows: boolean;
-  // 最後に分かっていたセッションの名前と状態。読めないときはこれを出す。
+  // 最後に分かっていたセッションの名前。読めないときはこれを出す。
   lastName?: string;
+  // 会話の記録の場所。一覧から外れたあと、消されたのかを確かめるのに使う。
+  transcript?: string;
   // そのセッションが書いたファイル（絶対パス）と、書いた時刻（ms）。
   wrote?: { path: string; at: number }[];
 }
@@ -101,6 +103,7 @@ export function asWorkspace(value: unknown): Workspace | null {
             sessionId: claude.sessionId,
             nameFollows: claude.nameFollows !== false,
             lastName: typeof claude.lastName === "string" ? claude.lastName : undefined,
+            transcript: typeof claude.transcript === "string" ? claude.transcript : undefined,
             wrote: Array.isArray(claude.wrote)
               ? claude.wrote.filter(
                   (w): w is { path: string; at: number } =>

@@ -1,6 +1,8 @@
 import { useStore } from "jotai";
 import { useCallback } from "react";
-import { pickDirectory } from "../lib/fsAccess";
+import { claudeSessionFiles, FIRST_TABS, type ClaudeSession, type Wrote } from "../lib/claude";
+import { pickDirectory, rootOf } from "../lib/fsAccess";
+import { dirOf } from "../lib/paths";
 import { registerFolder, rootName } from "../lib/idb";
 import { remapLeafPaths } from "../lib/ui";
 import { currentWindowLabel, openWorkspaceWindow } from "../lib/windows";
@@ -14,7 +16,7 @@ import {
   type WorkspaceColor,
 } from "../lib/workspaces";
 import * as A from "../state/atoms";
-import { notify } from "../state/toast";
+import { notify, notifyBusy, settle } from "../state/toast";
 import { upsertWorkspace } from "../state/workspace";
 import { useWorkspace } from "./useWorkspace";
 
@@ -177,6 +179,75 @@ export function useWorkspaceOps() {
     [store],
   );
 
+  // Claude のセッションからワークスペースを作って開く（ベータ）。
+  //
+  // 根は、書いたファイルを含む登録済みのフォルダ。どれにも入らなければ
+  // セッションの作業フォルダ。タブには書いたものを新しい順にいくつか並べる。
+  const createFromSession = useCallback(
+    async (session: ClaudeSession): Promise<void> => {
+      const transcript = session.transcript;
+      if (!transcript) {
+        notify(store, "このセッションの記録が見つかりません");
+        return;
+      }
+      const at = notifyBusy(store, "セッションが書いたファイルを読んでいます…");
+      let wrote: Wrote[];
+      try {
+        ({ wrote } = await claudeSessionFiles(session.sessionId, transcript));
+        settle(store, at, `${wrote.length} 件のファイルを見つけました`);
+      } catch (e) {
+        settle(store, at, "セッションの記録を読めませんでした");
+        console.error("セッションの記録を読めません", e);
+        return;
+      }
+      const folders = store.get(A.foldersAtom).map((f) => f.path);
+      const roots: string[] = [];
+      for (const w of wrote) {
+        const root = rootOf(folders, w.path);
+        if (root && !roots.includes(root)) roots.push(root);
+      }
+      if (roots.length === 0 && session.cwd) roots.push(session.cwd);
+      if (roots.length === 0 && wrote[0]) roots.push(dirOf(wrote[0].path));
+      if (roots.length === 0) {
+        notify(store, "並べるフォルダが決まりません");
+        return;
+      }
+      const tabs = wrote.slice(0, FIRST_TABS).map((w) => w.path);
+      const now = nowMs();
+      const ws: Workspace = {
+        id: newWorkspaceId(now),
+        name: session.name.trim() || "Claude のセッション",
+        color: freeColor(store.get(A.workspacesAtom)),
+        roots,
+        lastOpened: now,
+        ...(tabs.length > 0
+          ? { layout: { kind: "leaf", id: "p1", tabs, active: 0 }, active: "p1" }
+          : {}),
+        claude: {
+          sessionId: session.sessionId,
+          nameFollows: true,
+          lastName: session.name.trim() || undefined,
+          transcript,
+          wrote,
+        },
+      };
+      put(ws);
+      await openWorkspace(ws);
+    },
+    [store, put, openWorkspace],
+  );
+
+  // セッションとの結びつきを外して、ふつうのワークスペースにする。
+  const unlinkSession = useCallback(
+    (id: string) => {
+      const ws = find(id);
+      if (!ws?.claude) return;
+      const { claude: _drop, ...rest } = ws;
+      put(rest);
+    },
+    [find, put],
+  );
+
   // 新しい窓で開く（開いている窓があれば前に出す）。
   const openInNewWindow = useCallback(
     async (ws: Workspace) => {
@@ -194,5 +265,7 @@ export function useWorkspaceOps() {
     removeRoot,
     deleteWorkspace,
     openInNewWindow,
+    createFromSession,
+    unlinkSession,
   };
 }

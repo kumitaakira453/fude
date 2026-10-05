@@ -165,6 +165,24 @@ export function openInPane(store: Store, paneId: string, path: string) {
   store.set(A.activePaneIdAtom, paneId);
 }
 
+// 今のペインの末尾にタブを足す。見ているタブは替えない（外から足されたものを
+// 読んでいる最中に、画面が勝手に切り替わらないように）。既にあれば何もしない。
+export function appendTab(store: Store, path: string): boolean {
+  const paneId = store.get(A.activePaneIdAtom);
+  const root = store.get(A.layoutAtom);
+  const target = findLeaf(root, paneId) ?? findLeaf(root, firstLeafId(root));
+  if (!target || collectTabs(root).includes(path)) return false;
+  store.set(
+    A.layoutAtom,
+    updateLeaf(root, target.id, (t) => leaf(t.id, [...t.tabs, path], t.active)),
+  );
+  return true;
+}
+
+function collectTabs(node: LayoutNode): string[] {
+  return node.kind === "leaf" ? node.tabs : node.children.flatMap(collectTabs);
+}
+
 export function activateTab(store: Store, paneId: string, index: number) {
   store.set(
     A.layoutAtom,

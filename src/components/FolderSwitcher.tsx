@@ -11,6 +11,8 @@ import { draftNameAtom } from "../state/drafts";
 import { displayName } from "../lib/fsAccess";
 import { folderDisplayName } from "../lib/idb";
 import { colorVar } from "../lib/workspaces";
+import { PHASE_LABEL } from "../lib/claude";
+import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { Icon } from "./Icon";
 
 // いま何を開いているかを出す釦。
@@ -33,6 +35,7 @@ export function FolderSwitcher() {
   const setSwitcher = useSetAtom(workspaceSwitcherOpenAtom);
 
   const active = folders.find((f) => f.id === activeId);
+  const phase = useAtomValue(phaseForAtom)(ws);
 
   if (ws && !sole) {
     return (
@@ -43,6 +46,13 @@ export function FolderSwitcher() {
       >
         <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
         <span className="truncate text-[13px] font-semibold text-[var(--mg-fg)]">{ws.name}</span>
+        {phase && (
+          <span
+            title={`Claude のセッション：${PHASE_LABEL[phase]}`}
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
+            style={{ background: PHASE_COLOR[phase] }}
+          />
+        )}
         <Icon name="unfold_more" size={17} className="ml-auto text-[var(--mg-muted)]" />
       </button>
     );

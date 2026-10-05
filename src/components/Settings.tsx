@@ -21,6 +21,7 @@ import {
   themeAtom,
   updateCheckNonceAtom,
   updateStatusAtom,
+  claudeLinkAtom,
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
 import { Icon } from "./Icon";
@@ -131,6 +132,17 @@ const ROWS: Row[] = [
     name: "Markdown 以外も並べる",
     note: "画像・HTML・PDF と字で書かれたファイルをツリーに出す。切ると読み物だけの一覧になる（1 枚だけ開く経路はどちらでも通る）",
     aliases: ["tree", "一覧", "ツリー", "画像", "html", "pdf"],
+  },
+  {
+    kind: "switch",
+    id: "claude",
+    face: "files",
+    icon: "smart_toy",
+    beta: true,
+    atom: claudeLinkAtom,
+    name: "Claude のセッションからワークスペースを作る",
+    note: "⌘⇧P の一覧に、動いている Claude Code のセッションを並べる。選ぶと、そのセッションが書いたファイルをタブにしたワークスペースができ、書き足すたびに追いかける。名前と状態も追う",
+    aliases: ["claude", "agent", "セッション", "エージェント", "workspace"],
   },
   {
     kind: "words",

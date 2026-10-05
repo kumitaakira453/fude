@@ -6,6 +6,7 @@ import { RAIL_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
 import type { Workspace } from "../lib/workspaces";
+import type { ClaudeSession } from "../lib/claude";
 
 // ---- ワークスペース ----
 export const foldersAtom = atom<FolderEntry[]>([]); // 登録フォルダ（履歴）
@@ -28,6 +29,15 @@ export const rootsAtom = atom<string[]>((get) => {
 // ワークスペースになる。1 枚だけ開いているとき・別の窓へ引き出したファイル
 // だけの窓では null（控えを残さない）。
 export const workspaceAtom = atom<Workspace | null>(null);
+// Claude のセッションの一覧（ベータ）。読めなかったときは error を持つ。
+export const claudeSessionsAtom = atom<{
+  sessions: ClaudeSession[];
+  error: string | null;
+  // 一覧から外れ、記録のファイルも無くなったセッション。
+  gone: ReadonlySet<string>;
+} | null>(null);
+// 外から足されたばかりのタブ（Claude のセッションが書いたもの）。開くまで印を付ける。
+export const freshTabsAtom = atom<ReadonlySet<string>>(new Set<string>());
 // 今のタブの並びが、どのワークスペース（無ければフォルダ）のものか。開いた直後の
 // 空の並びや、控えを並べ直している途中の並びを控えに書かないための印。
 export const layoutOwnerAtom = atom<string | null>(null);
@@ -219,6 +229,9 @@ export const ignoresByRootAtom = atom((get) => {
   const common = get(ignoreAtom);
   return new Map(get(rootsAtom).map((root) => [root, own[root] ?? common]));
 });
+// Claude のセッションからワークスペースを作る（ベータ）。切っているあいだは
+// セッションの一覧も記録も読まない。
+export const claudeLinkAtom = atomWithStorage<boolean>("fude:claude", false);
 // 取り込んだ画像の置き場所。文書と同じところに、この名前のフォルダを作る。
 export const imageDirAtom = atomWithStorage<string>("mdglow:imagedir", "images");
 // Notion 風の打ち込み（ベータ）: `>` でトグル、`|` で引用。Markdown の書き方
