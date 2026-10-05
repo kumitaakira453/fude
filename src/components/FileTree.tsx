@@ -181,6 +181,11 @@ function markOn(path: string): void {
     ?.setAttribute("data-on", "");
 }
 
+// ホームの下なら ~ に縮める（見出しに添える置き場所を短くする）。
+export function tildify(path: string): string {
+  return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");
+}
+
 // 行は memo で包む。選択が変わったときに描き直すのは、真偽が変わった 2 行だけ。
 //
 // ctx は親で useMemo して同じものを渡す。毎回作り直すと memo が素通りになる。
@@ -211,8 +216,10 @@ const TreeItem = memo(function TreeItem({
 
   if (node.kind === "dir") {
     const isDropTarget = ctx.dragOverPath === node.path;
+    // 根の行（根を 2 つ以上並べているときだけ現れる）は、フォルダの見出しにする。
+    const heading = node.rel === "";
     return (
-      <div>
+      <div className={heading ? "mg-tree-root-group" : undefined}>
         {ctx.editingPath === node.path ? (
           <NameInput
             initial={node.name}
@@ -233,6 +240,7 @@ const TreeItem = memo(function TreeItem({
             draggable={node.rel !== ""}
             data-path={node.path}
             data-row="dir"
+            data-drop={isDropTarget || undefined}
             onDragStart={startDrag}
             onDragOver={(e) => {
               const outside = hasFiles(e.dataTransfer);
@@ -273,6 +281,8 @@ const TreeItem = memo(function TreeItem({
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
             className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none ${
+              heading ? "mg-tree-root " : ""
+            }${
               isDropTarget
                 ? "bg-[var(--mg-accent-soft)] ring-1 ring-inset ring-[var(--mg-accent)]"
                 : "hover:bg-[var(--mg-hover)] focus-visible:bg-[var(--mg-hover)]"
@@ -285,10 +295,15 @@ const TreeItem = memo(function TreeItem({
             />
             <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
             <span
-              className={`truncate ${node.rel === "" ? "font-semibold text-[var(--mg-fg)]" : "font-medium"}`}
+              className={`truncate ${heading ? "shrink-0 font-semibold text-[var(--mg-fg)]" : "font-medium"}`}
             >
               {node.name}
             </span>
+            {heading && (
+              <span className="mg-tree-root-where" title={node.abs}>
+                {tildify(dirOf(node.abs))}
+              </span>
+            )}
             {/* ホバー時に「このフォルダ内に作成」アクション */}
             <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
               <span
@@ -507,6 +522,20 @@ export function FileTree() {
     },
     [treeKey, activeFolderId, setExpandedByFolder],
   );
+
+  // 並べている根を、まとめて畳む／開く。
+  const allRootsOpen = multi && roots.every((r) => expanded.has(r));
+  const toggleRoots = useCallback(() => {
+    if (!treeKey || !activeFolderId) return;
+    setExpandedByFolder((prev) => {
+      const set = new Set((prev[treeKey] ?? []).map((p) => absoluteIn(p, activeFolderId)));
+      for (const r of roots) {
+        if (allRootsOpen) set.delete(r);
+        else set.add(r);
+      }
+      return { ...prev, [treeKey]: [...set] };
+    });
+  }, [treeKey, activeFolderId, setExpandedByFolder, roots, allRootsOpen]);
 
   // 掴んだまま畳んだフォルダの上に留まったら開く。掴み直さずに奥の階層まで
   // 降りられる。掴みものが外から来たものでも、中で掴んだものでも同じ。
@@ -743,8 +772,17 @@ export function FileTree() {
     <div className="flex min-h-0 flex-col">
       {/* ルート操作ツールバー（VSCode Explorer 風） */}
       <div className="flex items-center gap-0.5 px-2 pb-1">
-        <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
+        <span className="mr-auto flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
           エクスプローラー
+          {multi && (
+            <button
+              onClick={toggleRoots}
+              title={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
+              className="mg-tree-roots rounded px-1.5 py-0.5 normal-case tracking-normal hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+            >
+              フォルダ {roots.length}
+            </button>
+          )}
         </span>
         {!noAdd && lone && (
           <>

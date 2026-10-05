@@ -8380,3 +8380,32 @@ body.mg-carrying {
   background: color-mix(in srgb, var(--mg-fg) 12%, transparent);
   color: var(--mg-fg);
 }
+
+/* 根を 2 つ以上並べているときの、フォルダの見出し。帯で塗り、2 つ目からは
+   上に区切りを置く。スクロールしても、今いる根の見出しは上端に残る。 */
+.mg-tree-root-group + .mg-tree-root-group {
+  margin-top: 0.375rem;
+  border-top: 1px solid var(--mg-border);
+  padding-top: 0.375rem;
+}
+.mg-tree-root.mg-tree-root {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--mg-accent) 9%, var(--mg-panel));
+}
+.mg-tree-root.mg-tree-root:hover,
+.mg-tree-root.mg-tree-root:focus-visible {
+  background: color-mix(in srgb, var(--mg-accent) 15%, var(--mg-panel));
+}
+.mg-tree-root.mg-tree-root[data-drop] {
+  background: color-mix(in srgb, var(--mg-accent) 22%, var(--mg-panel));
+}
+.mg-tree-root-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--mg-muted);
+}
