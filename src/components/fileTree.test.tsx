@@ -5,8 +5,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { TreeNode } from "../lib/fsAccess";
 import { rootNode } from "../lib/fsAccess";
-import { activeFolderIdAtom, extraRootsAtom, soleAtom, treeAtom } from "../state/atoms";
-import { FileTree, tildify } from "./FileTree";
+import {
+  activeFolderIdAtom,
+  extraRootsAtom,
+  soleAtom,
+  treeAtom,
+  workspaceAtom,
+  workspaceMenuAtom,
+} from "../state/atoms";
+import { FileTree } from "./FileTree";
 
 // 木の上の「新規ファイル / 新規フォルダ」。1 枚だけ開いているときの木は
 // そのファイルしか持たないので、作っても出てこない。押せる状態にしない。
@@ -230,10 +237,18 @@ describe("行に焦点があるときの打鍵", () => {
 });
 
 describe("フォルダを複数並べているとき", () => {
+  let store: ReturnType<typeof createStore>;
   function showTwo() {
-    const store = createStore();
+    store = createStore();
     store.set(activeFolderIdAtom, "/Users/me/甲");
     store.set(extraRootsAtom, ["/Users/me/work/乙"]);
+    store.set(workspaceAtom, {
+      id: "ws",
+      name: "調べもの",
+      color: "rose",
+      roots: ["/Users/me/甲", "/Users/me/work/乙"],
+      lastOpened: 1,
+    });
     store.set(treeAtom, [
       rootNode("/Users/me/甲", "甲", []),
       rootNode("/Users/me/work/乙", "乙", []),
@@ -251,21 +266,31 @@ describe("フォルダを複数並べているとき", () => {
     return host;
   }
 
-  it("根の行を見出しにし、置き場所を添える", () => {
+  it("根の行には、札と同じ色の重なりフォルダの印を付け、置き場所は説明に入れる", () => {
     const el = showTwo();
-    const heads = Array.from(el.querySelectorAll(".mg-tree-root"));
+    const heads = Array.from(el.querySelectorAll<HTMLElement>(".mg-tree-root"));
     expect(heads).toHaveLength(2);
-    expect(heads[1].querySelector(".mg-tree-root-where")?.textContent).toBe("~/work");
-    expect(el.querySelectorAll(".mg-tree-root-group")).toHaveLength(2);
+    const mark = heads[1].querySelector<HTMLElement>(".mg-tree-root-mark")!;
+    expect(mark.textContent).toBe("folder_copy");
+    expect(mark.style.color).toContain("--mg-ws-rose");
+    expect(heads[1].title).toBe("/Users/me/work/乙");
+    expect(heads[1].textContent).not.toContain("/Users/me");
   });
 
-  it("上端のボタンで、すべてのフォルダをまとめて畳む・開く", () => {
+  it("上の段に並べている数を出し、ボタンでまとめて畳む・開く", () => {
     const el = showTwo();
-    const count = el.querySelector<HTMLElement>(".mg-tree-roots")!;
+    expect(el.querySelector(".mg-tree-count")?.textContent).toBe("フォルダ 2");
+    const fold = el.querySelector<HTMLElement>(".mg-tree-roots")!;
     // 最初は根の行だけ開いている。
-    expect(count.title).toBe("すべてのフォルダを畳む");
-    act(() => count.click());
+    expect(fold.title).toBe("すべてのフォルダを畳む");
+    act(() => fold.click());
     expect(el.querySelector<HTMLElement>(".mg-tree-roots")!.title).toBe("すべてのフォルダを開く");
+  });
+
+  it("「フォルダを追加」で、ワークスペースのメニューをフォルダを選ぶ画面から開く", () => {
+    const el = showTwo();
+    act(() => el.querySelector<HTMLElement>(".mg-tree-add-root")!.click());
+    expect(store.get(workspaceMenuAtom)).toMatchObject({ id: "ws", step: "folders" });
   });
 
   it("「エクスプローラー」の字は出さない", () => {
@@ -276,13 +301,5 @@ describe("フォルダを複数並べているとき", () => {
     const el = show(null);
     expect(el.querySelector(".mg-tree-root")).toBeNull();
     expect(el.querySelector(".mg-tree-roots")).toBeNull();
-  });
-});
-
-describe("ホームを ~ に縮める", () => {
-  it("ホームの下だけを縮める", () => {
-    expect(tildify("/Users/me/work")).toBe("~/work");
-    expect(tildify("/Users/me")).toBe("~");
-    expect(tildify("/opt/data")).toBe("/opt/data");
   });
 });

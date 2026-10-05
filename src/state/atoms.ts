@@ -44,7 +44,13 @@ export const layoutOwnerAtom = atom<string | null>(null);
 // 控えてあるワークスペースの一覧（新しく開いた順）。切り替えの一覧が出す。
 export const workspacesAtom = atom<Workspace[]>([]);
 // ワークスペースの右押しのメニュー。どこで右押ししても同じものが出る。
-export const workspaceMenuAtom = atom<{ id: string; x: number; y: number } | null>(null);
+// step を指すと、メニューを経ずにその画面から開く（ツリーの「フォルダを追加」）。
+export const workspaceMenuAtom = atom<{
+  id: string;
+  x: number;
+  y: number;
+  step?: "folders";
+} | null>(null);
 // ワークスペースを作る小さな一覧（札の並びの末尾の ＋）。出す位置を持つ。
 export const newWorkspaceAtom = atom<{ left: number; top: number } | null>(null);
 // ワークスペースを探して開く一覧（⌘⇧P）。

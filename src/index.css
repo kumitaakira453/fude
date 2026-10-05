@@ -8381,21 +8381,17 @@ body.mg-carrying {
   color: var(--mg-fg);
 }
 
-/* 根を 2 つ以上並べているときの、フォルダの見出し。塗らずに小見出しの形に
-   して、2 つ目からは上に細い区切りを置く。スクロールしても、今いる根の
-   見出しは上端に残る（留まっているあいだ下の行が透けないよう枠の色で塗る）。 */
+/* 根を 2 つ以上並べているときの、フォルダの見出し。線は引かず、根どうしは
+   間隔で分ける。スクロールしても、今いる根の見出しは上端に残る（留まって
+   いるあいだ下の行が透けないよう枠の色で塗る）。 */
 .mg-tree-root-group + .mg-tree-root-group {
-  margin-top: 0.25rem;
-  border-top: 1px solid var(--mg-border);
-  padding-top: 0.25rem;
+  margin-top: 0.5rem;
 }
 .mg-tree-root.mg-tree-root {
   position: sticky;
   top: 0;
   z-index: 2;
-  border-radius: 0;
   background: var(--mg-panel);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--mg-border) 55%, transparent);
 }
 .mg-tree-root.mg-tree-root:hover,
 .mg-tree-root.mg-tree-root:focus-visible {
@@ -8405,18 +8401,9 @@ body.mg-carrying {
   background: linear-gradient(var(--mg-accent-soft), var(--mg-accent-soft)), var(--mg-panel);
 }
 .mg-tree-root-name {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--mg-fg);
-}
-.mg-tree-root-where {
-  min-width: 0;
-  flex-shrink: 100;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10.5px;
-  color: var(--mg-muted);
 }
 
 /* 選ぶ一覧の行。マウスの塗りは :hover でその場で出し、キー操作の当たりは

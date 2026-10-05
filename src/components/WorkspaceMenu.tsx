@@ -24,7 +24,7 @@ export function WorkspaceMenu() {
   const [bar, setBar] = useAtom(barAtom);
   const ops = useWorkspaceOps();
   const ime = useImeSafeEnter();
-  const [step, setStep] = useState<"menu" | "rename" | "folders">("menu");
+  const [step, setStep] = useState<"menu" | "rename" | "folders">(at?.step ?? "menu");
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
 
@@ -32,7 +32,7 @@ export function WorkspaceMenu() {
     at && (current?.id === at.id ? current : (list.find((w) => w.id === at.id) ?? null));
   const close = () => setAt(null);
 
-  useEffect(() => setStep("menu"), [at?.id, at?.x, at?.y]);
+  useEffect(() => setStep(at?.step ?? "menu"), [at?.id, at?.x, at?.y, at?.step]);
 
   // 窓の端からはみ出さないよう、測ってから内側へ寄せる。
   useLayoutEffect(() => {

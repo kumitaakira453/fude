@@ -1,5 +1,5 @@
 import { message } from "@tauri-apps/plugin-dialog";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -37,7 +37,10 @@ import {
   treeAtom,
   treeFilterAtom,
   isShownAtom,
+  workspaceAtom,
+  workspaceMenuAtom,
 } from "../state/atoms";
+import { colorVar } from "../lib/workspaces";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
 import { FileIcon } from "./FileIcon";
@@ -181,9 +184,19 @@ function markOn(path: string): void {
     ?.setAttribute("data-on", "");
 }
 
-// ホームの下なら ~ に縮める（見出しに添える置き場所を短くする）。
-export function tildify(path: string): string {
-  return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");
+// ワークスペースに並べたフォルダ（根）の印。札と同じ色で塗り、普通のフォルダと
+// 見分ける。色を購読するのは根の行だけにする（全行が起きないように）。
+function RootMark() {
+  const ws = useAtomValue(workspaceAtom);
+  return (
+    <Icon
+      name="folder_copy"
+      size={17}
+      fill
+      className="mg-tree-root-mark shrink-0"
+      style={{ color: ws ? colorVar(ws.color) : "var(--mg-accent)" }}
+    />
+  );
 }
 
 // 行は memo で包む。選択が変わったときに描き直すのは、真偽が変わった 2 行だけ。
@@ -241,6 +254,7 @@ const TreeItem = memo(function TreeItem({
             data-path={node.path}
             data-row="dir"
             data-drop={isDropTarget || undefined}
+            title={heading ? node.abs : undefined}
             onDragStart={startDrag}
             onDragOver={(e) => {
               const outside = hasFiles(e.dataTransfer);
@@ -293,19 +307,23 @@ const TreeItem = memo(function TreeItem({
               size={18}
               className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
             />
-            <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
+            {heading ? (
+              <RootMark />
+            ) : (
+              <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
+            )}
             <span
               className={`min-w-0 truncate ${heading ? "mg-tree-root-name" : "font-medium"}`}
             >
               {node.name}
             </span>
-            {heading && (
-              <span className="mg-tree-root-where" title={node.abs}>
-                {tildify(dirOf(node.abs))}
-              </span>
-            )}
-            {/* ホバー時に「このフォルダ内に作成」アクション */}
-            <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+            {/* ホバー時に「このフォルダ内に作成」アクション。根の行では、指して
+                いないあいだは幅も取らない（名前を削らない）。 */}
+            <span
+              className={`ml-auto shrink-0 items-center gap-0.5 ${
+                heading ? "hidden group-hover:flex" : "flex opacity-0 transition group-hover:opacity-100"
+              }`}
+            >
               <span
                 role="button"
                 tabIndex={-1}
@@ -456,6 +474,9 @@ export function FileTree() {
   // 根そのものへ入れる口（枠への落とし込み・上の作る口）。根が 1 つのときだけ。
   // 2 つ以上なら、どの根に入れるかは根の行で選ぶ。
   const lone = multi ? null : activeFolderId;
+  // 並べている根の持ち主。根を足すのは、このワークスペースのメニューから。
+  const here = useAtomValue(workspaceAtom);
+  const setWsMenu = useSetAtom(workspaceMenuAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
   const [menu, setMenu] = useState<EntryMenuState | null>(null);
   const [iconFor, setIconFor] = useState<IconPickerState | null>(null);
@@ -774,13 +795,30 @@ export function FileTree() {
       {((!noAdd && lone) || multi) && (
         <div className="flex items-center justify-end gap-0.5 px-2 pb-1">
           {multi && (
-            <button
-              onClick={toggleRoots}
-              title={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
-              className="mg-tree-roots grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-            >
-              <Icon name={allRootsOpen ? "unfold_less" : "unfold_more"} size={16} />
-            </button>
+            <>
+              <span className="mg-tree-count mr-auto text-[11px] text-[var(--mg-muted)]">
+                フォルダ {roots.length}
+              </span>
+              {here && (
+                <button
+                  onClick={(e) => {
+                    const box = e.currentTarget.getBoundingClientRect();
+                    setWsMenu({ id: here.id, x: box.left, y: box.bottom + 4, step: "folders" });
+                  }}
+                  title="フォルダを追加"
+                  className="mg-tree-add-root grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+                >
+                  <Icon name="create_new_folder" size={16} />
+                </button>
+              )}
+              <button
+                onClick={toggleRoots}
+                title={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
+                className="mg-tree-roots grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+              >
+                <Icon name={allRootsOpen ? "unfold_less" : "unfold_more"} size={16} />
+              </button>
+            </>
           )}
           {!noAdd && lone && (
             <>

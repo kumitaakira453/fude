@@ -187,6 +187,15 @@ describe("手入れ：どこで右クリックしても同じメニュー", () =
   });
 });
 
+describe("手入れ：画面を指して開く", () => {
+  it("フォルダを選ぶ画面を指せば、メニューを経ずにその画面から開く", async () => {
+    const { store } = await show();
+    act(() => store.set(A.workspaceMenuAtom, { id: "a", x: 10, y: 10, step: "folders" }));
+    expect(document.querySelector('[role="menu"] [role="menuitem"]')).toBeNull();
+    expect(document.body.textContent).toContain("repo");
+  });
+});
+
 describe("探して開く：⌘⇧P", () => {
   it("作る口も Claude の区切りも持たない", async () => {
     const { el } = await show((s) => {
