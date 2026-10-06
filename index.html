@@ -79,146 +79,85 @@
           background-color 0.3s ease,
           opacity 0.12s ease 0.3s;
       }
-      /* 動かす前に書く動きを止め、書き終えた形にする。筆と線は先に消す。 */
-      #boot.is-landing .boot-ink {
-        animation: none;
-        opacity: 1;
-      }
+      /* 動かす前に線を消し、字は現れ終えた形で止める。 */
       #boot.is-landing .boot-word {
         animation: none;
         clip-path: inset(0);
         transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
       }
-      #boot.is-landing .boot-brush,
-      #boot.is-landing .boot-line {
-        animation: none;
+      #boot.is-landing .boot-track {
         opacity: 0;
         transition: opacity 0.12s ease;
       }
-      /* 筆が「fude」と書く。字は筆先の後ろから現れ、書き終えると筆が離れて
-         下に墨の線を引く。少し置いてから消え、また書く。 */
+      /* 名前を左から 1 度だけ現し、その下の細い線の上を短い線が往復する
+         （読み込んでいる印）。線の角は落とさず、色は 1 色で塗る。 */
+      .boot-ink {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        color: var(--boot-accent, #4fd1c5);
+      }
       /* 動かす要素は描画の層に載り、層は箱の大きさで切られる。Lobster の f は
          払いが箱の左下へはみ出すので、余白を持たせて箱の中に収める（負の
          外側余白で、見た目の位置は変えない）。 */
-      .boot-ink {
-        --w: 92px;
-        --loop: 2.8s;
-        position: relative;
-        padding: 18px 28px;
-        color: var(--boot-accent, #4fd1c5);
-        animation: boot-show var(--loop) ease infinite;
-      }
       .boot-word {
         display: block;
         font: 400 46px/1.15 "Lobster", sans-serif;
         letter-spacing: -0.035em;
         padding: 14px 22px;
         margin: -14px -22px;
-        clip-path: inset(0 calc(100% - 22px) 0 0);
-        animation: boot-write var(--loop) linear infinite;
+        clip-path: inset(0 100% 0 0);
+        animation: boot-reveal 0.45s cubic-bezier(0.3, 0.7, 0.2, 1) 0.05s forwards;
       }
-      .boot-line {
-        position: absolute;
-        left: 30px;
-        bottom: 8px;
-        width: calc(var(--w) * 0.9);
-        height: 3px;
-        border-radius: 999px;
-        background: linear-gradient(
-          90deg,
-          currentColor,
-          color-mix(in srgb, currentColor 30%, transparent)
-        );
-        transform: scaleX(0);
-        transform-origin: left center;
-        animation: boot-line var(--loop) cubic-bezier(0.2, 0.9, 0.3, 1) infinite;
+      .boot-track {
+        position: relative;
+        overflow: hidden;
+        width: 96px;
+        height: 2px;
+        border-radius: 1px;
+        background: color-mix(in srgb, currentColor 16%, transparent);
+        opacity: 0;
+        animation: boot-in 0.2s ease 0.4s forwards;
       }
-      /* 筆。印（src/assets/mark.png）から下の払いを外し、筆だけを小さく
-         切り出した形を埋め込む。dev では起動時に数百の部品を取りに行くので、
-         絵を別に取らせると後ろで待たされて筆が出ない。筆先（左下寄り）が、
-         字の書き終わりの位置に来るように置く。 */
-      .boot-brush {
+      .boot-track::after {
+        content: "";
         position: absolute;
-        left: 12px;
-        top: 20px;
-        width: 44px;
-        height: 37px;
+        inset: 0 auto 0 0;
+        width: 32px;
+        border-radius: 1px;
         background: currentColor;
-        -webkit-mask: url("data:image/png;base64,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") center / 100% 100% no-repeat;
-        mask: url("data:image/png;base64,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") center / 100% 100% no-repeat;
-        transform-origin: 36% 100%;
-        animation: boot-brush var(--loop) linear infinite;
+        animation: boot-scan 1.1s cubic-bezier(0.45, 0, 0.55, 1) 0.4s infinite alternate;
       }
-      @keyframes boot-show {
-        0% {
-          opacity: 0;
-        }
-        5%,
-        86% {
-          opacity: 1;
-        }
-        100% {
-          opacity: 0;
-        }
-      }
-      @keyframes boot-write {
-        0% {
-          clip-path: inset(0 calc(100% - 22px) 0 0);
-        }
-        56%,
-        100% {
+      @keyframes boot-reveal {
+        to {
           clip-path: inset(0);
         }
       }
-      @keyframes boot-brush {
-        0% {
-          transform: translate(0, 0) rotate(-14deg);
+      @keyframes boot-in {
+        to {
           opacity: 1;
-        }
-        14% {
-          transform: translate(calc(var(--w) * 0.22), -5px) rotate(-6deg);
-        }
-        28% {
-          transform: translate(calc(var(--w) * 0.47), 3px) rotate(-16deg);
-        }
-        42% {
-          transform: translate(calc(var(--w) * 0.72), -4px) rotate(-7deg);
-        }
-        56% {
-          transform: translate(var(--w), 2px) rotate(-13deg);
-          opacity: 1;
-        }
-        68%,
-        100% {
-          transform: translate(calc(var(--w) + 10px), -14px) rotate(6deg);
-          opacity: 0;
         }
       }
-      @keyframes boot-line {
-        0%,
-        58% {
-          transform: scaleX(0);
+      @keyframes boot-scan {
+        from {
+          transform: translateX(0);
         }
-        74%,
-        100% {
-          transform: scaleX(1);
+        to {
+          transform: translateX(64px);
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .boot-ink,
         .boot-word,
-        .boot-line,
-        .boot-brush {
+        .boot-track,
+        .boot-track::after {
           animation: none;
         }
         .boot-word {
           clip-path: none;
         }
-        .boot-line {
-          transform: none;
-        }
-        .boot-brush {
-          display: none;
+        .boot-track {
+          opacity: 1;
         }
       }
     </style>
@@ -228,22 +167,12 @@
     <div id="boot" aria-label="読み込み中">
       <div class="boot-ink">
         <span class="boot-word">fude</span>
-        <span class="boot-line"></span>
-        <span class="boot-brush"></span>
+        <span class="boot-track"></span>
       </div>
     </div>
     <script>
       (function () {
         var boot = document.getElementById("boot");
-        // 筆が進む幅は、書く字の幅に合わせる（書体が届いてから測る）。
-        var ink = boot.querySelector(".boot-ink");
-        var word = boot.querySelector(".boot-word");
-        var fit = function () {
-          // 字の箱は左右に 22px ずつ余白を持つので、その分を除く。
-          ink.style.setProperty("--w", word.getBoundingClientRect().width - 44 + "px");
-        };
-        fit();
-        if (document.fonts) document.fonts.load('46px "Lobster"').then(fit, function () {});
         // 画面が幕を下ろせずに終わっても（描画の失敗など）、いつまでも隠さない。
         setTimeout(function () {
           boot.remove();

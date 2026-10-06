@@ -36,7 +36,7 @@ function flyToWordmark(curtain: HTMLElement): void {
   const target = document.querySelector(".mg-wordmark");
   if (!word || !target) return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-  // 書いている途中の形（字の途中で切れた見え方）から動かさない。書き終えた形で止める。
+  // 現れている途中の形（字の途中で切れた見え方）から動かさない。現れ終えた形で止める。
   curtain.classList.add("is-landing");
   const from = textBox(word);
   const to = textBox(target);
