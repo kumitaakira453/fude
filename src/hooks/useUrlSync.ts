@@ -1,12 +1,13 @@
 import { useAtomValue, useStore } from "jotai";
 import { useEffect, useRef } from "react";
 import { dropBootCurtain, whenDocShown } from "../lib/boot";
-import { absoluteIn } from "../lib/fsAccess";
+import { absoluteIn, pathExists } from "../lib/fsAccess";
 import { buildHash, parseHash, type UrlState } from "../lib/url";
 import { currentWindowLabel, MAIN_LABEL, openWorkspaceWindow } from "../lib/windows";
 import { takeRestore, type Workspace } from "../lib/workspaces";
 import { refreshWorkspaces } from "../state/workspace";
 import * as A from "../state/atoms";
+import { notify } from "../state/toast";
 import { useWorkspace, whenOpened } from "./useWorkspace";
 
 // URL(hash) と「開いているフォルダ・ファイル」を双方向同期する。
@@ -80,18 +81,22 @@ export function useUrlSync() {
           store.set(A.soleAtom, null);
           return;
         }
+        // フォルダの ID は絶対パスそのもの。開いたことの無いフォルダ（ワークスペース
+        // に足しただけの根など）も、実在すればそのまま開く。
         const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
-        if (!entry) {
+        const there = entry ? entry.path : folderId.startsWith("/") ? folderId : null;
+        if (!there || (!entry && !(await pathExists(there)))) {
+          notify(store, "フォルダが見つかりません");
           store.set(A.activeFolderIdAtom, null);
           return;
         }
         // ファイルは絶対パスで載せる。根からの相対で載っていた頃の URL も読む。
-        const target = file ? absoluteIn(file, entry.path) : undefined;
+        const target = file ? absoluteIn(file, there) : undefined;
         if (store.get(A.activeFolderIdAtom) !== folderId) {
           // 開くファイルが決まっているなら、ツリーの走査より先に出させる
           // only は「そのファイルだけの窓」として開かれた印。控えの
           // レイアウトを並べ直さず、頼まれたファイルだけを出す。
-          await openFolder(entry.path, { file: target, only });
+          await openFolder(there, { file: target, only });
         }
         // 初期復元では保存レイアウトのファイルを尊重（上書きしない）。
         // 戻る/進む(popstate)では force で必ず切り替える。

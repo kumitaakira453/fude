@@ -8381,11 +8381,11 @@ body.mg-carrying {
   color: var(--mg-fg);
 }
 
-/* 根を 2 つ以上並べているときの、フォルダの見出し。線は引かず、根どうしは
-   間隔で分ける。スクロールしても、今いる根の見出しは上端に残る（留まって
+/* 根を 2 つ以上並べているときの、フォルダの見出し。線は引かず、上の根が
+   開いているときだけ間隔で分ける（畳んでいれば普通の行と同じに詰める）。スクロールしても、今いる根の見出しは上端に残る（留まって
    いるあいだ下の行が透けないよう枠の色で塗る）。 */
-.mg-tree-root-group + .mg-tree-root-group {
-  margin-top: 0.5rem;
+.mg-tree-root-group:has(> :nth-child(2)) + .mg-tree-root-group {
+  margin-top: 0.375rem;
 }
 .mg-tree-root.mg-tree-root {
   position: sticky;

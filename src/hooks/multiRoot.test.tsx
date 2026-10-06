@@ -23,8 +23,10 @@ const TEXT: Record<string, string> = {
   "/w/a/docs/x.md": "x",
 };
 
+const windows: { url?: string }[] = [];
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: async (cmd: string, args: { root?: string }) => {
+  invoke: async (cmd: string, args: { root?: string; url?: string }) => {
+    if (cmd === "open_doc_window") windows.push({ url: args.url });
     if (cmd === "scan_tree") return SCANS[args.root ?? ""] ?? [];
     if (cmd === "folder_mtimes") return [];
     return null;
@@ -91,6 +93,17 @@ const tabs = (store: ReturnType<typeof createStore>) => {
 };
 
 describe("根を 2 つ並べた窓", () => {
+  it("2 つ目の根のファイルを別のウィンドウで開くと、その根を渡す", async () => {
+    const { ws } = await rig();
+    windows.length = 0;
+    await act(async () => {
+      await ws().openInNewWindow("/w/b/README.md");
+    });
+    const hash = new URLSearchParams(windows[0].url!.split("#")[1]);
+    expect(hash.get("folder")).toBe("/w/b");
+    expect(hash.get("file")).toBe("/w/b/README.md");
+  });
+
   it("木は根を行として並べ、その下に中身を吊るす", async () => {
     const { store } = await rig();
     const tree = store.get(A.treeAtom);

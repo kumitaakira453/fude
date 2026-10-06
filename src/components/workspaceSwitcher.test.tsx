@@ -35,7 +35,7 @@ vi.mock("../hooks/useWorkspaceOps", () => ({
     createFromSession: async (s: { sessionId: string }) => log("fromSession")(s.sessionId),
     addRoots: async (roots: string[], id?: string) => log("addRoots")({ roots, id }),
     pickOtherFolder: async () => null,
-    openInNewWindow: async () => {},
+    openInNewWindow: async (w: Workspace) => void calls.push({ op: "newWindow", arg: w.id }),
     renameWorkspace: (id: string, name: string) => log("rename")({ id, name }),
     recolorWorkspace: (id: string, color: string) => log("recolor")({ id, color }),
     deleteWorkspace: async (id: string) => log("delete")(id),
@@ -214,6 +214,19 @@ describe("探して開く：⌘⇧P", () => {
     )!;
     act(() => row.click());
     expect(calls).toEqual([{ op: "openFolder", arg: "/w/repo" }]);
+  });
+
+  it("⌘⏎ は別のワークスペースなら新しいウィンドウで開き、今いるものなら何もしない", async () => {
+    const { el, store } = await show((s) => s.set(A.workspaceSwitcherOpenAtom, true));
+    const rowOf = (name: string) =>
+      Array.from(el.querySelectorAll<HTMLElement>("[data-idx]")).find((r) =>
+        r.textContent?.includes(name),
+      )!;
+    act(() => rowOf("要件定義").dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
+    expect(calls).toEqual([]);
+    act(() => store.set(A.workspaceSwitcherOpenAtom, true));
+    act(() => rowOf("Slack 対応").dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
+    expect(calls).toEqual([{ op: "newWindow", arg: "b" }]);
   });
 });
 

@@ -122,6 +122,8 @@ export function WorkspaceSwitcher() {
     const row = rows[i];
     if (row) {
       close();
+      // 今いるものは 1 つのウィンドウでしか開かない（新しいウィンドウには出さない）。
+      if (newWindow && row.ws.id === current?.id) return;
       if (newWindow) void ops.openInNewWindow(row.ws);
       else void openWorkspace(row.ws);
       return;

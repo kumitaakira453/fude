@@ -803,10 +803,14 @@ export function useWorkspace() {
     async (path: string | null, at?: DropPoint): Promise<boolean> => {
       // 下書きは置き場ごと別の窓へ持ち出せない。行き先を決めてから。
       if (holdDraft(() => {})) return false;
-      const folderId = store.get(A.activeFolderIdAtom);
+      // そのファイルが属する根を渡す（根を並べているとき、最初の根とは限らない）。
+      // 根の外のファイルなら、その親フォルダで開く。
+      const folderId =
+        (path && rootOf(store.get(A.rootsAtom), path)) ??
+        (path ? dirOf(path) : store.get(A.activeFolderIdAtom));
       if (!folderId) return false;
       const entry = store.get(A.foldersAtom).find((f) => f.id === folderId);
-      const title = entry ? folderDisplayName(entry) : "fude";
+      const title = entry ? folderDisplayName(entry) : baseOf(folderId) || "fude";
       try {
         await openDocWindow(folderId, path, title, at);
         return true;
