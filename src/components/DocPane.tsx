@@ -1012,7 +1012,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const showThread = useCallback(
     (id: string, block: number) => {
       const go = (el: Element | null | undefined) => {
-        el?.scrollIntoView({ block: "center", behavior: "smooth" });
+        // 見えているなら送らない。真ん中へ寄せ直すと、書いている最中の本文が
+        // 手元で動き、指していた位置がずれる。見えていなければ見える所までだけ送る。
+        el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
         // 枠の中で横に送るもの（表・コード）は、縦だけでは箇所が画面に出ない。
         const thread = review.threads.find((t) => t.id === id);
         if (el instanceof HTMLElement && thread) showAcross(el, thread);
