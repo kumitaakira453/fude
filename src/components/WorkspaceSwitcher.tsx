@@ -18,6 +18,7 @@ import {
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { refreshWorkspaces } from "../state/workspace";
 import { Icon } from "./Icon";
+import { keyedIn, movedIn } from "../lib/pointer";
 
 // ワークスペースを探して開く一覧（⌘⇧P）。札の列に出していないものや、まだ
 // ワークスペースになっていないフォルダもここから開ける。役目は探して開くこと
@@ -109,6 +110,7 @@ export function WorkspaceSwitcher() {
       byMouse.current = false;
       return;
     }
+    keyedIn(listRef.current);
     listRef.current
       ?.querySelector<HTMLElement>(`[data-idx="${active}"]`)
       ?.scrollIntoView({ block: "nearest" });
@@ -189,7 +191,7 @@ export function WorkspaceSwitcher() {
               <div
                 key={ws.id}
                 data-idx={i}
-                onMouseMove={() => hover(i)}
+                onMouseMove={(e) => movedIn(e) && hover(i)}
                 onClick={(e) => choose(i, e.metaKey)}
                 onMouseDown={(e) => {
                   // 右ボタンで押した瞬間に、下の語が選ばれるのを止める。
@@ -253,7 +255,7 @@ export function WorkspaceSwitcher() {
                   <div
                     key={f.path}
                     data-idx={i}
-                    onMouseMove={() => hover(i)}
+                    onMouseMove={(e) => movedIn(e) && hover(i)}
                     onClick={(e) => choose(i, e.metaKey)}
                     title="開くと、このフォルダのワークスペースができます"
                     data-on={i === active || undefined}

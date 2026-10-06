@@ -145,6 +145,50 @@ describe("⌘J の一覧は、選ぶまで開いたまま", () => {
     expect(shown()).toBeNull();
   });
 
+  it("開いた瞬間にマウスの下にあった行は塗らず、動かしてから当たりを移す", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    const list = document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list")!;
+    const rows = () => Array.from(list.querySelectorAll<HTMLElement>("[role=option]"));
+    const move = (row: HTMLElement, x: number) =>
+      act(() => {
+        row.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, screenX: x, screenY: 10 }));
+      });
+    // 下に来ただけの合図では動かない。
+    move(rows()[2], 100);
+    expect(rows().filter((r) => r.hasAttribute("data-on"))).toHaveLength(1);
+    expect(rows()[1].hasAttribute("data-on")).toBe(true);
+    expect(list.hasAttribute("data-moved")).toBe(false);
+    // 本当に動いたら、その行が当たりになる。
+    move(rows()[2], 120);
+    expect(list.hasAttribute("data-moved")).toBe(true);
+    expect(rows()[2].hasAttribute("data-on")).toBe(true);
+    expect(rows().filter((r) => r.hasAttribute("data-on"))).toHaveLength(1);
+    key({ key: "Enter" });
+    expect(opened).toEqual(["b"]);
+  });
+
+  it("キー操作で一覧が動いても、止まったマウスの下の行へ当たりを引き戻さない", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    const list = document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list")!;
+    const rows = () => Array.from(list.querySelectorAll<HTMLElement>("[role=option]"));
+    const move = (row: HTMLElement, x: number) =>
+      act(() => {
+        row.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, screenX: x, screenY: 10 }));
+      });
+    // 一度マウスを動かしてから、キーで進める。
+    move(rows()[0], 100);
+    move(rows()[0], 110);
+    key({ key: "ArrowDown" });
+    expect(rows()[1].hasAttribute("data-on")).toBe(true);
+    // キーで動かしたら、マウスがまた動くまでホバーの塗りは止まる。
+    expect(list.hasAttribute("data-moved")).toBe(false);
+    // スクロールで下に別の行が来ただけの合図（位置は同じ）。
+    move(rows()[0], 110);
+    expect(rows()[1].hasAttribute("data-on")).toBe(true);
+  });
+
   it("Esc で何もせず閉じる", () => {
     rig();
     key({ key: "j", code: "KeyJ", metaKey: true });

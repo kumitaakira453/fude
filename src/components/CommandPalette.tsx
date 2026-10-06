@@ -6,6 +6,7 @@ import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { Icon } from "./Icon";
+import { keyedIn, movedIn } from "../lib/pointer";
 
 // 触ってからの経過。細かい数字は要らないので、桁が分かる粒度で出す。
 function since(at: number | undefined, now: number): string {
@@ -63,6 +64,7 @@ export function CommandPalette() {
       byMouse.current = false;
       return;
     }
+    keyedIn(listRef.current);
     const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`);
     el?.scrollIntoView({ block: "nearest" });
   }, [active]);
@@ -123,7 +125,7 @@ export function CommandPalette() {
               data-idx={i}
               // 手が動いたときだけ選び直す。入った・出たで決めると、打つたびに
               // 並びが変わったとき、動いていないマウスの下へ当たりが飛ぶ。
-              onMouseMove={() => hover(i)}
+              onMouseMove={(e) => movedIn(e) && hover(i)}
               onClick={() => choose(i)}
               data-on={i === active || undefined}
               className="mg-pick-row flex w-full flex-col items-start px-4 py-1.5 text-left"

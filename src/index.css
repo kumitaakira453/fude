@@ -8407,16 +8407,17 @@ body.mg-carrying {
   color: var(--mg-fg);
 }
 
-/* 選ぶ一覧の行。マウスの塗りは :hover でその場で出し、キー操作の当たりは
-   data-on で塗る。マウスが一覧の上にあるあいだは、マウスの行だけを塗る。 */
+/* 選ぶ一覧の行。キー操作の当たりは data-on で塗る。マウスの塗りは、開いた
+   あとにマウスを動かしてから（data-moved）:hover でその場で出し、そのあいだは
+   マウスの行だけを塗る。開いた瞬間にマウスの下にあった行は塗らない。 */
 .mg-pick-row {
   user-select: none;
 }
-.mg-pick-row:hover,
-.mg-pick-row[data-on] {
+.mg-pick-row[data-on],
+.mg-pick-list[data-moved] .mg-pick-row:hover {
   background: var(--mg-accent-soft);
 }
-.mg-pick-list:hover .mg-pick-row[data-on]:not(:hover) {
+.mg-pick-list[data-moved]:hover .mg-pick-row[data-on]:not(:hover) {
   background: transparent;
 }
 

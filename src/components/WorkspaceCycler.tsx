@@ -2,6 +2,7 @@ import { useAtomValue, useStore } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { PHASE_LABEL } from "../lib/claude";
+import { keyedIn, movedIn } from "../lib/pointer";
 import { colorVar, type Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
@@ -75,6 +76,7 @@ export function WorkspaceCycler() {
       const n = cur.list.length;
       cur.at = (cur.at + by + n) % n;
       setAt(cur.at);
+      keyedIn(document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list"));
     };
     const onDown = (e: KeyboardEvent) => {
       const cur = live.current;
@@ -161,9 +163,9 @@ export function WorkspaceCycler() {
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
+        className="mg-pick-list w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] py-1.5 shadow-2xl"
         role="listbox"
         aria-label="ワークスペース"
-        className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] py-1.5 shadow-2xl"
       >
         {list.map((ws, i) => {
           const phase = phaseFor(ws);
@@ -172,6 +174,12 @@ export function WorkspaceCycler() {
               key={ws.id}
               role="option"
               aria-selected={i === at}
+              onMouseMove={(e) => {
+                const cur = live.current;
+                if (!movedIn(e) || !cur || cur.at === i) return;
+                cur.at = i;
+                setAt(i);
+              }}
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

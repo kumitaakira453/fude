@@ -5,6 +5,7 @@ import { folderDisplayName, type FolderEntry } from "../lib/idb";
 import { ago } from "../lib/when";
 import { foldersAtom } from "../state/atoms";
 import { Icon } from "./Icon";
+import { keyedIn, movedIn } from "../lib/pointer";
 
 // ワークスペースに並べるフォルダを、開いたことのあるフォルダから選ぶ段。
 // ⌘⇧P の一覧の中で、「新しく作る」と「フォルダを足す」に使う。
@@ -74,6 +75,7 @@ export function FolderChooser({
       byMouse.current = false;
       return;
     }
+    keyedIn(listRef.current);
     listRef.current
       ?.querySelector<HTMLElement>(`[data-idx="${active}"]`)
       ?.scrollIntoView({ block: "nearest" });
@@ -184,7 +186,7 @@ export function FolderChooser({
             <div
               key={f.path}
               data-idx={i}
-              onMouseMove={() => hover(i)}
+              onMouseMove={(e) => movedIn(e) && hover(i)}
               onClick={() => toggle(f.path)}
               data-on={i === active || undefined}
               className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5"
@@ -216,7 +218,7 @@ export function FolderChooser({
         })}
         <div
           data-idx={rows.length}
-          onMouseMove={() => hover(rows.length)}
+          onMouseMove={(e) => movedIn(e) && hover(rows.length)}
           onClick={() => void other()}
           data-on={active === rows.length || undefined}
           className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5 text-[13px] text-[var(--mg-fg-dim)]"
