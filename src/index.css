@@ -8687,14 +8687,14 @@ html[data-hints] [data-key]::after {
 }
 
 /* 左の欄。 */
-.mg-side {
+.mg-pane-side {
   display: flex;
   height: 100%;
   min-height: 0;
   flex-direction: column;
   background: var(--mg-panel);
 }
-.mg-side-head {
+.mg-pane-side-head {
   display: flex;
   height: 32px;
   flex: none;
@@ -8703,7 +8703,7 @@ html[data-hints] [data-key]::after {
   padding: 0 6px 0 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
 }
-.mg-side-title {
+.mg-pane-side-title {
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -8820,7 +8820,7 @@ html[data-hints] [data-key]::after {
 }
 
 /* 場所の段。 */
-.mg-crumbs {
+.mg-pathbar {
   display: flex;
   height: 28px;
   flex: none;
@@ -8830,7 +8830,7 @@ html[data-hints] [data-key]::after {
   border-bottom: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
   background: var(--mg-bg);
 }
-.mg-crumbs-path {
+.mg-pathbar-path {
   min-width: 0;
   flex: 1;
   overflow: hidden;

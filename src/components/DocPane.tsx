@@ -1449,7 +1449,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     >
       {/* 場所の段。左にパンくず、右にこの文書に効く操作を字で並べる。保存中と
           見張りの状態は足元の帯に出す。 */}
-      <header className="mg-crumbs">
+      <header className="mg-pathbar">
         {isDraft ? (
           // 置き場の道筋は人に見せない。まだ保存先が無いことだけを出す。
           <div className="flex min-w-0 flex-1 items-center">
@@ -1459,7 +1459,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             </span>
           </div>
         ) : (
-          <div className="mg-crumbs-path">
+          <div className="mg-pathbar-path">
             {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>

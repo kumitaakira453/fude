@@ -35,9 +35,9 @@ export function Sidebar() {
   const lone = roots.length === 1 && !sole;
 
   return (
-    <aside className="mg-side">
-      <div className="mg-side-head">
-        <span className="mg-side-title">{TITLE[face]}</span>
+    <aside className="mg-pane-side">
+      <div className="mg-pane-side-head">
+        <span className="mg-pane-side-title">{TITLE[face]}</span>
         {face === "files" && (
           <>
             <TextBtn tip="フォルダ・ファイルを開く" keys="⌘O" quiet onClick={() => setPicker(true)}>
