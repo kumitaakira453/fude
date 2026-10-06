@@ -18,9 +18,9 @@ import {
 import { copyText } from "../../lib/clip";
 import { fontStack } from "../../lib/fonts";
 import { answerOf } from "../../lib/versions";
-import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
+import { REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
-import { inEditable } from "../../lib/ui";
+import { inEditable, PAD_CLASS, WIDTH_CLASS } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import { rootOf } from "../../lib/fsAccess";
 import {
@@ -45,6 +45,7 @@ import { ago, whenText } from "../../lib/when";
 import { notify } from "../../state/toast";
 import {
   pathLabelAtom,
+  readingWidthAtom,
   rootsAtom,
   reviewSideWidthAtom,
   contentCacheAtom,
@@ -57,6 +58,7 @@ import {
   reviewThreadAtom,
 } from "../../state/review";
 import { AutoTextarea } from "../AutoTextarea";
+import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
 import { SidebarGrip } from "../SidebarGrip";
@@ -413,9 +415,13 @@ export function ReviewScreen() {
         <div className="mg-screenbar-title" data-tauri-drag-region>
           <span className="mg-screenbar-kind">コメント一覧</span>
           <span>
-            {threads.length > 0
-              ? `未解決 ${threads.length} 件`
-              : "このフォルダに未解決のコメントはありません"}
+            {threads.length > 0 ? (
+              <>
+                未解決 <span className="font-[family-name:var(--mg-font-mono)]">{threads.length}</span> 件
+              </>
+            ) : (
+              "このフォルダに未解決のコメントはありません"
+            )}
             {elsewhere > 0 && (
               <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">
                 他のフォルダに {elsewhere} 件
@@ -436,7 +442,10 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
+        <nav
+          className="mg-review-list shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]"
+          style={{ width: SIDEBAR_WIDTH }}
+        >
           {groups.length === 0 && (
             <p className="px-3 py-4 text-[12px] text-[var(--mg-muted)]">
               {elsewhere > 0
@@ -447,9 +456,12 @@ export function ReviewScreen() {
           {groups.map(([file, list]) => {
             const where = fileLabel(label, file);
             return (
-              <section key={file} className="mg-review-set">
+              <section
+                key={file}
+                className={`mg-review-set${file === selected?.file ? " is-current" : ""}`}
+              >
                 <h2 className="mg-review-group">
-                  <Icon name="description" size={14} className="mg-review-ico" />
+                  <FileIcon name={where.name} abs={file} size={14} className="mg-review-ico" />
                   <span className="mg-review-place" title={file}>
                     <span className="mg-review-name">{where.name}</span>
                     {where.dir && <span className="mg-review-dir">{where.dir}</span>}
@@ -460,10 +472,7 @@ export function ReviewScreen() {
                     title="このファイルのコメントを AI 用のプロンプトとして写す"
                     className="mg-bulk"
                   >
-                    <Icon
-                      name={copiedFile === file ? "check" : "content_copy"}
-                      size={14}
-                    />
+                    <Icon name={copiedFile === file ? "check" : "content_copy"} size={14} />
                   </button>
                   <button
                     onClick={() => void resolveFile(file, list)}
@@ -478,20 +487,22 @@ export function ReviewScreen() {
                     />
                   </button>
                 </h2>
-                {list.map((thread) => (
-                  <ThreadCard
-                    key={thread.id}
-                    thread={thread}
-                    where={
-                      factsById.get(thread.id)?.where ??
-                      thread.section_path.join(" › ")
-                    }
-                    state={factsById.get(thread.id)?.spot.state}
-                    active={thread.id === selected?.id}
-                    onPick={() => setSelectedId(thread.id)}
-                    onResolve={() => void resolveOne(thread.id)}
-                  />
-                ))}
+                <div className="mg-review-rows">
+                  {list.map((thread) => (
+                    <ThreadCard
+                      key={thread.id}
+                      thread={thread}
+                      where={
+                        factsById.get(thread.id)?.where ??
+                        thread.section_path.join(" › ")
+                      }
+                      state={factsById.get(thread.id)?.spot.state}
+                      active={thread.id === selected?.id}
+                      onPick={() => setSelectedId(thread.id)}
+                      onResolve={() => void resolveOne(thread.id)}
+                    />
+                  ))}
+                </div>
               </section>
             );
           })}
@@ -539,21 +550,31 @@ function DetailSkeleton() {
   // 右の欄は掴んで幅を変えられる。骨組みも同じ幅で出す（入れ替わる瞬間に
   // 欄の幅が動くと、読んでいる場所が横へ飛ぶ）。
   const sideWidth = useAtomValue(reviewSideWidthAtom);
+  const width = useAtomValue(readingWidthAtom);
   return (
     <div className="mg-loading flex min-w-0 flex-1">
-      <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="mg-progress" role="progressbar" aria-label="読み込み中" />
-        <div className="mx-auto max-w-3xl px-6 py-6">
-          <div className="mg-skeleton">
-            <div className="mg-skeleton-bar mg-skeleton-head" style={{ width: "45%" }} />
-            {widths.map((w, i) => (
-              <div key={i} className="mg-skeleton-bar" style={{ width: w }} />
-            ))}
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="mg-pathbar" />
+        <div
+          className="mg-progress absolute inset-x-0 top-[27px]"
+          role="progressbar"
+          aria-label="読み込み中"
+        />
+        <div className={`pt-8 ${PAD_CLASS[width]}`}>
+          <div className={`mx-auto ${WIDTH_CLASS[width]}`}>
+            <div className="mg-skeleton">
+              <div className="mg-skeleton-bar mg-skeleton-head" style={{ width: "45%" }} />
+              {widths.map((w, i) => (
+                <div key={i} className="mg-skeleton-bar" style={{ width: w }} />
+              ))}
+            </div>
           </div>
         </div>
       </div>
       <aside className="mg-side" style={{ width: sideWidth }}>
-        <div className="mg-side-head">読み込んでいます…</div>
+        <div className="mg-side-head">
+          <span className="mg-side-title">コメント</span>
+        </div>
         <div className="mg-talk">
           <div className="mg-skeleton w-full">
             <div className="mg-skeleton-bar" style={{ width: "60%" }} />
@@ -625,17 +646,17 @@ export function ThreadCard({
       }}
       className={`mg-thread-card ${active ? "is-active" : ""}`}
     >
-      {/* 読みたいのは指摘そのもの。対象はその下に、手がかりとして小さく添える。 */}
-      <div className="mg-thread-body">
-        {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
-      </div>
-      <div className={`mg-thread-quote${state ? " has-state" : ""}`}>
+      {/* 何への指摘かを先に、引用の線で添える（本文の画面の右の欄と同じ並び）。 */}
+      <div className="mg-thread-quote">
         {state && (
           <span className={`mg-thread-state is-${state}`} title={SPOT_NAME[state]}>
             <Icon name={SPOT_ICON[state]} size={11} fill />
           </span>
         )}
         <span>{targetLine(thread)}</span>
+      </div>
+      <div className="mg-thread-body">
+        {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
       </div>
       <div className="mg-thread-foot">
         {/* 幅が狭いので、いちばん細かい節だけを出す。全体は title で読める。
@@ -647,13 +668,12 @@ export function ThreadCard({
           {ago(thread.created_at)}
         </span>
         {answeredByAgent(thread) && (
-          <span className="mg-thread-answered" title="AI からの返信が届いています">
-            <Icon name="auto_awesome" size={11} fill />
-            返信
+          <span className="mg-ws-pill-badge is-agent" title="AI からの返信が届いています">
+            返信あり
           </span>
         )}
         {thread.comments.length > 1 && (
-          <span className="mg-thread-count">
+          <span className="mg-thread-count" title={`${thread.comments.length} 件のやり取り`}>
             <Icon name="forum" size={11} />
             {thread.comments.length}
           </span>
@@ -742,7 +762,9 @@ function ThreadDetail({
 
   // 本文の控えの鍵（絶対パス）。開いているフォルダの外なら null。
   const rel = useMemo(() => insideOf(roots, thread.file), [roots, thread.file]);
-  const where = useMemo(() => fileLabel(label, thread.file), [label, thread.file]);
+  // 場所の段に出す道筋。一覧の見出しと違って幅があるので、省かずに全部出す。
+  const path = useMemo(() => label(thread.file).split("/").filter(Boolean), [label, thread.file]);
+  const width = useAtomValue(readingWidthAtom);
 
   const { body: currentBody, raw, reading } = useFileBody(rel);
   // 右の欄の幅。掴んでいるあいだは仕切りが DOM へ直に書き、離したら控える。
@@ -943,34 +965,75 @@ function ThreadDetail({
 
   return (
     <div className="flex min-w-0 flex-1">
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div ref={setPaper} className="mx-auto max-w-3xl px-6 py-6">
-          {rel === null ? (
-            <p className="text-[12px] text-[var(--mg-muted)]">
-              このファイルは今開いているフォルダの中にないため、現在の本文を出せません。
-            </p>
-          ) : currentBody === null && !reading ? (
-            <p className="text-[12px] text-[var(--mg-muted)]">
-              このファイルの本文を読めませんでした。
-            </p>
-          ) : view === null ? (
-            <p className="text-[12px] text-[var(--mg-muted)]">読み込んでいます…</p>
-          ) : (
-            <markdownContext.Provider value={ctx}>
-              <DocumentView
-                blocks={view.blocks}
-                spot={view.spot}
-                changes={view.changes}
-                answered={answered}
-                goTo={goTo}
-                style={style}
-                focusNonce={focus}
-                selection={thread.selection}
-                subject={thread.id}
-                onSettled={settle}
-              />
-            </markdownContext.Provider>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* 何を読んでいるか。本文の画面の場所の段と同じ寸法で置く。 */}
+        <div className="mg-pathbar">
+          {/* 長いときはフォルダの側を省く。ファイル名は最後まで出す。 */}
+          <span className="mg-pathbar-path mg-review-path" title={thread.file}>
+            {path.length > 1 && (
+              <>
+                <span className="mg-review-path-dir">{path.slice(0, -1).join(" / ")}</span>
+                <span className="mg-crumb-sep">/</span>
+              </>
+            )}
+            <span className="mg-crumb is-last">{path[path.length - 1]}</span>
+          </span>
+          <button
+            onClick={jump}
+            disabled={!hasTarget}
+            title={
+              hasTarget
+                ? "本文のコメントの箇所へ戻る"
+                : "コメントの箇所が今の本文のどこかを決められていません"
+            }
+            className="mg-tbtn is-quiet"
+          >
+            <Icon name="my_location" size={13} />
+            対象箇所へ
+          </button>
+          {rel && (
+            <button
+              onClick={() => {
+                openFile(rel);
+                setScreen(false);
+              }}
+              title="読書ビューでこのファイルを開く"
+              className="mg-tbtn is-quiet"
+            >
+              <Icon name="open_in_new" size={13} />
+              ファイルを開く
+            </button>
           )}
+        </div>
+        <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto pt-8 ${PAD_CLASS[width]}`}>
+          <div ref={setPaper} className={`mx-auto pb-8 ${WIDTH_CLASS[width]}`}>
+            {rel === null ? (
+              <p className="text-[12px] text-[var(--mg-muted)]">
+                このファイルは今開いているフォルダの中にないため、現在の本文を出せません。
+              </p>
+            ) : currentBody === null && !reading ? (
+              <p className="text-[12px] text-[var(--mg-muted)]">
+                このファイルの本文を読めませんでした。
+              </p>
+            ) : view === null ? (
+              <p className="text-[12px] text-[var(--mg-muted)]">読み込んでいます…</p>
+            ) : (
+              <markdownContext.Provider value={ctx}>
+                <DocumentView
+                  blocks={view.blocks}
+                  spot={view.spot}
+                  changes={view.changes}
+                  answered={answered}
+                  goTo={goTo}
+                  style={style}
+                  focusNonce={focus}
+                  selection={thread.selection}
+                  subject={thread.id}
+                  onSettled={settle}
+                />
+              </markdownContext.Provider>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1004,42 +1067,14 @@ function ThreadDetail({
       />
       <aside ref={sideRef} className="mg-side" style={{ width: sideWidth }}>
         <div className="mg-side-head">
-          <span className="mg-review-place flex-1" title={thread.file}>
-            <span className="mg-review-name">{where.name}</span>
-            {where.dir && <span className="mg-review-dir">{where.dir}</span>}
-          </span>
-          <button
-            onClick={jump}
-            disabled={!hasTarget}
-            title={
-              hasTarget
-                ? "本文のコメントの箇所へ戻る"
-                : "コメントの箇所が今の本文のどこかを決められていません"
-            }
-            className="mg-side-open"
-          >
-            <Icon name="my_location" size={13} />
-            対象箇所へ
-          </button>
-          {rel && (
-            <button
-              onClick={() => {
-                openFile(rel);
-                setScreen(false);
-              }}
-              title="読書ビューでこのファイルを開く"
-              className="mg-side-open"
-            >
-              <Icon name="open_in_new" size={13} />
-            </button>
-          )}
-
+          <span className="mg-side-title">コメント</span>
+          <span className="mg-side-count">{thread.comments.length}</span>
         </div>
 
         <nav className="mg-crumbs">
           {(view?.crumbs.length ? view.crumbs : ["見出しの外"]).map((name, i) => (
             <span key={`${i}-${name}`}>
-              {i > 0 && <span className="sep">›&nbsp;</span>}
+              {i > 0 && <span className="sep">/</span>}
               {name}
             </span>
           ))}
@@ -1081,7 +1116,7 @@ function ThreadDetail({
                 <span className="mg-side-answer">{answer.label}</span>
               )}
             </span>
-            <button onClick={nextChange} className="mg-side-next">
+            <button onClick={nextChange} className="mg-tbtn mg-side-next">
               次の変更へ
             </button>
           </div>
@@ -1110,7 +1145,9 @@ function ThreadDetail({
               書き始めたとたんに読めなくなる。 */}
           <div className="mg-side-row">
             <PreviewToggle on={seeReply} onToggle={flipReply} />
-            <span className="mg-side-hint">⌘Enter で送信</span>
+            <span className="mg-side-hint">
+              <kbd className="mg-key">⌘Enter</kbd> で送信
+            </span>
             <button
               onClick={() => void send()}
               disabled={sending || !reply.trim()}
@@ -1133,12 +1170,11 @@ function ThreadDetail({
           <button
             onClick={() => void finish()}
             disabled={resolving}
-            className="mg-act is-done"
+            className="mg-tbtn mg-side-done"
           >
             <Icon
-              name={resolving ? "progress_activity" : "check_circle"}
-              size={15}
-              fill={!resolving}
+              name={resolving ? "progress_activity" : "check"}
+              size={13}
               className={resolving ? "mg-spin" : undefined}
             />
             {resolving ? "解決にしています…" : "解決にする"}
@@ -1148,11 +1184,11 @@ function ThreadDetail({
             onClick={() => void drop()}
             disabled={removing}
             title="コメントそのものを取り消す（解決の記録は残らない）"
-            className="mg-act is-drop"
+            className="mg-tbtn mg-side-drop"
           >
             <Icon
               name={removing ? "progress_activity" : "delete"}
-              size={14}
+              size={13}
               className={removing ? "mg-spin" : undefined}
             />
             削除
@@ -1173,8 +1209,10 @@ function SpotCard({ spot }: { spot: SpotDiff }) {
   return (
     <div className={`mg-spot-card is-${spot.state}`}>
       <div className="mg-spot-card-head">
-        <Icon name={SPOT_ICON[spot.state]} size={13} fill />
-        {SPOT_NAME[spot.state]}
+        <span className="mg-ws-pill-badge mg-spot-chip">
+          <Icon name={SPOT_ICON[spot.state]} size={11} fill />
+          {SPOT_NAME[spot.state]}
+        </span>
         {moved && (
           <span className="mg-spot-delta">
             {spot.added > 0 && <span className="is-add">＋{spot.added}</span>}
@@ -1210,10 +1248,6 @@ function Message({
   // 入力欄は autoFocus で出し直すので、戻す先の世話は要らない。
   const flip = () => setSee((v) => !v);
   const md = useMarkdownKeys(setText, flip);
-  // 吹き出しの幅。書き直しに入った瞬間に横幅が変わると、同じ発言が別の形に
-  // 見えてしまうので、入る直前の幅をそのまま引き継ぐ。
-  const [width, setWidth] = useState<number | undefined>(undefined);
-  const bubbleRef = useRef<HTMLDivElement>(null);
   const changed = text.trim().length > 0 && text.trim() !== comment.body;
   const save = () => {
     setEditing(false);
@@ -1233,89 +1267,86 @@ function Message({
     md.onKeyDown(e);
   };
   const startEditing = () => {
-    setWidth(bubbleRef.current?.getBoundingClientRect().width);
     setText(comment.body);
     setSee(false);
     setEditing(true);
   };
   return (
-    <div className={`mg-msg ${mine ? "is-reviewer" : ""} ${run ? "is-run" : ""}`}>
-      {!mine && (
-        <span className="mg-msg-face">
-          <Icon name={agent ? "auto_awesome" : "person"} size={14} fill />
-        </span>
+    // やり取りは上から順に読む平らな並び。吹き出しで左右に振ると、狭い欄では
+    // 長い返信ほど細く折り返して読みにくい。
+    <div className={`mg-msg${run ? " is-run" : ""}`}>
+      {!run && (
+        <div className="mg-msg-meta">
+          {agent ? (
+            <Icon name="claude" size={12} className="mg-msg-face" />
+          ) : null}
+          {/* 使っている本人の発言は、台帳に残る名前が何であれ「you」と呼ぶ */}
+          <span className="mg-msg-name">{mine ? "you" : comment.author}</span>
+          <span className="mg-msg-time">{whenText(comment.created_at)}</span>
+        </div>
       )}
-      <div className="mg-msg-main">
-        {!run && (
-          <div className="mg-msg-meta">
-            {/* 使っている本人の発言は、台帳に残る名前が何であれ「you」と呼ぶ */}
-            <span className="mg-msg-name">{mine ? "you" : comment.author}</span>
-            <span>{whenText(comment.created_at)}</span>
+      {editing ? (
+        <div className="mg-bubble-edit">
+          {see ? (
+            <CommentPreview body={text} onKeyDown={onKey} />
+          ) : (
+            <AutoTextarea
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyUp={md.onKeyUp}
+              onCompositionStart={md.onCompositionStart}
+              onCompositionEnd={md.onCompositionEnd}
+              onKeyDown={onKey}
+              minRows={2}
+              maxRows={12}
+              className="mg-bubble-input"
+            />
+          )}
+          {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
+              入力欄から焦点が外れる拍子に押下がどこにも届かないことがある。
+              書き換えていないときの保存は、何も書かずに閉じるだけにする。
+              押せないボタンにすると、反応しないのと区別が付かない。 */}
+          <div className="mg-bubble-edit-foot">
+            <PreviewToggle on={see} onToggle={flip} />
+            <span className="mg-side-hint">⌘Enter で保存</span>
+            <button
+              type="button"
+              className="mg-small"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setEditing(false);
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="mg-small is-go"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                save();
+              }}
+            >
+              保存
+            </button>
           </div>
-        )}
-        {editing ? (
-          <div className="mg-bubble-edit" style={{ width }}>
-            {see ? (
-              <CommentPreview body={text} onKeyDown={onKey} />
-            ) : (
-              <AutoTextarea
-                autoFocus
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyUp={md.onKeyUp}
-                onCompositionStart={md.onCompositionStart}
-                onCompositionEnd={md.onCompositionEnd}
-                onKeyDown={onKey}
-                minRows={2}
-                maxRows={12}
-                className="mg-bubble-input"
-              />
-            )}
-            {/* 押した瞬間に確定する（mousedown で拾う）。click を待つと、
-                入力欄から焦点が外れる拍子に押下がどこにも届かないことがある。
-                書き換えていないときの保存は、何も書かずに閉じるだけにする。
-                押せないボタンにすると、反応しないのと区別が付かない。 */}
-            <div className="mg-bubble-edit-foot">
-              <PreviewToggle on={see} onToggle={flip} />
-              <span className="mg-side-hint">⌘Enter で保存</span>
-              <button
-                type="button"
-                className="mg-small"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setEditing(false);
-                }}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="mg-small is-go"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  save();
-                }}
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="mg-bubble" ref={bubbleRef}>
-            <CommentBody body={comment.body} />
-            {mine && (
-              <button
-                type="button"
-                title="書き直す"
-                className="mg-bubble-pen"
-                onClick={startEditing}
-              >
-                <Icon name="edit" size={13} />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="mg-bubble">
+          <CommentBody body={comment.body} />
+          {mine && (
+            <button
+              type="button"
+              title="書き直す"
+              className="mg-bubble-pen"
+              onClick={startEditing}
+            >
+              <Icon name="edit" size={13} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
