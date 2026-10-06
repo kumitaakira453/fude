@@ -9236,6 +9236,11 @@ html[data-hints] .mg-seg {
   color: var(--mg-muted);
   font-size: 11px;
 }
+.mg-pal-note {
+  padding: 8px 12px;
+  color: var(--mg-muted);
+  font-size: 12px;
+}
 .mg-pal-foot kbd + kbd {
   margin-left: 3px;
 }

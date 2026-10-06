@@ -211,11 +211,8 @@ export function WorkspacePills() {
         type="button"
         data-tip="ワークスペースを作る"
         data-key="⌘T"
-        aria-expanded={!!making}
-        onClick={(e) => {
-          const box = e.currentTarget.getBoundingClientRect();
-          setMaking(making ? null : { left: box.left, top: box.bottom + 6 });
-        }}
+        aria-expanded={making}
+        onClick={() => setMaking(!making)}
         className="mg-ws-pill-add"
       >
         <Icon name="add" size={16} />

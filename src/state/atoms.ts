@@ -51,8 +51,8 @@ export const workspaceMenuAtom = atom<{
   y: number;
   step?: "folders";
 } | null>(null);
-// ワークスペースを作る小さな一覧（札の並びの末尾の ＋）。出す位置を持つ。
-export const newWorkspaceAtom = atom<{ left: number; top: number } | null>(null);
+// ワークスペースを作る一覧（札の並びの末尾の ＋・⌘T）を開いているか。
+export const newWorkspaceAtom = atom(false);
 // ワークスペースを探して開く一覧（⌘⇧P）。
 export const workspaceSwitcherOpenAtom = atom(false);
 // 木の開閉を控える鍵。ワークスペースがあればその ID、無ければフォルダ。

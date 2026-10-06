@@ -180,16 +180,16 @@ describe("⌘T で作るメニュー", () => {
   it("開き、もう一度押すと閉じる", () => {
     const store = rig();
     key({ key: "t", code: "KeyT", metaKey: true });
-    expect(store.get(A.newWorkspaceAtom)).not.toBeNull();
+    expect(store.get(A.newWorkspaceAtom)).toBe(true);
     key({ key: "t", code: "KeyT", metaKey: true });
-    expect(store.get(A.newWorkspaceAtom)).toBeNull();
+    expect(store.get(A.newWorkspaceAtom)).toBe(false);
   });
 
   it("⌘⇧T は閉じたタブを開き直す（作るメニューは開かない）", () => {
     const store = rig();
     store.set(A.closedTabsAtom, [{ path: "/w/a.md", paneId: "p1", index: 0 }]);
     key({ key: "T", code: "KeyT", metaKey: true, shiftKey: true });
-    expect(store.get(A.newWorkspaceAtom)).toBeNull();
+    expect(store.get(A.newWorkspaceAtom)).toBe(false);
     expect(store.get(A.closedTabsAtom)).toEqual([]);
   });
 });

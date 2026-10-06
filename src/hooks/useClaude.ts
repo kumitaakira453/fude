@@ -28,7 +28,7 @@ export function useClaude(): void {
   const store = useStore();
   const on = useAtomValue(A.claudeLinkAtom);
   // セッションを並べるのは、作る一覧（＋）を開いているとき。
-  const making = useAtomValue(A.newWorkspaceAtom) !== null;
+  const making = useAtomValue(A.newWorkspaceAtom);
   const list = useAtomValue(A.workspacesAtom);
   const current = useAtomValue(A.workspaceAtom);
   const linked = !!current?.claude || list.some((w) => w.claude);
