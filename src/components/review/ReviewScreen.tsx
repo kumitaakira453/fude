@@ -13,18 +13,19 @@ import {
   spotDiff,
   spotNote,
   type SpotDiff,
-  type SpotState,
 } from "../../lib/spotDiff";
 import { copyText } from "../../lib/clip";
 import { fontStack } from "../../lib/fonts";
 import { answerOf } from "../../lib/versions";
-import { REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
+import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
 import { inEditable, PAD_CLASS, WIDTH_CLASS } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import { rootOf } from "../../lib/fsAccess";
 import {
+  awaitsMe,
   isOpen,
+  RAIL_FILTERS,
   readVersion,
   replyToThread,
   answeredByAgent,
@@ -46,6 +47,8 @@ import { notify } from "../../state/toast";
 import {
   pathLabelAtom,
   readingWidthAtom,
+  reviewFilterAtom,
+  reviewGroupedAtom,
   rootsAtom,
   reviewSideWidthAtom,
   contentCacheAtom,
@@ -58,7 +61,6 @@ import {
   reviewThreadAtom,
 } from "../../state/review";
 import { AutoTextarea } from "../AutoTextarea";
-import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
 import { markdownContext } from "../MarkdownContext";
 import { SidebarGrip } from "../SidebarGrip";
@@ -137,6 +139,11 @@ function whereAt(spot: SpotDiff, thread: ReviewThread, blocks: Block[]): string 
   return "見出しの外";
 }
 
+// 最後に誰かが話した時刻。新しい順はこれで並べる。
+function lastAt(thread: ReviewThread): number {
+  return thread.comments[thread.comments.length - 1]?.created_at ?? thread.created_at;
+}
+
 // フロントマターの行数。本文の頭がファイルの何行目から始まるかを出す。
 function countLines(text: string): number {
   let n = 0;
@@ -180,25 +187,45 @@ export function ReviewScreen() {
   // 出すのは今開いているフォルダの中のファイルに付いた指摘だけ。外のものは
   // 本文を読めないので、どこへの指摘かを示せず、返信も解決も当て推量になる。
   // 数だけは伝える（消えたのではなく、そのフォルダを開けば出ると分かるように）。
-  const all = useMemo(() => ledger.threads.filter(isOpen), [ledger]);
   const inFolder = useMemo(
     () =>
       roots.length === 0
-        ? all
-        : all.filter((t) => insideOf(roots, t.file) !== null),
-    [all, roots],
+        ? ledger.threads
+        : ledger.threads.filter((t) => insideOf(roots, t.file) !== null),
+    [ledger, roots],
   );
-  const elsewhere = all.length - inFolder.length;
-  // 解決にすると押した瞬間から一覧に出さない。台帳への書き込みと読み直しは
-  // 背後で進むので、それを待ってから消すと、押しても何も起きない間ができる。
-  // しくじったら戻す（台帳が変わらなければ、下げていた分がそのまま戻る）。
+  const elsewhere = useMemo(
+    () => ledger.threads.filter(isOpen).length - inFolder.filter(isOpen).length,
+    [ledger, inFolder],
+  );
+  const [filter, setFilter] = useAtom(reviewFilterAtom);
+  const [grouped, setGrouped] = useAtom(reviewGroupedAtom);
+  const counts = useMemo(() => {
+    const open = inFolder.filter(isOpen);
+    return { todo: open.filter(awaitsMe).length, open: open.length };
+  }, [inFolder]);
+  // 解決にする（解決済みの一覧では未解決に戻す）と、押した瞬間から一覧に出さない。
+  // 台帳への書き込みと読み直しは背後で進むので、それを待ってから消すと、押しても
+  // 何も起きない間ができる。しくじったら戻す（台帳が変わらなければそのまま戻る）。
   const [going, setGoing] = useState<ReadonlySet<string>>(() => new Set());
   const goingRef = useRef(going);
   goingRef.current = going;
-  const threads = useMemo(
-    () => (going.size === 0 ? inFolder : inFolder.filter((t) => !going.has(t.id))),
-    [inFolder, going],
-  );
+  const threads = useMemo(() => {
+    const done = filter === "done";
+    const list = inFolder.filter((t) => {
+      if (going.has(t.id)) return false;
+      if (isOpen(t) === done) return false;
+      // 見ている指摘は、返信して「未対応」から外れても選び直すまで残す。
+      // 返した瞬間に一覧から消えると、読んでいた場所ごと飛ばされる。
+      return filter !== "todo" || awaitsMe(t) || t.id === selectedId;
+    });
+    // 新しい順は最後の発言の時刻で並べる。まとめるときはファイルごとに寄せる。
+    list.sort((x, y) => lastAt(y) - lastAt(x));
+    if (grouped) list.sort((x, y) => x.file.localeCompare(y.file));
+    return list;
+    // 選び直しのたびに並びを組み直さないよう、選んでいる id は見張らない
+    // （残すかどうかは、絞り込みや台帳が変わったときにだけ決め直せば足りる）。
+  }, [inFolder, going, filter, grouped]);
   // 解決の処理の中で「次の指摘」を引くための控え。押した瞬間の並びを見る。
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -250,7 +277,7 @@ export function ReviewScreen() {
       list.push(t);
       byFile.set(t.file, list);
     }
-    return [...byFile.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return [...byFile.entries()];
   }, [threads]);
 
   // 1 ファイル分の指摘をまとめて解決にする。解決を取り消す手段が無いので、
@@ -304,18 +331,20 @@ export function ReviewScreen() {
       // 先に下げて、見ていた指摘なら次へ送る。ここまでは押した一枚で終わる。
       setGoing((prev) => new Set(prev).add(id));
       if (store.get(reviewThreadAtom) === id) setSelectedId(next);
+      // 解決済みの一覧から押したときは、未解決に戻す。
+      const back = store.get(reviewFilterAtom) === "done";
       try {
-        if (!(await resolveThread(id, REVIEW_AUTHOR))) return;
+        if (!(back ? await reopenThread(id) : await resolveThread(id, REVIEW_AUTHOR))) return;
         await syncLedger(store);
         const restore = async () => {
           setReviewUndo(null);
-          if (!(await reopenThread(id))) return;
+          if (!(back ? await resolveThread(id, REVIEW_AUTHOR) : await reopenThread(id))) return;
           setSelectedId(id);
           await syncLedger(store);
-          notify(store, "未解決に戻しました");
+          notify(store, back ? "解決済みに戻しました" : "未解決に戻しました");
         };
         setReviewUndo(restore);
-        notify(store, "解決にしました", "center", {
+        notify(store, back ? "未解決に戻しました" : "解決にしました", "center", {
           label: "元に戻す",
           run: () => void restore(),
         });
@@ -365,6 +394,38 @@ export function ReviewScreen() {
     [label, store],
   );
 
+  // 今出ている指摘をまとめて写す。ファイルごとに組んでつなげる。
+  const copyAll = useCallback(() => {
+    if (groups.length === 0) return;
+    const text = groups
+      .map(([file, list]) => reviewPrompt(label(file), list, (t) => factsRef.current.get(t.id)))
+      .join("\n\n");
+    void copyText(text).then((done) =>
+      notify(store, done ? `${threads.length} 件のコメントを写しました` : "コメントを写せませんでした"),
+    );
+  }, [groups, label, store, threads.length]);
+
+  // ↑↓ で一覧の前後へ移る。入力欄の中では字の送りに譲る。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (inEditable(e.target)) return;
+      const list = threadsRef.current;
+      if (list.length === 0) return;
+      e.preventDefault();
+      const at = list.findIndex((t) => t.id === store.get(reviewThreadAtom));
+      const to = e.key === "ArrowDown" ? Math.min(at + 1, list.length - 1) : Math.max(at - 1, 0);
+      const id = list[at < 0 ? 0 : to].id;
+      setSelectedId(id);
+      document
+        .querySelector(`[data-thread-row="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setSelectedId, store]);
+
   // 一覧に出す「どこの話か」と「その箇所が今どうなっているか」。文書をブロックへ
   // 割り、指摘ごとに見出しを辿って版と突き合わせる重い処理なので、描画の中では
   // なくファイル 1 枚ずつフレームを分けて進める。まとめてやると数百ミリ秒画面が
@@ -408,28 +469,55 @@ export function ReviewScreen() {
     };
   }, [ready, groups, roots, label]);
 
+  const row = (thread: ReviewThread) => (
+    <ThreadCard
+      key={thread.id}
+      thread={thread}
+      where={factsById.get(thread.id)?.where ?? thread.section_path.join(" › ")}
+      file={grouped ? null : fileLabel(label, thread.file).name}
+      active={thread.id === selected?.id}
+      onPick={() => setSelectedId(thread.id)}
+      onResolve={() => void resolveOne(thread.id)}
+    />
+  );
+
   return (
     <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
       <header className="mg-review-head mg-screenbar" data-tauri-drag-region>
         <Icon name="comment" size={16} className="text-[var(--mg-accent)]" />
         <div className="mg-screenbar-title" data-tauri-drag-region>
           <span className="mg-screenbar-kind">コメント一覧</span>
-          <span>
-            {threads.length > 0 ? (
-              <>
-                未解決 <span className="font-[family-name:var(--mg-font-mono)]">{threads.length}</span> 件
-              </>
-            ) : (
-              "このフォルダに未解決のコメントはありません"
-            )}
-            {elsewhere > 0 && (
-              <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">
-                他のフォルダに {elsewhere} 件
-              </span>
-            )}
-          </span>
+          {elsewhere > 0 && (
+            <span className="text-[length:11px] text-[var(--mg-muted)]">
+              他のフォルダに {elsewhere} 件
+            </span>
+          )}
         </div>
         <span className="flex-1" />
+        <div className="mg-seg" role="group" aria-label="絞り込み">
+          {RAIL_FILTERS.filter((f) => f.id !== "all").map((f) => (
+            <button
+              key={f.id}
+              aria-pressed={filter === f.id}
+              title={f.note}
+              onClick={() => setFilter(f.id === "todo" || f.id === "open" ? f.id : "done")}
+            >
+              {f.name}
+              {f.id !== "done" && (
+                <span className="mg-seg-n">{f.id === "todo" ? counts.todo : counts.open}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={copyAll}
+          disabled={threads.length === 0}
+          className="mg-tbtn"
+          title="出ているコメントを AI 用のプロンプトとして写す"
+        >
+          <Icon name="content_copy" size={13} />
+          AI に渡す
+        </button>
         <button
           onClick={() => setScreen(false)}
           className="mg-tbtn"
@@ -442,74 +530,67 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav
-          className="mg-review-list shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]"
-          style={{ width: SIDEBAR_WIDTH }}
-        >
-          {groups.length === 0 && (
-            <p className="px-3 py-4 text-[12px] text-[var(--mg-muted)]">
-              {elsewhere > 0
-                ? "このフォルダには未解決のコメントがありません。他のフォルダのコメントは、そのフォルダを開くと出ます。"
-                : "コメントが付くとここに並びます。"}
-            </p>
-          )}
-          {groups.map(([file, list]) => {
-            const where = fileLabel(label, file);
-            return (
-              <section
-                key={file}
-                className={`mg-review-set${file === selected?.file ? " is-current" : ""}`}
-              >
-                <h2 className="mg-review-group">
-                  <FileIcon name={where.name} abs={file} size={14} className="mg-review-ico" />
-                  <span className="mg-review-place" title={file}>
-                    <span className="mg-review-name">{where.name}</span>
-                    {where.dir && <span className="mg-review-dir">{where.dir}</span>}
-                  </span>
-                  <span className="mg-count">{list.length}</span>
-                  <button
-                    onClick={() => copyPrompt(file, list)}
-                    title="このファイルのコメントを AI 用のプロンプトとして写す"
-                    className="mg-bulk"
-                  >
-                    <Icon name={copiedFile === file ? "check" : "content_copy"} size={14} />
-                  </button>
-                  <button
-                    onClick={() => void resolveFile(file, list)}
-                    disabled={bulkFile !== null}
-                    title="このファイルのコメントをすべて解決にする"
-                    className="mg-bulk"
-                  >
-                    <Icon
-                      name={bulkFile === file ? "progress_activity" : "done_all"}
-                      size={14}
-                      className={bulkFile === file ? "mg-spin" : undefined}
-                    />
-                  </button>
-                </h2>
-                <div className="mg-review-rows">
-                  {list.map((thread) => (
-                    <ThreadCard
-                      key={thread.id}
-                      thread={thread}
-                      where={
-                        factsById.get(thread.id)?.where ??
-                        thread.section_path.join(" › ")
-                      }
-                      state={factsById.get(thread.id)?.spot.state}
-                      active={thread.id === selected?.id}
-                      onPick={() => setSelectedId(thread.id)}
-                      onResolve={() => void resolveOne(thread.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+        <nav className="mg-inbox">
+          <div className="mg-inbox-head">
+            <span className="flex-1">{grouped ? "ファイルごと" : "新しい順・ファイルをまたいで 1 本"}</span>
+            <button
+              onClick={() => setGrouped(!grouped)}
+              aria-pressed={grouped}
+              className={`mg-tbtn is-quiet${grouped ? " is-on" : ""}`}
+            >
+              ファイルでまとめる
+            </button>
+          </div>
+          <div className="mg-inbox-list">
+            {threads.length === 0 && (
+              <p className="mg-inbox-none">
+                {filter === "todo"
+                  ? "未対応のコメントはありません。片付いています。"
+                  : filter === "open"
+                    ? "未解決のコメントはありません。"
+                    : "解決済みのコメントはありません。"}
+                {elsewhere > 0 && filter !== "done" && " 他のフォルダのコメントは、そのフォルダを開くと出ます。"}
+              </p>
+            )}
+            {grouped
+              ? groups.map(([file, list]) => (
+                  <section key={file}>
+                    <h2 className="mg-inbox-file" title={file}>
+                      <span className="mg-inbox-file-name">
+                        <bdi>{label(file)}</bdi>
+                      </span>
+                      <span className="mg-inbox-file-n">{list.length}</span>
+                      <button
+                        onClick={() => copyPrompt(file, list)}
+                        title="このファイルのコメントを AI 用のプロンプトとして写す"
+                        className="mg-bulk"
+                      >
+                        <Icon name={copiedFile === file ? "check" : "content_copy"} size={13} />
+                      </button>
+                      {filter !== "done" && (
+                        <button
+                          onClick={() => void resolveFile(file, list)}
+                          disabled={bulkFile !== null}
+                          title="このファイルのコメントをすべて解決にする"
+                          className="mg-bulk"
+                        >
+                          <Icon
+                            name={bulkFile === file ? "progress_activity" : "done_all"}
+                            size={13}
+                            className={bulkFile === file ? "mg-spin" : undefined}
+                          />
+                        </button>
+                      )}
+                    </h2>
+                    {list.map((thread) => row(thread))}
+                  </section>
+                ))
+              : threads.map((thread) => row(thread))}
+          </div>
         </nav>
 
         {threads.length === 0 ? (
-          <p className="p-8 text-[13px] text-[var(--mg-muted)]">
+          <p className="p-8 text-[length:13px] text-[var(--mg-muted)]">
             コメントを選ぶと、その箇所が今どうなっているかを本文の中で示します。
           </p>
         ) : !shown ? (
@@ -587,13 +668,8 @@ function DetailSkeleton() {
   );
 }
 
-// 一覧に出す「何への指摘か」の 1 行。記法をそのまま出すと
-// `| **バージョン** | **更新日** |` のような並びになって読めないので、
-// 画面に出るときの字へ均してから 1 行に詰める。
-const lineCache = new Map<string, string>();
-
-// 一覧に出す指摘の 1 行。ここは 2 行の枠なので組版はせず、記法だけを落として
-// 字の並びに均す（`**強調**` の記号が本文として読まれないようにする）。
+// 一覧に出す指摘の 1 行。組版はせず、記法だけを落として字の並びに均す
+// （`**強調**` の記号が本文として読まれないようにする）。
 const bodyCache = new Map<string, string>();
 
 function bodyLine(body: string): string {
@@ -605,92 +681,83 @@ function bodyLine(body: string): string {
   return line;
 }
 
-function targetLine(thread: ReviewThread): string {
-  const raw = thread.selection.trim();
-  if (raw) return raw.replace(/\s+/g, " ");
-  const hit = lineCache.get(thread.quote);
-  if (hit !== undefined) return hit;
-  const plain = buildProjection(thread.quote).plain.replace(/\s+/g, " ").trim();
-  const line = plain || thread.quote.replace(/\s+/g, " ").trim();
-  lineCache.set(thread.quote, line);
-  return line;
-}
-
 export function ThreadCard({
   thread,
   where,
-  state,
+  file,
   active,
   onPick,
   onResolve,
 }: {
   thread: ReviewThread;
   where: string;
-  // 指摘の箇所が今どうなっているか。突き合わせが済むまでは無い。
-  state?: SpotState;
+  // ファイルをまたいで並べるときに添えるファイル名。まとめているときは見出しにあるので無い。
+  file: string | null;
   active: boolean;
   onPick: () => void;
   onResolve: () => void;
 }) {
+  const open = isOpen(thread);
+  const mine = open && awaitsMe(thread);
+  const section = where.split(" › ").pop();
   return (
-    // 釦の中に釦は置けないので、札そのものは div で受ける（押す・Enter・Space
+    // 釦の中に釦は置けないので、行そのものは div で受ける（押す・Enter・Space
     // は自分で見る）。解決の釦は押した先を分ける。
     <div
       role="button"
       tabIndex={0}
+      data-thread-row={thread.id}
       onClick={onPick}
       onKeyDown={(e) => {
         if (e.key !== "Enter" && e.key !== " ") return;
         e.preventDefault();
         onPick();
       }}
-      className={`mg-thread-card ${active ? "is-active" : ""}`}
+      className={`mg-thread-card${active ? " is-active" : ""}${open ? "" : " is-done"}`}
     >
-      {/* 何への指摘かを先に、引用の線で添える（本文の画面の右の欄と同じ並び）。 */}
-      <div className="mg-thread-quote">
-        {state && (
-          <span className={`mg-thread-state is-${state}`} title={SPOT_NAME[state]}>
-            <Icon name={SPOT_ICON[state]} size={11} fill />
-          </span>
-        )}
-        <span>{targetLine(thread)}</span>
-      </div>
-      <div className="mg-thread-body">
+      {/* 自分が応える番（未対応）は塗った点、相手の返事を待っているものは枠だけ。 */}
+      <span
+        className={`mg-thread-dot${mine ? " is-todo" : open ? " is-wait" : ""}`}
+        title={mine ? "未対応" : open ? "返事待ち" : "解決済み"}
+      />
+      <span className="mg-thread-body">
         {bodyLine(thread.comments[0]?.body ?? "") || "（本文なし）"}
-      </div>
-      <div className="mg-thread-foot">
-        {/* 幅が狭いので、いちばん細かい節だけを出す。全体は title で読める。
-            見出しを辿り終える前は何も出さない（後から入る） */}
-        <span className="mg-thread-where" title={where}>
-          {where.split(" › ").pop()}
-        </span>
-        <span className="mg-thread-when" title={whenText(thread.created_at)}>
-          {ago(thread.created_at)}
-        </span>
-        {answeredByAgent(thread) && (
+      </span>
+      <span className="mg-thread-when" title={whenText(lastAt(thread))}>
+        {ago(lastAt(thread))}
+      </span>
+      {/* どこの話か。見出しを辿り終える前は指摘に残っている節を出す（後から入る）。 */}
+      <span className="mg-thread-where" title={where}>
+        {file && <span className="mg-thread-file">{file}</span>}
+        {file && section ? "・" : ""}
+        {section}
+      </span>
+      <span className="mg-thread-state">
+        {open && answeredByAgent(thread) && mine ? (
           <span className="mg-ws-pill-badge is-agent" title="AI からの返信が届いています">
             返信あり
           </span>
-        )}
+        ) : open && !mine ? (
+          <span>返事待ち</span>
+        ) : null}
         {thread.comments.length > 1 && (
           <span className="mg-thread-count" title={`${thread.comments.length} 件のやり取り`}>
-            <Icon name="forum" size={11} />
             {thread.comments.length}
           </span>
         )}
-        {/* 解決は手がかりの列の端に置く。指摘の字に重ねると読めなくなる。 */}
-        <button
-          type="button"
-          title="解決にする（⌘⇧D）"
-          className="mg-thread-done"
-          onClick={(e) => {
-            e.stopPropagation();
-            onResolve();
-          }}
-        >
-          <Icon name="check" size={13} />
-        </button>
-      </div>
+      </span>
+      {/* 指した行と選んだ行に重ねて出す。場所は空けたままにして、出入りで字を動かさない。 */}
+      <button
+        type="button"
+        title={open ? "解決にする（⌘⇧D）" : "未解決に戻す（⌘⇧D）"}
+        className="mg-thread-done"
+        onClick={(e) => {
+          e.stopPropagation();
+          onResolve();
+        }}
+      >
+        <Icon name={open ? "check" : "undo"} size={13} />
+      </button>
     </div>
   );
 }
@@ -958,6 +1025,7 @@ function ThreadDetail({
 
   const style = { fontFamily: fontStack(font) };
   const hasTarget = view !== null && view.spot.state !== "unknown";
+  const open = isOpen(thread);
   const jump = () => setFocus((n) => n + 1);
   // 会話を左右に振る。指摘を出した人（＝最初に発言した人）を右に置く。
   const reviewer =
@@ -1067,8 +1135,9 @@ function ThreadDetail({
       />
       <aside ref={sideRef} className="mg-side" style={{ width: sideWidth }}>
         <div className="mg-side-head">
-          <span className="mg-side-title">コメント</span>
-          <span className="mg-side-count">{thread.comments.length}</span>
+          <span className="mg-side-title">やり取り</span>
+          {/* 箇所が今どうなっているか。返信を書く前にいちばん見たいので頭に置く。 */}
+          {view && <SpotChip spot={view.spot} />}
         </div>
 
         <nav className="mg-crumbs">
@@ -1121,7 +1190,6 @@ function ThreadDetail({
             </button>
           </div>
         )}
-        {view && <SpotCard spot={view.spot} />}
 
         <div className="mg-side-compose">
           {seeReply ? (
@@ -1173,13 +1241,13 @@ function ThreadDetail({
             className="mg-tbtn mg-side-done"
           >
             <Icon
-              name={resolving ? "progress_activity" : "check"}
+              name={resolving ? "progress_activity" : open ? "check" : "undo"}
               size={13}
               className={resolving ? "mg-spin" : undefined}
             />
-            {resolving ? "解決にしています…" : "解決にする"}
+            {open ? (resolving ? "解決にしています…" : "解決にする") : "未解決に戻す"}
+            <kbd className="mg-key">⌘⇧D</kbd>
           </button>
-          <span className="flex-1" />
           <button
             onClick={() => void drop()}
             disabled={removing}
@@ -1193,35 +1261,30 @@ function ThreadDetail({
             />
             削除
           </button>
+          <span className="mg-side-hint text-right">↑↓ で次のコメントへ</span>
         </div>
       </aside>
     </div>
   );
 }
 
-// 指摘の箇所が今どうなっているか。返信を書く前にいちばん見たいものなので、
-// 会話のすぐ下、書き込む欄の手前に置く。
+// 指摘の箇所が今どうなっているか。やり取りの頭にチップで置き、説明は title で読ませる。
 //
 // 色だけでは状態を言い分けられない（テーマによって danger とアクセントが
 // 同系色になる）。記号と語を必ず添える。
-function SpotCard({ spot }: { spot: SpotDiff }) {
+function SpotChip({ spot }: { spot: SpotDiff }) {
   const moved = spot.added > 0 || spot.removed > 0;
   return (
-    <div className={`mg-spot-card is-${spot.state}`}>
-      <div className="mg-spot-card-head">
-        <span className="mg-ws-pill-badge mg-spot-chip">
-          <Icon name={SPOT_ICON[spot.state]} size={11} fill />
-          {SPOT_NAME[spot.state]}
+    <span className={`mg-ws-pill-badge mg-spot-chip is-${spot.state}`} title={spotNote(spot)}>
+      <Icon name={SPOT_ICON[spot.state]} size={11} fill />
+      {SPOT_NAME[spot.state]}
+      {moved && (
+        <span className="mg-spot-delta">
+          {spot.added > 0 && <span className="is-add">＋{spot.added}</span>}
+          {spot.removed > 0 && <span className="is-del">−{spot.removed}</span>}
         </span>
-        {moved && (
-          <span className="mg-spot-delta">
-            {spot.added > 0 && <span className="is-add">＋{spot.added}</span>}
-            {spot.removed > 0 && <span className="is-del">−{spot.removed}</span>}
-          </span>
-        )}
-      </div>
-      <p>{spotNote(spot)}</p>
-    </div>
+      )}
+    </span>
   );
 }
 

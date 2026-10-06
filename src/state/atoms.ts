@@ -261,6 +261,9 @@ export const bodyRoomAtom = atom<number | null>(null);
 // 本文とコメントの字の大きさ（px の数字の字）。根の要素の CSS 変数へ写す。
 export const bodySizeAtom = atomWithStorage<string>("fude:bodysize", "16");
 export const commentSizeAtom = atomWithStorage<string>("fude:commentsize", "12.5");
+// コメント一覧の絞り込みと並べ方。次に開いたときも同じ見え方で始める。
+export const reviewFilterAtom = atomWithStorage<"todo" | "open" | "done">("fude:reviewfilter", "todo");
+export const reviewGroupedAtom = atomWithStorage<boolean>("fude:reviewgrouped", false);
 // HTML の書き出しに使う配色。"same" は画面と同じ、ほかはテーマの id。
 export const handoutThemeAtom = atomWithStorage<string>("fude:handouttheme", "same");
 // メタ情報（フロントマター）を本文の上に表で出すか。

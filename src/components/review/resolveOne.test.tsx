@@ -34,7 +34,7 @@ vi.mock("../../state/review", async (real) => {
 
 const { ReviewScreen } = await import("./ReviewScreen");
 const { ledgerAtom, reviewThreadAtom } = await import("../../state/review");
-const { activeFolderIdAtom, contentCacheAtom } = await import("../../state/atoms");
+const { activeFolderIdAtom, contentCacheAtom, reviewFilterAtom } = await import("../../state/atoms");
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -50,7 +50,7 @@ beforeAll(() => {
   }
 });
 
-const thread = (id: string, body: string): ReviewThread => ({
+const thread = (id: string, body: string, extra: Partial<ReviewThread> = {}): ReviewThread => ({
   id,
   file: "/docs/a.md",
   quote: "本文",
@@ -62,6 +62,7 @@ const thread = (id: string, body: string): ReviewThread => ({
   status: { kind: "open" },
   comments: [{ id: `c-${id}`, author: "you", body, created_at: 0 }],
   created_at: 0,
+  ...extra,
 });
 
 let root: Root | null = null;
@@ -74,16 +75,16 @@ afterEach(() => {
   host = null;
 });
 
-function show() {
+function show(
+  threads = [thread("t1", "ひとつめ"), thread("t2", "ふたつめ")],
+  filter: "todo" | "open" | "done" = "open",
+) {
   const store = createStore();
-  store.set(ledgerAtom, {
-    version: 1,
-    threads: [thread("t1", "ひとつめ"), thread("t2", "ふたつめ")],
-    versions: [],
-  } as never);
+  store.set(ledgerAtom, { version: 1, threads, versions: [] } as never);
   store.set(activeFolderIdAtom, "/docs");
   store.set(contentCacheAtom, new Map([["/docs/a.md", "本文\n"]]));
-  store.set(reviewThreadAtom, "t1");
+  store.set(reviewFilterAtom, filter);
+  store.set(reviewThreadAtom, threads[0]?.id ?? null);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -149,5 +150,59 @@ describe("同じファイルのコメントを渡り歩く", () => {
     await settle();
     expect(document.querySelector(".mg-doc")).toBe(doc);
     expect(draft()!.value).toBe("");
+  });
+});
+
+// 受信箱の絞り込み。未対応は「最後の発言が自分でないもの」、新しい順に並ぶ。
+describe("絞り込みと並び", () => {
+  const ai = (id: string, body: string, at: number) =>
+    thread(id, body, {
+      comments: [
+        { id: `c-${id}`, author: "you", body, created_at: 0 },
+        { id: `r-${id}`, author: "AI", body: "返信", created_at: at },
+      ],
+    });
+  const list = () => [
+    ai("a", "古い返信", 10),
+    thread("b", "自分が最後"),
+    ai("c", "新しい返信", 20),
+    thread("d", "片付いた", { status: { kind: "resolved", by: "you", at: 1 } }),
+  ];
+  const segs = () =>
+    [...document.querySelectorAll(".mg-seg button")].map((b) => b.textContent);
+
+  it("未対応・未解決の件数を切り替えに出す", () => {
+    show(list(), "todo");
+    expect(segs()).toEqual(["未対応2", "未解決3", "解決済み"]);
+  });
+
+  it("未対応は自分が応える番のものだけを、最後の発言の新しい順に並べる", () => {
+    show(list(), "todo");
+    // 選んでいる先頭（a）は条件に合うので、そのまま並びに入る。
+    const shown = cards();
+    expect(shown).toHaveLength(2);
+    expect(shown[0]).toContain("新しい返信");
+    expect(shown[1]).toContain("古い返信");
+  });
+
+  it("解決済みでは、未解決に戻す釦になる", async () => {
+    show(list(), "done");
+    expect(cards().join("")).toContain("片付いた");
+    expect(document.querySelector(".mg-thread-done")?.getAttribute("title")).toContain("未解決に戻す");
+  });
+
+  it("↓ と ↑ で一覧の前後へ移る", () => {
+    const store = show(list(), "open");
+    const at = () => store.get(reviewThreadAtom);
+    // 新しい順：c, a, b。最初は先頭に渡した a を選んでいる。
+    expect(at()).toBe("a");
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    });
+    expect(at()).toBe("b");
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
+    });
+    expect(at()).toBe("a");
   });
 });

@@ -41,6 +41,7 @@ function show() {
       <ThreadCard
         thread={thread}
         where="節"
+        file="a.md"
         active={false}
         onPick={() => picked++}
         onResolve={() => resolved++}

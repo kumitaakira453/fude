@@ -4107,32 +4107,72 @@ svg[id^="mmd-"] foreignObject div {
   border-bottom: 1px solid var(--mg-border);
 }
 
-/* どのファイルの指摘かの見出し。地は上の段と同じ色にして、札の並びと分ける。 */
-.mg-review-group {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+/* 受信箱の一覧。ファイルをまたいで 1 本に並べる。行は縁から縁まで届かせ、
+   左右に余白を置かない（スクロールの棒は右端に重なる）。 */
+.mg-inbox {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 7px 6px 6px 10px;
-  border-bottom: 1px solid var(--mg-line);
-  background: var(--mg-chrome);
-  font-size: 12px;
-  color: var(--mg-muted);
-}
-.mg-review-group .mg-review-name {
-  color: var(--mg-fg);
-}
-/* ファイルごとのまとまり。どこまでが同じファイルの指摘かを線で切る。 */
-.mg-review-set + .mg-review-set {
-  border-top: 1px solid var(--mg-border);
-}
-.mg-review-rows {
-  display: flex;
+  width: 400px;
+  min-height: 0;
+  flex: none;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px;
+  border-right: 1px solid var(--mg-border);
+  background: var(--mg-panel);
+}
+.mg-inbox-head {
+  display: flex;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+}
+.mg-inbox-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.mg-inbox-none {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-s);
+  line-height: 1.7;
+}
+/* まとめるときのファイルの見出し。細い段で、塗らない。 */
+.mg-inbox-file {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  font-weight: 400;
+}
+.mg-inbox-file-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--mg-fg-dim);
+  font-family: var(--mg-font-mono);
+  direction: rtl;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-inbox-file-n {
+  font-family: var(--mg-font-mono);
+}
+.mg-seg-n {
+  margin-left: 5px;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
 }
 /* 短い知らせ。下の中央に出して自分で消える。押す対象は持たせない。
    右下は右ペインの操作ボタンの真上に来るので、中央に置いて重ならないようにする。
@@ -4170,11 +4210,15 @@ svg[id^="mmd-"] foreignObject div {
 /* この指摘の始末（解決・削除）。返信欄の下に線を挟み、ほかの画面と同じ枠の釦で置く。 */
 .mg-side-close {
   display: flex;
+  height: 40px;
   flex: none;
   gap: 6px;
   align-items: center;
-  padding: 8px 12px;
+  padding: 0 12px;
   border-top: 1px solid var(--mg-line);
+}
+.mg-side-close .mg-key {
+  margin-left: 2px;
 }
 .mg-act {
   display: flex;
@@ -4611,8 +4655,7 @@ svg[id^="mmd-"] foreignObject div {
   background: var(--mg-hover);
   color: var(--mg-accent);
 }
-.mg-review-group:hover .mg-bulk,
-.mg-review-set.is-current .mg-bulk,
+.mg-inbox-file:hover .mg-bulk,
 .mg-bulk:focus-visible {
   opacity: 1;
 }
@@ -4635,190 +4678,115 @@ svg[id^="mmd-"] foreignObject div {
   }
 }
 
-/* 道筋はファイル名と場所に分ける。1 行に流すと絶対パスが 4 行に折り返して
-   一覧そのものが読めなくなり、末尾を切ると見分けたい名前の方が消える。 */
-.mg-review-place {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.05rem;
-  line-height: 1.35;
-}
-.mg-review-name {
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--mg-fg-dim);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mg-review-dir {
-  overflow: hidden;
-  font-family: var(--mg-font-mono);
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--mg-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mg-review-ico {
-  flex: none;
-  margin-top: 1px;
-}
-.mg-review-group .mg-count {
-  flex: none;
-  padding: 0 2px;
-  color: var(--mg-muted);
-  font-family: var(--mg-font-mono);
-  font-size: 10.5px;
-  line-height: 18px;
-}
-
-/* 一覧の 1 件。左の欄のファイルの行と同じ形（内側に寄せた 4px 角、選ぶと薄く塗る）。 */
+/* 一覧の 1 件。2 行で、上にコメント、下にどこの話かを置く。
+   [点] コメント … 時刻 ／ ファイル・節 … 状態 */
 .mg-thread-card {
   position: relative;
-  display: block;
-  width: 100%;
-  padding: 7px 8px 5px;
-  border-radius: var(--mg-r1);
-  text-align: left;
+  display: grid;
+  height: 44px;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  grid-template-rows: 20px 16px;
+  align-content: center;
+  column-gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mg-line);
   cursor: pointer;
   transition: background 0.12s;
 }
 .mg-thread-card:hover {
   background: var(--mg-hover);
 }
-/* 一覧からそのまま解決にする。指した札と選んだ札にだけ出すが、場所は空けたままにする
-   （出入りで手がかりの列が詰まると、指しただけで字が動いて見える）。 */
-.mg-thread-done {
+.mg-thread-card.is-active {
+  background: var(--mg-accent-soft);
+  box-shadow: inset 2px 0 0 var(--mg-accent);
+}
+/* 状態の点。未対応は塗り、返事待ちは枠だけ、解決済みは出さない。 */
+.mg-thread-dot {
+  width: 6px;
+  height: 6px;
+  align-self: center;
+  border-radius: 50%;
+}
+.mg-thread-dot.is-todo {
+  background: var(--mg-warn);
+}
+.mg-thread-dot.is-wait {
+  box-shadow: inset 0 0 0 1px var(--mg-muted);
+}
+.mg-thread-body {
+  overflow: hidden;
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-m);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-thread-card.is-active .mg-thread-body {
+  color: var(--mg-fg);
+}
+.mg-thread-card.is-done .mg-thread-body {
+  color: var(--mg-muted);
+}
+.mg-thread-when {
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
+  line-height: 20px;
+  text-align: right;
+}
+.mg-thread-where {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-thread-file {
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
+}
+.mg-thread-state {
   display: flex;
-  flex: none;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  line-height: 16px;
+}
+.mg-thread-count {
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
+}
+/* 一覧からそのまま解決にする（解決済みでは未解決に戻す）。指した行と選んだ行に、
+   右下の状態の上へ重ねて出す。場所は取らないので、出入りで字が動かない。 */
+.mg-thread-done {
+  position: absolute;
+  right: 8px;
+  bottom: 3px;
+  display: grid;
   width: 22px;
   height: 22px;
-  margin: -3px -2px -3px 0;
+  place-items: center;
   border-radius: var(--mg-r1);
+  background: var(--mg-panel);
+  box-shadow: 0 0 0 1px var(--mg-border);
   color: var(--mg-muted);
   opacity: 0;
   pointer-events: none;
   transition:
     opacity 0.12s,
-    background 0.12s,
-    color 0.12s,
-    transform 0.08s;
+    color 0.12s;
 }
 .mg-thread-card:hover .mg-thread-done,
-.mg-thread-card.is-active .mg-thread-done,
 .mg-thread-done:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
 .mg-thread-done:hover {
-  background: var(--mg-accent-soft);
   color: var(--mg-accent);
-}
-/* 押した手応え。押してから一覧が動くまでの間を、指の側で埋める。 */
-.mg-thread-done:active {
-  transform: scale(0.88);
-}
-@media (prefers-reduced-motion: reduce) {
-  .mg-thread-done {
-    transition: opacity 0.12s;
-  }
-  .mg-thread-done:active {
-    transform: none;
-  }
-}
-/* 選ばれている札。見出しの地は上の段の色なので、アクセントの薄い面と取り違えない。 */
-.mg-thread-card.is-active {
-  background: var(--mg-accent-soft);
-}
-.mg-thread-card.is-active .mg-thread-body {
-  color: var(--mg-fg);
-}
-
-/* 何への指摘かの手がかり。1 行だけ、引用の線を付けて指摘の字と取り違えないようにする。 */
-.mg-thread-quote {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  overflow: hidden;
-  margin-bottom: 4px;
-  padding-left: 7px;
-  border-left: 2px solid var(--mg-warn);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--mg-muted);
-}
-.mg-thread-quote span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 箇所が今どうなっているか。引用の頭に添える。 */
-.mg-thread-state {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 1.05rem;
-  height: 1.05rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mg-muted) 18%, transparent);
-  color: var(--mg-muted);
-}
-.mg-thread-state.is-around,
-.mg-thread-state.is-rewritten {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
-}
-.mg-thread-state.is-removed,
-.mg-thread-state.is-unknown {
-  background: color-mix(in srgb, var(--mg-danger) 16%, transparent);
-  color: var(--mg-danger);
-}
-
-/* 札の主役。ここだけが本文の濃さで、他は手がかりとして沈める。 */
-.mg-thread-body {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  margin: 0 0 3px;
-  font-size: var(--mg-comment-size, 12.5px);
-  line-height: 1.5;
-  color: var(--mg-fg-dim);
-}
-
-.mg-thread-foot {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 18px;
-  font-size: 10.5px;
-  color: var(--mg-muted);
-}
-.mg-thread-where {
-  min-width: 0;
-  overflow: hidden;
-  flex: 1;
-  letter-spacing: 0.02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mg-thread-count {
-  display: flex;
-  flex: none;
-  gap: 3px;
-  align-items: center;
-  font-family: var(--mg-font-mono);
-}
-/* いつ言われたか。数字は桁を揃えて、並べたときに目が滑らないようにする。 */
-.mg-thread-when {
-  flex: none;
-  font-family: var(--mg-font-mono);
-  color: var(--mg-muted);
 }
 
 /* やり取りは本文の横に置く。本文に重ねると、読んでいる途中の段落が
@@ -4955,24 +4923,7 @@ svg[id^="mmd-"] foreignObject div {
   overflow-wrap: anywhere;
 }
 
-/* 箇所の状態。まだ書き換わっていないときは静かに、動いているときは
-   何が起きたかを言い切る。色だけで言い分けず、記号と語を必ず添える。 */
-.mg-spot-card {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px 10px;
-  border-top: 1px solid var(--mg-line);
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--mg-muted);
-}
-.mg-spot-card-head {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
+/* 箇所の状態。チップの色で言い分け、記号と語を必ず添える。 */
 /* 増減の字数。桁を揃えて、数として読めるようにする。 */
 .mg-spot-delta {
   display: flex;
@@ -4987,16 +4938,20 @@ svg[id^="mmd-"] foreignObject div {
 .mg-spot-delta .is-del {
   color: var(--mg-del-fg);
 }
-/* 状態はチップの色で言い分ける（語と記号も必ず添える）。 */
 .mg-spot-chip {
   gap: 3px;
   --mg-tone: var(--mg-ok);
 }
-.mg-spot-card:is(.is-around, .is-rewritten) .mg-spot-chip {
+.mg-spot-chip:is(.is-around, .is-rewritten) {
   --mg-tone: var(--mg-warn);
 }
-.mg-spot-card:is(.is-removed, .is-unknown) .mg-spot-chip {
+.mg-spot-chip:is(.is-removed, .is-unknown) {
   --mg-tone: var(--mg-danger);
+}
+.mg-spot-chip .mg-spot-delta {
+  margin-left: 4px;
+  gap: 4px;
+  font-family: var(--mg-font-mono);
 }
 
 .mg-side-compose {
