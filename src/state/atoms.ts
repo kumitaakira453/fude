@@ -258,6 +258,9 @@ export const taskMarksAtom = atomWithStorage<string[]>("fude:taskmarks", DEFAULT
 export const wideTableAtom = atomWithStorage<boolean>("fude:widetable", true);
 // 今のペインで本文に使える幅（px）。本文の幅の切り替えが効くかを見るのに使う。
 export const bodyRoomAtom = atom<number | null>(null);
+// 本文とコメントの字の大きさ（px の数字の字）。根の要素の CSS 変数へ写す。
+export const bodySizeAtom = atomWithStorage<string>("fude:bodysize", "16");
+export const commentSizeAtom = atomWithStorage<string>("fude:commentsize", "12.5");
 // メタ情報（フロントマター）を本文の上に表で出すか。
 export const metaOnTopAtom = atomWithStorage<boolean>("fude:metaontop", false);
 

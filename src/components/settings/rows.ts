@@ -73,7 +73,14 @@ export interface AboutRow extends Base {
   kind: "about";
 }
 
-export type Row = SwitchRow | WordsRow | MarksRow | PickRow | PaneRow | AboutRow;
+// 決まった中から 1 つ選ぶもの（字の大きさ）。
+export interface ChoiceRow extends Base {
+  kind: "choice";
+  atom: Words;
+  options: { value: string; label: string }[];
+}
+
+export type Row = SwitchRow | WordsRow | MarksRow | PickRow | PaneRow | AboutRow | ChoiceRow;
 
 // 絞り込みの当て方。名前・説明・別名・面とまとまりの名前を見る。
 export function matches(row: Row, query: string): boolean {

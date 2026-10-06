@@ -42,6 +42,8 @@ import { rememberLook, setWindowTitle } from "./lib/windows";
 import { DARK_THEME_IDS } from "./lib/themes";
 import {
   activeFolderIdAtom,
+  bodySizeAtom,
+  commentSizeAtom,
   foldersAtom,
   sidebarOpenAtom,
   sidebarWidthAtom,
@@ -89,6 +91,15 @@ export default function App() {
   useKeepLayout();
   useKeepWorkspace();
   useClaude();
+
+  // 本文とコメントの字の大きさを html 要素の変数へ。中の大きさはすべてこれに比例する。
+  const bodySize = useAtomValue(bodySizeAtom);
+  const commentSize = useAtomValue(commentSizeAtom);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--mg-body-size", `${bodySize}px`);
+    root.style.setProperty("--mg-comment-size", `${commentSize}px`);
+  }, [bodySize, commentSize]);
 
   // テーマを html 要素に反映
   useEffect(() => {

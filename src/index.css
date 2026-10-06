@@ -611,7 +611,7 @@ body {
   --tw-prose-th-borders: var(--mg-border);
   --tw-prose-td-borders: var(--mg-border);
   line-height: 1.75;
-  font-size: 16px;
+  font-size: var(--mg-body-size, 16px);
 }
 .mg-sans {
   font-family: var(--mg-font-sans);
@@ -3956,7 +3956,7 @@ svg[id^="mmd-"] foreignObject div {
 }
 .mg-rail-body {
   margin-top: 0.1rem;
-  font-size: 12.5px;
+  font-size: var(--mg-comment-size, 12.5px);
   line-height: 1.6;
   color: var(--mg-fg);
   overflow-wrap: anywhere;
@@ -3982,7 +3982,7 @@ svg[id^="mmd-"] foreignObject div {
   border-radius: 0.4rem;
   background: var(--mg-input-bg);
   font-family: var(--mg-font-sans);
-  font-size: 12px;
+  font-size: var(--mg-comment-size, 12.5px);
   line-height: 1.6;
   color: var(--mg-fg);
   resize: none;
@@ -5349,7 +5349,7 @@ svg[id^="mmd-"] foreignObject div {
    詰める。地の色は置かれた先（吹き出し・カード）から受け継ぐ。 */
 .mg-md {
   max-width: none;
-  font-size: 12.5px;
+  font-size: var(--mg-comment-size, 12.5px);
   line-height: 1.65;
   color: inherit;
   overflow-wrap: anywhere;

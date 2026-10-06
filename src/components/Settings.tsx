@@ -21,6 +21,8 @@ import {
   themeAtom,
   updateCheckNonceAtom,
   updateStatusAtom,
+  bodySizeAtom,
+  commentSizeAtom,
   metaOnTopAtom,
   wideTableAtom,
 } from "../state/atoms";
@@ -29,7 +31,7 @@ import { ClaudeMark } from "./ClaudeMark";
 import { Icon } from "./Icon";
 import { ClaudePane } from "./settings/ClaudePane";
 import { KEY_WORDS, KeysPane } from "./settings/KeysPane";
-import { IgnoreWords, Marks, Switch, Words } from "./settings/SettingRow";
+import { Choice, IgnoreWords, Marks, Switch, Words } from "./settings/SettingRow";
 import { FACES, grouped, matches, type Face, type Row, type SwitchRow } from "./settings/rows";
 
 // 設定。⌘, で開く。読む画面の代わりに、ウィンドウ全体がこの画面になる
@@ -76,6 +78,38 @@ const ROWS: Row[] = [
     name: "フォント",
     note: "本文のフォントを選びます",
     aliases: ["font", "typeface", "フォント", "ゴシック", "明朝"],
+  },
+  {
+    kind: "choice",
+    id: "bodysize",
+    face: "look",
+    group: "フォント",
+    atom: bodySizeAtom,
+    name: "本文の字の大きさ",
+    note: "Markdown の本文の字の大きさです。見出し・表・コードも同じ割合で変わります",
+    options: [
+      { value: "14", label: "小さめ" },
+      { value: "16", label: "標準" },
+      { value: "18", label: "大きめ" },
+      { value: "20", label: "さらに大きく" },
+    ],
+    aliases: ["size", "font size", "文字", "大きさ", "サイズ", "本文"],
+  },
+  {
+    kind: "choice",
+    id: "commentsize",
+    face: "look",
+    group: "フォント",
+    atom: commentSizeAtom,
+    name: "コメントの字の大きさ",
+    note: "右の欄とコメント一覧に出すコメントの字の大きさです",
+    options: [
+      { value: "11.5", label: "小さめ" },
+      { value: "12.5", label: "標準" },
+      { value: "14", label: "大きめ" },
+      { value: "15.5", label: "さらに大きく" },
+    ],
+    aliases: ["size", "font size", "文字", "大きさ", "サイズ", "コメント"],
   },
   {
     kind: "pick",
@@ -398,6 +432,8 @@ export function Settings() {
         return <Words row={row} foot={`本文には ./${cleanDir(imageDir)}/… と書き込まれます`} />;
       case "marks":
         return <Marks row={row} />;
+      case "choice":
+        return <Choice row={row} />;
       case "pick":
         return pick(row);
       case "about":

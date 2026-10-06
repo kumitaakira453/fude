@@ -6,7 +6,7 @@ import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
 import { AutoTextarea } from "../AutoTextarea";
 import { TaskBox } from "../TaskBox";
 import { EXTRA_MARKS } from "../../lib/md/taskMarks";
-import type { MarksRow, SwitchRow, WordsRow } from "./rows";
+import type { ChoiceRow, MarksRow, SwitchRow, WordsRow } from "./rows";
 
 // 設定の 1 行。切り替えと打ち込みと印の選択をここで描く。
 // 見本を出して選ぶもの（テーマ・書体・幅）と、面ひとつ分の部品は形が違うので
@@ -44,6 +44,27 @@ export function Switch({ row }: { row: SwitchRow }) {
         <i />
       </span>
     </button>
+  );
+}
+
+// 決まった中から 1 つ選ぶ。右に段の切り替えを置く。
+export function Choice({ row }: { row: ChoiceRow }) {
+  const [stored, store] = useAtom(row.atom);
+  const [now, set] = useOptimisticSetting(stored, store);
+  return (
+    <div className="mg-set-row is-static">
+      <span className="mg-set-row-main">
+        <RowName name={row.name} beta={row.beta} />
+        <span className="mg-set-note">{row.note}</span>
+      </span>
+      <span className="mg-seg" role="group" aria-label={row.name}>
+        {row.options.map((o) => (
+          <button key={o.value} type="button" aria-pressed={o.value === now} onClick={() => set(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </span>
+    </div>
   );
 }
 
