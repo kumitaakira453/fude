@@ -446,6 +446,8 @@ class CodeBlockView implements NodeView {
   // 図を描く。書きかけで構文が通らない間は、直前に描けた図を残す。
   private draw(now = false) {
     const code = this.node.textContent.trim();
+    // 書き出しで別の明暗に描き直すときの元の記述
+    this.stage.dataset.mermaid = code;
     window.clearTimeout(this.timer);
     if (!code) {
       this.canvas.replaceChildren();

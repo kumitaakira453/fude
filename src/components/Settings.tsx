@@ -23,6 +23,7 @@ import {
   updateStatusAtom,
   bodySizeAtom,
   commentSizeAtom,
+  handoutThemeAtom,
   metaOnTopAtom,
   wideTableAtom,
 } from "../state/atoms";
@@ -68,6 +69,20 @@ const ROWS: Row[] = [
     name: "テーマ",
     note: "画面の配色を選びます",
     aliases: ["theme", "color", "配色", "色", "ダーク", "ライト"],
+  },
+  {
+    kind: "choice",
+    id: "handouttheme",
+    face: "look",
+    group: "テーマ",
+    atom: handoutThemeAtom,
+    name: "書き出しの配色",
+    note: "HTML で書き出すときの配色です。社外に渡すときは白地のビジネスが読みやすくなります",
+    options: [
+      { value: "same", label: "画面と同じ" },
+      { value: "business", label: "ビジネス（白）" },
+    ],
+    aliases: ["export", "html", "書き出し", "共有", "白", "ビジネス"],
   },
   {
     kind: "pick",

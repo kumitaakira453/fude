@@ -23,6 +23,8 @@ export const THEMES: ThemeDef[] = [
   { id: "latte", label: "Latte", emoji: "☕", dark: false },
   { id: "mint", label: "Mint", emoji: "🌿", dark: false },
   { id: "lavender", label: "Lavender", emoji: "💐", dark: false },
+  // 共有向けの白地。社外に渡す書き出しでも、ビジネス文書として読める配色にする。
+  { id: "business", label: "ビジネス", emoji: "🗂️", dark: false },
 ];
 
 // 暗色テーマ ID（Mermaid のテーマ切替などで使用）

@@ -482,6 +482,28 @@ body {
   --mg-icode-fg: #226977;
   --mg-icode-bg: rgba(64, 178, 201, 0.13);
 }
+[data-theme="business"] {
+  color-scheme: light;
+  --mg-bg: #ffffff;
+  --mg-panel: #ffffff;
+  --mg-fg: #1f2328;
+  --mg-fg-dim: #3a3f45;
+  --mg-muted: #6b7280;
+  --mg-border: #d9dde3;
+  --mg-hover: rgba(15, 23, 42, 0.045);
+  --mg-accent: #1f4e8c;
+  --mg-accent2: #6d28d9;
+  --mg-accent-soft: rgba(31, 78, 140, 0.08);
+  --mg-code-bg: #f6f8fa;
+  --mg-code-head: #eef1f4;
+  --mg-code-fg: #24292f;
+  --mg-input-bg: #ffffff;
+  --mg-mark: #fff1a8;
+  --mg-mark-fg: #3b3000;
+  --mg-danger: #c62828;
+  --mg-icode-fg: #1f4e8c;
+  --mg-icode-bg: rgba(31, 78, 140, 0.07);
+}
 
 /* 画面の周りの面を、地から導かずに直に決めているテーマ。 */
 [data-theme="aurora"] {
@@ -493,6 +515,11 @@ body {
   --mg-chrome: #f3eee3;
   --mg-line: #ece5d8;
   --mg-pop: #fffdf8;
+}
+[data-theme="business"] {
+  --mg-chrome: #f5f6f8;
+  --mg-line: #e8ebef;
+  --mg-pop: #ffffff;
 }
 
 /* ============================================================
@@ -523,7 +550,8 @@ body {
 [data-theme="daylight"],
 [data-theme="latte"],
 [data-theme="mint"],
-[data-theme="lavender"] {
+[data-theme="lavender"],
+[data-theme="business"] {
   --sx-comment: #9a948a;
   --sx-key: #9333ea;
   --sx-str: #15803d;
@@ -7947,6 +7975,15 @@ body.mg-carrying {
   --mg-ic-orange: color-mix(in oklab, #c4602a 70%, var(--mg-accent));
   --mg-ic-red: color-mix(in oklab, #c33a4f 70%, var(--mg-accent));
   --mg-ic-purple: color-mix(in oklab, #6d28d9 70%, var(--mg-accent));
+}
+[data-theme="business"] {
+  --mg-ic-blue: #2f5f9e;
+  --mg-ic-cyan: #1f7a86;
+  --mg-ic-green: #3f7d3a;
+  --mg-ic-yellow: #9a7400;
+  --mg-ic-orange: #b4570f;
+  --mg-ic-red: #b42f2f;
+  --mg-ic-purple: #6b4aa0;
 }
 .mg-ficon {
   color: var(--mg-muted);

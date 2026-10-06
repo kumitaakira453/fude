@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bakeImages, frame, gatherCss, tidy } from "./handout";
+import { bakeImages, frame, gatherCss, redrawDiagrams, tidy } from "./handout";
 
 // 渡す 1 枚に均す処理。押せるものが残っていないか、渡した先で切れるものを
 // 抱えていないかを見る。
@@ -217,5 +217,26 @@ describe("枠", () => {
     expect(frame("", "", { title: "<script>", theme: "daylight", font: "sans", wide: true })).toContain(
       "<title>&lt;script&gt;</title>",
     );
+  });
+});
+
+describe("書き出しの配色", () => {
+  it("選んだ配色をそのまま data-theme に置く", () => {
+    const html = frame("", "", { title: "x", theme: "business", font: "sans", wide: false });
+    expect(html).toContain('data-theme="business"');
+  });
+
+  it("図は元の記述から描き直し、描けなかった図は元の絵のまま残す", async () => {
+    const out = article(
+      '<div class="mg-mermaid" data-mermaid="graph A"><div class="mg-mermaid-inner">暗い図</div></div>' +
+        '<div class="mg-mermaid" data-mermaid="壊れた図"><div class="mg-mermaid-inner">元の図</div></div>',
+    );
+    await redrawDiagrams(out, async (code) => {
+      if (code === "壊れた図") throw new Error("描けない");
+      return `<svg>明るい ${code}</svg>`;
+    });
+    const inner = [...out.querySelectorAll(".mg-mermaid-inner")].map((e) => e.innerHTML);
+    expect(inner).toEqual(["<svg>明るい graph A</svg>", "元の図"]);
+    expect(out.querySelector("[data-mermaid]")).toBeNull();
   });
 });

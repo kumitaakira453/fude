@@ -41,6 +41,8 @@ export function Mermaid({ code }: { code: string }) {
       <div
         ref={ref}
         className="mg-mermaid my-4"
+        // 書き出しで別の明暗に描き直すときの元の記述
+        data-mermaid={code.trim()}
         role="button"
         title="クリックで拡大"
         onClick={(e) => {

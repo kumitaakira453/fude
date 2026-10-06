@@ -63,6 +63,7 @@ import {
   settingsOpenAtom,
   soleAtom,
   themeAtom,
+  handoutThemeAtom,
   wideTableAtom,
   railAtom,
   railWidthAtom,
@@ -135,6 +136,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   liveRef.current = live;
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   const theme = useAtomValue(themeAtom);
+  const handoutTheme = useAtomValue(handoutThemeAtom);
   const wide = useAtomValue(wideTableAtom);
   const dark = DARK_THEME_IDS.has(theme);
   const rail = useAtomValue(railAtom);
@@ -447,7 +449,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
       });
       if (!dest) return;
       at = notifyBusy(store, "書き出しています…");
-      const html = await makeHandout(face, { title: name, theme, font, wide });
+      const look = handoutTheme === "same" ? theme : handoutTheme;
+      const redraw = DARK_THEME_IDS.has(look) !== DARK_THEME_IDS.has(theme);
+      const html = await makeHandout(face, {
+        title: name,
+        theme: look,
+        font,
+        wide,
+        redrawDark: redraw ? DARK_THEME_IDS.has(look) : undefined,
+      });
       await writeFile(/\.html?$/i.test(dest) ? dest : `${dest}.html`, html);
       settle(store, at, "HTML で書き出しました");
     } catch (e) {
@@ -458,7 +468,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         kind: "error",
       });
     }
-  }, [path, content, editContent, editing, settled, theme, font, store]);
+  }, [path, content, editContent, editing, settled, theme, handoutTheme, font, store]);
 
   // 保存先を決めて、そこへ移す。指摘と版も付いていく。
   //

@@ -12,6 +12,9 @@ export interface Look {
   font: string;
   // 幅の長い表の手当て。渡した先でも先頭の列を置いていく。
   wide: boolean;
+  // 図をこの明暗で描き直す。画面と明暗の違う配色で書き出すとき、図だけ
+  // 画面の明暗のまま残らないようにする。
+  redrawDark?: boolean;
 }
 
 // 読む面に出る絵。同梱の書体は 5.3MB あり、合字で描いているので書体が無いと
@@ -341,9 +344,34 @@ const breathe = (): Promise<void> =>
     requestAnimationFrame(() => setTimeout(ok, 0));
   });
 
+// 図を描き直す。元の記述は data-mermaid に持たせてある。描けなかった図は
+// 元の絵のまま残す。
+export async function redrawDiagrams(
+  out: HTMLElement,
+  draw: (code: string) => Promise<string>,
+): Promise<void> {
+  for (const el of out.querySelectorAll<HTMLElement>(".mg-mermaid[data-mermaid]")) {
+    const inner = el.querySelector(".mg-mermaid-inner");
+    const code = el.dataset.mermaid ?? "";
+    el.removeAttribute("data-mermaid");
+    if (!inner || !code) continue;
+    try {
+      inner.innerHTML = await draw(code);
+    } catch (e) {
+      console.error("[書き出し] 図を描き直せませんでした", e);
+    }
+  }
+}
+
 export async function makeHandout(article: HTMLElement, look: Look): Promise<string> {
   await breathe();
   const out = tidy(article);
+  if (look.redrawDark !== undefined) {
+    const dark = look.redrawDark;
+    const { renderMermaid } = await import("./mermaid");
+    await redrawDiagrams(out, (code) => renderMermaid(code, dark));
+  }
+  out.querySelectorAll("[data-mermaid]").forEach((el) => el.removeAttribute("data-mermaid"));
   await bakeImages(out);
   await breathe();
   const math = !!out.querySelector(".katex");
