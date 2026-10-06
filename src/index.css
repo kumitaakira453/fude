@@ -1781,22 +1781,6 @@ body.mg-col-resizing * {
   opacity: 1;
 }
 
-/* ランディングの履歴に出す未解決の指摘の数。開く前に読むものがあると
-   分かるように、名前のすぐ後ろに小さく添える。 */
-.mg-landing-count {
-  display: inline-flex;
-  flex: none;
-  gap: 0.2rem;
-  align-items: center;
-  padding: 0.05rem 0.35rem;
-  border-radius: 999px;
-  background: var(--mg-accent-soft);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--mg-accent);
-}
-
 /* ============================================================
    設定（⌘,）
    読む画面の代わりにウィンドウ全体を使う。左に面の一覧、右に中身。
@@ -5568,39 +5552,99 @@ body.mg-carrying {
   color: var(--mg-accent);
 }
 .mg-landing {
-  background:
-    radial-gradient(70rem 34rem at 50% -10%, var(--mg-accent-soft), transparent 60%),
-    var(--mg-bg);
+  background: var(--mg-bg);
 }
-.mg-blob {
-  position: absolute;
-  width: 32rem;
-  height: 32rem;
-  border-radius: 9999px;
-  filter: blur(90px);
-  opacity: 0.28;
-  pointer-events: none;
+/* 真ん中の列は ⌘⇧P の枠と同じ幅。 */
+.mg-landing-body {
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: 72px 16px 32px;
 }
-.mg-blob-a {
-  top: -12rem;
-  left: -8rem;
-  background: var(--mg-accent);
-  animation: mg-drift 14s ease-in-out infinite;
+.mg-landing-mark {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 28px;
 }
-.mg-blob-b {
-  bottom: -14rem;
-  right: -8rem;
-  background: var(--mg-accent2);
-  animation: mg-drift 18s ease-in-out infinite reverse;
+.mg-landing-mark .mg-wordmark {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -0.035em;
 }
-@keyframes mg-drift {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(3rem, 2rem) scale(1.12);
-  }
+.mg-landing-lead {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  color: var(--mg-muted);
+  font-size: 13px;
+}
+.mg-landing-recent {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin-top: 28px;
+}
+.mg-landing-head {
+  display: flex;
+  height: 26px;
+  flex: none;
+  align-items: center;
+  margin: 0;
+  padding: 0 6px;
+  color: var(--mg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.mg-landing-head-n {
+  margin-left: auto;
+  font-family: var(--mg-font-mono);
+  font-weight: 400;
+}
+.mg-landing-row {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+  text-align: left;
+}
+.mg-landing-row:hover,
+.mg-landing-row:focus-visible {
+  background: var(--mg-hover);
+}
+.mg-landing-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mg-fg-dim);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-landing-row:hover .mg-landing-name {
+  color: var(--mg-fg);
+}
+.mg-landing-where {
+  flex: none;
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
+}
+.mg-landing-when {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
 }
 @keyframes mg-float {
   0%,
@@ -6921,105 +6965,46 @@ body.mg-carrying {
   color: var(--mg-fg-dim);
 }
 
-/* スタート画面の銘。 */
-.mg-mark-icon {
-  animation: mg-mark-in 520ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+/* スタート画面の開く口。横に 3 つ並べた枠。塗りは使わず、指すと線を濃くする。 */
+.mg-start {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
-/* 筆で引いた墨の線。左から伸びる。 */
-.mg-mark-stroke {
-  display: block;
-  height: 3px;
-  width: 5.2rem;
-  margin-top: 0.4rem;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--mg-accent),
-    color-mix(in srgb, var(--mg-accent) 35%, transparent)
-  );
-  transform-origin: left center;
-  animation: mg-stroke-in 620ms cubic-bezier(0.2, 0.9, 0.3, 1) 120ms both;
-}
-@keyframes mg-mark-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.94);
+@media (max-width: 560px) {
+  .mg-start {
+    grid-template-columns: 1fr;
   }
 }
-@keyframes mg-stroke-in {
-  from {
-    transform: scaleX(0);
-  }
-}
-
-/* スタート画面の開く口。押す先が 2 つしかないので、行ではなく札にして
-   どちらを選ぶかを先に決めさせる。 */
 .mg-start-card {
-  display: block;
-  padding: 0.9rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px 11px;
   border: 1px solid var(--mg-border);
-  border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--mg-panel) 82%, transparent);
+  border-radius: var(--mg-r1);
+  background: var(--mg-panel);
   text-align: left;
-  transition:
-    border-color 0.14s,
-    background 0.14s,
-    transform 0.14s;
+  transition: border-color 0.12s;
 }
 .mg-start-card:hover,
 .mg-start-card:focus-visible {
-  border-color: var(--mg-accent);
-  background: var(--mg-panel);
+  border-color: color-mix(in srgb, var(--mg-fg) 28%, var(--mg-border));
 }
-.mg-start-card:active {
-  transform: scale(0.99);
-}
-/* 印は色を敷いた枠の中に入れる。札のどちらを選ぶかが先に目に入る。 */
-.mg-start-tile {
-  display: grid;
-  place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  margin-bottom: 0.7rem;
-  border-radius: 0.65rem;
-  background: var(--mg-accent-soft);
+.mg-start-ico {
+  margin-bottom: 6px;
   color: var(--mg-accent);
-  transition: background 0.14s;
-}
-.mg-start-card:hover .mg-start-tile {
-  background: color-mix(in srgb, var(--mg-accent) 22%, transparent);
 }
 .mg-start-name {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 14.5px;
-  font-weight: 600;
   color: var(--mg-fg);
+  font-size: 13px;
+  font-weight: 600;
 }
-.mg-start-go {
-  color: var(--mg-accent);
-  opacity: 0;
-  transform: translateX(-4px);
-  transition:
-    opacity 0.14s,
-    transform 0.14s;
-}
-.mg-start-card:hover .mg-start-go,
-.mg-start-card:focus-visible .mg-start-go {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mg-mark-icon,
-  .mg-mark-stroke,
-  .mg-blob {
-    animation: none;
-  }
-  .mg-mark-stroke {
-    transform: none;
-  }
+.mg-start-lead {
+  color: var(--mg-muted);
+  font-size: 11px;
 }
 
 /* 切り替えの下に置く開く口。行を積まずに横へ並べる。 */

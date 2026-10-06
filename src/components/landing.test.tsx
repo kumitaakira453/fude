@@ -92,9 +92,9 @@ afterEach(() => {
   host = null;
 });
 
-// 見出しの下に並ぶ釦。見出しそのものは押せない。
+// 見出しの下に並ぶ釦。見出しそのものは押せない（見出しの後ろの件数は名前に含めない）。
 function under(at: HTMLElement, title: string): HTMLElement[] {
-  const head = [...at.querySelectorAll("h2")].find((h) => h.textContent === title);
+  const head = [...at.querySelectorAll("h2")].find((h) => h.firstChild?.textContent === title);
   if (!head) return [];
   return [...(head.nextElementSibling?.querySelectorAll("button") ?? [])];
 }

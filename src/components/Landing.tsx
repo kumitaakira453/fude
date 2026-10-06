@@ -82,32 +82,18 @@ export function Landing() {
   };
 
   return (
-    <div className="mg-landing relative h-full overflow-hidden">
-      {/* 窓のタイトルバーの代わり。掴むと窓を動かせる。 */}
-      <div className="absolute inset-x-0 top-0 z-10 h-10" data-tauri-drag-region />
-      {/* 地の色をゆっくり動かす。読むものが無い画面なので、ここだけ息をさせる。
-          画面の外へはみ出す円なので、切り取る層に入れる。 */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        <div className="mg-blob mg-blob-a" />
-        <div className="mg-blob mg-blob-b" />
-      </div>
+    <div className="mg-landing flex h-full flex-col">
+      {/* 窓のタイトルバーの代わり。掴むと窓を動かせる（ほかの全面の画面と同じ帯）。 */}
+      <header className="mg-screenbar" data-tauri-drag-region />
 
-      <div className="relative mx-auto flex h-full max-w-2xl flex-col justify-center px-8 py-16">
-        <div className="mg-mark mb-12 flex shrink-0 items-center gap-4">
-          <AppIcon size={58} className="mg-mark-icon text-[var(--mg-accent)]" />
-          <div>
-            <h1 className="mg-wordmark text-[2.3rem] font-semibold leading-none tracking-[-0.035em]">
-              fude
-            </h1>
-            {/* 筆で引いた墨の線。開いたときに左から伸びる。 */}
-            <span className="mg-mark-stroke" aria-hidden />
-            <p className="mt-1.5 text-[13.5px] text-[var(--mg-muted)]">
-              ローカルの Markdown を、美しく読む
-            </p>
-          </div>
+      <div className="mg-landing-body">
+        <div className="mg-landing-mark">
+          <AppIcon size={30} className="shrink-0 text-[var(--mg-accent)]" />
+          <h1 className="mg-wordmark">fude</h1>
+          <p className="mg-landing-lead">ローカルの Markdown を読む・書く・指摘する</p>
         </div>
 
-        <div className="grid shrink-0 gap-3 sm:grid-cols-3">
+        <div className="mg-start">
           <StartCard
             icon="folder_open"
             title="フォルダを開く"
@@ -129,9 +115,11 @@ export function Landing() {
         </div>
 
         {recent.length > 0 && (
-          <div className="mt-11 flex min-h-0 flex-col">
-            <h2 className="mb-1 shrink-0 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--mg-muted)]">
+          <section className="mg-landing-recent">
+            {/* 見出しは左の欄の根の見出しと同じ形 */}
+            <h2 className="mg-landing-head">
               最近
+              <span className="mg-landing-head-n">{recent.length}</span>
             </h2>
             <div className="min-h-0 flex-1 overflow-y-auto">
               {recent.map((r) => (
@@ -141,37 +129,24 @@ export function Landing() {
                     r.kind === "folder" ? void openFolder(r.path) : openDoc(r.path)
                   }
                   title={r.path}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-[var(--mg-hover)]"
+                  className="mg-landing-row"
                 >
-                  <Icon
-                    name={r.kind === "folder" ? "folder" : "description"}
-                    size={17}
-                    className="shrink-0 text-[var(--mg-muted)]"
-                  />
-                  <span className="truncate text-[13.5px] font-medium text-[var(--mg-fg-dim)]">
-                    {r.name}
-                  </span>
-                  {r.where && (
-                    <span className="shrink-0 text-[11.5px] text-[var(--mg-muted)]">
-                      · {r.where}
-                    </span>
-                  )}
+                  <Icon name={r.kind === "folder" ? "folder" : "description"} size={14} />
+                  <span className="mg-landing-name">{r.name}</span>
+                  {r.where && <span className="mg-landing-where">{r.where}</span>}
                   {r.open > 0 && (
                     <span
-                      className="mg-landing-count"
+                      className="mg-ws-pill-badge is-waiting"
                       title={`未解決のコメント ${r.open} 件`}
                     >
-                      <Icon name="chat_bubble" size={11} fill />
-                      {r.open}
+                      コメント {r.open}
                     </span>
                   )}
-                  <span className="ml-auto shrink-0 tabular-nums text-[11px] text-[var(--mg-muted)]">
-                    {timeAgo(r.lastOpened)}
-                  </span>
+                  <span className="mg-landing-when">{timeAgo(r.lastOpened)}</span>
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         )}
       </div>
     </div>
@@ -191,14 +166,9 @@ function StartCard({
 }) {
   return (
     <button onClick={onClick} className="mg-start-card">
-      <span className="mg-start-tile">
-        <Icon name={icon} size={20} />
-      </span>
-      <span className="mg-start-name">
-        {title}
-        <Icon name="arrow_forward" size={16} className="mg-start-go" />
-      </span>
-      <span className="mt-0.5 block text-[12px] text-[var(--mg-muted)]">{lead}</span>
+      <Icon name={icon} size={16} className="mg-start-ico" />
+      <span className="mg-start-name">{title}</span>
+      <span className="mg-start-lead">{lead}</span>
     </button>
   );
 }
