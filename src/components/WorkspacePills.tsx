@@ -9,9 +9,10 @@ import {
   workspaceAtom,
   workspaceMenuAtom,
   workspacesAtom,
+  workspaceSwitcherOpenAtom,
 } from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
-import { barAtom, cyclerAskAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
+import { barAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 
 // ツールバーの中に並べるワークスペースの札。1 回押せば切り替わる。
@@ -78,7 +79,7 @@ export function WorkspacePills() {
 
   // ⌘ を押したままにしているあいだ（useKeyHints）、札に ⌘1〜9 の番号を出す。
   const hints = useAtomValue(hintsAtom);
-  const askCycler = useSetAtom(cyclerAskAtom);
+  const setSwitcher = useSetAtom(workspaceSwitcherOpenAtom);
 
   const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
     const pills = Array.from(
@@ -211,7 +212,7 @@ export function WorkspacePills() {
         data-tip="ワークスペースを選ぶ"
         data-key="⌘J"
         aria-label="ワークスペースを選ぶ"
-        onClick={() => askCycler((n) => n + 1)}
+        onClick={() => setSwitcher((v) => !v)}
         className="mg-ws-pill-add"
       >
         <Icon name="expand_more" size={16} />

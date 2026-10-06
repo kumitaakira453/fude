@@ -17,10 +17,11 @@ import {
 } from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { refreshWorkspaces } from "../state/workspace";
+import { barAtom, visitedAtom } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 import { keyedIn, movedIn } from "../lib/pointer";
 
-// ワークスペースを探して開く一覧（⌘⇧P）。札の列に出していないものや、まだ
+// ワークスペースの一覧（⌘J・札の並びの ▾）。札の列に出していないものや、まだ
 // ワークスペースになっていないフォルダもここから開ける。役目は探して開くこと
 // だけ（作るのは札の並びの ＋、手入れは右押しのメニュー）。
 // Enter で今のウィンドウを切り替え、⌘Enter で新しいウィンドウに開く。
@@ -38,6 +39,8 @@ const matches = (ws: Workspace, names: string[], q: string): boolean => {
 export function WorkspaceSwitcher() {
   const [open, setOpen] = useAtom(workspaceSwitcherOpenAtom);
   const list = useAtomValue(workspacesAtom);
+  const visited = useAtomValue(visitedAtom);
+  const bar = useAtomValue(barAtom);
   const current = useAtomValue(workspaceAtom);
   const folders = useAtomValue(foldersAtom);
   const phaseFor = useAtomValue(phaseForAtom);
@@ -50,6 +53,8 @@ export function WorkspaceSwitcher() {
   // 別のウィンドウで開いているもの（ID → ウィンドウの名前）。
   const [elsewhere, setElsewhere] = useState<Map<string, string>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
+  // 打ったかどうか。開いた直後の当たり（直前のもの）を、打つまでは動かさない。
+  const typed = useRef(false);
   // 塗りは CSS の :hover で即座に出す。状態はキー操作を続ける起点だけに使う。
   const byMouse = useRef(false);
   const hover = (i: number) =>
@@ -64,8 +69,9 @@ export function WorkspaceSwitcher() {
 
   useEffect(() => {
     if (!open) return;
+    typed.current = false;
     setQuery("");
-    setActive(0);
+    setActive(current && list.length > 0 ? 1 : 0);
     void refreshWorkspaces(store);
     const me = currentWindowLabel();
     void liveWorkspaces()
@@ -80,10 +86,20 @@ export function WorkspaceSwitcher() {
         ? list.map((w) => (w.id === current.id ? current : w))
         : [current, ...list]
       : list;
-    return merged
+    // 今いるものを先頭に、続けてこのウィンドウで開いた順、札の並び、残りは
+    // 開いた時刻の新しい順。開いたときの当たりは 2 番目（直前のもの）。
+    const rank = (ws: Workspace) => {
+      if (ws.id === current?.id) return -1;
+      const v = visited.indexOf(ws.id);
+      if (v >= 0) return v;
+      const b = bar.indexOf(ws.id);
+      return b >= 0 ? 1000 + b : 2000;
+    };
+    return [...merged]
+      .sort((a, b) => rank(a) - rank(b) || b.lastOpened - a.lastOpened)
       .map((ws) => ({ ws, names: ws.roots.map((r) => rootName(folders, r)) }))
       .filter(({ ws, names }) => matches(ws, names, query.trim()));
-  }, [list, current, folders, query]);
+  }, [list, current, folders, query, visited, bar]);
 
   // 開いたことはあるが、まだワークスペースになっていないフォルダ。選ぶとその
   // フォルダのワークスペースができる。
@@ -103,7 +119,11 @@ export function WorkspaceSwitcher() {
   }, [folders, list, current, query]);
   const total = rows.length + loose.length;
 
-  useEffect(() => setActive(0), [query]);
+  useEffect(() => {
+    // 打ち始めたら、絞り込んだ先頭に当てる（開いた直後の「直前のもの」から移る）。
+    if (!typed.current) return;
+    setActive(0);
+  }, [query]);
   useEffect(() => {
     // マウスで当てた行はもう見えている。スクロールさせない。
     if (byMouse.current) {
@@ -139,11 +159,11 @@ export function WorkspaceSwitcher() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[12vh] backdrop-blur-sm"
+      className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
       onClick={close}
     >
       <div
-        className="w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-2xl"
+        className="mg-pop w-full max-w-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-[var(--mg-border)] px-4">
@@ -151,7 +171,10 @@ export function WorkspaceSwitcher() {
           <input
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              typed.current = true;
+              setQuery(e.target.value);
+            }}
             onKeyUp={ime.onKeyUp}
             onCompositionStart={ime.onCompositionStart}
             onCompositionEnd={ime.onCompositionEnd}
@@ -170,7 +193,7 @@ export function WorkspaceSwitcher() {
                 close();
               }
             }}
-            placeholder="ワークスペースを探して開く…（名前・フォルダで絞り込み）"
+            placeholder="ワークスペースを選ぶ…（名前・フォルダで絞り込み）"
             className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
           />
         </div>

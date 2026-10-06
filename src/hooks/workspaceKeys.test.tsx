@@ -124,85 +124,55 @@ describe("ワークスペースを切り替えるキー", () => {
   });
 });
 
-describe("⌘J の一覧は、選ぶまで開いたまま", () => {
-  const shown = () => document.querySelector(".mg-ws-cycler");
-
-  it("⌘ を離しても移らず、一覧はそのまま", () => {
-    rig();
+describe("⌘J：ワークスペースの一覧", () => {
+  it("押すと一覧を開き、もう一度押すと閉じる（⌘ を離しても移らない）", () => {
+    const store = rig();
     key({ key: "j", code: "KeyJ", metaKey: true });
     up({ key: "Meta" });
+    expect(store.get(A.workspaceSwitcherOpenAtom)).toBe(true);
     expect(opened).toEqual([]);
-    expect(shown()).not.toBeNull();
-  });
-
-  it("J で選択を進め、Enter で移る", () => {
-    rig();
     key({ key: "j", code: "KeyJ", metaKey: true });
-    up({ key: "Meta" });
-    key({ key: "j", code: "KeyJ" });
-    key({ key: "Enter" });
-    expect(opened).toEqual(["b"]);
-    expect(shown()).toBeNull();
+    expect(store.get(A.workspaceSwitcherOpenAtom)).toBe(false);
   });
+});
 
-  it("開いた瞬間にマウスの下にあった行は塗らず、動かしてから当たりを移す", () => {
+describe("⌃Tab の一覧のマウス", () => {
+  const list = () => document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list")!;
+  const rows = () => Array.from(list().querySelectorAll<HTMLElement>("[role=option]"));
+  const move = (row: HTMLElement, x: number) =>
+    act(() => {
+      row.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, screenX: x, screenY: 10 }));
+    });
+  const opened2 = async () => {
     rig();
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    const list = document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list")!;
-    const rows = () => Array.from(list.querySelectorAll<HTMLElement>("[role=option]"));
-    const move = (row: HTMLElement, x: number) =>
-      act(() => {
-        row.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, screenX: x, screenY: 10 }));
-      });
-    // 下に来ただけの合図では動かない。
+    key({ key: "Tab", ctrlKey: true });
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, 200));
+    });
+  };
+
+  it("開いた瞬間にマウスの下にあった行は塗らず、動かしてから当たりを移す", async () => {
+    await opened2();
     move(rows()[2], 100);
     expect(rows().filter((r) => r.hasAttribute("data-on"))).toHaveLength(1);
     expect(rows()[1].hasAttribute("data-on")).toBe(true);
-    expect(list.hasAttribute("data-moved")).toBe(false);
-    // 本当に動いたら、その行が当たりになる。
+    expect(list().hasAttribute("data-moved")).toBe(false);
     move(rows()[2], 120);
-    expect(list.hasAttribute("data-moved")).toBe(true);
+    expect(list().hasAttribute("data-moved")).toBe(true);
     expect(rows()[2].hasAttribute("data-on")).toBe(true);
-    expect(rows().filter((r) => r.hasAttribute("data-on"))).toHaveLength(1);
-    key({ key: "Enter" });
+    up({ key: "Control" });
     expect(opened).toEqual(["b"]);
   });
 
-  it("キー操作で一覧が動いても、止まったマウスの下の行へ当たりを引き戻さない", () => {
-    rig();
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    const list = document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list")!;
-    const rows = () => Array.from(list.querySelectorAll<HTMLElement>("[role=option]"));
-    const move = (row: HTMLElement, x: number) =>
-      act(() => {
-        row.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, screenX: x, screenY: 10 }));
-      });
-    // 一度マウスを動かしてから、キーで進める。
+  it("位置の変わらない合図では、当たりを引き戻さない", async () => {
+    await opened2();
     move(rows()[0], 100);
     move(rows()[0], 110);
-    key({ key: "ArrowDown" });
+    key({ key: "Tab", ctrlKey: true });
     expect(rows()[1].hasAttribute("data-on")).toBe(true);
-    // キーで動かしたら、マウスがまた動くまでホバーの塗りは止まる。
-    expect(list.hasAttribute("data-moved")).toBe(false);
-    // スクロールで下に別の行が来ただけの合図（位置は同じ）。
+    // キーで送ったあと、止まったマウスの下（先頭の行）から位置の同じ合図が来る。
     move(rows()[0], 110);
     expect(rows()[1].hasAttribute("data-on")).toBe(true);
-  });
-
-  it("Esc で何もせず閉じる", () => {
-    rig();
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    key({ key: "Escape" });
-    expect(opened).toEqual([]);
-    expect(shown()).toBeNull();
-  });
-
-  it("もう一度 ⌘J で閉じる", () => {
-    rig();
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    expect(opened).toEqual([]);
-    expect(shown()).toBeNull();
   });
 });
 

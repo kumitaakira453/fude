@@ -331,6 +331,8 @@ export const savingCountAtom = atom(0);
 // 左の欄の頭の「新規」から、根にファイル・フォルダを作る頼み。木が受けて名前の欄を出す。
 export const rootCreateAtom = atom<{ kind: "file" | "dir"; nonce: number } | null>(null);
 export const paletteOpenAtom = atom<boolean>(false);
+// 一覧に並べるもの。⌘P はファイルだけ、⌘⇧P は操作とファイル。
+export const paletteModeAtom = atom<"files" | "all">("files");
 // ⌘, で開く設定（⌘/ はその中のキー操作の面）
 export const settingsOpenAtom = atom<boolean>(false);
 // 設定で開いている面。

@@ -82,14 +82,28 @@ export function useHotkeys() {
         // ⌘O: 開くものを選ぶ画面。フォルダと 1 枚のファイルをここで選ぶ。
         e.preventDefault();
         store.set(A.openPickerAtom, !store.get(A.openPickerAtom));
-      } else if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {
+      } else if (mod && (e.key === "p" || e.key === "P") && !e.defaultPrevented) {
+        // ⌘P はファイルだけ、⌘⇧P は操作とファイルを並べる一覧。同じ一覧なので、
+        // 開いているときに別のほうを押すと並べるものを替える。コメントを書いている
+        // 欄では ⌘⇧P が下書きのプレビューなので、そちらが受けたら（defaultPrevented）開かない。
         e.preventDefault();
-        store.set(A.paletteOpenAtom, !store.get(A.paletteOpenAtom));
-      } else if (mod && e.shiftKey && (e.key === "p" || e.key === "P") && !e.defaultPrevented) {
-        // ⌘⇧P: ワークスペースを探して開く一覧。コメントを書いている欄では同じキーが
-        // 下書きのプレビューなので、そちらが受けたら（defaultPrevented）開かない。
+        const mode = e.shiftKey ? "all" : "files";
+        const open = store.get(A.paletteOpenAtom);
+        if (open && store.get(A.paletteModeAtom) === mode) {
+          store.set(A.paletteOpenAtom, false);
+        } else {
+          store.set(A.paletteModeAtom, mode);
+          store.set(A.paletteOpenAtom, true);
+        }
+      } else if (mod && !e.shiftKey && !e.altKey && e.code === "KeyJ") {
+        // ⌘J: ワークスペースの一覧。名前で絞り込んで、Enter で移る。
         e.preventDefault();
         store.set(A.workspaceSwitcherOpenAtom, !store.get(A.workspaceSwitcherOpenAtom));
+      } else if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.code === "KeyE") {
+        // ⌃E は文中で行末へ移るキーなので、⌘ だけで受ける。
+        // ⌘E: 閲覧と編集を切り替える。書いている最中でも効かせる（編集から出る口）。
+        e.preventDefault();
+        store.set(A.liveEditAtom, !store.get(A.liveEditAtom));
       } else if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
         // ⌘⇧F: ディレクトリ全体検索（サイドバー）。選択語をプリフィルし入力欄へフォーカス。
         e.preventDefault();

@@ -262,7 +262,7 @@ export function EntryMenu({
       data-entry-menu
       style={style}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 w-52 rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl"
+      className="mg-pop fixed z-50 w-52 p-1"
     >
       {items.map((it, i) =>
         it === "sep" ? (
