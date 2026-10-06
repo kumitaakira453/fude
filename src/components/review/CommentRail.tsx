@@ -498,7 +498,11 @@ function RailCard({
       data-mg-on={active ? "1" : undefined}
       // 押したら箇所へ送り、そのまま書き始められるところまで運ぶ。釦を挟むと、
       // 読んだ流れが一度切れる。
-      onClick={() => {
+      onClick={(e) => {
+        // 字を選び終えた押し上げも click になる。そのときは何もしない（返信の口へ
+        // 焦点を移すと、選んだ字が外れて写せない）。
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed && e.currentTarget.contains(sel.anchorNode)) return;
         onJump();
         setWriting(true);
         box.current?.focus({ preventScroll: true });

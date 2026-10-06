@@ -663,3 +663,19 @@ describe("札の置き場所", () => {
     expect(flowed().map((el) => el.style.visibility)).toEqual(["", "hidden"]);
   });
 });
+
+describe("札の字を選ぶ", () => {
+  it("選んで離しても、選んだ字は外れない（箇所へも送らない）", () => {
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
+    const card = cards()[0];
+    const range = document.createRange();
+    range.selectNodeContents(card.querySelector(".mg-rail-quote")!);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+    click(card);
+    expect(window.getSelection()!.isCollapsed).toBe(false);
+    expect(shown).toEqual([]);
+    sel.removeAllRanges();
+  });
+});
