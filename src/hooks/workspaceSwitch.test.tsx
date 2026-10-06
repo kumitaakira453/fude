@@ -285,6 +285,24 @@ describe("戻ってきたときは読み直さない", () => {
     expect(r.store.get(A.contentCacheAtom).get("/甲/b.md")).toBe("本文 2");
   });
 
+  it("戻ったとき、タブは同じペインの id で戻る（見ていた位置を同じ鍵で引ける）", async () => {
+    const r = rig();
+    const first = { ...a, layout: { ...leaf(["/甲/a.md"]), id: "p31" }, active: "p31" };
+    await act(async () => {
+      await r.ws().openWorkspace(first);
+      await idle();
+    });
+    expect(r.store.get(A.activePaneIdAtom)).toBe("p31");
+    await act(async () => {
+      await r.ws().openWorkspace(b);
+      await idle();
+      await r.ws().openWorkspace(first);
+      await idle();
+    });
+    expect(r.store.get(A.layoutAtom).id).toBe("p31");
+    expect(r.store.get(A.activePaneIdAtom)).toBe("p31");
+  });
+
   it("離れているあいだに消えたファイルは、本文を落としてタブも閉じる", async () => {
     const r = await visitAndLeave();
     disk.set("/甲", ["b.md"]);

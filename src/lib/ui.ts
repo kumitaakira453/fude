@@ -435,19 +435,29 @@ export type StoredNode =
     };
 
 // 保存レイアウトを復元用に再生成する。
-// - id を振り直して既存 seq との衝突を防ぐ
+// - 控えの id をそのまま使う（見ていた位置は「ペインの id ＋ パス」で控えて
+//   いるので、振り直すと戻ったときに先頭へ飛ぶ）。並びの中で重なったときと、
+//   形の違う id だけ振り直し、この後に振る id がこれらと重ならないよう進める
 // - 存在しないファイルパスは取り除く
 // - タブが無かった頃に保存されたものは path を 1 枚のタブとして読む
-// 戻り値の active は旧アクティブ leaf に対応する新 id（無ければ先頭 leaf）。
+// 戻り値の active は旧アクティブ leaf に対応する id（無ければ先頭 leaf）。
 export function reviveLayout(
   node: StoredNode,
   validPaths: Set<string>,
   oldActive: string,
 ): { layout: LayoutNode; active: string } {
   let newActive = "";
+  const used = new Set<string>();
+  const keep = (stored: string, kind: "p" | "s", fresh: () => string): string => {
+    const m = new RegExp(`^${kind}(\\d+)$`).exec(stored);
+    const id = m && !used.has(stored) ? stored : fresh();
+    used.add(id);
+    if (m && id === stored) seq = Math.max(seq, Number(m[1]) + 1);
+    return id;
+  };
   const walk = (n: StoredNode): LayoutNode => {
     if (n.kind === "leaf") {
-      const id = leafId();
+      const id = keep(n.id, "p", leafId);
       if (n.id === oldActive) newActive = id;
       const stored = n.tabs ?? (n.path ? [n.path] : []);
       const kept = stored.filter((p) => validPaths.has(p));
@@ -456,7 +466,7 @@ export function reviveLayout(
       return leaf(id, kept, at < 0 ? 0 : at);
     }
     const children = n.children.map(walk);
-    return { kind: "split", id: splitId(), dir: n.dir, sizes: n.sizes, children };
+    return { kind: "split", id: keep(n.id, "s", splitId), dir: n.dir, sizes: n.sizes, children };
   };
   const layout = walk(node);
   return { layout, active: newActive || firstLeafId(layout) };

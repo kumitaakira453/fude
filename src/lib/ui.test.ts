@@ -391,11 +391,41 @@ describe("reviveLayout", () => {
     expect(A.activePath(first())).toBe("a.md");
   });
 
-  it("id を振り直して既存と衝突させない", () => {
-    const stored: StoredNode = { kind: "leaf", id: "p1", tabs: ["a.md"], active: 0 };
-    const one = reviveLayout(stored, valid, "p1");
-    const two = reviveLayout(stored, valid, "p1");
-    expect(one.layout.id).not.toBe(two.layout.id);
+  it("控えの id をそのまま使う（見ていた位置を同じ鍵で引ける）", () => {
+    const stored: StoredNode = { kind: "leaf", id: "p40", tabs: ["a.md"], active: 0 };
+    const one = reviveLayout(stored, valid, "p40");
+    const two = reviveLayout(stored, valid, "p40");
+    expect(one.layout.id).toBe("p40");
+    expect(two.layout.id).toBe("p40");
+    expect(one.active).toBe("p40");
+  });
+
+  it("並びの中で id が重なったときだけ振り直す", () => {
+    const stored: StoredNode = {
+      kind: "split",
+      id: "s1",
+      dir: "row",
+      sizes: [0.5, 0.5],
+      children: [
+        { kind: "leaf", id: "p7", tabs: ["a.md"], active: 0 },
+        { kind: "leaf", id: "p7", tabs: ["b.md"], active: 0 },
+      ],
+    };
+    const { layout } = reviveLayout(stored, valid, "p7");
+    const ids = layout.kind === "split" ? layout.children.map((c) => c.id) : [];
+    expect(ids[0]).toBe("p7");
+    expect(ids[1]).not.toBe("p7");
+  });
+
+  it("この後に作るペインの id は、控えの id と重ならない", () => {
+    const stored: StoredNode = { kind: "leaf", id: "p900", tabs: ["a.md"], active: 0 };
+    const { layout } = reviveLayout(stored, valid, "p900");
+    store.set(A.layoutAtom, layout);
+    store.set(A.activePaneIdAtom, "p900");
+    splitPane(store, "row");
+    const ids = panes().map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => id === "p900" || Number(id.slice(1)) > 900)).toBe(true);
   });
 });
 
