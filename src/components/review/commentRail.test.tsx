@@ -59,7 +59,11 @@ function thread(id: string, over: Partial<ReviewThread> = {}): ReviewThread {
     section_path: [],
     base_version: "v1",
     status: { kind: "open" },
-    comments: [{ id: `${id}c1`, author: "you", body: `${id} の指摘`, created_at: 0 }],
+    // AI が返したところ（最後の発言が自分でないので、自分が応える番＝未対応）。
+    comments: [
+      { id: `${id}c1`, author: "you", body: `${id} の指摘`, created_at: 0 },
+      { id: `${id}c2`, author: "claude", body: `${id} への返事`, created_at: 1 },
+    ],
     created_at: 0,
     ...over,
   };
@@ -251,20 +255,44 @@ describe("絞り込み", () => {
     two({ done: [settled("d1")], loose: [thread("x1")] });
     openFilter();
     expect(picks().map((el) => el.textContent)).toEqual([
-      "未対応返信も解決もまだ3",
+      "未対応最後の発言が自分でないもの3",
       "未解決返信済みも含む3",
       "解決済み片付いたもの1",
       "すべて4",
     ]);
   });
 
-  it("既定は未対応。返信の付いた指摘は残らない", () => {
+  it("既定は未対応。最後の発言が自分のものは残らない", () => {
     two({ done: [settled("d1")] });
     expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2"]);
     pick("未解決");
     expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2"]);
     pick("すべて");
     expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2", "選んだ字 d1"]);
+  });
+
+  it("自分→AI は未対応、自分→AI→自分 と自分だけのものは未対応に入れない", () => {
+    show(
+      [
+        thread("t1"),
+        thread("t2", {
+          comments: [
+            { id: "a", author: "you", body: "指摘", created_at: 0 },
+            { id: "b", author: "claude", body: "返事", created_at: 1 },
+            { id: "c", author: "you", body: "了解", created_at: 2 },
+          ],
+        }),
+        thread("t3", { comments: [{ id: "d", author: "you", body: "指摘", created_at: 0 }] }),
+      ],
+      new Map<string, Resolution>([
+        ["t1", at(0)],
+        ["t2", at(1)],
+        ["t3", at(2)],
+      ]),
+    );
+    expect(quotes()).toEqual(["選んだ字 t1"]);
+    pick("未解決");
+    expect(quotes()).toEqual(["選んだ字 t1", "選んだ字 t2", "選んだ字 t3"]);
   });
 
   it("片付いたものだけも出せる", () => {
@@ -290,8 +318,10 @@ describe("絞り込み", () => {
 });
 
 describe("自分の書き込み", () => {
+  // 既定は自分の指摘だけ（最後の書き込みが自分）。
+  const mine = [{ id: "t1c1", author: "you", body: "t1 の指摘", created_at: 0 }];
   const two = (over: Partial<ReviewThread> = {}) =>
-    show([thread("t1", over)], new Map<string, Resolution>([["t1", at(0)]]), {
+    show([thread("t1", { comments: mine, ...over })], new Map<string, Resolution>([["t1", at(0)]]), {
       filter: "all",
     });
   const own = () =>

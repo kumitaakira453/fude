@@ -9,7 +9,7 @@ import {
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
 import {
-  hasReply,
+  awaitsMe,
   isOpen,
   ownsLast,
   RAIL_FILTERS,
@@ -189,7 +189,7 @@ export function CommentRail({
   // 今の本文に居場所を持たない指摘はここへ入れない。押しても飛ぶ先が無い。
   // 絞り込みごとの件数。選ぶ前に、どれがどれだけあるかを見せる。
   const counts = useMemo(() => {
-    const todo = [...threads, ...loose].filter((t) => !hasReply(t)).length;
+    const todo = [...threads, ...loose].filter(awaitsMe).length;
     const open = threads.length + loose.length;
     return { todo, open, done: done.length, all: open + done.length };
   }, [threads, loose, done]);
@@ -199,7 +199,7 @@ export function CommentRail({
       if (filter === "all") return true;
       if (filter === "done") return settled;
       if (settled) return false;
-      return filter === "open" || !hasReply(thread);
+      return filter === "open" || awaitsMe(thread);
     },
     [filter],
   );

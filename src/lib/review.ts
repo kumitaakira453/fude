@@ -22,14 +22,17 @@ export interface ReviewComment {
 export type RailFilter = "todo" | "open" | "done" | "all";
 
 export const RAIL_FILTERS: { id: RailFilter; name: string; note: string }[] = [
-  { id: "todo", name: "未対応", note: "返信も解決もまだ" },
+  { id: "todo", name: "未対応", note: "最後の発言が自分でないもの" },
   { id: "open", name: "未解決", note: "返信済みも含む" },
   { id: "done", name: "解決済み", note: "片付いたもの" },
   { id: "all", name: "すべて", note: "" },
 ];
 
-// 返信が付いているか。先頭は指摘そのものなので、2 件目から先が返信。
-export const hasReply = (thread: ReviewThread): boolean => thread.comments.length > 1;
+// 自分が応える番か。最後の発言が自分でなければ、こちらが読んで応える番。
+// 自分の指摘に AI が返したもの（自分→AI）は自分の番、そこへ自分が返した
+// もの（自分→AI→自分）は相手の番。
+export const awaitsMe = (thread: ReviewThread): boolean =>
+  thread.comments[thread.comments.length - 1]?.author !== REVIEW_AUTHOR;
 
 export interface ReviewThread {
   id: string;
