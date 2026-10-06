@@ -128,18 +128,18 @@ export function Toc({
 
   return (
     <nav
-      className={`mg-toc hidden min-h-0 w-56 shrink-0 self-stretch overflow-y-auto py-6 pl-4 pr-3 lg:block ${
-        bare ? "" : "border-l border-[var(--mg-border)]"
+      className={`mg-toc hidden min-h-0 w-56 shrink-0 self-stretch overflow-y-auto lg:block ${
+        bare ? "" : "border-l border-[var(--mg-border)] bg-[var(--mg-panel)]"
       }`}
       aria-hidden={bare || undefined}
     >
       {bare ? null : (
         <>
-      <div className="mg-toc-head">
-        <span>目次</span>
+      <div className="mg-rail-head">
+        <span className="mg-rail-title">目次</span>
         <IconBtn tip="目次を閉じる" keys="⌘⇧O" icon="close" onClick={() => setRail("none")} />
       </div>
-      <ul className="space-y-0.5">
+      <ul className="space-y-0.5 px-3 py-2.5">
         {headings.map((h, i) => (
           <li key={`${h.id}-${i}`}>
             <a

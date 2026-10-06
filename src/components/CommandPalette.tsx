@@ -44,9 +44,42 @@ function since(at: number | undefined, now: number): string {
 // ファイルの並びは「名前の一致」と「最後に触った新しさ」で決める。操作は台帳
 // （lib/commands）の名前で当て、最近使ったものを先に出す。
 
+// 一覧の見出し。打つ前は最近使った操作を先に、打ったら操作とファイルに分ける。
+type Section = "最近使った操作" | "操作" | "ファイル";
+
 type Row =
-  | { kind: "cmd"; cmd: Command }
-  | { kind: "file"; r: ReturnType<typeof quickOpen>[number] };
+  | { kind: "cmd"; cmd: Command; section: Section }
+  | { kind: "file"; r: ReturnType<typeof quickOpen>[number]; section: Section };
+
+// 打った語に当たった部分を強める。語は空白で区切ったそれぞれを見る。
+function Marked({ text, query }: { text: string; query: string }) {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return <>{text}</>;
+  const low = text.toLowerCase();
+  const hit = new Array<boolean>(text.length).fill(false);
+  for (const w of words) {
+    for (let at = low.indexOf(w); at >= 0; at = low.indexOf(w, at + 1)) {
+      for (let i = at; i < at + w.length; i++) hit[i] = true;
+    }
+  }
+  const parts: { s: string; on: boolean }[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const last = parts[parts.length - 1];
+    if (last && last.on === hit[i]) last.s += text[i];
+    else parts.push({ s: text[i], on: hit[i] });
+  }
+  return (
+    <>
+      {parts.map((p, i) => (p.on ? <mark key={i}>{p.s}</mark> : <span key={i}>{p.s}</span>))}
+    </>
+  );
+}
+
+// ファイルの置き場のフォルダ名（すぐ上のもの）。根の直下なら空。
+function folderOf(rel: string): string {
+  const parts = rel.split("/");
+  return parts.length > 1 ? parts[parts.length - 2] : "";
+}
 
 // 操作の一覧に混ぜて出すファイルの数。
 const FILES_IN_ALL = 8;
@@ -119,18 +152,22 @@ export function CommandPalette() {
   }, [store, holdDraft, panes.length, workspaces, here?.id, openWorkspace]);
 
   const rows = useMemo((): Row[] => {
-    if (mode === "files") return results.map((r) => ({ kind: "file", r }));
+    if (mode === "files") return results.map((r) => ({ kind: "file", r, section: "ファイル" }));
     const hits = commands.filter((c) => matchCommand(c, query));
     // 打つ前は、最近使った操作を先に出す。
     const recent = query.trim() ? [] : recentCommands();
-    hits.sort((a, b) => {
-      const ra = recent.indexOf(a.id);
-      const rb = recent.indexOf(b.id);
-      return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb);
-    });
-    const cmds: Row[] = hits.map((cmd) => ({ kind: "cmd", cmd }));
+    const rank = (c: Command) => {
+      const at = recent.indexOf(c.id);
+      return at < 0 ? 99 : at;
+    };
+    hits.sort((a, b) => rank(a) - rank(b));
+    const cmds: Row[] = hits.map((cmd) => ({
+      kind: "cmd",
+      cmd,
+      section: rank(cmd) < 99 ? "最近使った操作" : "操作",
+    }));
     const fs: Row[] = query.trim()
-      ? results.slice(0, FILES_IN_ALL).map((r) => ({ kind: "file", r }))
+      ? results.slice(0, FILES_IN_ALL).map((r) => ({ kind: "file", r, section: "ファイル" }))
       : [];
     return [...cmds, ...fs];
   }, [mode, results, commands, query]);
@@ -173,16 +210,10 @@ export function CommandPalette() {
   };
 
   return (
-    <div
-      className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
-      onClick={() => setOpen(false)}
-    >
-      <div
-        className="mg-pop w-full max-w-xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-[var(--mg-border)] px-4">
-          <Icon name="search" size={18} className="shrink-0 text-[var(--mg-muted)]" />
+    <div className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[52px]" onClick={() => setOpen(false)}>
+      <div className="mg-pop mg-pal" onClick={(e) => e.stopPropagation()}>
+        <div className="mg-pal-in">
+          <Icon name="search" size={15} stroke={1.7} className="text-[var(--mg-muted)]" />
           <input
             autoFocus
             value={query}
@@ -191,85 +222,88 @@ export function CommandPalette() {
             onCompositionStart={ime.onCompositionStart}
             onCompositionEnd={ime.onCompositionEnd}
             onKeyDown={(e) => {
-            if (ime.isComposing(e)) return; // IME 変換中のキーを無視
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setActive((a) => Math.min(a + 1, rows.length - 1));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setActive((a) => Math.max(a - 1, 0));
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              choose(active);
-            } else if (e.key === "Escape") {
-              setOpen(false);
-            }
-          }}
-            placeholder={
-              mode === "files"
-                ? "ファイルを開く…（ファイル名で絞り込み）"
-                : "操作・ファイルを名前で探す…"
-            }
-            className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
+              if (ime.isComposing(e)) return; // IME 変換中のキーを無視
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive((a) => Math.min(a + 1, rows.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((a) => Math.max(a - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                choose(active);
+              } else if (e.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder={mode === "files" ? "ファイルを名前で探す" : "操作・ファイルを名前で探す"}
           />
+          <kbd className="mg-key">esc</kbd>
         </div>
-        <div ref={listRef} className="mg-pick-list max-h-[50vh] overflow-y-auto py-1">
+        <div ref={listRef} className="mg-pick-list max-h-[50vh] overflow-y-auto">
           {rows.map((row, i) => {
             const head =
-              row.kind === "cmd"
-                ? i === 0 || rows[i - 1].kind !== "cmd" || (rows[i - 1] as { cmd: Command }).cmd.group !== row.cmd.group
-                  ? row.cmd.group
-                  : null
-                : i === 0 || rows[i - 1].kind !== "file"
-                  ? mode === "all"
-                    ? "ファイル"
-                    : null
-                  : null;
+              mode === "all" && (i === 0 || rows[i - 1].section !== row.section) ? row.section : null;
             return (
               <div key={row.kind === "cmd" ? `c:${row.cmd.id}` : `f:${row.r.node.path}`}>
                 {head && <div className="mg-pal-group">{head}</div>}
-                {row.kind === "cmd" ? (
-                  <button
-                    data-idx={i}
-                    onMouseMove={(e) => movedIn(e) && hover(i)}
-                    onClick={() => choose(i)}
-                    data-on={i === active || undefined}
-                    className="mg-pick-row mg-pal-row"
-                  >
-                    <span className="min-w-0 flex-1 truncate">{row.cmd.label}</span>
-                    {row.cmd.keys && <kbd className="mg-key">{row.cmd.keys}</kbd>}
-                  </button>
-                ) : (
-                  <button
-                    data-idx={i}
-                    // 手が動いたときだけ選び直す。入った・出たで決めると、打つたびに
-                    // 並びが変わったとき、動いていないマウスの下へ当たりが飛ぶ。
-                    onMouseMove={(e) => movedIn(e) && hover(i)}
-                    onClick={() => choose(i)}
-                    data-on={i === active || undefined}
-                    className="mg-pick-row flex w-full flex-col items-start px-4 py-1.5 text-left"
-                  >
-                    <span className="flex w-full items-baseline gap-2 text-[13.5px] text-[var(--mg-fg)]">
-                      <span className="min-w-0 flex-1 truncate">
-                        {row.r.node.name.replace(/\.(md|markdown|mdx|mdown|mkd)$/i, "")}
+                <button
+                  data-idx={i}
+                  // 手が動いたときだけ選び直す。入った・出たで決めると、打つたびに
+                  // 並びが変わったとき、動いていないマウスの下へ当たりが飛ぶ。
+                  onMouseMove={(e) => movedIn(e) && hover(i)}
+                  onClick={() => choose(i)}
+                  data-on={i === active || undefined}
+                  className="mg-pick-row mg-pal-row"
+                >
+                  {row.kind === "cmd" ? (
+                    <>
+                      <span className="mg-pal-name">
+                        <Marked text={row.cmd.label} query={query} />
                       </span>
+                      <span className="mg-pal-word">{row.cmd.group}</span>
+                      <span className="mg-pal-keys">
+                        {row.cmd.keys && <kbd className="mg-key">{row.cmd.keys}</kbd>}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mg-pal-name" title={label(row.r.node.path)}>
+                        <Marked text={row.r.node.name} query={query} />
+                      </span>
+                      <span className="mg-pal-word">{folderOf(row.r.node.rel)}</span>
                       {/* いつ触ったか。並び順の理由が読めるように添える。 */}
-                      <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
+                      <span className="mg-pal-keys mg-pal-word">
                         {since(touched.get(row.r.node.path), now)}
                       </span>
-                    </span>
-                    <span className="w-full truncate text-[11px] text-[var(--mg-muted)]">
-                      {label(row.r.node.path)}
-                    </span>
-                  </button>
-                )}
+                    </>
+                  )}
+                </button>
               </div>
             );
           })}
           {rows.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-[var(--mg-muted)]">
+            <div className="px-3 py-6 text-center text-[13px] text-[var(--mg-muted)]">
               {mode === "files" ? "ファイルが見つかりません" : "当てはまるものがありません"}
             </div>
+          )}
+        </div>
+        <div className="mg-pal-foot">
+          <span>
+            <kbd className="mg-key">⏎</kbd> 開く・実行
+          </span>
+          <span>
+            <kbd className="mg-key">↑</kbd>
+            <kbd className="mg-key">↓</kbd> 選ぶ
+          </span>
+          {mode === "all" ? (
+            <span>
+              <kbd className="mg-key">⌘P</kbd> ファイルだけ
+            </span>
+          ) : (
+            <span>
+              <kbd className="mg-key">⌘⇧P</kbd> 操作も探す
+            </span>
           )}
         </div>
       </div>

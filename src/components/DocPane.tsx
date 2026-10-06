@@ -1501,7 +1501,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             icon="more_horiz"
             label="その他"
             title="ほかの操作"
-            dot={!!data || broken}
             items={[
               ...(canCopy
                 ? [{ icon: "content_copy", label: "全文をコピー", keys: "⌘⌥C", run: () => void copyAll() }]

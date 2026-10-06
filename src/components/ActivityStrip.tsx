@@ -3,12 +3,11 @@ import { claudeLinkAtom, sidebarOpenAtom, sidebarTabAtom, type SideFace } from "
 import { draftRelAtom } from "../state/drafts";
 import { openTotalAtom, reviewScreenAtom } from "../state/review";
 import { IconBtn } from "./Chrome";
-import { ClaudeMark } from "./ClaudeMark";
 
 // 左端の縦の帯。左の欄に出す面（ファイル・検索・Claude）を切り替える。
-// 今出している面をもう一度押すと、左の欄を閉じる。下にはコメント一覧の入口。
+// 今出している面をもう一度押すと、左の欄を閉じる。続けてコメント一覧の入口。
 const FACES: { id: SideFace; tip: string; icon: string; keys?: string }[] = [
-  { id: "files", tip: "ファイル", icon: "description" },
+  { id: "files", tip: "ファイル", icon: "insert_drive_file" },
   { id: "search", tip: "全文を検索", icon: "search", keys: "⌘⇧F" },
 ];
 
@@ -37,30 +36,23 @@ export function ActivityStrip() {
           tip={f.tip}
           keys={f.keys}
           icon={f.icon}
-          size={18}
           on={open && face === f.id}
           onClick={() => pick(f.id)}
         />
       ))}
       {claude && (
-        <button
-          type="button"
-          data-tip="Claude のセッション"
-          aria-label="Claude のセッション"
-          aria-pressed={open && face === "claude"}
-          className={`mg-ibtn${open && face === "claude" ? " is-on" : ""}`}
+        <IconBtn
+          tip="Claude のセッション"
+          icon="claude"
+          on={open && face === "claude"}
           onClick={() => pick("claude")}
-        >
-          <ClaudeMark size={16} />
-        </button>
+        />
       )}
-      <span className="mg-strip-gap" />
       <span className="mg-strip-badge-host">
         <IconBtn
           tip={isDraft ? "コメントは保存先を決めてから" : "コメント一覧（全ファイル）"}
           keys="⌘⇧R"
-          icon="forum"
-          size={18}
+          icon="comment"
           disabled={isDraft}
           onClick={() => setReview(true)}
         />

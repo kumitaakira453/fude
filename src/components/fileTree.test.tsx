@@ -15,6 +15,7 @@ import {
   rootCreateAtom,
 } from "../state/atoms";
 import { FileTree } from "./FileTree";
+import { Sidebar } from "./Sidebar";
 
 // 木の上の「新規ファイル / 新規フォルダ」。1 枚だけ開いているときの木は
 // そのファイルしか持たないので、作っても出てこない。押せる状態にしない。
@@ -270,30 +271,52 @@ describe("フォルダを複数並べているとき", () => {
     return host;
   }
 
-  it("根の行には、札と同じ色の重なりフォルダの印を付け、置き場所は説明に入れる", () => {
+  it("根の行には、札と同じ色の四角とファイルの数を付け、置き場所は説明に入れる", () => {
     const el = showTwo();
     const heads = Array.from(el.querySelectorAll<HTMLElement>(".mg-tree-root"));
     expect(heads).toHaveLength(2);
     const mark = heads[1].querySelector<HTMLElement>(".mg-tree-root-mark")!;
-    expect(mark.dataset.icon).toBe("folder_copy");
-    expect(mark.style.color).toContain("--mg-ws-rose");
+    expect(mark.style.background).toContain("--mg-ws-rose");
+    expect(heads[1].querySelector(".mg-tree-root-count")?.textContent).toBe("0");
     expect(heads[1].title).toBe("/Users/me/work/乙");
     expect(heads[1].textContent).not.toContain("/Users/me");
   });
 
-  it("上の段に並べている数を出し、ボタンでまとめて畳む・開く", () => {
+  it("根の行の右クリックから、並べたフォルダをまとめて畳む・開く", () => {
     const el = showTwo();
-    expect(el.querySelector(".mg-tree-count")?.textContent).toBe("フォルダ 2");
-    const fold = el.querySelector<HTMLElement>(".mg-tree-roots")!;
+    const menuItem = (label: string) =>
+      Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) =>
+        b.textContent?.includes(label),
+      );
+    const openMenu = () =>
+      act(() => {
+        el.querySelector(".mg-tree-root")!.dispatchEvent(
+          new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }),
+        );
+      });
     // 最初は根の行だけ開いている。
-    expect(fold.dataset.tip).toBe("すべてのフォルダを畳む");
-    act(() => fold.click());
-    expect(el.querySelector<HTMLElement>(".mg-tree-roots")!.dataset.tip).toBe("すべてのフォルダを開く");
+    openMenu();
+    act(() => menuItem("すべてのフォルダを畳む")!.click());
+    openMenu();
+    expect(menuItem("すべてのフォルダを開く")).toBeTruthy();
   });
 
-  it("「フォルダを追加」で、ワークスペースのメニューをフォルダを選ぶ画面から開く", () => {
-    const el = showTwo();
-    act(() => el.querySelector<HTMLElement>(".mg-tree-add-root")!.click());
+  it("左の欄の「新規」から、ワークスペースのメニューをフォルダを選ぶ画面で開く", () => {
+    showTwo();
+    act(() => root!.unmount());
+    root = createRoot(host!);
+    act(() =>
+      root!.render(
+        <Provider store={store}>
+          <Sidebar />
+        </Provider>,
+      ),
+    );
+    act(() => host!.querySelector<HTMLElement>('[data-tip="新しく作る"]')!.click());
+    const add = Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) =>
+      b.textContent?.includes("このワークスペースにフォルダを追加"),
+    )!;
+    act(() => add.click());
     expect(store.get(workspaceMenuAtom)).toMatchObject({ id: "ws", step: "folders" });
   });
 

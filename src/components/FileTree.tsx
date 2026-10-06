@@ -1,5 +1,5 @@
 import { message } from "@tauri-apps/plugin-dialog";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -38,10 +38,8 @@ import {
   treeFilterAtom,
   isShownAtom,
   workspaceAtom,
-  workspaceMenuAtom,
   rootCreateAtom,
 } from "../state/atoms";
-import { IconBtn, TextBtn } from "./Chrome";
 import { colorVar } from "../lib/workspaces";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
@@ -51,6 +49,11 @@ import { Icon } from "./Icon";
 
 
 // 外（Finder など）から掴んできたものか。中で掴んだものは種別が違う。
+// 木の字下げ。1 段ごとの幅、行の左の余白、フォルダの開閉の印とその後ろの間隔。
+const INDENT = 16;
+const ROW_PAD = 6;
+const CHEVRON_W = 18;
+
 const hasFiles = (data: DataTransfer): boolean =>
   data.types.includes("Files");
 
@@ -100,7 +103,6 @@ function NameInput({
   pad,
   icon,
   keepExt = false,
-  bold = false,
   on = false,
 }: {
   initial: string;
@@ -111,7 +113,6 @@ function NameInput({
   // 抜けるときも字と印が動かないようにする。
   pad: number;
   icon: ReactNode;
-  bold?: boolean;
   // 選ばれている行の塗りと左端の棒で描く。出しているファイルの名前を変える
   // ときに使う（消えると、選択が外れたように見える）。
   on?: boolean;
@@ -136,12 +137,9 @@ function NameInput({
   return (
     <div
       data-on={on || undefined}
-      className={`relative flex h-7 items-center gap-1 rounded-md pr-2 ${on ? "mg-tree-row" : "text-[var(--mg-fg)]"}`}
+      className={`mg-tree-line ${on ? "mg-tree-row" : "text-[var(--mg-fg)]"}`}
       style={{ paddingLeft: `${pad}px` }}
     >
-      {on && <span className="mg-tree-rail" />}
-      {/* 行の折り返しの印（フォルダ）・空き（ファイル）と同じ幅 */}
-      <span className="w-[18px] shrink-0" />
       {icon}
       <input
         ref={input}
@@ -166,7 +164,7 @@ function NameInput({
         placeholder={placeholder}
         // 枠も地も付けず、字の位置と行の高さを名前を出している行に揃える。
         // 変えている最中なのは、選んだ範囲とカーソルで分かる。
-        className={`h-6 min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] leading-none text-inherit outline-none ${bold ? "font-medium" : ""}`}
+        className="h-6 min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] leading-none text-inherit outline-none"
       />
     </div>
   );
@@ -191,14 +189,19 @@ function markOn(path: string): void {
 function RootMark() {
   const ws = useAtomValue(workspaceAtom);
   return (
-    <Icon
-      name="folder_copy"
-      size={17}
-      fill
-      className="mg-tree-root-mark shrink-0"
-      style={{ color: ws ? colorVar(ws.color) : "var(--mg-accent)" }}
+    <span
+      className="mg-tree-root-mark"
+      style={{ background: ws ? colorVar(ws.color) : "var(--mg-accent)" }}
     />
   );
+}
+
+// 根の下にあるファイルの数（見出しの右に出す）。
+function countFiles(node: TreeNode): number {
+  if (node.kind === "file") return 1;
+  let n = 0;
+  for (const c of node.children ?? []) n += countFiles(c);
+  return n;
 }
 
 // 行は memo で包む。選択が変わったときに描き直すのは、真偽が変わった 2 行だけ。
@@ -221,7 +224,8 @@ const TreeItem = memo(function TreeItem({
   const draftName = useAtomValue(draftNameAtom);
   const showOthers = useAtomValue(showOtherFilesAtom);
   const isOpen = ctx.filtering || ctx.expanded.has(node.path);
-  const basePad = depth * 14 + 8;
+  // フォルダは開閉の印から、ファイルは同じ深さのフォルダの絵の位置から始める。
+  const basePad = depth * INDENT + ROW_PAD + (node.kind === "file" ? CHEVRON_W : 0);
 
   const startDrag = (e: React.DragEvent) => {
     setDragPayload(e.dataTransfer, { path: node.path });
@@ -241,8 +245,7 @@ const TreeItem = memo(function TreeItem({
             onCommit={(v, byKey) => ctx.commitRename(node, v, byKey)}
             onCancel={() => ctx.cancelRename(node)}
             pad={basePad}
-            icon={<FileIcon name={node.name} abs={node.abs} dir size={17} />}
-            bold
+            icon={<FileIcon name={node.name} abs={node.abs} dir />}
             // フォルダには「出している」印が無いので、変えている最中はいつも
             // 選ばれている行の塗りにする（どの行を変えているかが分かる）。
             on
@@ -296,7 +299,7 @@ const TreeItem = memo(function TreeItem({
             }}
             onContextMenu={(e) => ctx.onContext(e, node)}
             style={{ paddingLeft: `${basePad}px` }}
-            className={`group flex h-7 w-full cursor-pointer select-none items-center gap-1 rounded-md pr-1.5 text-left text-[13px] text-[var(--mg-fg-dim)] outline-none ${
+            className={`mg-tree-line group w-full cursor-pointer text-left text-[var(--mg-fg-dim)] outline-none ${
               heading ? "mg-tree-root " : ""
             }${
               isDropTarget
@@ -304,21 +307,22 @@ const TreeItem = memo(function TreeItem({
                 : "hover:bg-[var(--mg-hover)] focus-visible:bg-[var(--mg-hover)]"
             }`}
           >
-            <Icon
-              name="chevron_right"
-              size={18}
-              className={`shrink-0 text-[var(--mg-muted)] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
-            />
             {heading ? (
               <RootMark />
             ) : (
-              <FileIcon name={node.name} abs={node.abs} dir open={isOpen} size={17} />
+              <>
+                <Icon
+                  name={isOpen ? "expand_more" : "chevron_right"}
+                  size={12}
+                  className="text-[var(--mg-muted)]"
+                />
+                <FileIcon name={node.name} abs={node.abs} dir open={isOpen} />
+              </>
             )}
-            <span
-              className={`min-w-0 truncate ${heading ? "mg-tree-root-name" : "font-medium"}`}
-            >
+            <span className={`min-w-0 truncate ${heading ? "mg-tree-root-name" : ""}`}>
               {node.name}
             </span>
+            {heading && <span className="mg-tree-root-count">{countFiles(node)}</span>}
             {/* ホバー時に「このフォルダ内に作成」アクション。根の行では、指して
                 いないあいだは幅も取らない（名前を削らない）。 */}
             <span
@@ -365,12 +369,13 @@ const TreeItem = memo(function TreeItem({
                 }
                 onCommit={ctx.commitCreate}
                 onCancel={ctx.cancelCreate}
-                pad={(depth + 1) * 14 + 8}
+                pad={(heading ? depth : depth + 1) * INDENT + ROW_PAD + (ctx.creating.kind === "dir" ? 0 : CHEVRON_W)}
                 icon={<FileIcon name={ctx.creating.kind === "dir" ? "" : "a.md"} dir={ctx.creating.kind === "dir"} />}
               />
             )}
+            {/* 根の見出しの下は、見出しと同じ深さから並べる。 */}
             {node.children!.map((c) => (
-              <TreeItem key={c.path} node={c} depth={depth + 1} ctx={ctx} />
+              <TreeItem key={c.path} node={c} depth={heading ? depth : depth + 1} ctx={ctx} />
             ))}
           </div>
         )}
@@ -438,10 +443,8 @@ const TreeItem = memo(function TreeItem({
       // class 文字列で切り替えると、遷移の掛かるものと掛からないものが混ざり、
       // 押した瞬間に一部だけ変わる。
       data-on={active || undefined}
-      className="mg-tree-row group relative flex h-7 w-full select-none items-center gap-1 rounded-md pr-2 text-left text-[13px] outline-none"
+      className="mg-tree-line mg-tree-row group w-full text-left outline-none"
     >
-      {active && <span className="mg-tree-rail" />}
-      <span className="w-[18px] shrink-0" />
       <FileIcon name={node.name} />
       <span className="truncate">
         {node.path === draftRel ? draftName : listName(node.name, showOthers)}
@@ -449,7 +452,7 @@ const TreeItem = memo(function TreeItem({
       {reviewCount > 0 && (
         <span
           title={`未解決のコメント ${reviewCount} 件`}
-          className="ml-auto shrink-0 rounded-full bg-[var(--mg-accent-soft)] px-1.5 text-[10.5px] font-medium text-[var(--mg-accent)]"
+          className="mg-tree-badge"
         >
           {reviewCount}
         </span>
@@ -477,8 +480,6 @@ export function FileTree() {
   // 2 つ以上なら、どの根に入れるかは根の行で選ぶ。
   const lone = multi ? null : activeFolderId;
   // 並べている根の持ち主。根を足すのは、このワークスペースのメニューから。
-  const here = useAtomValue(workspaceAtom);
-  const setWsMenu = useSetAtom(workspaceMenuAtom);
   const [expandedByFolder, setExpandedByFolder] = useAtom(expandedByFolderAtom);
   const [menu, setMenu] = useState<EntryMenuState | null>(null);
   const [iconFor, setIconFor] = useState<IconPickerState | null>(null);
@@ -802,33 +803,6 @@ export function FileTree() {
 
   return (
     <div className="flex min-h-0 flex-col">
-      {/* 木そのものへの操作。押せるものが無ければ段ごと出さない。 */}
-      {/* フォルダを複数並べているときの、並べた根への操作。作る口は左の欄の頭。 */}
-      {multi && (
-        <div className="mg-tree-head">
-          <span className="mg-tree-count">フォルダ {roots.length}</span>
-          {here && (
-            <TextBtn
-              tip="このワークスペースにフォルダを追加"
-              quiet
-              className="mg-tree-add-root"
-              onClick={(e) => {
-                const box = e.currentTarget.getBoundingClientRect();
-                setWsMenu({ id: here.id, x: box.left, y: box.bottom + 4, step: "folders" });
-              }}
-            >
-              追加
-            </TextBtn>
-          )}
-          <IconBtn
-            tip={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
-            icon={allRootsOpen ? "unfold_less" : "unfold_more"}
-            className="mg-tree-roots"
-            onClick={toggleRoots}
-          />
-        </div>
-      )}
-
       <div
         ref={listRef}
         onDragOver={(e) => {
@@ -844,7 +818,7 @@ export function FileTree() {
         }}
         onDrop={onRootDrop}
         onKeyDown={onListKey}
-        className={`min-h-full flex-1 rounded py-1 pl-1 ${
+        className={`min-h-full flex-1 rounded ${
           rootDragOver ? "ring-1 ring-inset ring-[var(--mg-accent)]" : ""
         }`}
       >
@@ -856,7 +830,7 @@ export function FileTree() {
             }
             onCommit={ctx.commitCreate}
             onCancel={ctx.cancelCreate}
-            pad={8}
+            pad={ROW_PAD + (creating.kind === "dir" ? 0 : CHEVRON_W)}
             icon={<FileIcon name={creating.kind === "dir" ? "" : "a.md"} dir={creating.kind === "dir"} />}
           />
         )}
@@ -889,6 +863,7 @@ export function FileTree() {
           onNewFolder={noAdd ? undefined : (n) => startCreate(n.path, "dir")}
           onRename={(n) => setEditingPath(n.path)}
           onRemoveRoot={multi ? (n) => void removeRoot(n.path) : undefined}
+          onToggleRoots={multi ? { open: allRootsOpen, run: toggleRoots } : undefined}
           onIcon={(n, at) => setIconFor({ ...at, abs: n.abs, name: n.name })}
           iconOpen={!!iconFor}
         />

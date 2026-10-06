@@ -37,11 +37,14 @@ export function MenuButton({
   className,
   label,
   keys,
+  framed = false,
 }: {
   icon: string;
   // 字で出す入口（「新規 ▾」「その他 ▾」）。あれば絵だけの釦にしない。
   label?: string;
   keys?: string;
+  // 字の入口を縁のある釦にし、絵を字の前に添える（左の欄の頭の「＋ 新規」）。
+  framed?: boolean;
   title: string;
   items: MenuItem[];
   // 釦そのものが今の状態を持つとき（右の欄など）。
@@ -108,7 +111,7 @@ export function MenuButton({
         aria-expanded={open}
         className={
           label
-            ? `mg-tbtn is-quiet${active || open ? " is-on" : ""}`
+            ? `mg-tbtn${framed ? "" : " is-quiet"}${active || open ? " is-on" : ""}`
             : className ??
           `grid h-8 w-8 place-items-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40 ${
             active || open
@@ -119,8 +122,8 @@ export function MenuButton({
       >
         {label ? (
           <>
+            {framed && <Icon name={icon} size={13} stroke={1.7} />}
             {label}
-            <Icon name="expand_more" size={14} />
           </>
         ) : (
           <Icon name={icon} size={size} />

@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHASE_LABEL } from "../lib/claude";
 import { RAIL_ROOM } from "../lib/sidebar";
@@ -103,6 +103,14 @@ export function StatusBar() {
   // 右の欄は、窓が広く、分割していないときだけ出せる。
   const canRail = isLg && panes.length <= 1;
   const count = useMemo(() => (text === undefined ? null : countText(text)), [text]);
+  // 最後に書き終えた時刻。この窓で保存を見届けたときだけ出す。
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const wasSaving = useRef(false);
+  useEffect(() => {
+    if (wasSaving.current && saving === 0) setSavedAt(new Date());
+    wasSaving.current = saving > 0;
+  }, [saving]);
+  useEffect(() => setSavedAt(null), [path]);
   const open = path ? (counts.get(path) ?? 0) : 0;
   const why = "窓が狭いか、分割しているあいだは出せません";
 
@@ -121,16 +129,23 @@ export function StatusBar() {
               <span className={`mg-foot-dot${isDraft ? " is-warn" : " is-ok"}`} />
             )}
             {saving > 0 ? "保存中" : isDraft ? "下書き" : "保存済み"}
-          </Item>
-          <Item tip="閲覧と編集を切り替える" keys="⌘E" on={live} onClick={() => setLive((v) => !v)}>
-            {live ? "編集" : "閲覧"}
+            {saving === 0 && !isDraft && savedAt && (
+              <span className="mg-foot-num">
+                {savedAt.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
           </Item>
         </>
       )}
       <Item tip="ファイルの変更を見張っているか">
-        <Icon name="visibility" size={12} />
+        <Icon name="visibility" size={12} stroke={1.7} />
         {WATCH_LABEL[watch]}
       </Item>
+      {path && (
+        <Item tip="閲覧と編集を切り替える" keys="⌘E" on={live} onClick={() => setLive((v) => !v)}>
+          {live ? "編集" : "閲覧"}
+        </Item>
+      )}
       <span className="mg-foot-grow" />
       {ws?.claude && phase && (
         <Item
@@ -171,10 +186,14 @@ export function StatusBar() {
             幅 {WIDTH_LABEL[width]}
           </Item>
           {count && (
-            <Item tip="字数（空白を除く）と行数">
-              <span className="mg-foot-num">{count.chars.toLocaleString()}</span> 字
-              <span className="mg-foot-num">{count.lines.toLocaleString()}</span> 行
-            </Item>
+            <>
+              <Item tip="字数（空白と改行を除く）">
+                <span className="mg-foot-num">{count.chars.toLocaleString()}</span> 字
+              </Item>
+              <Item tip="行数">
+                <span className="mg-foot-num">L {count.lines.toLocaleString()}</span>
+              </Item>
+            </>
           )}
         </>
       )}

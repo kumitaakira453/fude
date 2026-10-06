@@ -17,8 +17,7 @@ import {
   workspaceAtom,
 } from "../state/atoms";
 import { dropWorkspaceSave } from "../state/workspace";
-import { PHASE_COLOR, phaseForAtom, seenTab } from "../state/claude";
-import { ClaudeMark } from "./ClaudeMark";
+import { phaseForAtom, seenTab } from "../state/claude";
 import { Icon } from "./Icon";
 
 // Claude のセッションに結びついたワークスペースの、サイドバーの欄（ベータ）。
@@ -140,53 +139,44 @@ export function ClaudeFiles() {
           key={`f:${n.path}`}
           title={n.path}
           onClick={() => show(n.path)}
-          style={{ paddingLeft: `${1.45 + depth * 0.85}rem` }}
-          className="flex w-full items-baseline gap-2 rounded-md py-0.5 pr-3 text-left hover:bg-[var(--mg-hover)]"
+          style={{ paddingLeft: 18 + depth * 14 }}
+          className="mg-sess-row"
         >
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--mg-fg)]">{n.name}</span>
-          <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">{ago(n.at, now)}</span>
+          <span className="mg-sess-name">{n.name}</span>
+          <span className="mg-sess-time">{ago(n.at, now)}</span>
         </button>
       ),
     );
 
   return (
-    <div className="border-t border-[var(--mg-border)] px-1 pt-1">
-      <div className="flex items-center whitespace-nowrap text-[11px] font-medium text-[var(--mg-muted)]">
+    <div className="mg-sess">
+      <div className="mg-sess-head">
         <button
           onClick={() => setOpen((v) => !v)}
-          title="このセッションで作成・編集したファイル"
-          className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1 text-left"
+          data-tip={open ? "このセッションで作成・編集したファイル（押すと畳む）" : "このセッションで作成・編集したファイル（押すと開く）"}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <Icon
-            name="chevron_right"
-            size={16}
-            className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
-          />
-          <ClaudeMark size={12} className="mr-0.5" />
+          <Icon name="claude" size={12} stroke={1.8} />
           <span className="min-w-0 truncate">セッションのファイル</span>
         </button>
         <button
           onClick={() => setView(view === "tree" ? "list" : "tree")}
-          title={view === "tree" ? "一覧で表示" : "ツリーで表示"}
+          data-tip={view === "tree" ? "一覧で表示" : "ツリーで表示"}
           aria-label={view === "tree" ? "一覧で表示" : "ツリーで表示"}
           className="mg-claude-view grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
         >
-          <Icon name={view === "tree" ? "format_list_bulleted" : "account_tree"} size={14} />
+          <Icon name={view === "tree" ? "format_list_bulleted" : "account_tree"} size={12} />
         </button>
         {phase && (
-          <span className="flex shrink-0 items-center gap-1 pl-1.5 pr-2">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
-              style={{ background: PHASE_COLOR[phase] }}
-            />
+          <span className={`mg-sess-phase${phase === "waiting" ? " is-waiting" : ""}`}>
             {PHASE_LABEL[phase]}
           </span>
         )}
       </div>
       {open && (
-        <div className="max-h-[38vh] overflow-y-auto pb-2">
+        <div className="max-h-[38vh] overflow-y-auto">
           {wrote.length === 0 && (
-            <div className="px-3 py-2 text-[11.5px] text-[var(--mg-muted)]">
+            <div className="mg-sess-row text-[var(--mg-muted)]" style={{ paddingLeft: 18 }}>
               まだありません
             </div>
           )}
@@ -197,19 +187,20 @@ export function ClaudeFiles() {
                 key={w.path}
                 title={w.path}
                 onClick={() => show(w.path)}
-                className="flex w-full items-baseline gap-2 rounded-md px-3 py-1 text-left hover:bg-[var(--mg-hover)]"
+                className="mg-sess-row"
+                style={{ paddingLeft: 18 }}
               >
-                <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--mg-fg)]">
+                <span className="mg-sess-name">
                   {w.path.split("/").pop()}
                   <span className="ml-1.5 text-[10.5px] text-[var(--mg-muted)]">
                     {label(w.path).split("/").slice(0, -1).join("/")}
                   </span>
                 </span>
-                <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">{ago(w.at, now)}</span>
+                <span className="mg-sess-time">{ago(w.at, now)}</span>
               </button>
             ))}
           {view === "list" && wrote.length > SHOWN && (
-            <div className="px-3 py-1 text-[11px] text-[var(--mg-muted)]">
+            <div className="mg-sess-row text-[var(--mg-muted)]" style={{ paddingLeft: 18 }}>
               ほか {wrote.length - SHOWN} 件
             </div>
           )}

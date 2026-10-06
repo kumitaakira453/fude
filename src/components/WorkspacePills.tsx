@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { PHASE_LABEL, type Phase } from "../lib/claude";
+import type { Phase } from "../lib/claude";
 import { currentWindowLabel } from "../lib/windows";
 import { colorVar, liveWorkspaces } from "../lib/workspaces";
 import {
@@ -11,7 +11,7 @@ import {
   workspacesAtom,
   workspaceSwitcherOpenAtom,
 } from "../state/atoms";
-import { PHASE_COLOR, phaseForAtom } from "../state/claude";
+import { phaseForAtom } from "../state/claude";
 import { barAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 
@@ -24,6 +24,7 @@ const DRAG_TYPE = "application/x-fude-ws";
 
 // 札に言葉で添える状態。作業中・待機中は点だけで足りる。
 const PHASE_BADGE: Partial<Record<Phase, string>> = {
+  working: "作業中",
   waiting: "応答待ち",
   done: "終了",
   ended: "終了",
@@ -167,28 +168,17 @@ export function WorkspacePills() {
               }${dropAt === i + 1 && i === items.length - 1 ? " drop-after" : ""}`}
             >
               {hints && hintOf(i, items.length) ? (
-                <kbd className="mg-ws-pill-hint" style={{ color: colorVar(ws.color) }}>
-                  ⌘{hintOf(i, items.length)}
-                </kbd>
+                <kbd className="mg-ws-pill-hint">⌘{hintOf(i, items.length)}</kbd>
               ) : (
                 <span
                   className="mg-ws-dot"
                   style={{ background: colorVar(ws.color) }}
                 />
               )}
-              <span className="truncate">{ws.name}</span>
-              {phase && (
-                <span
-                  title={`Claude のセッション：${PHASE_LABEL[phase]}`}
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
-                  style={{ background: PHASE_COLOR[phase] }}
-                />
-              )}
-              {/* 返事を待っているもの・終わったものは、点だけでは見落とすので言葉でも出す。 */}
+              <span className="mg-ws-pill-name">{ws.name}</span>
+              {/* Claude のセッションの今の様子を、言葉で出す。 */}
               {phase && PHASE_BADGE[phase] && (
-                <span className={`mg-ws-pill-badge is-${phase}`}>
-                  {PHASE_BADGE[phase]}
-                </span>
+                <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_BADGE[phase]}</span>
               )}
               {/* ツールバーから外すだけ。ワークスペースは消えない（⌘⇧P からまた開ける）。 */}
               <span
@@ -201,7 +191,7 @@ export function WorkspacePills() {
                 }}
                 className="mg-ws-pill-x"
               >
-                <Icon name="close" size={12} />
+                <Icon name="close" size={12} stroke={1.8} />
               </span>
             </div>
           );

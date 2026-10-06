@@ -98,10 +98,8 @@ function FilterChip({
         data-tone={here.id}
         className={`mg-rail-chip${open ? " is-open" : ""}`}
       >
-        <i className="mg-rail-dot" />
         {here.name}
         <b>{counts[now]}</b>
-        <Icon name={open ? "expand_less" : "expand_more"} size={14} />
       </button>
       {open && (
         <div className="mg-rail-menu">
@@ -353,7 +351,7 @@ export function CommentRail({
         content ? "" : " is-static"
       }`}
     >
-      <div className="mg-rail-bar">
+      <div className="mg-rail-bar mg-rail-head">
         <span className="mg-rail-title">コメント</span>
         <FilterChip now={filter} counts={counts} onPick={onFilter} />
         {strays.length > 0 && (
@@ -372,7 +370,6 @@ export function CommentRail({
           tip="コメントの欄を閉じる"
           keys="⌘⇧K"
           icon="close"
-          className="ml-auto"
           onClick={() => setRail("none")}
         />
       </div>

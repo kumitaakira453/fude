@@ -5,7 +5,7 @@
 // 出す。線の太さと形を 1 系統にそろえ、柔らかい塗りの絵を周りから無くすため。
 
 const outline = import.meta.glob(
-  "/node_modules/@tabler/icons/icons/outline/{x,trash,loader-2,copy,check,external-link,folder,plus,folder-open,file-text,chevron-right,chevron-down,chevron-up,pencil,arrows-maximize,link,grip-vertical,folder-plus,selector,file-plus,code,message-circle,sparkles,message-plus,search,device-floppy,dots-vertical,dots,unlink,history,messages,list,bolt,arrow-right,arrow-left,binary-tree,eye,eye-off,layout-columns,layout-rows,arrows-horizontal,message-2,keyboard,info-circle,photo,arrow-up,arrow-down,checks,circle-check,square,square-check,settings,toggle-right,list-tree,terminal-2,switch-horizontal,send,rocket,layout-sidebar,layout-sidebar-left-collapse,layout-sidebar-left-expand,layout-sidebar-right,layout-sidebar-right-collapse,arrow-back-up,restore,current-location,palette,list-details,html,file-diff,copy-plus,tag,zoom-out,zoom-in,maximize,arrow-bar-to-up,arrow-bar-to-down,playlist-x,icons,folders,mail,minus,file-pencil,clock,layers-subtract,arrow-autofit-width,minimize,file-code}.svg",
+  "/node_modules/@tabler/icons/icons/outline/{x,trash,loader-2,copy,check,external-link,folder,plus,folder-open,file-text,chevron-right,chevron-down,chevron-up,pencil,arrows-maximize,link,grip-vertical,folder-plus,selector,file-plus,code,message-circle,sparkles,message-plus,search,device-floppy,dots-vertical,dots,unlink,history,messages,list,bolt,arrow-right,arrow-left,binary-tree,eye,eye-off,layout-columns,layout-rows,arrows-horizontal,message-2,keyboard,info-circle,photo,arrow-up,arrow-down,checks,circle-check,square,square-check,settings,toggle-right,list-tree,terminal-2,switch-horizontal,send,rocket,layout-sidebar,layout-sidebar-left-collapse,layout-sidebar-left-expand,layout-sidebar-right,layout-sidebar-right-collapse,arrow-back-up,restore,current-location,palette,list-details,html,file-diff,copy-plus,tag,zoom-out,zoom-in,maximize,arrow-bar-to-up,arrow-bar-to-down,playlist-x,icons,folders,mail,minus,file-pencil,clock,layers-subtract,arrow-autofit-width,minimize,file-code,chevron-left,file,message,filter-2}.svg",
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;
 
@@ -30,6 +30,8 @@ function inners(raw: Record<string, string>): Map<string, string> {
 }
 
 const LINE = inners(outline);
+// Tabler に無い形。Claude の印を、ほかの絵と同じ線で描く（8 方向の線）。
+LINE.set("claude-spark", '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>');
 const SOLID = inners(filled);
 
 // Material Symbols の名前 → Tabler の名前。1 つの意味に 1 つの絵を当てる。
@@ -113,6 +115,12 @@ export const UI_ICONS: Record<string, string> = {
   terminal: "terminal-2",
   send: "send",
   rocket_launch: "rocket",
+  left_panel: "layout-sidebar",
+  chevron_left: "chevron-left",
+  insert_drive_file: "file",
+  comment: "message",
+  filter_list: "filter-2",
+  claude: "claude-spark",
   left_panel_open: "layout-sidebar-left-expand",
   left_panel_close: "layout-sidebar-left-collapse",
   right_panel_close: "layout-sidebar-right-collapse",

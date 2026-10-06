@@ -35,6 +35,7 @@ export function EntryMenu({
   onCloseOthers,
   onCloseAll,
   onRemoveRoot,
+  onToggleRoots,
 }: {
   menu: EntryMenuState;
   onClose: () => void;
@@ -51,6 +52,8 @@ export function EntryMenu({
   onCloseAll?: () => void;
   // 根の行から、その根を並びから外す。
   onRemoveRoot?: (n: TreeNode) => void;
+  // 根の行から、並べた根をまとめて畳む・開く。open は今すべて開いているか。
+  onToggleRoots?: { open: boolean; run: () => void };
 }) {
   const { openInNewWindow, deleteEntry } = useWorkspace();
   const store = useStore();
@@ -158,6 +161,15 @@ export function EntryMenu({
         ]
       : []),
     // 根の行は並べているフォルダそのもの。名前を変えたり消したりはここからはしない。
+    ...(isRoot && onToggleRoots
+      ? [
+          {
+            icon: onToggleRoots.open ? "unfold_less" : "unfold_more",
+            label: onToggleRoots.open ? "すべてのフォルダを畳む" : "すべてのフォルダを開く",
+            action: onToggleRoots.run,
+          } satisfies MI,
+        ]
+      : []),
     ...(isRoot
       ? onRemoveRoot
         ? [

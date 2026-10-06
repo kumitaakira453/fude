@@ -16,7 +16,9 @@ import {
 } from "../lib/fsAccess";
 import { VIEWABLE_SIEVE } from "../lib/kind";
 import { revealInTree } from "../lib/ui";
+import { rootName } from "../lib/idb";
 import {
+  foldersAtom,
   rootsAtom,
   activeIgnoreAtom,
   showOtherFilesAtom,
@@ -72,6 +74,7 @@ export function Breadcrumbs({
   // 木を持っているときの、このファイルの根。区切りは根からの相対で出す。
   const allRoots = useAtomValue(rootsAtom);
   const root = path ? rootOf(allRoots, path) : null;
+  const folders = useAtomValue(foldersAtom);
   const { openFile, openDoc } = useWorkspace();
   // 一覧に出すものは設定に合わせる。木と同じ見え方にする。
   const other = useAtomValue(showOtherFilesAtom);
@@ -237,16 +240,18 @@ export function Breadcrumbs({
   return (
     <>
       <div ref={navRef} className="truncate">
+        {/* 先頭はフォルダの名前。どこのフォルダのファイルかを道筋の頭で示す。 */}
+        {!lazy && root && <span title={root}>{rootName(folders, root)}</span>}
         {crumbs.map((crumb, i) => (
           <span key={crumb.path}>
-            {i > 0 && <span className="mx-1.5 opacity-60">›</span>}
+            {(i > 0 || (!lazy && root)) && <span className="mg-crumb-sep">/</span>}
             <button
               onClick={(e) =>
                 picker?.index === i ? close() : open(i, e.currentTarget)
               }
               title={crumb.path}
-              className={`rounded px-0.5 hover:text-[var(--mg-accent)] hover:underline ${
-                picker?.index === i ? "text-[var(--mg-accent)]" : ""
+              className={`mg-crumb${i === crumbs.length - 1 ? " is-last" : ""}${
+                picker?.index === i ? " is-open" : ""
               }`}
             >
               {crumb.name}

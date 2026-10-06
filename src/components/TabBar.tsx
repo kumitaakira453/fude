@@ -160,7 +160,8 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               // ので、背景だけ遅れると足並みが揃わない（ツリーの行と同じ）。
               className={`mg-tab group${selected ? " is-on" : ""}`}
             >
-              {selected && isActive && <span className="mg-tab-line" />}
+              {/* 今のタブの上端の線。分割していて焦点の無いペインでは色を落とす。 */}
+              {selected && <span className={`mg-tab-line${isActive ? "" : " is-dim"}`} />}
               <button
                 type="button"
                 role="tab"
@@ -199,7 +200,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                 onClick={() => closeTab(store, pane.id, i)}
                 className="mg-tab-x"
               >
-                <Icon name="close" size={13} />
+                <Icon name="close" size={12} stroke={1.8} />
               </button>
               {insertAt === i && <Marker side="left" />}
               {insertAt === i + 1 && <Marker side="right" />}

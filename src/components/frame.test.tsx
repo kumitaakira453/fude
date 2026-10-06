@@ -156,7 +156,8 @@ describe("足元の帯", () => {
 
   it("字数と行数を出す", () => {
     show();
-    expect(byTip("字数（空白を除く）と行数").textContent).toBe("8 字2 行");
+    expect(byTip("字数（空白と改行を除く）").textContent).toBe("8 字");
+    expect(byTip("行数").textContent).toBe("L 2");
     expect(countText("あ い\nう")).toEqual({ chars: 3, lines: 2 });
   });
 

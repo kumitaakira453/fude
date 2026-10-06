@@ -15,6 +15,7 @@ export function Icon({
   className = "",
   style,
   content = false,
+  stroke = 1.6,
 }: {
   name: string;
   size?: number;
@@ -24,11 +25,11 @@ export function Icon({
   className?: string;
   style?: CSSProperties;
   content?: boolean;
+  // 線画の線の太さ。小さい絵ほど太めにすると、同じ濃さに見える。
+  stroke?: number;
 }) {
   const glyph = content ? null : uiGlyph(name, fill);
   if (glyph) {
-    // 線画は字形より一回り大きく見えるので、少しだけ小さく描く。
-    const px = Math.round(size * 0.84);
     return (
       <span
         className={`mg-ui-icon inline-flex shrink-0 items-center justify-center leading-none ${className}`}
@@ -37,12 +38,12 @@ export function Icon({
         aria-hidden
       >
         <svg
-          width={px}
-          height={px}
+          width={size}
+          height={size}
           viewBox="0 0 24 24"
           fill={glyph.solid ? "currentColor" : "none"}
           stroke={glyph.solid ? "none" : "currentColor"}
-          strokeWidth={1.6}
+          strokeWidth={stroke}
           strokeLinecap="round"
           strokeLinejoin="round"
           dangerouslySetInnerHTML={{ __html: glyph.inner }}

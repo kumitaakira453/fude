@@ -42,6 +42,19 @@
   --mg-t-l: 15px;
   --mg-pop-shadow: 0 4px 14px rgb(0 0 0 / 0.18), 0 0 0 1px rgb(0 0 0 / 0.02);
 
+  /* 画面の周りの面。どのテーマにも、地から導いた値を置く（テーマの側で
+     直に決めてあればそちらが勝つ）。
+     chrome は上の段・縦の帯・足元の帯の地で、本文の地より一段沈める。
+     line は欄の内側の区切り線で、縁より一段淡い。pop は浮くものの地。 */
+  --mg-chrome: light-dark(
+    color-mix(in srgb, var(--mg-bg) 95%, #5c4a28),
+    color-mix(in srgb, var(--mg-bg) 78%, #000)
+  );
+  --mg-line: color-mix(in srgb, var(--mg-border) 60%, var(--mg-bg));
+  --mg-pop: light-dark(var(--mg-panel), color-mix(in srgb, var(--mg-panel) 95%, #fff));
+  --mg-warn: light-dark(#b7791f, #e2a33b);
+  --mg-ok: light-dark(#2f855a, #3fb68b);
+
   --mg-font-sans: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
     "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
   --mg-font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", Georgia, "Times New Roman",
@@ -120,15 +133,15 @@ body {
 [data-theme="aurora"] {
   color-scheme: dark;
   --mg-bg: #0e1116;
-  --mg-panel: #151a21;
+  --mg-panel: #13171d;
   --mg-fg: #e6edf3;
   --mg-fg-dim: #c2ccd6;
   --mg-muted: #7d8894;
-  --mg-border: #232b35;
-  --mg-hover: rgba(255, 255, 255, 0.06);
+  --mg-border: #222a33;
+  --mg-hover: rgba(255, 255, 255, 0.055);
   --mg-accent: #4fd1c5;
   --mg-accent2: #a78bfa;
-  --mg-accent-soft: rgba(79, 209, 197, 0.14);
+  --mg-accent-soft: rgba(79, 209, 197, 0.13);
   --mg-code-bg: #0b0f14;
   --mg-code-head: #12171e;
   --mg-code-fg: #d7e0ea;
@@ -299,12 +312,12 @@ body {
   --mg-panel: #fffdf8;
   --mg-fg: #2b2a26;
   --mg-fg-dim: #44423c;
-  --mg-muted: #9a948a;
-  --mg-border: #e7e0d3;
-  --mg-hover: rgba(0, 0, 0, 0.04);
+  --mg-muted: #8d877c;
+  --mg-border: #e3dccd;
+  --mg-hover: rgba(0, 0, 0, 0.045);
   --mg-accent: #b45309;
   --mg-accent2: #9333ea;
-  --mg-accent-soft: rgba(180, 83, 9, 0.1);
+  --mg-accent-soft: rgba(180, 83, 9, 0.09);
   --mg-code-bg: #f4efe4;
   --mg-code-head: #ece5d6;
   --mg-code-fg: #33322e;
@@ -468,6 +481,18 @@ body {
   --mg-danger: #dc2626;
   --mg-icode-fg: #226977;
   --mg-icode-bg: rgba(64, 178, 201, 0.13);
+}
+
+/* 画面の周りの面を、地から導かずに直に決めているテーマ。 */
+[data-theme="aurora"] {
+  --mg-chrome: #0b0e12;
+  --mg-line: #1a2028;
+  --mg-pop: #161b22;
+}
+[data-theme="paper"] {
+  --mg-chrome: #f3eee3;
+  --mg-line: #ece5d8;
+  --mg-pop: #fffdf8;
 }
 
 /* ============================================================
@@ -1128,19 +1153,77 @@ button.mg-task-check:hover {
 /* 選ばれている行。:hover と強さが同じなので、後に置いて勝たせる。 */
 .mg-tree-row[data-on] {
   background: var(--mg-accent-soft);
-  color: var(--mg-accent);
+  color: var(--mg-fg);
+}
+/* 木の 1 行。高さ 26、絵と字の間 6、角丸 4。 */
+.mg-tree-line {
+  position: relative;
+  display: flex;
+  height: 26px;
+  align-items: center;
+  gap: 6px;
+  padding-right: 6px;
+  border-radius: var(--mg-r1);
+  font-size: 13px;
+  white-space: nowrap;
+  user-select: none;
+}
+.mg-tree-badge {
+  flex: none;
+  margin-left: auto;
+  color: var(--mg-warn);
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
+}
+/* 左の欄の下に出す、Claude のセッションが書いたファイル。 */
+.mg-sess {
+  flex: none;
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--mg-line);
+}
+.mg-sess-head {
+  display: flex;
+  height: 22px;
+  align-items: center;
+  gap: 6px;
+  color: var(--mg-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.mg-sess-phase {
+  flex: none;
+}
+.mg-sess-phase.is-waiting {
+  color: var(--mg-warn);
+}
+.mg-sess-row {
+  display: flex;
+  width: 100%;
+  height: 22px;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--mg-r1);
+  color: var(--mg-fg-dim);
+  font-size: 12px;
+  text-align: left;
+}
+button.mg-sess-row:hover {
+  background: var(--mg-hover);
+}
+.mg-sess-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-sess-time {
+  flex: none;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
 }
 /* 左端の棒 */
-.mg-tree-rail {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  height: 1rem;
-  width: 2px;
-  transform: translateY(-50%);
-  border-radius: 9999px;
-  background: var(--mg-accent);
-}
 
 /* パンくずから「ツリーで表示」した行の一時ハイライト */
 .mg-tree-reveal {
@@ -1667,18 +1750,14 @@ body.mg-col-resizing * {
   display: grid;
   flex: none;
   place-items: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 0.3rem;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
   color: var(--mg-muted);
-  opacity: 0.55;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    opacity 0.12s ease;
+  opacity: 0.5;
 }
 .mg-tab-x:hover {
-  background: color-mix(in srgb, var(--mg-fg) 12%, transparent);
+  background: var(--mg-hover);
   color: var(--mg-fg);
   opacity: 1;
 }
@@ -3533,11 +3612,6 @@ svg[id^="mmd-"] foreignObject div {
   position: sticky;
   top: 0;
   z-index: 3;
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  padding: 0.5rem 0.7rem;
-  background: var(--mg-bg);
 }
 
 /* 絞り込みの札。押すと選択肢が開く。 */
@@ -3563,30 +3637,26 @@ svg[id^="mmd-"] foreignObject div {
 
 .mg-rail-chip {
   display: inline-flex;
+  height: 22px;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.22rem 0.4rem 0.22rem 0.55rem;
-  border: 1px solid color-mix(in srgb, var(--mg-tone) 30%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mg-tone) 10%, var(--mg-panel));
-  color: color-mix(in srgb, var(--mg-tone) 70%, var(--mg-fg));
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: transparent;
+  color: var(--mg-muted);
+  font-size: 11.5px;
   cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease,
-    box-shadow 0.12s ease;
 }
 .mg-rail-chip:hover,
 .mg-rail-chip.is-open {
-  border-color: color-mix(in srgb, var(--mg-tone) 55%, transparent);
-  background: color-mix(in srgb, var(--mg-tone) 16%, var(--mg-panel));
-  box-shadow: 0 1px 6px -2px color-mix(in srgb, var(--mg-tone) 45%, transparent);
+  background: var(--mg-hover);
+  color: var(--mg-fg);
 }
 /* 件数は、ツリーに出しているコメントの数と同じ札の形にする。色は状態ごと。 */
-.mg-rail-chip > b,
+.mg-rail-chip > b {
+  font-weight: 400;
+}
 .mg-rail-opt > b {
   padding: 0 0.35rem;
   border-radius: 999px;
@@ -3734,6 +3804,8 @@ svg[id^="mmd-"] foreignObject div {
 
 .mg-rail {
   overflow: hidden;
+  border-left: 1px solid var(--mg-border);
+  background: var(--mg-panel);
 }
 /* 流れる列。札は絶対配置で、行き先は CommentRail が測って入れる。 */
 .mg-rail-flow {
@@ -8167,17 +8239,16 @@ body.mg-carrying {
   display: flex;
   min-width: 0;
   flex: 1;
-  gap: 0.3rem;
+  gap: 2px;
   align-items: center;
-  margin: 0 0.6rem;
 }
 .mg-ws-pills {
   display: flex;
   min-width: 0;
-  gap: 0.3rem;
+  gap: 2px;
   align-items: center;
-  /* 送る箱は札の上下を切るので、輪郭や塗りが欠けないだけの余白を持たせる。 */
-  padding: 2px 1px;
+  /* 送る箱は札の上下を切るので、縁が欠けないだけの余白を持たせる。 */
+  padding: 1px 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -8188,33 +8259,42 @@ body.mg-carrying {
   position: relative;
   user-select: none;
   display: inline-flex;
-  width: 12.5rem;
-  height: 1.75rem;
+  width: 168px;
+  height: 26px;
   flex: none;
-  gap: 0.4rem;
+  gap: 7px;
   align-items: center;
-  padding: 0 0.7rem 0 0.55rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 999px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--mg-r1);
   font-size: 12px;
-  color: var(--mg-fg-dim);
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
+  color: var(--mg-muted);
 }
 .mg-ws-pill:hover {
   background: var(--mg-hover);
+  color: var(--mg-fg-dim);
 }
 /* 今いる札は名前を全部見せる（長さが変わるのは切り替えたときだけ）。 */
 .mg-ws-pill.is-on {
   width: auto;
-  min-width: 12.5rem;
-  max-width: 28rem;
-  border-color: transparent;
-  background: var(--mg-accent-soft);
-  font-weight: 600;
+  min-width: 168px;
+  max-width: 300px;
+  border-color: var(--mg-border);
+  background: var(--mg-panel);
   color: var(--mg-fg);
+  outline: none;
+}
+.mg-ws-pill .mg-ws-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+.mg-ws-pill-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mg-ws-pill.is-away {
   opacity: 0.6;
@@ -8236,12 +8316,14 @@ body.mg-carrying {
   right: -0.25rem;
 }
 .mg-ws-pill-add {
-  display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
+  display: inline-flex;
+  height: 24px;
+  min-width: 24px;
   flex: none;
-  place-items: center;
-  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: var(--mg-r1);
   color: var(--mg-muted);
 }
 .mg-ws-pill-add:hover,
@@ -8357,16 +8439,14 @@ body.mg-carrying {
 /* 札に添える状態の言葉。 */
 .mg-ws-pill-badge {
   flex: none;
-  padding: 0 0.3rem;
-  border-radius: 0.3rem;
-  background: var(--mg-hover);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 10.5px;
   color: var(--mg-muted);
 }
 .mg-ws-pill-badge.is-waiting {
-  background: color-mix(in srgb, #e8a33d 18%, transparent);
-  color: #b9781c;
+  color: var(--mg-warn);
+}
+.mg-ws-pill-badge.is-working {
+  color: var(--mg-accent);
 }
 
 /* 作る一覧の、すでにワークスペースがあるセッション。押すと作らずに開く。 */
@@ -8380,25 +8460,23 @@ body.mg-carrying {
 /* 札の ×。指していなくても常に出す（どこを押せば外れるかを探させない）。 */
 .mg-ws-pill-x {
   display: grid;
-  width: 1rem;
-  height: 1rem;
+  width: 14px;
+  height: 14px;
   flex: none;
   place-items: center;
-  margin-left: auto;
-  margin-right: -0.35rem;
-  border-radius: 999px;
-  color: var(--mg-muted);
+  border-radius: 3px;
+  opacity: 0.55;
 }
 .mg-ws-pill-x:hover {
-  background: color-mix(in srgb, var(--mg-fg) 12%, transparent);
-  color: var(--mg-fg);
+  background: var(--mg-hover);
+  opacity: 1;
 }
 
-/* 根を 2 つ以上並べているときの、フォルダの見出し。線は引かず、上の根が
-   開いているときだけ間隔で分ける（畳んでいれば普通の行と同じに詰める）。スクロールしても、今いる根の見出しは上端に残る（留まって
-   いるあいだ下の行が透けないよう枠の色で塗る）。 */
-.mg-tree-root-group:has(> :nth-child(2)) + .mg-tree-root-group {
-  margin-top: 0.375rem;
+/* 根を 2 つ以上並べているときの、フォルダの見出し。小さな太字で、色の四角と
+   ファイルの数を添える。スクロールしても、今いる根の見出しは上端に残る（留まって
+   いるあいだ下の行が透けないよう欄の色で塗る）。 */
+.mg-tree-root-group + .mg-tree-root-group {
+  margin-top: 6px;
 }
 .mg-tree-root.mg-tree-root {
   position: sticky;
@@ -8414,9 +8492,23 @@ body.mg-carrying {
   background: linear-gradient(var(--mg-accent-soft), var(--mg-accent-soft)), var(--mg-panel);
 }
 .mg-tree-root-name {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--mg-fg);
+  letter-spacing: 0.02em;
+  color: var(--mg-muted);
+}
+.mg-tree-root-mark {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
+}
+.mg-tree-root-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
 }
 
 /* 選ぶ一覧の行。キー操作の当たりは data-on で塗る。マウスの塗りは、開いた
@@ -8435,11 +8527,14 @@ body.mg-carrying {
 
 /* ⌘ を押しているあいだ、札の点の位置に出す番号。 */
 .mg-ws-pill-hint {
+  width: 18px;
   flex: none;
-  font-family: inherit;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--mg-accent);
+  font-family: var(--mg-font-mono);
   font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
@@ -8507,15 +8602,15 @@ html[data-hints] [data-key]::after {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   height: 36px;
   padding: 0 8px 0 0;
   border-bottom: 1px solid var(--mg-border);
-  background: color-mix(in srgb, var(--mg-panel) 70%, var(--mg-bg));
+  background: var(--mg-chrome);
   user-select: none;
 }
 .mg-top-lights {
-  width: 78px;
+  width: 80px;
   height: 100%;
   flex: none;
 }
@@ -8523,17 +8618,16 @@ html[data-hints] [data-key]::after {
   width: 1px;
   height: 16px;
   flex: none;
-  margin: 0 6px;
+  margin: 0 2px;
   background: var(--mg-border);
 }
 .mg-top-find {
   display: flex;
-  width: 240px;
+  width: 260px;
   height: 26px;
   flex: none;
   align-items: center;
   gap: 8px;
-  margin: 0 4px 0 8px;
   padding: 0 8px;
   border: 1px solid var(--mg-border);
   border-radius: var(--mg-r1);
@@ -8541,22 +8635,27 @@ html[data-hints] [data-key]::after {
   color: var(--mg-muted);
   font-size: var(--mg-t-s);
 }
-.mg-top-find > span {
+.mg-top-find-label {
+  min-width: 0;
   flex: 1;
+  overflow: hidden;
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mg-top-find:hover {
-  border-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
   color: var(--mg-fg-dim);
 }
 
 /* 絵のボタン・字のボタン。 */
 .mg-ibtn {
-  display: inline-grid;
-  width: var(--mg-h-s);
+  display: inline-flex;
   height: var(--mg-h-s);
+  min-width: var(--mg-h-s);
   flex: none;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
   border-radius: var(--mg-r1);
   color: var(--mg-muted);
 }
@@ -8580,13 +8679,14 @@ html[data-hints] [data-key]::after {
   padding: 0 7px;
   border: 1px solid var(--mg-border);
   border-radius: var(--mg-r1);
-  color: var(--mg-fg-dim);
-  font-size: var(--mg-t-s);
+  color: var(--mg-muted);
+  font-size: 11.5px;
   white-space: nowrap;
 }
 .mg-tbtn.is-quiet {
+  height: auto;
+  padding: 2px 6px;
   border-color: transparent;
-  color: var(--mg-muted);
 }
 .mg-tbtn:hover:not(:disabled),
 .mg-tbtn.is-on {
@@ -8598,41 +8698,6 @@ html[data-hints] [data-key]::after {
   cursor: default;
 }
 
-/* 札。角を立て、今いる札は地を変えて縁を付ける。 */
-.mg-ws-pills-wrap {
-  min-width: 0;
-  flex: 1;
-}
-.mg-ws-pill {
-  width: 10.5rem;
-  height: 26px;
-  gap: 7px;
-  padding: 0 6px 0 8px;
-  border-color: transparent;
-  border-radius: var(--mg-r1);
-  color: var(--mg-muted);
-  transition: none;
-}
-.mg-ws-pill:hover {
-  color: var(--mg-fg-dim);
-}
-.mg-ws-pill.is-on {
-  min-width: 10.5rem;
-  max-width: 24rem;
-  border-color: var(--mg-border);
-  background: var(--mg-bg);
-  font-weight: 500;
-  color: var(--mg-fg);
-}
-.mg-ws-pill .mg-ws-dot {
-  border-radius: 2px;
-}
-.mg-ws-pill-add {
-  width: var(--mg-h-s);
-  height: var(--mg-h-s);
-  border-radius: var(--mg-r1);
-}
-
 /* 縦の帯。 */
 .mg-strip {
   display: flex;
@@ -8641,9 +8706,9 @@ html[data-hints] [data-key]::after {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 0;
+  padding-top: 8px;
   border-right: 1px solid var(--mg-border);
-  background: color-mix(in srgb, var(--mg-panel) 70%, var(--mg-bg));
+  background: var(--mg-chrome);
 }
 .mg-strip .mg-ibtn {
   position: relative;
@@ -8663,9 +8728,6 @@ html[data-hints] [data-key]::after {
   border-radius: 1px;
   background: var(--mg-accent);
   content: "";
-}
-.mg-strip-gap {
-  flex: 1;
 }
 .mg-strip-badge-host {
   position: relative;
@@ -8699,9 +8761,9 @@ html[data-hints] [data-key]::after {
   height: 32px;
   flex: none;
   align-items: center;
-  gap: 2px;
-  padding: 0 6px 0 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
+  gap: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--mg-line);
 }
 .mg-pane-side-title {
   min-width: 0;
@@ -8712,6 +8774,7 @@ html[data-hints] [data-key]::after {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-left: 4px;
 }
 .mg-input {
   width: 100%;
@@ -8730,16 +8793,34 @@ html[data-hints] [data-key]::after {
 .mg-input:focus {
   border-color: var(--mg-accent);
 }
-.mg-tree-head {
+/* 左の欄の絞り込み。絵を添えた 1 行の欄。 */
+.mg-filter {
   display: flex;
+  height: 26px;
+  flex: none;
   align-items: center;
-  gap: 2px;
-  padding: 0 6px 4px 8px;
-}
-.mg-tree-count {
-  flex: 1;
+  gap: 6px;
+  margin: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: var(--mg-bg);
   color: var(--mg-muted);
-  font-size: var(--mg-t-xs);
+}
+.mg-filter:focus-within {
+  border-color: var(--mg-accent);
+}
+.mg-filter > input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--mg-fg);
+  font-size: var(--mg-t-s);
+  outline: none;
+}
+.mg-filter > input::placeholder {
+  color: var(--mg-muted);
 }
 
 /* タブの段。 */
@@ -8756,14 +8837,12 @@ html[data-hints] [data-key]::after {
   display: flex;
   max-width: 220px;
   align-items: center;
-  gap: 6px;
-  padding: 0 6px 0 12px;
-  border-right: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
+  gap: 7px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid var(--mg-line);
   color: var(--mg-muted);
   font-size: var(--mg-t-s);
-}
-.mg-tab:hover {
-  background: var(--mg-hover);
+  white-space: nowrap;
 }
 .mg-tab.is-on {
   background: var(--mg-bg);
@@ -8786,6 +8865,9 @@ html[data-hints] [data-key]::after {
   height: 2px;
   background: var(--mg-accent);
 }
+.mg-tab-line.is-dim {
+  background: var(--mg-border);
+}
 .mg-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8796,7 +8878,7 @@ html[data-hints] [data-key]::after {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 0 8px;
 }
 .mg-seg {
@@ -8809,7 +8891,8 @@ html[data-hints] [data-key]::after {
 .mg-seg > button {
   padding: 0 9px;
   color: var(--mg-muted);
-  font-size: var(--mg-t-s);
+  font-size: 11.5px;
+  font-weight: 500;
 }
 .mg-seg > button:hover {
   color: var(--mg-fg);
@@ -8822,12 +8905,12 @@ html[data-hints] [data-key]::after {
 /* 場所の段。 */
 .mg-pathbar {
   display: flex;
-  height: 28px;
+  height: 26px;
   flex: none;
   align-items: center;
-  gap: 2px;
-  padding: 0 8px 0 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
+  gap: 6px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mg-line);
   background: var(--mg-bg);
 }
 .mg-pathbar-path {
@@ -8835,20 +8918,41 @@ html[data-hints] [data-key]::after {
   flex: 1;
   overflow: hidden;
   color: var(--mg-muted);
-  font-size: var(--mg-t-s);
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mg-crumb-sep {
+  margin: 0 0.6em;
+}
+.mg-crumb {
+  border-radius: 3px;
+}
+.mg-crumb:hover,
+.mg-crumb.is-open {
+  color: var(--mg-accent);
+}
+.mg-crumb.is-last {
+  color: var(--mg-fg-dim);
+  font-weight: 500;
+}
+.mg-pathbar .mg-tbtn.is-quiet {
+  font-family: var(--mg-font-sans);
+}
 
-/* 右の欄の頭。 */
-.mg-toc-head {
+/* 右の欄の頭。目次とコメントで同じ形。 */
+.mg-rail-head {
   display: flex;
+  height: 32px;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  color: var(--mg-muted);
-  font-size: var(--mg-t-xs);
-  font-weight: 600;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  background: var(--mg-panel);
+}
+.mg-rail-head > .mg-rail-title {
+  flex: 1;
 }
 .mg-rail-title {
   color: var(--mg-fg-dim);
@@ -8862,10 +8966,10 @@ html[data-hints] [data-key]::after {
   height: 24px;
   flex: none;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   padding: 0 6px;
   border-top: 1px solid var(--mg-border);
-  background: color-mix(in srgb, var(--mg-panel) 70%, var(--mg-bg));
+  background: var(--mg-chrome);
   color: var(--mg-muted);
   font-size: var(--mg-t-xs);
   user-select: none;
@@ -8879,9 +8983,11 @@ html[data-hints] [data-key]::after {
   border-radius: 3px;
   white-space: nowrap;
 }
-.mg-foot-item:not(.is-static):hover,
-.mg-foot-item.is-on {
+.mg-foot-item:not(.is-static):hover {
   background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-foot-item.is-on {
   color: var(--mg-fg);
 }
 .mg-foot-dot {
@@ -8892,10 +8998,10 @@ html[data-hints] [data-key]::after {
   background: var(--mg-muted);
 }
 .mg-foot-dot.is-ok {
-  background: #3fb68b;
+  background: var(--mg-ok);
 }
 .mg-foot-dot.is-warn {
-  background: #d4962a;
+  background: var(--mg-warn);
 }
 .mg-foot-num {
   font-family: var(--mg-font-mono);
@@ -8917,7 +9023,7 @@ html[data-hints] [data-key]::after {
 .mg-ws-menu {
   border: 1px solid var(--mg-border);
   border-radius: var(--mg-r2);
-  background: var(--mg-panel);
+  background: var(--mg-pop);
   box-shadow: var(--mg-pop-shadow);
 }
 .mg-menu-pop {
@@ -8969,9 +9075,9 @@ html[data-hints] [data-key]::after {
 }
 /* 操作の一覧。 */
 .mg-pal-group {
-  padding: 8px 16px 3px;
+  padding: 8px 12px 3px;
   color: var(--mg-muted);
-  font-size: var(--mg-t-xs);
+  font-size: 10.5px;
   letter-spacing: 0.04em;
 }
 .mg-pal-row {
@@ -8980,11 +9086,77 @@ html[data-hints] [data-key]::after {
   height: 30px;
   align-items: center;
   gap: 10px;
-  padding: 0 16px;
+  padding: 0 12px;
   color: var(--mg-fg-dim);
   font-size: var(--mg-t-m);
   text-align: left;
 }
 .mg-pal-row[data-on] {
   color: var(--mg-fg);
+}
+.mg-pal {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+}
+.mg-pal-in {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mg-border);
+}
+.mg-pal-in > input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  color: var(--mg-fg);
+  font-size: 14px;
+  outline: none;
+}
+.mg-pal-in > input::placeholder {
+  color: var(--mg-muted);
+}
+.mg-pal-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: none;
+  max-width: 70%;
+}
+.mg-pal-name mark {
+  background: none;
+  color: var(--mg-accent);
+  font-weight: 600;
+}
+.mg-pal-word {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-pal-keys {
+  display: flex;
+  flex: none;
+  gap: 3px;
+  margin-left: auto;
+}
+.mg-pal-foot {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 0 12px;
+  border-top: 1px solid var(--mg-border);
+  color: var(--mg-muted);
+  font-size: 11px;
+}
+.mg-pal-foot kbd + kbd {
+  margin-left: 3px;
 }

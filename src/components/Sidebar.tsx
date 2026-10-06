@@ -1,4 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useRef } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import {
   loadingAtom,
@@ -9,11 +10,13 @@ import {
   soleAtom,
   treeFilterAtom,
   workspaceAtom,
+  workspaceMenuAtom,
 } from "../state/atoms";
 import { ClaudeBanner, ClaudeFiles } from "./ClaudePanel";
 import { TextBtn } from "./Chrome";
 import { FileTree } from "./FileTree";
 import { FolderSwitcher } from "./FolderSwitcher";
+import { Icon } from "./Icon";
 import { MenuButton } from "./MenuButton";
 import { SearchPanel } from "./SearchPanel";
 
@@ -30,22 +33,25 @@ export function Sidebar() {
   const sole = useAtomValue(soleAtom);
   const setPicker = useSetAtom(openPickerAtom);
   const askCreate = useSetAtom(rootCreateAtom);
+  const setWsMenu = useSetAtom(workspaceMenuAtom);
+  const head = useRef<HTMLDivElement>(null);
   const { newDraft } = useWorkspace();
   // 根が 1 つのときだけ、根にそのまま作れる（複数なら根の行の右クリックから）。
   const lone = roots.length === 1 && !sole;
 
   return (
     <aside className="mg-pane-side">
-      <div className="mg-pane-side-head">
+      <div ref={head} className="mg-pane-side-head">
         <span className="mg-pane-side-title">{TITLE[face]}</span>
         {face === "files" && (
           <>
-            <TextBtn tip="フォルダ・ファイルを開く" keys="⌘O" quiet onClick={() => setPicker(true)}>
+            <TextBtn tip="フォルダ・ファイルを開く" keys="⌘O" onClick={() => setPicker(true)}>
               開く
             </TextBtn>
             <MenuButton
               icon="add"
               label="新規"
+              framed
               title="新しく作る"
               keys="⌘N"
               items={[
@@ -64,6 +70,23 @@ export function Sidebar() {
                       },
                     ]
                   : []),
+                ...(ws
+                  ? [
+                      {
+                        icon: "create_new_folder",
+                        label: "このワークスペースにフォルダを追加",
+                        run: () => {
+                          const box = head.current?.getBoundingClientRect();
+                          setWsMenu({
+                            id: ws.id,
+                            x: box ? box.left + 8 : 0,
+                            y: box ? box.bottom + 4 : 0,
+                            step: "folders",
+                          });
+                        },
+                      },
+                    ]
+                  : []),
               ]}
             />
           </>
@@ -78,7 +101,7 @@ export function Sidebar() {
       )}
 
       {loading.active && (
-        <div className="px-3 py-1.5 text-[var(--mg-t-xs)] text-[var(--mg-muted)]">
+        <div className="px-3 py-1.5 text-[length:var(--mg-t-xs)] text-[var(--mg-muted)]">
           {loading.message}…
           {loading.total > 0 && ` ${loading.done}/${loading.total}`}
         </div>
@@ -86,17 +109,18 @@ export function Sidebar() {
 
       {face === "files" && (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="p-2">
+          <label className="mg-filter">
+            <Icon name="filter_list" size={13} stroke={1.7} />
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="ファイル名で絞り込み…"
-              className="mg-input"
+              placeholder="ファイル名で絞り込み"
             />
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 pb-4">
+          </label>
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 pb-2">
             <FileTree />
           </div>
+          {ws?.claude && <ClaudeFiles />}
         </div>
       )}
       {face === "search" && (
@@ -109,7 +133,7 @@ export function Sidebar() {
           <ClaudeBanner />
           <ClaudeFiles />
           {!ws?.claude && (
-            <div className="px-3 py-4 text-[var(--mg-t-s)] text-[var(--mg-muted)]">
+            <div className="px-3 py-4 text-[length:var(--mg-t-s)] text-[var(--mg-muted)]">
               このワークスペースは Claude のセッションと結びついていません。札の ＋ から、セッションのワークスペースを作れます。
             </div>
           )}

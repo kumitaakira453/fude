@@ -73,7 +73,7 @@ describe("セッションのファイル", () => {
   it("はじめは一覧で、ボタンで木に替わり、選んだ表示を覚える", () => {
     const store = mount();
     expect(host!.querySelector(".mg-claude-tree")).toBeNull();
-    expect(toggle().title).toBe("ツリーで表示");
+    expect(toggle().dataset.tip).toBe("ツリーで表示");
     act(() => toggle().click());
     expect(store.get(claudeFilesViewAtom)).toBe("tree");
     const tree = host!.querySelector(".mg-claude-tree")!;
