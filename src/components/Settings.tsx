@@ -21,6 +21,7 @@ import {
   themeAtom,
   updateCheckNonceAtom,
   updateStatusAtom,
+  metaOnTopAtom,
   wideTableAtom,
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
@@ -85,6 +86,16 @@ const ROWS: Row[] = [
     name: "本文幅",
     note: "本文の 1 行の長さを選びます",
     aliases: ["width", "幅", "余白"],
+  },
+  {
+    kind: "switch",
+    id: "metaontop",
+    face: "look",
+    group: "表示",
+    atom: metaOnTopAtom,
+    name: "メタ情報を本文の上に表示",
+    note: "ファイルの先頭のメタ情報（フロントマター）を、開いたときに本文の上へ表で出します。押すと編集できます",
+    aliases: ["meta", "frontmatter", "フロントマター", "メタ", "プロパティ"],
   },
   {
     kind: "switch",

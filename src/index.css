@@ -9241,6 +9241,76 @@ html[data-hints] .mg-seg {
   color: var(--mg-muted);
   font-size: 12px;
 }
+/* 本文の上のメタ情報。本文より一段小さく、細い線の表にする。 */
+.mg-meta-panel {
+  margin: 0 0 24px;
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r2);
+  background: var(--mg-panel);
+  font-family: var(--mg-font-sans);
+}
+.mg-meta-panel-head {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  font-weight: 600;
+}
+.mg-meta-panel-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: var(--mg-t-s);
+  cursor: pointer;
+}
+.mg-meta-panel-table th,
+.mg-meta-panel-table td {
+  padding: 5px 12px;
+  border: 0;
+  vertical-align: top;
+  text-align: left;
+}
+.mg-meta-panel-table tr + tr > * {
+  border-top: 1px solid var(--mg-line);
+}
+.mg-meta-panel-table th {
+  width: 9rem;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+}
+.mg-meta-panel-table td {
+  color: var(--mg-fg-dim);
+}
+.mg-meta-panel-table:hover td {
+  color: var(--mg-fg);
+}
+.mg-meta-panel-value:is(.is-date, .is-number, .is-url, .is-mail) {
+  font-family: var(--mg-font-mono);
+  font-size: 11.5px;
+}
+.mg-meta-panel-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mg-meta-panel-item {
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--mg-hover);
+}
+.mg-meta-panel-broken {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-s);
+  text-align: left;
+}
 .mg-pal-foot kbd + kbd {
   margin-left: 3px;
 }

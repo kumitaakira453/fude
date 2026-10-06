@@ -256,6 +256,8 @@ export const taskMarksAtom = atomWithStorage<string[]>("fude:taskmarks", DEFAULT
 // 幅の長い表の手当て（ベータ）。横に送っても先頭の列を残し、溢れている表には
 // 「大きく開く」を出す。切ると今までどおり、ただ横に送るだけになる。
 export const wideTableAtom = atomWithStorage<boolean>("fude:widetable", true);
+// メタ情報（フロントマター）を本文の上に表で出すか。
+export const metaOnTopAtom = atomWithStorage<boolean>("fude:metaontop", false);
 
 // 画面の使い方はウィンドウごと。片方でサイドバーを閉じても、もう片方は開いたまま。
 export const sidebarOpenAtom = atomWithStorage<boolean>(

@@ -57,6 +57,7 @@ import {
   metaOpenAtom,
   paletteOpenAtom,
   pendingAnchorAtom,
+  metaOnTopAtom,
   readingWidthAtom,
   settingsOpenAtom,
   soleAtom,
@@ -71,6 +72,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
 import { DraftClose } from "./DraftClose";
 import { MetaModal } from "./meta/MetaModal";
+import { MetaPanel } from "./meta/MetaPanel";
 import { Icon } from "./Icon";
 import { LoadingBody } from "./LoadingBody";
 import { markdownContext } from "./MarkdownContext";
@@ -125,6 +127,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const cache = useAtomValue(contentCacheAtom);
   const font = useAtomValue(fontAtom);
   const width = useAtomValue(readingWidthAtom);
+  const metaOnTop = useAtomValue(metaOnTopAtom);
   const live = useAtomValue(liveEditAtom);
   // 設定の切り替えでファイル切替の手順を走らせないよう、控えから読む。
   const liveRef = useRef(live);
@@ -1623,6 +1626,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 </div>
               </div>
             )}
+            {metaOnTop && (
+              <div className={`${WIDTH_CLASS[width]} mx-auto`}>
+                <MetaPanel data={data} broken={broken} onOpen={() => setMetaPane(pane.id)} />
+              </div>
+            )}
             <BodyEditor
               key={path}
               body={body}
@@ -1680,6 +1688,11 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             >
               {path ? (
                 <div className="mg-tail px-10 pt-8 sm:px-16">
+                  {metaOnTop && isDoc && (
+                    <div className={`${WIDTH_CLASS[width]} mx-auto`}>
+                      <MetaPanel data={data} broken={broken} onOpen={() => setMetaPane(pane.id)} />
+                    </div>
+                  )}
                   <article
                     ref={setContent}
                     style={{ fontFamily: fontStack(font) }}
