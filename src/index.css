@@ -9145,6 +9145,63 @@ html[data-hints] .mg-seg {
   color: var(--mg-muted);
   font-size: 12px;
 }
+/* 選ぶ一覧の名前の欄（新しいワークスペース）。入力の行の下に 1 段。 */
+.mg-pick-name {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+}
+.mg-pick-name > input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  color: var(--mg-fg);
+  font-size: var(--mg-t-m);
+  outline: none;
+}
+.mg-pick-name > input::placeholder {
+  color: var(--mg-muted);
+}
+/* 選ぶ印。4px 角の枠で、選ぶとアクセントの線と印になる。 */
+.mg-check {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  color: var(--mg-accent);
+}
+.mg-check.is-on {
+  border-color: var(--mg-accent);
+}
+/* 主な操作の釦。アクセントで塗った 24px。 */
+.mg-go {
+  display: inline-flex;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: var(--mg-r1);
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+  font-size: var(--mg-t-s);
+  font-weight: 600;
+}
+.mg-go:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.mg-go:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 /* 本文の上のメタ情報。本文より一段小さく、細い線の表にする。 */
 .mg-meta-panel {
   margin: 0 0 24px;

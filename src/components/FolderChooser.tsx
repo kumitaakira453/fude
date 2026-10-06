@@ -122,13 +122,9 @@ export function FolderChooser({
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-[var(--mg-border)] px-4">
-        <button
-          title="一覧へ戻る (Esc)"
-          onClick={onBack}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-        >
-          <Icon name="arrow_back" size={18} />
+      <div className="mg-pal-in">
+        <button title="一覧へ戻る (Esc)" onClick={onBack} className="mg-ibtn -ml-1.5">
+          <Icon name="chevron_left" size={16} />
         </button>
         <input
           autoFocus
@@ -138,18 +134,13 @@ export function FolderChooser({
           onCompositionStart={ime.onCompositionStart}
           onCompositionEnd={ime.onCompositionEnd}
           onKeyDown={onKey}
-          placeholder={
-            mode === "create"
-              ? "フォルダを選択…（Space で選択、Enter で作成）"
-              : "追加するフォルダを選択…（Space で選択、Enter で追加）"
-          }
-          className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
+          placeholder={mode === "create" ? "フォルダを選ぶ…" : "追加するフォルダを選ぶ…"}
         />
       </div>
 
       {mode === "create" && (
-        <div className="flex items-center gap-2 border-b border-[var(--mg-border)] px-4 py-2">
-          <span className="shrink-0 text-[11.5px] text-[var(--mg-muted)]">名前</span>
+        <div className="mg-pick-name">
+          <span>名前</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -168,14 +159,13 @@ export function FolderChooser({
               }
             }}
             placeholder="空欄なら最初のフォルダ名になります"
-            className="min-w-0 flex-1 rounded bg-transparent px-1 text-[13px] outline-none placeholder:text-[var(--mg-muted)]"
           />
         </div>
       )}
 
       <div ref={listRef} className="mg-pick-list max-h-[46vh] overflow-y-auto py-1">
         {rows.length === 0 && (
-          <div className="px-4 py-4 text-center text-[12.5px] text-[var(--mg-muted)]">
+          <div className="mg-pal-note text-center">
             {folders.length === 0 ? "以前開いたフォルダはまだありません" : "一致するフォルダがありません"}
           </div>
         )}
@@ -189,28 +179,19 @@ export function FolderChooser({
               onMouseMove={(e) => movedIn(e) && hover(i)}
               onClick={() => toggle(f.path)}
               data-on={i === active || undefined}
-              className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5"
+              className="mg-pick-row mg-pal-row cursor-pointer"
             >
-              <Icon
-                name={on ? "check_box" : "check_box_outline_blank"}
-                size={18}
-                fill={on}
-                className={on ? "text-[var(--mg-accent)]" : "text-[var(--mg-muted)]"}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-[13.5px] text-[var(--mg-fg)]">
-                    {folderDisplayName(f)}
-                  </span>
-                  {mode === "create" && order === 0 && picked.length > 1 && (
-                    <span className="shrink-0 text-[10px] text-[var(--mg-muted)]">メイン</span>
-                  )}
-                </div>
-                <div className="truncate text-[11px] text-[var(--mg-muted)]" title={f.path}>
-                  {f.path}
-                </div>
-              </div>
-              <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
+              <span className={`mg-check${on ? " is-on" : ""}`} aria-hidden>
+                {on && <Icon name="check" size={11} stroke={2.2} />}
+              </span>
+              <span className="mg-pal-name text-[var(--mg-fg)]">{folderDisplayName(f)}</span>
+              {mode === "create" && order === 0 && picked.length > 1 && (
+                <span className="mg-ws-pill-badge is-working">メイン</span>
+              )}
+              <span className="mg-pal-word font-[family-name:var(--mg-font-mono)] text-[length:11px]" title={f.path}>
+                {f.path}
+              </span>
+              <span className="mg-pal-keys font-[family-name:var(--mg-font-mono)] text-[length:11px] text-[var(--mg-muted)]">
                 {ago(f.lastOpened, now)}
               </span>
             </div>
@@ -221,24 +202,32 @@ export function FolderChooser({
           onMouseMove={(e) => movedIn(e) && hover(rows.length)}
           onClick={() => void other()}
           data-on={active === rows.length || undefined}
-          className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5 text-[13px] text-[var(--mg-fg-dim)]"
+          className="mg-pick-row mg-pal-row cursor-pointer"
         >
-          <Icon name="folder_open" size={18} className="text-[var(--mg-muted)]" />
+          <Icon name="folder_open" size={14} className="text-[var(--mg-muted)]" />
           その他のフォルダ…
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-[var(--mg-border)] px-3 py-1.5">
-        <span className="text-[11px] text-[var(--mg-muted)]">
-          {picked.length > 0 ? `${picked.length} 個のフォルダを選択中` : "未選択の場合はカーソルのあるフォルダを使います"}
+      <div className="mg-pal-foot">
+        <span className="mr-auto">
+          {picked.length > 0 ? `${picked.length} 個のフォルダを選択中` : "選んでいないときは、カーソルのあるフォルダを使います"}
         </span>
-        <span className="ml-auto text-[10.5px] text-[var(--mg-muted)]">
-          {mode === "create" ? "⏎ 作成　⌘⏎ 新しいウィンドウで作成" : "⏎ 追加"}
+        <span>
+          <kbd className="mg-key">space</kbd> 選ぶ
         </span>
+        <span>
+          <kbd className="mg-key">⏎</kbd> {mode === "create" ? "作成" : "追加"}
+        </span>
+        {mode === "create" && (
+          <span>
+            <kbd className="mg-key">⌘⏎</kbd> 新しいウィンドウで作成
+          </span>
+        )}
         <button
           onClick={() => done(false)}
           disabled={picked.length === 0 && !rows[active]}
-          className="rounded-md bg-[var(--mg-accent-soft)] px-2.5 py-1 text-[12px] font-medium text-[var(--mg-accent)] hover:opacity-80 disabled:opacity-40"
+          className="mg-go"
         >
           {mode === "create" ? "作成" : "追加"}
         </button>
