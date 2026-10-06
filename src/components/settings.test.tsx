@@ -122,12 +122,12 @@ describe("画面", () => {
     open();
     expect(box()).not.toBeNull();
     expect(document.querySelector(".mg-set-back")).toBeNull();
-    expect(box().querySelector(".mg-set-leave")?.textContent).toContain("戻る");
+    expect(box().querySelector(".mg-set-close")?.textContent).toContain("閉じる");
   });
 
-  it("「戻る」で閉じる", () => {
+  it("右上の「閉じる」で閉じる", () => {
     open();
-    act(() => box().querySelector<HTMLElement>(".mg-set-leave")!.click());
+    act(() => box().querySelector<HTMLElement>(".mg-set-close")!.click());
     expect(store.get(settingsOpenAtom)).toBe(false);
   });
 

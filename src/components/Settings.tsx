@@ -548,17 +548,19 @@ export function Settings() {
   return (
     <div className="mg-set" role="dialog" aria-label="設定">
       <div className="mg-screenbar mg-set-bar" data-tauri-drag-region>
+        <Icon name="tune" size={16} className="text-[var(--mg-accent)]" />
+        <span className="mg-screenbar-kind" data-tauri-drag-region>設定</span>
+        <span className="flex-1" data-tauri-drag-region />
         <button
           type="button"
-          className="mg-set-leave"
+          className="mg-tbtn mg-set-close"
           onClick={() => setOpen(false)}
-          data-tip="戻る"
+          data-tip="閉じる"
           data-key="Esc"
         >
-          <Icon name="chevron_left" size={16} />
-          戻る
+          <Icon name="close" size={13} stroke={1.7} />
+          閉じる
         </button>
-        <span className="mg-screenbar-kind" data-tauri-drag-region>設定</span>
       </div>
       <aside className="mg-set-nav">
         <div className="mg-set-find">

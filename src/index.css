@@ -1812,20 +1812,6 @@ body.mg-col-resizing * {
   border-right: 1px solid var(--mg-border);
   background: var(--mg-panel);
 }
-.mg-set-leave {
-  display: flex;
-  height: 24px;
-  gap: 2px;
-  align-items: center;
-  padding: 0 8px 0 4px;
-  border-radius: var(--mg-r1);
-  font-size: 12px;
-  color: var(--mg-muted);
-}
-.mg-set-leave:hover {
-  background: var(--mg-hover);
-  color: var(--mg-fg);
-}
 .mg-set-tabs {
   display: flex;
   flex-direction: column;
