@@ -1798,7 +1798,7 @@ body.mg-col-resizing * {
   inset: 0;
   z-index: 45;
   display: flex;
-  padding-top: 36px;
+  padding-top: 40px;
   background: var(--mg-bg);
   color: var(--mg-fg);
 }
@@ -8645,7 +8645,7 @@ html[data-hints] .mg-seg {
   flex: none;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 40px;
   padding: 0 8px 0 0;
   border-bottom: 1px solid var(--mg-border);
   background: var(--mg-chrome);
@@ -8690,7 +8690,7 @@ html[data-hints] .mg-seg {
    掴むと窓を動かせる。 */
 .mg-screenbar {
   display: flex;
-  height: 36px;
+  height: 40px;
   flex: none;
   align-items: center;
   gap: 8px;
@@ -8897,7 +8897,7 @@ html[data-hints] .mg-seg {
 /* タブの段。 */
 .mg-tabrow {
   display: flex;
-  height: 32px;
+  height: 34px;
   flex: none;
   align-items: stretch;
   /* 下の線は地に描く。今のタブはその地を自分の色で覆い、下の段とつながる
@@ -8969,7 +8969,7 @@ html[data-hints] .mg-seg {
 /* 場所の段。 */
 .mg-pathbar {
   display: flex;
-  height: 26px;
+  height: 28px;
   flex: none;
   align-items: center;
   gap: 6px;

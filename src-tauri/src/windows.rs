@@ -226,7 +226,7 @@ pub fn open_doc_window(
         builder = builder
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .hidden_title(true)
-            .traffic_light_position(tauri::LogicalPosition::new(14.0, 18.0));
+            .traffic_light_position(tauri::LogicalPosition::new(14.0, 20.0));
     }
     // 前回のテーマの明暗と地で出す。白い窓が一瞬見えない。
     let look = saved_look();
