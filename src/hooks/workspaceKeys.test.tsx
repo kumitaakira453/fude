@@ -104,49 +104,61 @@ describe("ワークスペースを切り替えるキー", () => {
     expect(document.querySelector(".mg-ws-cycler")).toBeNull();
   });
 
-  it("⌃2 で列の 2 番目、⌃9 で最後", () => {
+  it("⌘2 で列の 2 番目、⌘9 で最後", () => {
     rig();
-    key({ key: "2", code: "Digit2", ctrlKey: true });
-    key({ key: "9", code: "Digit9", ctrlKey: true });
+    key({ key: "2", code: "Digit2", metaKey: true });
+    key({ key: "9", code: "Digit9", metaKey: true });
     expect(opened).toEqual(["b", "c"]);
   });
 
   it("今いるものを指したら何もしない", () => {
     rig();
-    key({ key: "1", code: "Digit1", ctrlKey: true });
+    key({ key: "1", code: "Digit1", metaKey: true });
     expect(opened).toEqual([]);
   });
 
-  it("⌘ の数字は奪わない", () => {
+  it("⌃ の数字では移らない", () => {
     rig();
-    key({ key: "2", code: "Digit2", metaKey: true });
+    key({ key: "2", code: "Digit2", ctrlKey: true });
     expect(opened).toEqual([]);
   });
 });
 
-describe("⌘J で一覧を送る", () => {
-  it("すぐ離すと、直前に開いていたものへ", () => {
+describe("⌘J の一覧は、選ぶまで開いたまま", () => {
+  const shown = () => document.querySelector(".mg-ws-cycler");
+
+  it("⌘ を離しても移らず、一覧はそのまま", () => {
     rig();
     key({ key: "j", code: "KeyJ", metaKey: true });
     up({ key: "Meta" });
-    expect(opened).toEqual(["c"]);
-  });
-
-  it("⌘ を押したまま J を 2 回押して離すと、3 番目へ", () => {
-    rig();
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    up({ key: "Meta" });
-    expect(opened).toEqual(["b"]);
-  });
-
-  it("⌘J で始めたときは、⌃ を離しても移らない", () => {
-    rig();
-    key({ key: "j", code: "KeyJ", metaKey: true });
-    up({ key: "Control" });
     expect(opened).toEqual([]);
+    expect(shown()).not.toBeNull();
+  });
+
+  it("J で選択を進め、Enter で移る", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
     up({ key: "Meta" });
-    expect(opened).toEqual(["c"]);
+    key({ key: "j", code: "KeyJ" });
+    key({ key: "Enter" });
+    expect(opened).toEqual(["b"]);
+    expect(shown()).toBeNull();
+  });
+
+  it("Esc で何もせず閉じる", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    key({ key: "Escape" });
+    expect(opened).toEqual([]);
+    expect(shown()).toBeNull();
+  });
+
+  it("もう一度 ⌘J で閉じる", () => {
+    rig();
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    key({ key: "j", code: "KeyJ", metaKey: true });
+    expect(opened).toEqual([]);
+    expect(shown()).toBeNull();
   });
 });
 

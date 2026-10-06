@@ -11,13 +11,13 @@ import {
   workspacesAtom,
 } from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
-import { barAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
+import { barAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 
 // ツールバーの中に並べるワークスペースの札。1 回押せば切り替わる。
 // ファイルのタブとは段も形も分ける（同じ形で 2 段に重ねると、どちらがどちらか
 // 読めない）。右押しで手入れのメニュー、末尾の ＋ で作る。
-// 掴んで並べ替え、× か中クリックでツールバーから外す（⌃1〜9 はこの並びの位置を指す）。
+// 掴んで並べ替え、× か中クリックでツールバーから外す（⌘1〜9 はこの並びの位置を指す）。
 
 const DRAG_TYPE = "application/x-fude-ws";
 
@@ -28,6 +28,15 @@ const PHASE_BADGE: Partial<Record<Phase, string>> = {
   ended: "終了",
   deleted: "削除済み",
 };
+
+// ⌘ を押したままにして、番号を出すまでの間。
+const HINT_AFTER_MS = 300;
+
+// その札を指す ⌘ の数字（⌘9 は一番右）。指すキーが無ければ null。
+export function hintOf(i: number, count: number): string | null {
+  if (i === count - 1 && count >= 9) return "9";
+  return i < 8 ? String(i + 1) : null;
+}
 
 export function WorkspacePills() {
   const [bar, setBar] = useAtom(barAtom);
@@ -69,6 +78,37 @@ export function WorkspacePills() {
   useEffect(() => {
     here.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [current?.id, items.length]);
+
+  // ⌘ だけを押したまましばらく待つと、札に ⌘1〜9 の番号を出す。⌘S などを
+  // 押す途中でちらっと出ないよう、少し待ってから出す。
+  const [hints, setHints] = useAtom(hintsAtom);
+  useEffect(() => {
+    let timer = 0;
+    const hide = () => {
+      window.clearTimeout(timer);
+      setHints(false);
+    };
+    const onDown = (e: KeyboardEvent) => {
+      if (e.key === "Meta" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => setHints(true), HINT_AFTER_MS);
+      } else {
+        hide();
+      }
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta") hide();
+    };
+    window.addEventListener("keydown", onDown, true);
+    window.addEventListener("keyup", onUp, true);
+    window.addEventListener("blur", hide);
+    return () => {
+      window.removeEventListener("keydown", onDown, true);
+      window.removeEventListener("keyup", onUp, true);
+      window.removeEventListener("blur", hide);
+      hide();
+    };
+  }, [setHints]);
 
   const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
     const pills = Array.from(
@@ -148,17 +188,23 @@ export function WorkspacePills() {
                 away
                   ? `${ws.name}（別のウィンドウで開いています）`
                   : i < 9
-                    ? `${ws.name}（⌃${i + 1}）`
+                    ? `${ws.name}（⌘${i + 1}）`
                     : ws.name
               }
               className={`mg-ws-pill${on ? " is-on" : ""}${away ? " is-away" : ""}${
                 dropAt === i ? " drop-before" : ""
               }${dropAt === i + 1 && i === items.length - 1 ? " drop-after" : ""}`}
             >
-              <span
-                className="mg-ws-dot"
-                style={{ background: colorVar(ws.color) }}
-              />
+              {hints && hintOf(i, items.length) ? (
+                <kbd className="mg-ws-pill-hint" style={{ color: colorVar(ws.color) }}>
+                  ⌘{hintOf(i, items.length)}
+                </kbd>
+              ) : (
+                <span
+                  className="mg-ws-dot"
+                  style={{ background: colorVar(ws.color) }}
+                />
+              )}
               <span className="truncate">{ws.name}</span>
               {phase && (
                 <span

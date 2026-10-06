@@ -8,7 +8,7 @@ import * as A from "../state/atoms";
 import { barAtom } from "../state/workspaceBar";
 import { NewWorkspace } from "./NewWorkspace";
 import { WorkspaceMenu } from "./WorkspaceMenu";
-import { WorkspacePills } from "./WorkspacePills";
+import { hintOf, WorkspacePills } from "./WorkspacePills";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 // ワークスペースの入口。やりたいことごとに入口を 1 つに決めてある。
@@ -184,6 +184,43 @@ describe("手入れ：どこで右クリックしても同じメニュー", () =
 
     rightClick(pill(el, "a"));
     expect(menuItems()).toContain("ツールバーから外す");
+  });
+});
+
+describe("⌘ を押しているあいだの番号", () => {
+  const press = (type: "keydown" | "keyup", init: KeyboardEventInit) =>
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent(type, { bubbles: true, ...init }));
+    });
+  const hints = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll(".mg-ws-pill-hint")).map((h) => h.textContent);
+  const wait = (ms: number) =>
+    act(async () => {
+      await new Promise((ok) => setTimeout(ok, ms));
+    });
+
+  it("⌘ だけを押したまま待つと札に番号が出て、離すと消える", async () => {
+    const { el } = await show();
+    press("keydown", { key: "Meta", metaKey: true });
+    expect(hints(el)).toEqual([]);
+    await wait(350);
+    expect(hints(el)).toEqual(["⌘1", "⌘2"]);
+    press("keyup", { key: "Meta" });
+    expect(hints(el)).toEqual([]);
+  });
+
+  it("⌘S のように続けて別のキーを押したときは出さない", async () => {
+    const { el } = await show();
+    press("keydown", { key: "Meta", metaKey: true });
+    press("keydown", { key: "s", metaKey: true });
+    await wait(350);
+    expect(hints(el)).toEqual([]);
+  });
+
+  it("番号は ⌘1〜8 が左から、⌘9 は一番右の札", () => {
+    expect([0, 1, 7, 8].map((i) => hintOf(i, 12))).toEqual(["1", "2", "8", null]);
+    expect(hintOf(11, 12)).toBe("9");
+    expect(hintOf(8, 9)).toBe("9");
   });
 });
 

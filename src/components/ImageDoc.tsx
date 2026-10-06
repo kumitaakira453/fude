@@ -153,12 +153,13 @@ export function ImageDoc({ abs }: { abs: string }) {
     } else if (e.key === "-") {
       e.preventDefault();
       zoomTo(shown.scale / STEP);
+    } else if (e.code === "Digit0" && e.shiftKey) {
+      // ⌘⇧0 で画面に合わせる（⌘9 はワークスペースの切り替えに使う）。
+      e.preventDefault();
+      setView(null);
     } else if (e.key === "0") {
       e.preventDefault();
       setView(clampPan({ scale: 1, x: 0, y: 0 }, natural, box));
-    } else if (e.key === "9") {
-      e.preventDefault();
-      setView(null);
     }
   };
 

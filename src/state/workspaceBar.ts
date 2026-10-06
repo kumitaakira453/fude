@@ -5,10 +5,13 @@ import { atomWithStorage } from "jotai/utils";
 //
 // ブラウザのタブと同じ考え方で、開いたワークスペースが末尾に入り、× で列から
 // 外す（ワークスペースそのものは消さない）。並びは全ウィンドウで共有する。
-// ⌃1〜9 はこの並びの位置を指す。
+// ⌘1〜9 はこの並びの位置を指す。
 export const barAtom = atomWithStorage<string[]>("fude:wsbar", [], undefined, {
   getOnInit: true,
 });
+
+// ⌘ を押したままにしているあいだ、札に ⌘1〜9 の番号を出す。
+export const hintsAtom = atom(false);
 
 // このウィンドウで開いた順（新しいものが先頭）。⌃Tab で直前のものへ戻るのに使う。
 export const visitedAtom = atom<string[]>([]);
@@ -35,7 +38,7 @@ export function visit(list: readonly string[], id: string): string[] {
   return [id, ...list.filter((x) => x !== id)];
 }
 
-// ⌃1〜9 の行き先。9 は最後。
+// ⌘1〜9 の行き先。9 は最後。
 export function barTarget(list: readonly string[], n: number): string | undefined {
   if (list.length === 0) return undefined;
   return n === 9 ? list[list.length - 1] : list[n - 1];

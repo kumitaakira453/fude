@@ -50,10 +50,9 @@ export function useHotkeys() {
       return isJsonPath(path) ? "json" : null;
     };
     const onKey = (e: KeyboardEvent) => {
-      // ⌃1〜9 はワークスペースの切り替え（⌃Tab は WorkspaceCycler が持つ）。⌘ とは
-      // 分けて見る（⌘ の割り当てを奪わない）。書いている最中でも効かせる（編集面は
-      // この組を使っていない）。
-      if (e.ctrlKey && !e.metaKey && !e.altKey) {
+      // ⌘1〜9 はツールバーの札の位置へ（⌘9 は一番右）。書いている最中でも
+      // 効かせる（編集面はこの組を使っていない）。
+      if (e.metaKey && !e.ctrlKey && !e.altKey) {
         const go = (id: string | undefined) => {
           const ws = id
             ? (store.get(A.workspacesAtom).find((w) => w.id === id) ??

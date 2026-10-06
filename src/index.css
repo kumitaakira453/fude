@@ -8419,3 +8419,13 @@ body.mg-carrying {
 .mg-pick-list:hover .mg-pick-row[data-on]:not(:hover) {
   background: transparent;
 }
+
+/* ⌘ を押しているあいだ、札の点の位置に出す番号。 */
+.mg-ws-pill-hint {
+  flex: none;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}

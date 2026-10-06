@@ -7,11 +7,12 @@ import * as A from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { barAtom, visitedAtom } from "../state/workspaceBar";
 
-// ⌘J（または ⌃Tab）の一覧。macOS の ⌘Tab と同じく、⌘ を押したまま J で送り、
-// ⌘ を離したところで移る。すぐ離せば直前のワークスペースへ（一覧は出さない）。
-// 並べるのはツールバーの札と同じもので、最近開いた順。
+// ワークスペースの一覧。並べるのはツールバーの札と同じもので、最近開いた順。
+// ⌘J は見るための一覧で、Enter かクリックで選ぶまで開いたまま。
+// ⌃Tab はブラウザのタブ送りと同じく、⌃ を押したまま送って離したところで移る。
+// すぐ離せば直前のワークスペースへ（一覧は出さない）。
 
-// 押してからこの間に離せば、一覧を出さずに移る（素早い行き来でちらつかせない）。
+// ⌃Tab を押してからこの間に離せば、一覧を出さずに移る（ちらつかせない）。
 const SHOW_AFTER_MS = 150;
 
 // 札の並びを、最近開いた順に並べ替える（今いるものが先頭）。
@@ -26,7 +27,7 @@ export function cycleOrder(
   return [...head, ...new Set(rest)];
 }
 
-// 一覧を送るキーなら、押したままにしている修飾キーを返す。
+// 一覧を開く・送るキーなら、その修飾キーを返す。
 function holdOf(e: KeyboardEvent): "Meta" | "Control" | null {
   if (e.altKey) return null;
   if (e.metaKey && !e.ctrlKey && (e.code === "KeyJ" || e.key.toLowerCase() === "j")) {
@@ -36,30 +37,25 @@ function holdOf(e: KeyboardEvent): "Meta" | "Control" | null {
   return null;
 }
 
-// ⌃1〜9 の番号（札の並びでの位置。9 は最後）。
-function numberOf(bar: readonly string[], id: string): string | null {
-  const at = bar.indexOf(id);
-  if (at < 0) return null;
-  if (at === bar.length - 1 && bar.length >= 9) return "9";
-  return at < 8 ? String(at + 1) : null;
-}
-
 export function WorkspaceCycler() {
   const store = useStore();
   const { openWorkspace } = useWorkspace();
   const openRef = useRef(openWorkspace);
   openRef.current = openWorkspace;
   const phaseFor = useAtomValue(phaseForAtom);
-  const bar = useAtomValue(barAtom);
   const [list, setList] = useState<Workspace[] | null>(null);
   const [at, setAt] = useState(0);
   const [shown, setShown] = useState(false);
+  const [picking, setPicking] = useState(false);
   // キーの扱いは描画をまたぐので、控えで持つ。
+  // キーの扱いは描画をまたぐので、控えで持つ。
+  // hold：⌃Tab。押したまま送り、⌃ を離したところで移る。
+  // pick：⌘J。一覧を見るためのもの。Enter（かクリック）で選ぶまで開いたまま。
   const live = useRef<{
     list: Workspace[];
     at: number;
     timer: number;
-    hold: "Meta" | "Control";
+    mode: "hold" | "pick";
   } | null>(null);
 
   useEffect(() => {
@@ -73,22 +69,45 @@ export function WorkspaceCycler() {
       end();
       if (ws && ws.id !== store.get(A.workspaceAtom)?.id) void openRef.current(ws);
     };
+    const step = (by: 1 | -1) => {
+      const cur = live.current;
+      if (!cur) return;
+      const n = cur.list.length;
+      cur.at = (cur.at + by + n) % n;
+      setAt(cur.at);
+    };
     const onDown = (e: KeyboardEvent) => {
       const cur = live.current;
-      if (cur && e.key === "Escape") {
+      const hold = holdOf(e);
+      const claim = () => {
         e.preventDefault();
         e.stopPropagation();
+      };
+      if (cur && e.key === "Escape") {
+        claim();
         end();
         return;
       }
-      const hold = holdOf(e);
+      if (cur?.mode === "pick") {
+        if (hold === "Meta") {
+          claim();
+          end();
+        } else if (e.key === "Enter") {
+          claim();
+          go(cur.list[cur.at]);
+        } else if (e.key === "ArrowDown" || e.key === "Tab" || e.key.toLowerCase() === "j") {
+          claim();
+          step(e.shiftKey || e.key === "J" ? -1 : 1);
+        } else if (e.key === "ArrowUp") {
+          claim();
+          step(-1);
+        }
+        return;
+      }
       if (!hold) return;
-      e.preventDefault();
-      e.stopPropagation();
+      claim();
       if (cur) {
-        const n = cur.list.length;
-        cur.at = (cur.at + (e.shiftKey ? n - 1 : 1)) % n;
-        setAt(cur.at);
+        step(e.shiftKey ? -1 : 1);
         return;
       }
       const known = store.get(A.workspacesAtom);
@@ -99,18 +118,21 @@ export function WorkspaceCycler() {
         .filter((w): w is Workspace => !!w);
       if (found.length < 2) return;
       const start = e.shiftKey ? found.length - 1 : 1;
+      const mode = hold === "Meta" ? "pick" : "hold";
       live.current = {
         list: found,
         at: start,
-        hold,
-        timer: window.setTimeout(() => setShown(true), SHOW_AFTER_MS),
+        mode,
+        timer: mode === "pick" ? 0 : window.setTimeout(() => setShown(true), SHOW_AFTER_MS),
       };
       setList(found);
       setAt(start);
+      setPicking(mode === "pick");
+      if (mode === "pick") setShown(true);
     };
     const onUp = (e: KeyboardEvent) => {
       const cur = live.current;
-      if (cur && e.key === cur.hold) go(cur.list[cur.at]);
+      if (cur?.mode === "hold" && e.key === "Control") go(cur.list[cur.at]);
     };
     // ほかのアプリへ移ったら、⌃ を離したことが届かない。そのまま閉じる。
     const onBlur = () => end();
@@ -128,15 +150,23 @@ export function WorkspaceCycler() {
   if (!list || !shown) return null;
 
   return (
-    <div className="mg-ws-cycler fixed inset-0 z-50 flex items-center justify-center bg-black/25">
+    <div
+      className="mg-ws-cycler fixed inset-0 z-50 flex items-center justify-center bg-black/25"
+      onMouseDown={() => {
+        if (live.current) window.clearTimeout(live.current.timer);
+        live.current = null;
+        setList(null);
+        setShown(false);
+      }}
+    >
       <div
+        onMouseDown={(e) => e.stopPropagation()}
         role="listbox"
         aria-label="ワークスペース"
         className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--mg-border)] bg-[var(--mg-panel)] py-1.5 shadow-2xl"
       >
         {list.map((ws, i) => {
           const phase = phaseFor(ws);
-          const num = numberOf(bar, ws.id);
           return (
             <div
               key={ws.id}
@@ -144,15 +174,15 @@ export function WorkspaceCycler() {
               aria-selected={i === at}
               onMouseDown={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 if (live.current) window.clearTimeout(live.current.timer);
                 live.current = null;
                 setList(null);
                 setShown(false);
                 if (ws.id !== store.get(A.workspaceAtom)?.id) void openRef.current(ws);
               }}
-              className={`mx-1.5 flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 ${
-                i === at ? "bg-[var(--mg-accent-soft)]" : "hover:bg-[var(--mg-hover)]"
-              }`}
+              data-on={i === at || undefined}
+              className="mg-pick-row mx-1.5 flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2"
             >
               <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
               <span className="min-w-0 flex-1 truncate text-[13.5px] text-[var(--mg-fg)]">
@@ -167,12 +197,14 @@ export function WorkspaceCycler() {
                   {PHASE_LABEL[phase]}
                 </span>
               )}
-              {num && (
-                <kbd className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">⌃{num}</kbd>
-              )}
             </div>
           );
         })}
+        {picking && (
+          <div className="mt-1 border-t border-[var(--mg-border)] px-4 pt-1.5 pb-0.5 text-right text-[10.5px] text-[var(--mg-muted)]">
+            ⏎ 開く　↑↓ 選ぶ　esc 閉じる
+          </div>
+        )}
       </div>
     </div>
   );
