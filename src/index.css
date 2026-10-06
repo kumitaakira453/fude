@@ -8308,7 +8308,11 @@ body.mg-carrying {
 /* 札と札の境目。今の札とホバーした札は縁と地で分かるので、それ以外のあいだに
    細い縦線を引く。 */
 .mg-ws-pill:not(.is-on) + .mg-ws-pill:not(.is-on):not(:hover) {
-  background: linear-gradient(var(--mg-border), var(--mg-border)) 0 50% / 1px 14px no-repeat;
+  background: linear-gradient(
+      color-mix(in srgb, var(--mg-fg) 28%, transparent),
+      color-mix(in srgb, var(--mg-fg) 28%, transparent)
+    )
+    0 50% / 1px 16px no-repeat;
 }
 .mg-ws-pill .mg-ws-dot {
   width: 7px;
