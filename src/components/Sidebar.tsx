@@ -129,9 +129,9 @@ export function Sidebar() {
         </div>
       )}
       {face === "claude" && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col">
           <ClaudeBanner />
-          <ClaudeFiles />
+          <ClaudeFiles fill />
           {!ws?.claude && (
             <div className="px-3 py-4 text-[length:var(--mg-t-s)] text-[var(--mg-muted)]">
               このワークスペースは Claude のセッションと結びついていません。札の ＋ から、セッションのワークスペースを作れます。

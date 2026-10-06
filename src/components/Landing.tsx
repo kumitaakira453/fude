@@ -83,6 +83,8 @@ export function Landing() {
 
   return (
     <div className="mg-landing relative h-full overflow-hidden">
+      {/* 窓のタイトルバーの代わり。掴むと窓を動かせる。 */}
+      <div className="absolute inset-x-0 top-0 z-10 h-9" data-tauri-drag-region />
       {/* 地の色をゆっくり動かす。読むものが無い画面なので、ここだけ息をさせる。
           画面の外へはみ出す円なので、切り取る層に入れる。 */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>

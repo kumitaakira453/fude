@@ -485,16 +485,20 @@ export function Settings() {
 
   return (
     <div className="mg-set" role="dialog" aria-label="設定">
-      <aside className="mg-set-nav">
+      <div className="mg-screenbar mg-set-bar" data-tauri-drag-region>
         <button
           type="button"
           className="mg-set-leave"
           onClick={() => setOpen(false)}
-          title="戻る（Esc）"
+          data-tip="戻る"
+          data-key="Esc"
         >
-          <Icon name="arrow_back" size={17} />
+          <Icon name="chevron_left" size={16} />
           戻る
         </button>
+        <span className="mg-screenbar-kind" data-tauri-drag-region>設定</span>
+      </div>
+      <aside className="mg-set-nav">
         <div className="mg-set-find">
           <Icon name="search" size={16} className="text-[var(--mg-muted)]" />
           <input

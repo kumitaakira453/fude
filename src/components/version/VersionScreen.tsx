@@ -273,18 +273,12 @@ export function VersionScreen({ path }: { path: string }) {
 
   return (
     <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
-      <header className="mg-review-head flex h-14 shrink-0 items-center gap-3 px-5">
-        <Icon name="history" size={20} className="text-[var(--mg-accent)]" />
-        <div className="min-w-0">
-          <div className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-[var(--mg-muted)]">
-            Versions
-          </div>
-          <div className="truncate text-[13px] font-medium leading-tight" title={path}>
-            {name}
-            {dir && (
-              <span className="ml-1.5 text-[11px] text-[var(--mg-muted)]">{dir}</span>
-            )}
-          </div>
+      <header className="mg-review-head mg-screenbar" data-tauri-drag-region>
+        <Icon name="history" size={16} className="text-[var(--mg-accent)]" />
+        <div className="mg-screenbar-title" data-tauri-drag-region title={path}>
+          <span className="mg-screenbar-kind">バージョン履歴</span>
+          <span>{name}</span>
+          {dir && <span className="text-[11px] text-[var(--mg-muted)]">{dir}</span>}
         </div>
         <span className="flex-1" />
 
@@ -335,9 +329,11 @@ export function VersionScreen({ path }: { path: string }) {
 
         <button
           onClick={() => close(null)}
-          className="flex items-center gap-1 rounded-lg border border-[var(--mg-border)] px-2.5 py-1 text-[12px] text-[var(--mg-fg-dim)] transition duration-100 active:scale-95 hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+          className="mg-tbtn"
+          data-tip="閉じる"
+          data-key="Esc"
         >
-          <Icon name="close" size={15} />
+          <Icon name="close" size={13} stroke={1.7} />
           閉じる
         </button>
       </header>

@@ -403,13 +403,11 @@ export function ReviewScreen() {
 
   return (
     <div className="mg-review flex h-screen w-screen flex-col overflow-hidden bg-[var(--mg-bg)] text-[var(--mg-fg)]">
-      <header className="mg-review-head flex h-14 shrink-0 items-center gap-3 px-5">
-        <Icon name="rate_review" size={20} className="text-[var(--mg-accent)]" />
-        <div className="min-w-0">
-          <div className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-[var(--mg-muted)]">
-            Review
-          </div>
-          <div className="text-[13px] font-medium leading-tight">
+      <header className="mg-review-head mg-screenbar" data-tauri-drag-region>
+        <Icon name="comment" size={16} className="text-[var(--mg-accent)]" />
+        <div className="mg-screenbar-title" data-tauri-drag-region>
+          <span className="mg-screenbar-kind">コメント一覧</span>
+          <span>
             {threads.length > 0
               ? `未解決 ${threads.length} 件`
               : "このフォルダに未解決のコメントはありません"}
@@ -418,14 +416,16 @@ export function ReviewScreen() {
                 他のフォルダに {elsewhere} 件
               </span>
             )}
-          </div>
+          </span>
         </div>
         <span className="flex-1" />
         <button
           onClick={() => setScreen(false)}
-          className="flex items-center gap-1 rounded-lg border border-[var(--mg-border)] px-2.5 py-1 text-[12px] text-[var(--mg-fg-dim)] transition duration-100 active:scale-95 hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
+          className="mg-tbtn"
+          data-tip="閉じる"
+          data-key="Esc"
         >
-          <Icon name="close" size={15} />
+          <Icon name="close" size={13} stroke={1.7} />
           閉じる
         </button>
       </header>

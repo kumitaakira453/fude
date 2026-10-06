@@ -84,7 +84,9 @@ export function ClaudeBanner() {
   );
 }
 
-export function ClaudeFiles() {
+// fill：Claude の面に出すときは欄の高さいっぱいに並べる。ファイルの面の下に
+// 添えるときは、木を押し出さないよう高さを抑える。
+export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
   const ws = useAtomValue(workspaceAtom);
   const phase = useAtomValue(phaseForAtom)(ws);
   const label = useAtomValue(pathLabelAtom);
@@ -149,7 +151,7 @@ export function ClaudeFiles() {
     );
 
   return (
-    <div className="mg-sess">
+    <div className={`mg-sess${fill ? " is-fill" : ""}`}>
       <div className="mg-sess-head">
         <button
           onClick={() => setOpen((v) => !v)}
@@ -168,13 +170,11 @@ export function ClaudeFiles() {
           <Icon name={view === "tree" ? "format_list_bulleted" : "account_tree"} size={12} />
         </button>
         {phase && (
-          <span className={`mg-sess-phase${phase === "waiting" ? " is-waiting" : ""}`}>
-            {PHASE_LABEL[phase]}
-          </span>
+          <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>
         )}
       </div>
       {open && (
-        <div className="max-h-[38vh] overflow-y-auto">
+        <div className={fill ? "min-h-0 flex-1 overflow-y-auto" : "max-h-[38vh] overflow-y-auto"}>
           {wrote.length === 0 && (
             <div className="mg-sess-row text-[var(--mg-muted)]" style={{ paddingLeft: 18 }}>
               まだありません
