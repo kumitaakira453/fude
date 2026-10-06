@@ -4001,19 +4001,22 @@ svg[id^="mmd-"] foreignObject div {
 .mg-rail-acts {
   position: sticky;
   z-index: 2;
-  top: 0.3rem;
+  /* 欄の頭（32px）の下に留める。 */
+  top: 38px;
   display: flex;
   height: 0;
+  /* 高さ 0 の段に伸ばされると一組が潰れ、釦が外へはみ出して指せなくなる。 */
+  align-items: flex-start;
   justify-content: flex-end;
 }
 .mg-rail-acts-pill {
   display: flex;
-  gap: 0.1rem;
-  padding: 0.15rem;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  background: var(--mg-panel);
-  box-shadow: 0 2px 10px -4px rgb(0 0 0 / 30%);
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
   opacity: 0;
   transition: opacity 0.12s ease;
 }
@@ -4026,14 +4029,11 @@ svg[id^="mmd-"] foreignObject div {
 .mg-rail-act {
   display: grid;
   place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 0.35rem;
-  color: var(--mg-fg-dim);
+  width: var(--mg-h-s);
+  height: var(--mg-h-s);
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
   pointer-events: none;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
 }
 .mg-rail-acts-pill:hover .mg-rail-act {
   pointer-events: auto;

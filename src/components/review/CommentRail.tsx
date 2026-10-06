@@ -734,7 +734,7 @@ function RailAct({
   return (
     <button
       type="button"
-      title={label}
+      data-tip={label}
       aria-label={label}
       onClick={(e) => {
         e.stopPropagation();
@@ -742,7 +742,7 @@ function RailAct({
       }}
       className="mg-rail-act"
     >
-      <Icon name={icon} size={15} />
+      <Icon name={icon} size={14} />
     </button>
   );
 }
