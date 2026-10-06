@@ -9219,21 +9219,26 @@ html[data-hints] .mg-seg {
 /* 本文の上のメタ情報。本文より一段小さく、細い線の表にする。 */
 .mg-meta-panel {
   margin: 0 0 24px;
-  border: 1px solid var(--mg-line);
-  border-radius: var(--mg-r2);
-  background: var(--mg-panel);
+  border-top: 1px solid var(--mg-line);
+  border-bottom: 1px solid var(--mg-line);
   font-family: var(--mg-font-sans);
 }
+/* 名前は左上に小さく添えるだけ。編集は表を指したときだけ出す。 */
 .mg-meta-panel-head {
   display: flex;
-  height: 28px;
+  height: 24px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 6px 0 12px;
-  border-bottom: 1px solid var(--mg-line);
   color: var(--mg-muted);
   font-size: var(--mg-t-xs);
-  font-weight: 600;
+}
+.mg-meta-panel-head .mg-tbtn {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.mg-meta-panel:hover .mg-meta-panel-head .mg-tbtn,
+.mg-meta-panel-head .mg-tbtn:focus-visible {
+  opacity: 1;
 }
 .mg-meta-panel-table {
   width: 100%;
@@ -9244,16 +9249,19 @@ html[data-hints] .mg-seg {
 }
 .mg-meta-panel-table th,
 .mg-meta-panel-table td {
-  padding: 5px 12px;
+  padding: 5px 0;
   border: 0;
   vertical-align: top;
   text-align: left;
 }
-.mg-meta-panel-table tr + tr > * {
+.mg-meta-panel-table tr > * {
   border-top: 1px solid var(--mg-line);
 }
 .mg-meta-panel-table th {
-  width: 9rem;
+  width: 1%;
+  max-width: 9rem;
+  padding-right: 24px;
+  white-space: nowrap;
   color: var(--mg-muted);
   font-family: var(--mg-font-mono);
   font-size: 11px;
@@ -9281,7 +9289,7 @@ html[data-hints] .mg-seg {
 }
 .mg-meta-panel-broken {
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 0 8px;
   color: var(--mg-muted);
   font-size: var(--mg-t-s);
   text-align: left;
