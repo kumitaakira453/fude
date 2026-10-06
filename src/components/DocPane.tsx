@@ -1509,11 +1509,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             書き出し
           </TextBtn>
         )}
-        {pane.tabs.length > 0 && (
-          <TextBtn tip="右に分割" keys={"⌘\\"} quiet onClick={() => splitInto(store, "row")}>
-            分割
-          </TextBtn>
-        )}
         {(canCopy || (path && isDoc) || isSplit) && (
           <MenuButton
             icon="more_horiz"
