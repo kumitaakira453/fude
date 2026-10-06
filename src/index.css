@@ -4135,20 +4135,25 @@ svg[id^="mmd-"] foreignObject div {
   padding: 4px;
 }
 /* 短い知らせ。下の中央に出して自分で消える。押す対象は持たせない。
-   右下は右ペインの操作ボタンの真上に来るので、中央に置いて重ならないようにする。 */
+   右下は右ペインの操作ボタンの真上に来るので、中央に置いて重ならないようにする。
+   形は浮くもの（6px の角・縁・弱い影）。 */
 .mg-toast {
   position: fixed;
   left: 50%;
   bottom: 1.75rem;
   z-index: 60;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: var(--mg-panel);
-  box-shadow:
-    0 0 0 1px var(--mg-border),
-    0 8px 24px -12px rgba(0, 0, 0, 0.45);
-  font-size: 12.5px;
+  display: flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
+  font-size: var(--mg-t-s);
   color: var(--mg-fg);
+  white-space: nowrap;
   pointer-events: none;
   animation: mgToastIn 0.22s ease both;
 }
@@ -4471,27 +4476,95 @@ svg[id^="mmd-"] foreignObject div {
 
 /* 操作が付いた知らせだけ押せるようにする。素の知らせは押す対象を持たない。 */
 .mg-toast.has-action {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  padding-right: 0.5rem;
+  gap: 10px;
+  padding-right: 4px;
   pointer-events: auto;
 }
 /* 進行中・完了の印。文の左に置く。 */
 .mg-toast > :is(.material-symbols-rounded, .mg-ui-icon) {
   flex: none;
-  opacity: 0.8;
+  color: var(--mg-muted);
 }
 
 .mg-toast-action {
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--mg-r1);
   font-weight: 600;
   color: var(--mg-accent);
   transition: background 0.12s;
 }
 .mg-toast-action:hover {
-  background: var(--mg-hover);
+  background: var(--mg-accent-soft);
+}
+/* 新しいバージョンの案内。右下に浮かせる（設定の上にも出す）。 */
+.mg-update {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 70;
+  width: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
+  font-size: var(--mg-t-s);
+}
+.mg-update-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mg-fg);
+  font-size: var(--mg-t-m);
+  font-weight: 600;
+}
+.mg-update-head > :first-child {
+  color: var(--mg-accent);
+}
+.mg-update-sub {
+  margin-top: 2px;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: var(--mg-t-xs);
+}
+.mg-update-note {
+  display: -webkit-box;
+  margin: 8px 0 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-xs);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.mg-update-error {
+  margin: 8px 0 0;
+  color: var(--mg-danger);
+  font-size: var(--mg-t-xs);
+  line-height: 1.6;
+}
+.mg-update-bar {
+  height: 2px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--mg-line);
+}
+.mg-update-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--mg-accent);
+  transition: width 0.15s;
+}
+.mg-update-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
 }
 
 /* 中央ペインの上に操作ボタンが無い画面では右下に置く。 */

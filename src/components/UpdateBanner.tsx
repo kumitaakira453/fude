@@ -70,59 +70,32 @@ export function UpdateBanner() {
   return (
     // 設定やキー操作の一覧（z-index 60）より上に置く。更新を確認するのは設定の中
     // なので、その上に出ないと押せる場所に現れない。
-    <div className="fixed bottom-4 right-4 z-[70] w-[320px] overflow-hidden rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] shadow-2xl">
-      <div className="flex items-start gap-3 p-4">
-        <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]">
-          <Icon name="rocket_launch" size={18} fill />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-semibold text-[var(--mg-fg)]">
-            新しいバージョン {update.version} が利用できます
-          </div>
-          <div className="mt-0.5 text-[11px] text-[var(--mg-muted)]">
-            現在 v{update.currentVersion}
-          </div>
-          {update.body && phase === "available" && (
-            <p className="mt-2 line-clamp-3 whitespace-pre-line text-[11px] leading-relaxed text-[var(--mg-fg-dim)]">
-              {update.body}
-            </p>
-          )}
-          {phase === "error" && (
-            <p className="mt-2 text-[11px] leading-relaxed text-red-400">
-              更新に失敗しました: {error}
-            </p>
-          )}
-
-          {phase === "downloading" ? (
-            <div className="mt-3">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--mg-hover)]">
-                <div
-                  className="h-full bg-[var(--mg-accent)] transition-[width] duration-150"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div className="mt-1.5 text-[11px] text-[var(--mg-muted)]">
-                ダウンロード中… {pct}%
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                onClick={runUpdate}
-                className="rounded-lg bg-[var(--mg-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition hover:opacity-90"
-              >
-                {phase === "error" ? "再試行" : "更新して再起動"}
-              </button>
-              <button
-                onClick={() => setPhase("hidden")}
-                className="rounded-lg px-3 py-1.5 text-[12px] text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                後で
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="mg-update" role="status">
+      <div className="mg-update-head">
+        <Icon name="rocket_launch" size={16} />
+        新しいバージョン {update.version}
       </div>
+      <div className="mg-update-sub">今は v{update.currentVersion}</div>
+      {update.body && phase === "available" && <p className="mg-update-note">{update.body}</p>}
+      {phase === "error" && <p className="mg-update-error">更新できませんでした: {error}</p>}
+
+      {phase === "downloading" ? (
+        <>
+          <div className="mg-update-bar">
+            <i style={{ width: `${pct}%` }} />
+          </div>
+          <div className="mg-update-acts">ダウンロードしています… {pct}%</div>
+        </>
+      ) : (
+        <div className="mg-update-acts">
+          <button onClick={runUpdate} className="mg-go">
+            {phase === "error" ? "もう一度" : "更新して再起動"}
+          </button>
+          <button onClick={() => setPhase("hidden")} className="mg-tbtn">
+            後で
+          </button>
+        </div>
+      )}
     </div>
   );
 }

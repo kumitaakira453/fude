@@ -37,7 +37,7 @@ export function Toast() {
       {toast.busy && (
         <Icon name="progress_activity" size={14} className="mg-spin" />
       )}
-      {toast.done && <Icon name="check" size={15} />}
+      {toast.done && <Icon name="check" size={14} />}
       <span>{toast.text}</span>
       {toast.action && (
         <button
