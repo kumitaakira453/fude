@@ -669,6 +669,12 @@ class ImageView implements NodeView {
       const grip = document.createElement("span");
       grip.className = `mg-img-grip is-${side}`;
       grip.setAttribute("aria-hidden", "true");
+      // 掴んだ押下を編集面へ渡さない。渡すと絵の塊ごと選ばれ、塊の幅いっぱいに
+      // 選択の枠が出る。
+      grip.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
       grip.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
         event.preventDefault();

@@ -6341,6 +6341,14 @@ body.mg-carrying {
   outline: 2px solid var(--mg-accent);
   outline-offset: 1px;
 }
+/* 絵の塊は本文の幅いっぱいに広がっている。枠は絵そのものに付ける。 */
+.mg-pm .mg-img.ProseMirror-selectednode {
+  outline: none;
+}
+.mg-pm .mg-img.ProseMirror-selectednode .mg-img-hold > img {
+  outline: 2px solid var(--mg-accent);
+  outline-offset: 2px;
+}
 
 /* ============================================================
    版の履歴
