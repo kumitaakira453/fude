@@ -66,11 +66,11 @@ describe("吹き出し", () => {
   });
 
   it("data-tip の部品を指すと、少し待ってから名前とキーを出す", async () => {
-    const el = mount('<button data-tip="版を保存" data-key="⌘S"><svg></svg></button>');
+    const el = mount('<button data-tip="バージョンを保存" data-key="⌘S"><svg></svg></button>');
     over(el.querySelector("button")!);
     expect(tip()).toBeNull();
     await wait(450);
-    expect(tip()?.textContent).toBe("版を保存⌘S");
+    expect(tip()?.textContent).toBe("バージョンを保存⌘S");
   });
 
   it("絵だけのボタンの title も吹き出しにする（title は外す）", async () => {
@@ -108,7 +108,7 @@ describe("⌘ を押したときの手がかり", () => {
     });
 
   it("⌘ だけを押したまま待つと、キーを持つ部品に手がかりを出し、離すと消す", async () => {
-    mount('<button data-key="⌘S">版を保存</button>');
+    mount('<button data-key="⌘S">バージョンを保存</button>');
     press("keydown", { key: "Meta", metaKey: true });
     await wait(350);
     expect(document.documentElement.hasAttribute("data-hints")).toBe(true);
@@ -117,7 +117,7 @@ describe("⌘ を押したときの手がかり", () => {
   });
 
   it("⌘S のように続けて押したときは出さない", async () => {
-    mount('<button data-key="⌘S">版を保存</button>');
+    mount('<button data-key="⌘S">バージョンを保存</button>');
     press("keydown", { key: "Meta", metaKey: true });
     press("keydown", { key: "s", metaKey: true });
     await wait(350);

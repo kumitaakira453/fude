@@ -119,7 +119,7 @@ export function StatusBar() {
       {path && (
         <>
           <Item
-            tip={saving > 0 ? "保存しています" : isDraft ? "保存先がまだ決まっていない下書き" : "押すと版の履歴"}
+            tip={saving > 0 ? "保存しています" : isDraft ? "保存先がまだ決まっていない下書き" : "押すとバージョン履歴"}
             keys={saving > 0 || isDraft ? undefined : "⌘Y"}
             onClick={saving > 0 || isDraft ? undefined : () => openVersions(path)}
           >

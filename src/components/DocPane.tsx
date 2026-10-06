@@ -1473,15 +1473,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         {path && isDoc && !isDraft && (
           <>
             <TextBtn
-              tip="今の本文を版として保存"
+              tip="今の本文をバージョンとして保存"
               keys="⌘S"
               quiet
               on={naming !== null}
               onClick={() => (naming === null ? startNaming() : setNaming(null))}
             >
-              版を保存
+              バージョンを保存
             </TextBtn>
-            <TextBtn tip="版の履歴" keys="⌘Y" quiet onClick={showVersions}>
+            <TextBtn tip="バージョン履歴" keys="⌘Y" quiet onClick={showVersions}>
               履歴
             </TextBtn>
           </>

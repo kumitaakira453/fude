@@ -148,9 +148,9 @@ describe("足元の帯", () => {
     expect(store.get(readingWidthAtom)).toBe("wide");
   });
 
-  it("保存の状態を押すと版の履歴を開く", () => {
+  it("保存の状態を押すとバージョン履歴を開く", () => {
     show();
-    click(byTip("押すと版の履歴"));
+    click(byTip("押すとバージョン履歴"));
     expect(store.get(versionScreenAtom)).toBe("/w/a.md");
   });
 

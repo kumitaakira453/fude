@@ -98,7 +98,7 @@ describe("spotDiff", () => {
     );
     expect(spot.state).toBe("unknown");
     expect(spot.kept).toBe(false);
-    expect(spotNote(spot)).toContain("基準版が残っていない");
+    expect(spotNote(spot)).toContain("基準にしたバージョンが残っていない");
   });
 
   it("版を引けなくても、今の本文に同じ文があれば居場所は出せる", () => {

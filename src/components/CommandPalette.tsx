@@ -75,10 +75,11 @@ function Marked({ text, query }: { text: string; query: string }) {
   );
 }
 
-// ファイルの置き場のフォルダ名（すぐ上のもの）。根の直下なら空。
-function folderOf(rel: string): string {
-  const parts = rel.split("/");
-  return parts.length > 1 ? parts[parts.length - 2] : "";
+// ファイルの置き場。名前が同じファイルはどこにあるかで見分けるので、フォルダの
+// 道筋を全部出す（長いときは頭を省き、ファイルに近い側を残す）。
+function placeOf(label: string): string {
+  const parts = label.split("/");
+  return parts.slice(0, -1).join(" / ");
 }
 
 // 操作の一覧に混ぜて出すファイルの数。
@@ -271,7 +272,11 @@ export function CommandPalette() {
                       <span className="mg-pal-name" title={label(row.r.node.path)}>
                         <Marked text={row.r.node.name} query={query} />
                       </span>
-                      <span className="mg-pal-word">{folderOf(row.r.node.rel)}</span>
+                      <span className="mg-pal-word mg-pal-place">
+                        <bdi>
+                          <Marked text={placeOf(label(row.r.node.path))} query={query} />
+                        </bdi>
+                      </span>
                       {/* いつ触ったか。並び順の理由が読めるように添える。 */}
                       <span className="mg-pal-keys mg-pal-word">
                         {since(touched.get(row.r.node.path), now)}

@@ -9134,7 +9134,8 @@ html[data-hints] .mg-seg {
   flex: none;
   max-width: 70%;
 }
-.mg-pal-name mark {
+.mg-pal-name mark,
+.mg-pal-place mark {
   background: none;
   color: var(--mg-accent);
   font-weight: 600;
@@ -9147,6 +9148,15 @@ html[data-hints] .mg-seg {
   font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* ファイルの置き場。あふれたら頭を省く（向きを逆にして省略記号を左に出し、
+   中の字は bdi で元の向きのまま並べる）。 */
+.mg-pal-place {
+  flex: 0 1 auto;
+  direction: rtl;
+  text-align: left;
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
 }
 .mg-pal-keys {
   display: flex;

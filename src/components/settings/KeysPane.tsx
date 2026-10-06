@@ -56,7 +56,7 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "コメントと版",
+    title: "コメントとバージョン",
     face: "review",
     rows: [
       ["⌘I", "選んだところにコメント"],
