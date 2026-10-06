@@ -304,7 +304,7 @@ export function WorkspaceSwitcher() {
         </div>
 
         <div className="flex items-center border-t border-[var(--mg-border)] px-4 py-1.5 text-[10.5px] text-[var(--mg-muted)]">
-          <span>右クリックで名前・色・フォルダを変更</span>
+          <span>右クリックで名前・色・フォルダの変更、削除</span>
           <span className="ml-auto">⏎ 開く　⌘⏎ 新しいウィンドウ</span>
         </div>
       </div>
