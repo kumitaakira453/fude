@@ -8592,6 +8592,21 @@ html[data-hints] [data-key]::after {
   white-space: nowrap;
   pointer-events: none;
 }
+/* 足元の帯は画面の下端にあるので上に、縦の帯は右下に出す。 */
+html[data-hints] .mg-foot [data-key]::after {
+  top: -10px;
+  bottom: auto;
+}
+html[data-hints] .mg-strip [data-key]::after {
+  right: -8px;
+  bottom: -4px;
+  left: auto;
+  transform: none;
+}
+/* 閲覧と編集の切り替えは角を丸めるために外を切っている。キーの印だけははみ出させる。 */
+html[data-hints] .mg-seg {
+  overflow: visible;
+}
 
 /* ============================================================
    画面の骨組み（上の段・縦の帯・左の欄・タブ・場所の段・足元の帯）
