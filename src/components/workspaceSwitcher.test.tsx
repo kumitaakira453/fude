@@ -8,6 +8,7 @@ import * as A from "../state/atoms";
 import { barAtom } from "../state/workspaceBar";
 import { NewWorkspace } from "./NewWorkspace";
 import { WorkspaceMenu } from "./WorkspaceMenu";
+import { useKeyHints } from "../hooks/useKeyHints";
 import { hintOf, WorkspacePills } from "./WorkspacePills";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
@@ -78,6 +79,12 @@ const ws = (id: string, name: string, extra: Partial<Workspace> = {}): Workspace
   ...extra,
 });
 
+// ⌘ を押したままにしたときの手がかりは、画面全体の仕組み（useKeyHints）が出す。
+function Hints() {
+  useKeyHints();
+  return null;
+}
+
 async function show(setup?: (s: ReturnType<typeof createStore>) => void) {
   const store = createStore();
   const here = ws("a", "要件定義", { folder: "/w/a" });
@@ -96,6 +103,7 @@ async function show(setup?: (s: ReturnType<typeof createStore>) => void) {
   await act(async () => {
     root!.render(
       <Provider store={store}>
+        <Hints />
         <WorkspacePills />
         <WorkspaceSwitcher />
         <WorkspaceMenu />

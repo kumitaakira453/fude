@@ -269,7 +269,7 @@ function Callout({ type, children }: { type: string; children: ReactNode }) {
   return (
     <div className={`mg-callout ${c.cls}`}>
       <span className="mg-callout-ico">
-        <Icon name={c.icon} size={17} fill />
+        <Icon name={c.icon} size={17} fill content />
       </span>
       <div className="mg-callout-body">
         <div className="mg-callout-k">{c.k}</div>

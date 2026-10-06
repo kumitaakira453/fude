@@ -271,7 +271,7 @@ describe("フォルダを複数並べているとき", () => {
     const heads = Array.from(el.querySelectorAll<HTMLElement>(".mg-tree-root"));
     expect(heads).toHaveLength(2);
     const mark = heads[1].querySelector<HTMLElement>(".mg-tree-root-mark")!;
-    expect(mark.textContent).toBe("folder_copy");
+    expect(mark.dataset.icon).toBe("folder_copy");
     expect(mark.style.color).toContain("--mg-ws-rose");
     expect(heads[1].title).toBe("/Users/me/work/乙");
     expect(heads[1].textContent).not.toContain("/Users/me");

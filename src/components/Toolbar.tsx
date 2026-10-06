@@ -98,7 +98,7 @@ export function Toolbar() {
     <div className="flex h-12 shrink-0 items-center gap-0.5 border-b border-[var(--mg-border)] bg-[var(--mg-panel)] px-2">
       <IconButton
         onClick={() => setSidebarOpen((v) => !v)}
-        title="サイドバー (⌘B)"
+        title="サイドバー (⌘D)"
         active={sidebarOpen}
         icon={sidebarOpen ? "left_panel_close" : "left_panel_open"}
       />

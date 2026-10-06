@@ -30,6 +30,18 @@
   --mg-ws-indigo: #6c71d6;
   --mg-ws-slate: #7f8c9b;
 
+  /* 画面の周りの決まり。角丸は 2 段、部品の高さは 2 段、字は 4 段にそろえる。
+     影は浮くものにだけ、近くに落ちる弱いものを 1 つ。 */
+  --mg-r1: 4px;
+  --mg-r2: 6px;
+  --mg-h-s: 24px;
+  --mg-h-m: 28px;
+  --mg-t-xs: 11px;
+  --mg-t-s: 12px;
+  --mg-t-m: 13px;
+  --mg-t-l: 15px;
+  --mg-pop-shadow: 0 4px 14px rgb(0 0 0 / 0.18), 0 0 0 1px rgb(0 0 0 / 0.02);
+
   --mg-font-sans: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
     "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
   --mg-font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", Georgia, "Times New Roman",
@@ -1746,7 +1758,7 @@ body.mg-col-resizing * {
     background 0.12s ease,
     color 0.12s ease;
 }
-.mg-set-tab > .material-symbols-rounded,
+.mg-set-tab > :is(.material-symbols-rounded, .mg-ui-icon),
 .mg-set-tab > span:first-child {
   color: var(--mg-muted);
 }
@@ -1758,7 +1770,7 @@ body.mg-col-resizing * {
   font-weight: 600;
   color: var(--mg-accent);
 }
-.mg-set-tab.is-on > .material-symbols-rounded,
+.mg-set-tab.is-on > :is(.material-symbols-rounded, .mg-ui-icon),
 .mg-set-tab.is-on > span:first-child {
   color: var(--mg-accent);
 }
@@ -2446,7 +2458,7 @@ body.mg-col-resizing * {
 .mg-menu-row.is-on:hover:not(:disabled) {
   background: color-mix(in srgb, var(--mg-accent) 22%, transparent);
 }
-.mg-menu-row.is-on > .material-symbols-rounded,
+.mg-menu-row.is-on > :is(.material-symbols-rounded, .mg-ui-icon),
 .mg-menu-row.is-on .mg-menu-keys {
   color: var(--mg-accent);
 }
@@ -4377,7 +4389,7 @@ svg[id^="mmd-"] foreignObject div {
   pointer-events: auto;
 }
 /* 進行中・完了の印。文の左に置く。 */
-.mg-toast > .material-symbols-rounded {
+.mg-toast > :is(.material-symbols-rounded, .mg-ui-icon) {
   flex: none;
   opacity: 0.8;
 }
@@ -5997,10 +6009,10 @@ body.mg-carrying {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
-.mg-code-lang .material-symbols-rounded {
+.mg-code-lang :is(.material-symbols-rounded, .mg-ui-icon) {
   color: var(--mg-muted);
 }
-.mg-code-lang:hover .material-symbols-rounded {
+.mg-code-lang:hover :is(.material-symbols-rounded, .mg-ui-icon) {
   color: inherit;
 }
 .mg-code-tools {
@@ -6211,7 +6223,7 @@ body.mg-carrying {
   font-size: 13.5px;
   text-align: left;
 }
-.mg-slash-row > .material-symbols-rounded {
+.mg-slash-row > :is(.material-symbols-rounded, .mg-ui-icon) {
   color: var(--mg-muted);
 }
 .mg-slash-label {
@@ -6234,7 +6246,7 @@ body.mg-carrying {
   background: var(--mg-accent-soft);
   color: var(--mg-accent);
 }
-.mg-slash-row.is-active > .material-symbols-rounded {
+.mg-slash-row.is-active > :is(.material-symbols-rounded, .mg-ui-icon) {
   color: var(--mg-accent);
 }
 
@@ -8279,14 +8291,14 @@ body.mg-carrying {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
-.mg-ws-menu-item > .material-symbols-rounded {
+.mg-ws-menu-item > :is(.material-symbols-rounded, .mg-ui-icon) {
   color: var(--mg-muted);
 }
 .mg-ws-menu-item:hover {
   background: var(--mg-hover);
 }
 .mg-ws-menu-item.is-danger,
-.mg-ws-menu-item.is-danger > .material-symbols-rounded {
+.mg-ws-menu-item.is-danger > :is(.material-symbols-rounded, .mg-ui-icon) {
   color: var(--mg-danger, #e5484d);
 }
 .mg-ws-menu-sep {
@@ -8429,4 +8441,59 @@ body.mg-carrying {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+}
+
+
+/* 吹き出し。画面に 1 つだけ置き、指した部品の位置へ動かして使い回す。 */
+.mg-tip {
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 4px 8px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r2);
+  background: var(--mg-panel);
+  box-shadow: var(--mg-pop-shadow);
+  color: var(--mg-fg);
+  font-size: var(--mg-t-s);
+  line-height: 1.4;
+  white-space: pre-line;
+  pointer-events: none;
+}
+.mg-tip kbd,
+.mg-key {
+  font-family: var(--mg-font-mono);
+  font-size: 10.5px;
+  color: var(--mg-muted);
+  border: 1px solid var(--mg-border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+/* ⌘ を押したままにしているあいだ、キーを持つ部品にキーを重ねて出す。 */
+html[data-hints] [data-key] {
+  position: relative;
+}
+html[data-hints] [data-key]::after {
+  content: attr(data-key);
+  position: absolute;
+  z-index: 85;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+  font-family: var(--mg-font-mono);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  pointer-events: none;
 }

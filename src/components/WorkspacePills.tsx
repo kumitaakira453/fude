@@ -29,9 +29,6 @@ const PHASE_BADGE: Partial<Record<Phase, string>> = {
   deleted: "削除済み",
 };
 
-// ⌘ を押したままにして、番号を出すまでの間。
-const HINT_AFTER_MS = 300;
-
 // その札を指す ⌘ の数字（⌘9 は一番右）。指すキーが無ければ null。
 export function hintOf(i: number, count: number): string | null {
   if (i === count - 1 && count >= 9) return "9";
@@ -79,36 +76,8 @@ export function WorkspacePills() {
     here.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [current?.id, items.length]);
 
-  // ⌘ だけを押したまましばらく待つと、札に ⌘1〜9 の番号を出す。⌘S などを
-  // 押す途中でちらっと出ないよう、少し待ってから出す。
-  const [hints, setHints] = useAtom(hintsAtom);
-  useEffect(() => {
-    let timer = 0;
-    const hide = () => {
-      window.clearTimeout(timer);
-      setHints(false);
-    };
-    const onDown = (e: KeyboardEvent) => {
-      if (e.key === "Meta" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => setHints(true), HINT_AFTER_MS);
-      } else {
-        hide();
-      }
-    };
-    const onUp = (e: KeyboardEvent) => {
-      if (e.key === "Meta") hide();
-    };
-    window.addEventListener("keydown", onDown, true);
-    window.addEventListener("keyup", onUp, true);
-    window.addEventListener("blur", hide);
-    return () => {
-      window.removeEventListener("keydown", onDown, true);
-      window.removeEventListener("keyup", onUp, true);
-      window.removeEventListener("blur", hide);
-      hide();
-    };
-  }, [setHints]);
+  // ⌘ を押したままにしているあいだ（useKeyHints）、札に ⌘1〜9 の番号を出す。
+  const hints = useAtomValue(hintsAtom);
 
   const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
     const pills = Array.from(

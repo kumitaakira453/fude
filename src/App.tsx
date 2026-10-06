@@ -16,6 +16,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { useAfterPaint } from "./hooks/useAfterPaint";
 import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
+import { useKeyHints } from "./hooks/useKeyHints";
 import { watchStalls } from "./lib/measure";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
@@ -25,6 +26,7 @@ import { useWatcher } from "./hooks/useWatcher";
 import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
+import { TipLayer } from "./components/TipLayer";
 import { WorkspaceCycler } from "./components/WorkspaceCycler";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
@@ -76,6 +78,7 @@ export default function App() {
   const versionFile = useAtomValue(versionScreenAtom);
 
   useHotkeys();
+  useKeyHints();
   useEffect(watchStalls, []);
   useDragging();
   useWatcher();
@@ -284,6 +287,8 @@ export default function App() {
       {/* スタート画面からも切り替えられるよう、どちらの画面でも出せる位置に置く。 */}
       <WorkspaceSwitcher />
       <WorkspaceCycler />
+      {/* 吹き出しは画面に 1 つだけ。どの画面の部品にも出す。 */}
+      <TipLayer />
       {/* 設定はウィンドウ全体を覆う画面。スタート画面からも開ける。 */}
       <Settings />
       {/* ワークスペースの右押しのメニューと、作る一覧。どこから出しても同じもの。 */}

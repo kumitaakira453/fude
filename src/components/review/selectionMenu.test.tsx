@@ -71,11 +71,8 @@ describe("選択メニュー", () => {
       </SelectionMenu>,
     );
     const buttons = [...at.querySelectorAll("button")];
-    // アイコンの字（Material Symbols）が頭に入るので、末尾の言葉で見る
-    expect(buttons.map((b) => b.textContent)).toEqual([
-      "add_commentコメント",
-      "edit編集する",
-    ]);
+    // 絵は線画で描くので字を持たない。言葉だけで並びを見る。
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["コメント", "編集する"]);
     expect(press(buttons[1])).toBe(true);
     expect(asked).toBe(1);
   });

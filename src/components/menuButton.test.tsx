@@ -112,7 +112,7 @@ describe("MenuButton", () => {
     show([item("削除", { tone: "drop" }), item("写す")]);
     click(open());
     const ico = (i: number) =>
-      rows()[i].querySelector<HTMLElement>(".material-symbols-rounded")!;
+      rows()[i].querySelector<HTMLElement>("[data-icon]")!;
     expect(ico(0).style.color).toBe("var(--mg-danger)");
     // 種別を添えないものは、行の字の色のまま。
     expect(ico(1).style.color).toBe("");
