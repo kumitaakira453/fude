@@ -15,6 +15,15 @@ function countLeaves(node: LayoutNode): number {
   return node.kind === "leaf" ? 1 : node.children.reduce((s, c) => s + countLeaves(c), 0);
 }
 
+// 本文の左右の余白。広め・全幅では詰め、狭い欄でも本文が広がるようにする
+// （詰めないと、左右の欄を開いた窓では標準と見た目が変わらない）。
+export const PAD_WIDE = 24;
+export const PAD_CLASS: Record<string, string> = {
+  cozy: "px-10 sm:px-16",
+  wide: "px-6",
+  full: "px-6",
+};
+
 // 本文の読み幅。設定（readingWidthAtom）の値をそのまま引く。
 export const WIDTH_CLASS: Record<string, string> = {
   cozy: "max-w-[760px]",

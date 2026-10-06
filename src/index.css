@@ -9054,6 +9054,9 @@ html[data-hints] .mg-seg {
 .mg-foot-item.is-on {
   color: var(--mg-fg);
 }
+.mg-foot-item.is-dim {
+  opacity: 0.5;
+}
 .mg-foot-dot {
   width: 6px;
   height: 6px;

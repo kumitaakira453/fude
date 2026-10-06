@@ -5,6 +5,7 @@ import { PHASE_LABEL } from "../lib/claude";
 import { RAIL_ROOM } from "../lib/sidebar";
 import {
   activePaneAtom,
+  bodyRoomAtom,
   activePath,
   contentCacheAtom,
   liveEditAtom,
@@ -26,6 +27,8 @@ import { Icon } from "./Icon";
 // か、関係する画面へ移る。状態をあちこちの小さな印に散らさないための置き場。
 
 const WIDTHS = ["cozy", "wide", "full"] as const;
+// 標準の幅（lib/ui の WIDTH_CLASS の cozy と同じ値）。
+const COZY_PX = 760;
 const WIDTH_LABEL = { cozy: "標準", wide: "広め", full: "全幅" } as const;
 const WATCH_LABEL = {
   observer: "監視中",
@@ -102,6 +105,9 @@ export function StatusBar() {
   const isLg = useMediaQuery(RAIL_ROOM);
   // 右の欄は、窓が広く、分割していないときだけ出せる。
   const canRail = isLg && panes.length <= 1;
+  // 本文に使える幅が標準の幅に届かないときは、どれを選んでも同じ幅になる。
+  const room = useAtomValue(bodyRoomAtom);
+  const cramped = room !== null && room <= COZY_PX;
   const count = useMemo(() => (text === undefined ? null : countText(text)), [text]);
   // 最後に書き終えた時刻。この窓で保存を見届けたときだけ出す。
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -180,7 +186,12 @@ export function StatusBar() {
           </Item>
           <span className="mg-foot-sep" />
           <Item
-            tip="本文の幅。押すと順に切り替える"
+            tip={
+              cramped
+                ? "本文の幅。今は本文の欄が狭く、切り替えても見た目は変わりません（左右の欄を閉じると広がります）"
+                : "本文の幅。押すと順に切り替える"
+            }
+            className={cramped ? "is-dim" : ""}
             onClick={() => setWidth(WIDTHS[(WIDTHS.indexOf(width) + 1) % WIDTHS.length])}
           >
             幅 {WIDTH_LABEL[width]}

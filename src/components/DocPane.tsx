@@ -36,7 +36,7 @@ import {
 } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
-import { closePane, inEditable, inFloating, splitInto, WIDTH_CLASS } from "../lib/ui";
+import { closePane, inEditable, inFloating, PAD_CLASS, PAD_WIDE, splitInto, WIDTH_CLASS } from "../lib/ui";
 import {
   screenOpenAtom,
   syncLedger,
@@ -57,6 +57,7 @@ import {
   metaOpenAtom,
   paletteOpenAtom,
   pendingAnchorAtom,
+  bodyRoomAtom,
   metaOnTopAtom,
   readingWidthAtom,
   settingsOpenAtom,
@@ -181,6 +182,18 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const [editScroller, setEditScroller] = useState<HTMLElement | null>(null);
 
   const isActive = activeId === pane.id;
+  // 本文に使える幅（広めの余白で）。足元の帯が、幅を変えても見た目が変わらない
+  // ときに理由を出すのに使う。今のペインだけが知らせる。
+  const setRoom = useSetAtom(bodyRoomAtom);
+  useEffect(() => {
+    const box = editScroller ?? scroller;
+    if (!isActive || !box) return;
+    const measure = () => setRoom(box.clientWidth - PAD_WIDE * 2);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(box);
+    return () => watch.disconnect();
+  }, [isActive, editScroller, scroller, setRoom]);
   // 押した瞬間の値と、本文を組むための値を分ける。
   //
   // 本文の入れ替え（前の本文の片付けと新しい本文の組み立て）は 900 ブロックで
@@ -1606,7 +1619,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         ) : writing && path ? (
           <div
             ref={setEditScroller}
-            className="mg-tail relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-10 pt-8 sm:px-16"
+            className={`mg-tail relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-8 ${PAD_CLASS[width]}`}
           >
             {/* 組み上がるまで骨組みを被せる。
                 編集面を組むのは React の効果の中で、それが走るのは骨組みを
@@ -1620,7 +1633,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 解除は遅らせた path に紐づくので、2 フレーム後まで前の
                 ファイルが出たままになっていた。 */}
             {(!pm || settling) && (
-              <div className="absolute inset-0 z-10 bg-[var(--mg-bg)] px-10 py-8 sm:px-16">
+              <div className={`absolute inset-0 z-10 bg-[var(--mg-bg)] py-8 ${PAD_CLASS[width]}`}>
                 <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                   <LoadingBody />
                 </div>
@@ -1687,7 +1700,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
             >
               {path ? (
-                <div className="mg-tail px-10 pt-8 sm:px-16">
+                <div className={`mg-tail pt-8 ${PAD_CLASS[width]}`}>
                   {metaOnTop && isDoc && (
                     <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                       <MetaPanel data={data} broken={broken} onOpen={() => setMetaPane(pane.id)} />
@@ -1722,7 +1735,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               )}
             </div>
             {shownPath && (settling || !loaded || opening) && (
-              <div className="absolute inset-0 z-10 overflow-hidden bg-[var(--mg-bg)] px-10 py-8 sm:px-16">
+              <div className={`absolute inset-0 z-10 overflow-hidden bg-[var(--mg-bg)] py-8 ${PAD_CLASS[width]}`}>
                 <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                   <LoadingBody />
                 </div>
