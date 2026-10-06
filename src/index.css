@@ -9220,6 +9220,11 @@ html[data-hints] .mg-seg {
   gap: 3px;
   margin-left: auto;
 }
+.mg-pal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
 .mg-pal-foot {
   display: flex;
   height: 28px;

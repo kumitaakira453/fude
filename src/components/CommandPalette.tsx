@@ -27,6 +27,7 @@ import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { Icon } from "./Icon";
+import { Marked } from "./Marked";
 import { keyedIn, movedIn } from "../lib/pointer";
 
 // 触ってからの経過。細かい数字は要らないので、桁が分かる粒度で出す。
@@ -50,30 +51,6 @@ type Section = "最近使った操作" | "操作" | "ファイル";
 type Row =
   | { kind: "cmd"; cmd: Command; section: Section }
   | { kind: "file"; r: ReturnType<typeof quickOpen>[number]; section: Section };
-
-// 打った語に当たった部分を強める。語は空白で区切ったそれぞれを見る。
-function Marked({ text, query }: { text: string; query: string }) {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return <>{text}</>;
-  const low = text.toLowerCase();
-  const hit = new Array<boolean>(text.length).fill(false);
-  for (const w of words) {
-    for (let at = low.indexOf(w); at >= 0; at = low.indexOf(w, at + 1)) {
-      for (let i = at; i < at + w.length; i++) hit[i] = true;
-    }
-  }
-  const parts: { s: string; on: boolean }[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const last = parts[parts.length - 1];
-    if (last && last.on === hit[i]) last.s += text[i];
-    else parts.push({ s: text[i], on: hit[i] });
-  }
-  return (
-    <>
-      {parts.map((p, i) => (p.on ? <mark key={i}>{p.s}</mark> : <span key={i}>{p.s}</span>))}
-    </>
-  );
-}
 
 // ファイルの置き場。名前が同じファイルはどこにあるかで見分けるので、フォルダの
 // 道筋を全部出す（長いときは頭を省き、ファイルに近い側を残す）。

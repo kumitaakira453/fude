@@ -15,10 +15,11 @@ import {
   workspacesAtom,
   workspaceSwitcherOpenAtom,
 } from "../state/atoms";
-import { PHASE_COLOR, phaseForAtom } from "../state/claude";
+import { phaseForAtom } from "../state/claude";
 import { refreshWorkspaces } from "../state/workspace";
 import { barAtom, visitedAtom } from "../state/workspaceBar";
 import { Icon } from "./Icon";
+import { Marked } from "./Marked";
 import { keyedIn, movedIn } from "../lib/pointer";
 
 // ワークスペースの一覧（⌘J・札の並びの ▾）。札の列に出していないものや、まだ
@@ -158,16 +159,10 @@ export function WorkspaceSwitcher() {
   };
 
   return (
-    <div
-      className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
-      onClick={close}
-    >
-      <div
-        className="mg-pop w-full max-w-xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-[var(--mg-border)] px-4">
-          <Icon name="workspaces" size={20} className="shrink-0 text-[var(--mg-accent)]" />
+    <div className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[52px]" onClick={close}>
+      <div className="mg-pop mg-pal" onClick={(e) => e.stopPropagation()}>
+        <div className="mg-pal-in">
+          <Icon name="search" size={15} stroke={1.7} className="text-[var(--mg-muted)]" />
           <input
             autoFocus
             value={query}
@@ -193,19 +188,20 @@ export function WorkspaceSwitcher() {
                 close();
               }
             }}
-            placeholder="ワークスペースを選ぶ…（名前・フォルダで絞り込み）"
-            className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-[var(--mg-muted)]"
+            placeholder="ワークスペースを名前・フォルダで探す"
           />
+          <kbd className="mg-key">esc</kbd>
         </div>
 
-        <div ref={listRef} className="mg-pick-list max-h-[56vh] overflow-y-auto py-1">
+        <div ref={listRef} className="mg-pick-list max-h-[56vh] overflow-y-auto">
           {total === 0 && (
-            <div className="px-4 py-6 text-center text-[12.5px] text-[var(--mg-muted)]">
+            <div className="px-3 py-6 text-center text-[13px] text-[var(--mg-muted)]">
               {list.length === 0 && folders.length === 0
                 ? "まだ何もありません。フォルダを開くと、そのフォルダのワークスペースができます"
                 : "一致するものがありません"}
             </div>
           )}
+          {rows.length > 0 && <div className="mg-pal-group">ワークスペース</div>}
           {rows.map(({ ws, names }, i) => {
             const here = current?.id === ws.id;
             const other = elsewhere.get(ws.id);
@@ -225,87 +221,63 @@ export function WorkspaceSwitcher() {
                   openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
                 }}
                 data-on={i === active || undefined}
-                className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-2"
+                className="mg-pick-row mg-pal-row cursor-pointer"
               >
-                <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="truncate text-[13.5px] text-[var(--mg-fg)]">{ws.name}</span>
-                    {here && (
-                      <span className="shrink-0 rounded bg-[var(--mg-accent-soft)] px-1 text-[10px] font-medium text-[var(--mg-accent)]">
-                        このウィンドウ
-                      </span>
-                    )}
-                    {!here && other && (
-                      <span className="shrink-0 rounded bg-[var(--mg-hover)] px-1 text-[10px] text-[var(--mg-muted)]">
-                        別のウィンドウ
-                      </span>
-                    )}
-                    {phase && (
-                      <span
-                        className="flex shrink-0 items-center gap-1 text-[10.5px] text-[var(--mg-muted)]"
-                        title={`Claude のセッション：${PHASE_LABEL[phase]}`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${phase === "working" ? "animate-pulse" : ""}`}
-                          style={{ background: PHASE_COLOR[phase] }}
-                        />
-                        {PHASE_LABEL[phase]}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-2 text-[11px] text-[var(--mg-muted)]">
-                    <span className="truncate" title={ws.roots.join("\n")}>
-                      {rootsSummary(names)}
-                    </span>
-                    {!here && ws.lastOpened > 0 && (
-                      <span className="shrink-0">{ago(ws.lastOpened, now)}</span>
-                    )}
-                  </div>
-                </div>
+                <span className="mg-ws-dot mg-pal-dot" style={{ background: colorVar(ws.color) }} />
+                <span className="mg-pal-name">
+                  <Marked text={ws.name} query={query} />
+                </span>
+                {phase && PHASE_LABEL[phase] && (
+                  <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>
+                )}
+                {here && <span className="mg-pal-word">このウィンドウ</span>}
+                {!here && other && <span className="mg-pal-word">別のウィンドウ</span>}
+                <span className="mg-pal-word mg-pal-place" title={ws.roots.join("\n")}>
+                  <bdi>
+                    <Marked text={rootsSummary(names)} query={query} />
+                  </bdi>
+                </span>
+                <span className="mg-pal-keys mg-pal-word">
+                  {!here && ws.lastOpened > 0 ? ago(ws.lastOpened, now) : ""}
+                </span>
               </div>
             );
           })}
 
-          {loose.length > 0 && (
-            <div className="mt-1 border-t border-[var(--mg-border)] pt-1">
-              <div className="px-4 py-1 text-[10.5px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
-                フォルダ
+          {loose.length > 0 && <div className="mg-pal-group">開いたことのあるフォルダ</div>}
+          {loose.map((f, j) => {
+            const i = rows.length + j;
+            return (
+              <div
+                key={f.path}
+                data-idx={i}
+                onMouseMove={(e) => movedIn(e) && hover(i)}
+                onClick={(e) => choose(i, e.metaKey)}
+                data-tip="開くと、このフォルダのワークスペースができます"
+                data-on={i === active || undefined}
+                className="mg-pick-row mg-pal-row cursor-pointer"
+              >
+                <Icon name="folder" size={14} className="text-[var(--mg-muted)]" />
+                <span className="mg-pal-name">
+                  <Marked text={folderDisplayName(f)} query={query} />
+                </span>
+                <span className="mg-pal-word mg-pal-place" title={f.path}>
+                  <bdi>{f.path}</bdi>
+                </span>
+                <span className="mg-pal-keys mg-pal-word">{ago(f.lastOpened, now)}</span>
               </div>
-              {loose.map((f, j) => {
-                const i = rows.length + j;
-                return (
-                  <div
-                    key={f.path}
-                    data-idx={i}
-                    onMouseMove={(e) => movedIn(e) && hover(i)}
-                    onClick={(e) => choose(i, e.metaKey)}
-                    title="開くと、このフォルダのワークスペースができます"
-                    data-on={i === active || undefined}
-                    className="mg-pick-row flex cursor-pointer items-center gap-3 px-4 py-1.5"
-                  >
-                    <Icon name="folder" size={16} className="shrink-0 text-[var(--mg-muted)]" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] text-[var(--mg-fg)]">
-                        {folderDisplayName(f)}
-                      </div>
-                      <div className="truncate text-[11px] text-[var(--mg-muted)]" title={f.path}>
-                        {f.path}
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-[10.5px] text-[var(--mg-muted)]">
-                      {ago(f.lastOpened, now)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            );
+          })}
         </div>
 
-        <div className="flex items-center border-t border-[var(--mg-border)] px-4 py-1.5 text-[10.5px] text-[var(--mg-muted)]">
-          <span>右クリックで名前・色・フォルダの変更、削除</span>
-          <span className="ml-auto">⏎ 開く　⌘⏎ 新しいウィンドウ</span>
+        <div className="mg-pal-foot">
+          <span className="mr-auto">右クリックで名前・色・フォルダの変更、削除</span>
+          <span>
+            <kbd className="mg-key">⏎</kbd> 開く
+          </span>
+          <span>
+            <kbd className="mg-key">⌘⏎</kbd> 新しいウィンドウ
+          </span>
         </div>
       </div>
     </div>
