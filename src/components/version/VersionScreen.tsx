@@ -10,7 +10,7 @@ import { readVersion, restoreVersion, type ReviewVersion } from "../../lib/revie
 import { lineDiff } from "../../lib/lineDiff";
 import { WIDTH_CLASS } from "../../lib/ui";
 import {
-  ACTOR_ICON,
+  ACTOR_NAME,
   actorOf,
   fullyOf,
   labelOf,
@@ -26,6 +26,7 @@ import {
 } from "../../state/atoms";
 import { ledgerAtom, syncLedger, versionScreenAtom } from "../../state/review";
 import { notify } from "../../state/toast";
+import { SIDEBAR_WIDTH } from "../../lib/sidebar";
 import { Icon } from "../Icon";
 import { LoadingBody } from "../LoadingBody";
 import { Markdown } from "../Markdown";
@@ -283,12 +284,12 @@ export function VersionScreen({ path }: { path: string }) {
         <span className="flex-1" />
 
         {list.length > 0 && (
-          <div className="mg-ver-seg">
+          <div className="mg-seg">
             {MODES.map((m) => (
               <button
                 key={m.id}
                 onClick={() => setMode(m.id)}
-                className={mode === m.id ? "is-on" : undefined}
+                aria-pressed={mode === m.id}
               >
                 {m.label}
               </button>
@@ -308,17 +309,18 @@ export function VersionScreen({ path }: { path: string }) {
             <button
               onClick={() => setSource((v) => !v)}
               title="Markdown のまま比べる"
-              className={`mg-ver-flag${source ? " is-on" : ""}`}
+              aria-pressed={source}
+              className={`mg-tbtn${source ? " is-on" : ""}`}
             >
-              <Icon name="code" size={15} />
+              <Icon name="code" size={13} />
               ソース
             </button>
-            <div className="mg-ver-seg">
+            <div className="mg-seg">
               {LAYOUTS.map((l) => (
                 <button
                   key={l.id}
                   onClick={() => setLayout(l.id)}
-                  className={layout === l.id ? "is-on" : undefined}
+                  aria-pressed={layout === l.id}
                 >
                   {l.label}
                 </button>
@@ -339,7 +341,10 @@ export function VersionScreen({ path }: { path: string }) {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-[19rem] shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]">
+        <nav
+          className="mg-ver-list shrink-0 overflow-y-auto border-r border-[var(--mg-border)] bg-[var(--mg-panel)]"
+          style={{ width: SIDEBAR_WIDTH }}
+        >
           {list.map((version) => {
             const actor = actorOf(version);
             return (
@@ -349,9 +354,8 @@ export function VersionScreen({ path }: { path: string }) {
                 title={fullyOf(version)}
                 className={`mg-ver-row${picked === version.id ? " is-active" : ""}`}
               >
-                <span className={`mg-ver-face is-${actor}`}>
-                  <Icon name={ACTOR_ICON[actor]} size={13} fill />
-                </span>
+                {/* 誰が保存したか。色の点で並びを見分け、名前は title で読める。 */}
+                <span className={`mg-ver-face is-${actor}`} title={ACTOR_NAME[actor]} />
                 <span className="mg-ver-main">
                   <span className="mg-ver-name">{whenOf(version)}</span>
                   <span className="mg-ver-note">{noteOf(version)}</span>
@@ -380,12 +384,12 @@ export function VersionScreen({ path }: { path: string }) {
                   <Stat added={stat.added} removed={stat.removed} />
                   {spots > 0 && (
                     <span className="mg-ver-hop">
-                      <button onClick={() => jump(-1)} title="前の変更へ">
-                        <Icon name="keyboard_arrow_up" size={16} />
+                      <button onClick={() => jump(-1)} title="前の変更へ" className="mg-ibtn">
+                        <Icon name="keyboard_arrow_up" size={14} />
                       </button>
                       <span>{at < 0 ? `${spots} 箇所` : `${at + 1} / ${spots}`}</span>
-                      <button onClick={() => jump(1)} title="次の変更へ">
-                        <Icon name="keyboard_arrow_down" size={16} />
+                      <button onClick={() => jump(1)} title="次の変更へ" className="mg-ibtn">
+                        <Icon name="keyboard_arrow_down" size={14} />
                       </button>
                     </span>
                   )}
@@ -462,11 +466,11 @@ export function VersionScreen({ path }: { path: string }) {
                 if (version) void restore(version);
               }}
               disabled={restoring !== null || current === undefined}
-              className="mg-act is-done"
+              className="mg-ver-restore"
             >
               <Icon
                 name={restoring === picked ? "progress_activity" : "restore"}
-                size={14}
+                size={13}
                 className={restoring === picked ? "mg-spin" : undefined}
               />
               このバージョンを復元
@@ -549,13 +553,13 @@ function Against({
 
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="mg-ver-pick">
-        <span className="text-[var(--mg-muted)]">比較対象</span>
-        <span className="truncate font-medium">{label}</span>
-        <Icon name="unfold_more" size={15} className="text-[var(--mg-muted)]" />
+      <button onClick={() => setOpen((o) => !o)} className={`mg-tbtn mg-ver-pick${open ? " is-on" : ""}`}>
+        <span>比較対象</span>
+        <span className="truncate font-medium text-[var(--mg-fg)]">{label}</span>
+        <Icon name="unfold_more" size={13} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-1 max-h-80 w-72 overflow-y-auto rounded-xl border border-[var(--mg-border)] bg-[var(--mg-panel)] p-1.5 shadow-2xl">
+        <div className="mg-ver-menu">
           {exclude !== null && (
             <button
               onClick={() => pick(null)}
@@ -573,7 +577,7 @@ function Against({
                 className={`mg-ver-opt${current === v.id ? " is-on" : ""}`}
               >
                 <span className="shrink-0">{whenOf(v)}</span>
-                <span className="truncate text-[11px] text-[var(--mg-muted)]">
+                <span className="truncate text-[length:11px] text-[var(--mg-muted)]">
                   {noteOf(v)}
                 </span>
               </button>

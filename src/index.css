@@ -6321,59 +6321,34 @@ body.mg-carrying {
    「後」をアクセントで示す。色は本文の読み心地を壊さない濃さに留める。
    ============================================================ */
 
-/* 本文 / 差分、統合 / 分割の切り替え。並んだ選択肢は枠で囲って 1 つの
-   まとまりに見せる。 */
-.mg-ver-seg {
-  display: flex;
-  flex: none;
-  overflow: hidden;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-}
-.mg-ver-seg > button {
-  padding: 0.25rem 0.6rem;
-  font-size: 12px;
-  color: var(--mg-fg-dim);
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.mg-ver-seg > button:hover {
-  background: var(--mg-hover);
-}
-.mg-ver-seg > button.is-on {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
-  font-weight: 600;
-}
-.mg-ver-seg > button + button {
-  border-left: 1px solid var(--mg-border);
-}
 
 /* 差分の相手を選ぶ口。 */
 .mg-ver-pick {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  max-width: 14rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  font-size: 12px;
-  color: var(--mg-fg-dim);
-  transition: background 0.12s ease;
+  max-width: 16rem;
 }
-.mg-ver-pick:hover {
-  background: var(--mg-hover);
+/* 比べる相手の一覧。浮くものの形（6px の角・弱い影）。 */
+.mg-ver-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  width: 18rem;
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
 }
 .mg-ver-opt {
   display: flex;
   align-items: baseline;
-  gap: 0.45rem;
+  gap: 8px;
   width: 100%;
-  padding: 0.3rem 0.5rem;
-  border-radius: 0.4rem;
-  font-size: 12.5px;
+  padding: 5px 8px;
+  border-radius: var(--mg-r1);
+  font-size: 12px;
   text-align: left;
   color: var(--mg-fg-dim);
   font-variant-numeric: tabular-nums;
@@ -6382,8 +6357,8 @@ body.mg-carrying {
   background: var(--mg-hover);
 }
 .mg-ver-opt.is-on {
-  color: var(--mg-accent);
-  font-weight: 600;
+  background: var(--mg-accent-soft);
+  color: var(--mg-fg);
 }
 
 /* バージョンの名前を決める小窓。画面の中央に出す。
@@ -6396,38 +6371,38 @@ body.mg-carrying {
   display: grid;
   place-items: center;
   padding: 2rem;
-  background: color-mix(in srgb, var(--mg-bg) 55%, transparent);
-  backdrop-filter: blur(3px);
+  background: color-mix(in srgb, var(--mg-bg) 45%, transparent);
 }
 .mg-ver-save {
   width: min(24rem, 100%);
-  padding: 0.9rem 1rem 0.75rem;
+  padding: 12px 14px 10px;
   border: 1px solid var(--mg-border);
-  border-radius: 0.9rem;
-  background: var(--mg-panel);
-  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6);
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
 }
 .mg-ver-save-head {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding-bottom: 0.6rem;
+  gap: 6px;
+  padding-bottom: 10px;
   font-size: 13px;
   font-weight: 600;
   color: var(--mg-fg);
 }
 .mg-ver-save-input {
   width: 100%;
-  padding: 0.45rem 0.6rem;
+  height: 28px;
+  padding: 0 8px;
   border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  background: var(--mg-input-bg);
-  font-size: 13.5px;
+  border-radius: var(--mg-r1);
+  background: var(--mg-bg);
+  font-size: 13px;
   color: var(--mg-fg);
   outline: none;
 }
 .mg-ver-save-input:focus {
-  border-color: color-mix(in srgb, var(--mg-accent) 60%, var(--mg-border));
+  border-color: var(--mg-accent);
 }
 .mg-ver-save-input::placeholder {
   color: var(--mg-muted);
@@ -6435,7 +6410,7 @@ body.mg-carrying {
 /* 問いの本文。何が起きるかを 1 行で言う。 */
 .mg-ver-save-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--mg-muted);
 }
@@ -6443,22 +6418,27 @@ body.mg-carrying {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 0.3rem;
-  padding-top: 0.5rem;
+  gap: 6px;
+  padding-top: 10px;
+}
+/* 一覧。行は左の欄のファイルの行と同じ形で、内側に寄せる。 */
+.mg-ver-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
 }
 
 /* 一覧の 1 行。 */
 .mg-ver-row {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: 8px;
   width: 100%;
-  padding: 0.5rem 0.7rem;
+  padding: 6px 8px;
+  border-radius: var(--mg-r1);
   text-align: left;
   transition: background 0.12s ease;
-}
-.mg-ver-row + .mg-ver-row {
-  border-top: 1px solid var(--mg-border);
 }
 .mg-ver-row:hover {
   background: var(--mg-hover);
@@ -6466,53 +6446,49 @@ body.mg-carrying {
 .mg-ver-row.is-active {
   background: var(--mg-accent-soft);
 }
-/* 版を打った主体。人とエージェントで色を分ける。名前だけでは、自分で
-   打ったのかコメントやエージェントが残したのかが読めない。 */
+/* バージョンを保存した主体。人とエージェントで点の色を分ける。名前だけでは、
+   自分で打ったのかコメントやエージェントが残したのかが読めない。 */
 .mg-ver-face {
-  display: grid;
-  place-items: center;
   flex: none;
-  width: 1.25rem;
-  height: 1.25rem;
-  margin-top: 0.1rem;
-  border-radius: 999px;
-  background: var(--mg-hover);
-  color: var(--mg-muted);
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--mg-muted);
 }
 .mg-ver-face.is-ai {
-  background: color-mix(in srgb, var(--mg-accent2) 18%, transparent);
-  color: var(--mg-accent2);
+  background: var(--mg-accent2);
 }
 .mg-ver-face.is-you {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
+  background: var(--mg-accent);
 }
-/* fude が自動で残した版。人とエージェントのどちらでもないので色を持たせない。 */
+/* fude が自動で残したもの。人とエージェントのどちらでもないので色を持たせない。 */
 .mg-ver-face.is-system {
-  background: var(--mg-hover);
-  color: var(--mg-muted);
+  background: var(--mg-muted);
 }
 .mg-ver-main {
   display: flex;
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 1px;
 }
 .mg-ver-name {
   overflow: hidden;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: var(--mg-fg);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mg-fg-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.mg-ver-row.is-active .mg-ver-name {
+  color: var(--mg-fg);
+}
 /* 主体と、名前か何をした時点か。日時の下に添える。 */
 .mg-ver-note {
   overflow: hidden;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--mg-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6521,15 +6497,33 @@ body.mg-carrying {
 /* 復元。1 つしかない操作なので、列を作らず本文の上に浮かせる。 */
 .mg-ver-act {
   position: fixed;
-  right: 1.5rem;
-  bottom: 1.5rem;
+  right: 24px;
+  bottom: 24px;
   z-index: 20;
-  padding: 0.3rem;
-  border-radius: 0.6rem;
-  background: var(--mg-panel);
-  box-shadow:
-    0 0 0 1px var(--mg-border),
-    0 10px 28px -14px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
+}
+/* 復元の主な釦。アクセントで塗った 24px の釦。 */
+.mg-ver-restore {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: var(--mg-r1);
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mg-ver-restore:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.mg-ver-restore:disabled {
+  opacity: 0.55;
 }
 
 /* 読み込み中や「同じです」の一言。 */
@@ -6545,12 +6539,13 @@ body.mg-carrying {
    押した瞬間にここだけが変わる。 */
 .mg-ver-facing {
   display: flex;
+  height: 28px;
   flex: none;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.6rem 1.5rem;
-  border-bottom: 1px solid var(--mg-border);
-  font-size: 11.5px;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  font-size: 12px;
   color: var(--mg-fg-dim);
 }
 .mg-ver-facing-name {
@@ -6559,17 +6554,17 @@ body.mg-carrying {
   font-variant-numeric: tabular-nums;
 }
 .mg-ver-facing-note {
-  margin-left: 0.45rem;
+  margin-left: 8px;
   color: var(--mg-muted);
 }
 /* 変更の規模。数と、追加・削除の比率を示す帯。 */
 .mg-ver-stat {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 6px;
   margin-left: auto;
+  font-family: var(--mg-font-mono);
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 .mg-ver-stat .is-add {
   color: var(--mg-add-fg);
@@ -6582,9 +6577,9 @@ body.mg-carrying {
 .mg-ver-bar {
   display: block;
   overflow: hidden;
-  width: 4.5rem;
-  height: 0.35rem;
-  border-radius: 999px;
+  width: 64px;
+  height: 4px;
+  border-radius: 1px;
   background: var(--mg-del-fg);
 }
 .mg-ver-bar > i {
@@ -6596,46 +6591,10 @@ body.mg-carrying {
 .mg-ver-hop {
   display: flex;
   align-items: center;
-  gap: 0.1rem;
+  gap: 2px;
+  font-family: var(--mg-font-mono);
   font-size: 11px;
   color: var(--mg-muted);
-  font-variant-numeric: tabular-nums;
-}
-.mg-ver-hop > button {
-  display: grid;
-  place-items: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  border-radius: 0.35rem;
-  color: var(--mg-fg-dim);
-  transition: background 0.12s ease;
-}
-.mg-ver-hop > button:hover {
-  background: var(--mg-hover);
-}
-/* ソースのまま比べるかの切り替え。 */
-.mg-ver-flag {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.55rem;
-  border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
-  font-size: 12px;
-  color: var(--mg-fg-dim);
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.mg-ver-flag:hover {
-  background: var(--mg-hover);
-}
-.mg-ver-flag.is-on {
-  background: var(--mg-accent-soft);
-  border-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
-  color: var(--mg-accent);
-  font-weight: 600;
 }
 
 /* 差分。変わっていないところは弱め、変わったところは組ごとに枠で囲む。 */
@@ -6660,7 +6619,7 @@ body.mg-carrying {
   width: 100%;
   margin: 0.5rem 0;
   padding: 0.25rem;
-  border-radius: 0.4rem;
+  border-radius: var(--mg-r1);
   border: 1px dashed var(--mg-border);
   font-size: 11px;
   color: var(--mg-muted);
@@ -6764,7 +6723,7 @@ body.mg-carrying {
 .mg-src-hunk {
   overflow: hidden;
   border: 1px solid var(--mg-border);
-  border-radius: 0.5rem;
+  border-radius: var(--mg-r1);
   scroll-margin-top: 4.5rem;
 }
 .mg-src-hunk + .mg-src-hunk {

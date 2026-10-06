@@ -20,12 +20,6 @@ export const ACTOR_NAME: Record<VersionActor, string> = {
   system: "システム",
 };
 
-export const ACTOR_ICON: Record<VersionActor, string> = {
-  you: "person",
-  ai: "auto_awesome",
-  system: "settings",
-};
-
 // 何をした時点の版なのか。名前が付いていないときに、その代わりとして出す。
 // 手で打った版は主体だけで足りるので持たない。
 export const ORIGIN_NOTE: Partial<Record<ReviewVersion["origin"], string>> = {
