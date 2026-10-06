@@ -323,7 +323,13 @@ export const revealInTreeAtom = atom<{
 
 // ---- 検索・パレット ----
 export const treeFilterAtom = atom<string>("");
-export const sidebarTabAtom = atom<"files" | "search">("files");
+// 左の欄に出している面。縦の帯で切り替える。
+export type SideFace = "files" | "search" | "claude";
+export const sidebarTabAtom = atom<SideFace>("files");
+// 書いている途中の保存の数（全ペインの合計）。足元の帯に「保存中」を出す。
+export const savingCountAtom = atom(0);
+// 左の欄の頭の「新規」から、根にファイル・フォルダを作る頼み。木が受けて名前の欄を出す。
+export const rootCreateAtom = atom<{ kind: "file" | "dir"; nonce: number } | null>(null);
 export const paletteOpenAtom = atom<boolean>(false);
 // ⌘, で開く設定（⌘/ はその中のキー操作の面）
 export const settingsOpenAtom = atom<boolean>(false);

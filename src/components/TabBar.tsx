@@ -1,4 +1,4 @@
-import { useAtomValue, useStore } from "jotai";
+import { useAtom, useAtomValue, useStore } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useDragReset } from "../hooks/useDragReset";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -20,7 +20,15 @@ import {
   openInPane,
   revealInTree,
 } from "../lib/ui";
-import { freshTabsAtom, type LeafNode, showOtherFilesAtom, treeAtom } from "../state/atoms";
+import {
+  docFindNonceAtom,
+  freshTabsAtom,
+  liveEditAtom,
+  type LeafNode,
+  showOtherFilesAtom,
+  treeAtom,
+} from "../state/atoms";
+import { IconBtn } from "./Chrome";
 import { seenTab } from "../state/claude";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
@@ -47,6 +55,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
 
   // 外から足されたばかりのタブ（Claude のセッションが書いたもの）。開いたら印を外す。
   const fresh = useAtomValue(freshTabsAtom);
+  const [live, setLive] = useAtom(liveEditAtom);
   useEffect(() => {
     if (active && fresh.has(active)) seenTab(store, active);
   }, [active, fresh, store]);
@@ -104,10 +113,11 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
 
   return (
     <>
+      <div className="mg-tabrow">
       <div
         role="tablist"
         data-mg-tabbar
-        className="mg-tabbar flex shrink-0 items-stretch overflow-x-auto border-b border-[var(--mg-border)] bg-[var(--mg-panel)]"
+        className="mg-tabbar flex min-w-0 flex-1 items-stretch overflow-x-auto"
         onDragOver={(e) => {
           if (!accept(e)) return;
           e.preventDefault();
@@ -148,15 +158,9 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               }}
               // 遷移は掛けない。上端のアクセントの線は要素の出現で即座に出る
               // ので、背景だけ遅れると足並みが揃わない（ツリーの行と同じ）。
-              className={`group relative flex max-w-[200px] items-center gap-1 border-r border-[var(--mg-border)] pl-3 pr-1.5 text-[12px] ${
-                selected
-                  ? "bg-[var(--mg-bg)] text-[var(--mg-fg)]"
-                  : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)]"
-              }`}
+              className={`mg-tab group${selected ? " is-on" : ""}`}
             >
-              {selected && isActive && (
-                <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--mg-accent)]" />
-              )}
+              {selected && isActive && <span className="mg-tab-line" />}
               <button
                 type="button"
                 role="tab"
@@ -176,7 +180,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                     closeTab(store, pane.id, i);
                   }
                 }}
-                className="select-none truncate py-1.5"
+                className="mg-tab-name"
               >
                 {label(path)}
               </button>
@@ -202,6 +206,26 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
             </div>
           );
         })}
+      </div>
+      {/* 開いている文書に効く切り替え。閲覧と編集、ファイルの中を探す。 */}
+      {isActive && pane.tabs.length > 0 && (
+        <div className="mg-tabrow-acts">
+          <div className="mg-seg" role="group" aria-label="閲覧と編集" data-tip="閲覧と編集を切り替える" data-key="⌘E">
+            <button type="button" aria-pressed={!live} onClick={() => setLive(false)}>
+              閲覧
+            </button>
+            <button type="button" aria-pressed={live} onClick={() => setLive(true)}>
+              編集
+            </button>
+          </div>
+          <IconBtn
+            tip="このファイルを検索"
+            keys="⌘F"
+            icon="search"
+            onClick={() => store.set(docFindNonceAtom, (n) => n + 1)}
+          />
+        </div>
+      )}
       </div>
       {menu && (
         <EntryMenu

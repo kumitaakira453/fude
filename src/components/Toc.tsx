@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useSetAtom } from "jotai";
+import { railAtom } from "../state/atoms";
+import { IconBtn } from "./Chrome";
 import { touchesBody } from "../lib/layerHost";
 
 interface Heading {
@@ -31,6 +34,7 @@ export function Toc({
   scroller: HTMLElement | null;
   contentKey: string;
 }) {
+  const setRail = useSetAtom(railAtom);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeAt, setActiveAt] = useState(-1);
   // 押したときに飛ぶ先。並びの位置で引くので、同じ文字の見出しでも取り違えない。
@@ -131,8 +135,9 @@ export function Toc({
     >
       {bare ? null : (
         <>
-      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--mg-muted)]">
-        目次
+      <div className="mg-toc-head">
+        <span>目次</span>
+        <IconBtn tip="目次を閉じる" keys="⌘⇧O" icon="close" onClick={() => setRail("none")} />
       </div>
       <ul className="space-y-0.5">
         {headings.map((h, i) => (

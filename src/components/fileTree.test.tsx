@@ -12,6 +12,7 @@ import {
   treeAtom,
   workspaceAtom,
   workspaceMenuAtom,
+  rootCreateAtom,
 } from "../state/atoms";
 import { FileTree } from "./FileTree";
 
@@ -71,8 +72,11 @@ const dir = (name: string, children: TreeNode[]): TreeNode => ({
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 
+let last: ReturnType<typeof createStore> | null = null;
+
 function show(sole: string | null, tree: TreeNode[] = [file("読み物.md")]) {
   const store = createStore();
+  last = store;
   store.set(treeAtom, tree);
   store.set(soleAtom, sole);
   store.set(activeFolderIdAtom, "/本");
@@ -89,10 +93,6 @@ function show(sole: string | null, tree: TreeNode[] = [file("読み物.md")]) {
   return host;
 }
 
-const adders = (el: HTMLElement) =>
-  Array.from(el.querySelectorAll("button[title]")).filter((b) =>
-    (b.getAttribute("title") ?? "").startsWith("ルートに新規"),
-  );
 
 // 行は絶対パスで見分ける。試験では根（/本）からの相対で指す。
 const rowOf = (el: HTMLElement, rel: string) =>
@@ -123,13 +123,17 @@ afterEach(() => {
   said.length = 0;
 });
 
-describe("木の上の作る口", () => {
-  it("フォルダを開いているときは出す", () => {
-    expect(adders(show(null))).toHaveLength(2);
+describe("左の欄の頭の「新規」から根に作る", () => {
+  it("フォルダを開いているときは、名前の欄を出す", () => {
+    const el = show(null);
+    act(() => last!.set(rootCreateAtom, { kind: "file", nonce: 1 }));
+    expect(el.querySelector("input")).not.toBeNull();
   });
 
-  it("1 枚だけ開いているときは出さない", () => {
-    expect(adders(show("/読み物.md"))).toHaveLength(0);
+  it("1 枚だけ開いているときは作らない", () => {
+    const el = show("/読み物.md");
+    act(() => last!.set(rootCreateAtom, { kind: "file", nonce: 1 }));
+    expect(el.querySelector("input")).toBeNull();
   });
 });
 
@@ -282,9 +286,9 @@ describe("フォルダを複数並べているとき", () => {
     expect(el.querySelector(".mg-tree-count")?.textContent).toBe("フォルダ 2");
     const fold = el.querySelector<HTMLElement>(".mg-tree-roots")!;
     // 最初は根の行だけ開いている。
-    expect(fold.title).toBe("すべてのフォルダを畳む");
+    expect(fold.dataset.tip).toBe("すべてのフォルダを畳む");
     act(() => fold.click());
-    expect(el.querySelector<HTMLElement>(".mg-tree-roots")!.title).toBe("すべてのフォルダを開く");
+    expect(el.querySelector<HTMLElement>(".mg-tree-roots")!.dataset.tip).toBe("すべてのフォルダを開く");
   });
 
   it("「フォルダを追加」で、ワークスペースのメニューをフォルダを選ぶ画面から開く", () => {

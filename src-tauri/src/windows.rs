@@ -220,6 +220,14 @@ pub fn open_doc_window(
         // OS のファイルドロップを掴ませない。掴ませると WebView 内の
         // HTML のドラッグ&ドロップ（タブの移動など）が届かなくなる。
         .disable_drag_drop_handler();
+    // タイトルバーを画面の上の段と一体にする（信号機の右に札を並べる）。
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
+            .traffic_light_position(tauri::LogicalPosition::new(14.0, 18.0));
+    }
     // 前回のテーマの明暗と地で出す。白い窓が一瞬見えない。
     let look = saved_look();
     builder = builder.theme(Some(theme_of(&look)));

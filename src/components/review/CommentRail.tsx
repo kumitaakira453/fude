@@ -21,6 +21,9 @@ import { ago } from "../../lib/when";
 import { touchesBody } from "../../lib/layerHost";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
+import { IconBtn } from "../Chrome";
+import { useSetAtom } from "jotai";
+import { railAtom } from "../../state/atoms";
 import { CommentBody } from "./CommentMarkdown";
 
 // 本文の横に出すコメント。目次と同じ場所を取り合う（どちらも右の欄）。
@@ -181,6 +184,7 @@ export function CommentRail({
   onRewrite: (id: string, comment: string, body: string) => void;
   onErase: (id: string, comment: string) => void;
 }) {
+  const setRail = useSetAtom(railAtom);
   // 本文の並び順に出す。台帳の並びは書いた順なので、そのままでは本文を
   // 行ったり来たりすることになる。
   //
@@ -350,6 +354,7 @@ export function CommentRail({
       }`}
     >
       <div className="mg-rail-bar">
+        <span className="mg-rail-title">コメント</span>
         <FilterChip now={filter} counts={counts} onPick={onFilter} />
         {strays.length > 0 && (
           <button
@@ -363,6 +368,13 @@ export function CommentRail({
             <Icon name={openLoose ? "expand_less" : "expand_more"} size={14} />
           </button>
         )}
+        <IconBtn
+          tip="コメントの欄を閉じる"
+          keys="⌘⇧K"
+          icon="close"
+          className="ml-auto"
+          onClick={() => setRail("none")}
+        />
       </div>
 
       {openLoose && strays.length > 0 && (

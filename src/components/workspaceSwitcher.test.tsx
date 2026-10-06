@@ -294,7 +294,7 @@ describe("探して開く：⌘⇧P", () => {
 describe("作る：＋", () => {
   it("作り方を並べ、今のフォルダで作るのは 1 回押すだけ", async () => {
     const { el } = await show();
-    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
     expect(document.body.textContent).toContain("フォルダを選んで新規作成");
     expect(document.body.textContent).toContain("今のタブを複製して新規作成");
     act(() => button("今のフォルダで新規作成").click());
@@ -303,7 +303,7 @@ describe("作る：＋", () => {
 
   it("Claude の連携を切っていれば、セッションから作る項目は出さない", async () => {
     const { el } = await show();
-    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
     expect(document.body.textContent).not.toContain("Claude のセッションから作成");
   });
 
@@ -319,13 +319,13 @@ describe("作る：＋", () => {
         gone: new Set<string>(),
       });
     });
-    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
     const made = button("結びつき済み");
     expect(made.textContent).toContain("作成済み");
     expect(button("[V]新しいセッション").textContent).not.toContain("作成済み");
     act(() => button("[V]新しいセッション").click());
     expect(calls).toEqual([{ op: "fromSession", arg: "t" }]);
-    act(() => el.querySelector<HTMLElement>(".mg-ws-pill-add")!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
     act(() => button("結びつき済み").click());
     expect(calls.at(-1)).toEqual({ op: "open", arg: "b" });
   });

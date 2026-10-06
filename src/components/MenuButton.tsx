@@ -35,8 +35,13 @@ export function MenuButton({
   dot,
   size = 18,
   className,
+  label,
+  keys,
 }: {
   icon: string;
+  // 字で出す入口（「新規 ▾」「その他 ▾」）。あれば絵だけの釦にしない。
+  label?: string;
+  keys?: string;
   title: string;
   items: MenuItem[];
   // 釦そのものが今の状態を持つとき（右の欄など）。
@@ -96,12 +101,15 @@ export function MenuButton({
         type="button"
         onClick={() => setOpen(!open)}
         disabled={disabled}
-        title={title}
+        data-tip={title}
+        data-key={keys}
         aria-label={title}
         aria-haspopup="menu"
         aria-expanded={open}
         className={
-          className ??
+          label
+            ? `mg-tbtn is-quiet${active || open ? " is-on" : ""}`
+            : className ??
           `grid h-8 w-8 place-items-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40 ${
             active || open
               ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
@@ -109,7 +117,14 @@ export function MenuButton({
           }`
         }
       >
-        <Icon name={icon} size={size} />
+        {label ? (
+          <>
+            {label}
+            <Icon name="expand_more" size={14} />
+          </>
+        ) : (
+          <Icon name={icon} size={size} />
+        )}
         {dot && <span className="mg-menu-dot" />}
       </button>
       {at &&

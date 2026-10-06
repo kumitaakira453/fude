@@ -8497,3 +8497,416 @@ html[data-hints] [data-key]::after {
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* ============================================================
+   画面の骨組み（上の段・縦の帯・左の欄・タブ・場所の段・足元の帯）
+   ============================================================ */
+
+/* 上の段。窓のタイトルバーと一体。左は信号機の場所。 */
+.mg-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 8px 0 0;
+  border-bottom: 1px solid var(--mg-border);
+  background: color-mix(in srgb, var(--mg-panel) 70%, var(--mg-bg));
+  user-select: none;
+}
+.mg-top-lights {
+  width: 78px;
+  height: 100%;
+  flex: none;
+}
+.mg-top-sep {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  margin: 0 6px;
+  background: var(--mg-border);
+}
+.mg-top-find {
+  display: flex;
+  width: 240px;
+  height: 26px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 0 8px;
+  padding: 0 8px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: var(--mg-bg);
+  color: var(--mg-muted);
+  font-size: var(--mg-t-s);
+}
+.mg-top-find > span {
+  flex: 1;
+  text-align: left;
+}
+.mg-top-find:hover {
+  border-color: color-mix(in srgb, var(--mg-accent) 45%, var(--mg-border));
+  color: var(--mg-fg-dim);
+}
+
+/* 絵のボタン・字のボタン。 */
+.mg-ibtn {
+  display: inline-grid;
+  width: var(--mg-h-s);
+  height: var(--mg-h-s);
+  flex: none;
+  place-items: center;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+}
+.mg-ibtn:hover:not(:disabled) {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-ibtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.mg-ibtn.is-on {
+  color: var(--mg-fg);
+}
+.mg-tbtn {
+  display: inline-flex;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-s);
+  white-space: nowrap;
+}
+.mg-tbtn.is-quiet {
+  border-color: transparent;
+  color: var(--mg-muted);
+}
+.mg-tbtn:hover:not(:disabled),
+.mg-tbtn.is-on {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-tbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 札。角を立て、今いる札は地を変えて縁を付ける。 */
+.mg-ws-pills-wrap {
+  min-width: 0;
+  flex: 1;
+}
+.mg-ws-pill {
+  width: 10.5rem;
+  height: 26px;
+  gap: 7px;
+  padding: 0 6px 0 8px;
+  border-color: transparent;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+  transition: none;
+}
+.mg-ws-pill:hover {
+  color: var(--mg-fg-dim);
+}
+.mg-ws-pill.is-on {
+  min-width: 10.5rem;
+  max-width: 24rem;
+  border-color: var(--mg-border);
+  background: var(--mg-bg);
+  font-weight: 500;
+  color: var(--mg-fg);
+}
+.mg-ws-pill .mg-ws-dot {
+  border-radius: 2px;
+}
+.mg-ws-pill-add {
+  width: var(--mg-h-s);
+  height: var(--mg-h-s);
+  border-radius: var(--mg-r1);
+}
+
+/* 縦の帯。 */
+.mg-strip {
+  display: flex;
+  width: 40px;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-right: 1px solid var(--mg-border);
+  background: color-mix(in srgb, var(--mg-panel) 70%, var(--mg-bg));
+}
+.mg-strip .mg-ibtn {
+  position: relative;
+  width: 30px;
+  height: 30px;
+}
+.mg-strip .mg-ibtn.is-on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-strip .mg-ibtn.is-on::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--mg-accent);
+  content: "";
+}
+.mg-strip-gap {
+  flex: 1;
+}
+.mg-strip-badge-host {
+  position: relative;
+}
+.mg-strip-badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  min-width: 15px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+  font-family: var(--mg-font-mono);
+  font-size: 9.5px;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 左の欄。 */
+.mg-side {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--mg-panel);
+}
+.mg-side-head {
+  display: flex;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
+}
+.mg-side-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-s);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-input {
+  width: 100%;
+  height: var(--mg-h-m);
+  padding: 0 8px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: var(--mg-input-bg);
+  color: var(--mg-fg);
+  font-size: var(--mg-t-s);
+  outline: none;
+}
+.mg-input::placeholder {
+  color: var(--mg-muted);
+}
+.mg-input:focus {
+  border-color: var(--mg-accent);
+}
+.mg-tree-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 4px 8px;
+}
+.mg-tree-count {
+  flex: 1;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+}
+
+/* タブの段。 */
+.mg-tabrow {
+  display: flex;
+  height: 32px;
+  flex: none;
+  align-items: stretch;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-panel);
+}
+.mg-tab {
+  position: relative;
+  display: flex;
+  max-width: 220px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 12px;
+  border-right: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
+  color: var(--mg-muted);
+  font-size: var(--mg-t-s);
+}
+.mg-tab:hover {
+  background: var(--mg-hover);
+}
+.mg-tab.is-on {
+  background: var(--mg-bg);
+  color: var(--mg-fg);
+}
+.mg-tab.is-on::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: var(--mg-bg);
+  content: "";
+}
+.mg-tab-line {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--mg-accent);
+}
+.mg-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+.mg-tabrow-acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+}
+.mg-seg {
+  display: flex;
+  height: 22px;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+}
+.mg-seg > button {
+  padding: 0 9px;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-s);
+}
+.mg-seg > button:hover {
+  color: var(--mg-fg);
+}
+.mg-seg > button[aria-pressed="true"] {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+
+/* 場所の段。 */
+.mg-crumbs {
+  display: flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mg-border) 60%, transparent);
+  background: var(--mg-bg);
+}
+.mg-crumbs-path {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 右の欄の頭。 */
+.mg-toc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  font-weight: 600;
+}
+.mg-rail-title {
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-s);
+  font-weight: 600;
+}
+
+/* 足元の帯。 */
+.mg-foot {
+  display: flex;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  padding: 0 6px;
+  border-top: 1px solid var(--mg-border);
+  background: color-mix(in srgb, var(--mg-panel) 70%, var(--mg-bg));
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  user-select: none;
+}
+.mg-foot-item {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.mg-foot-item:not(.is-static):hover,
+.mg-foot-item.is-on {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-foot-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--mg-muted);
+}
+.mg-foot-dot.is-ok {
+  background: #3fb68b;
+}
+.mg-foot-dot.is-warn {
+  background: #d4962a;
+}
+.mg-foot-num {
+  font-family: var(--mg-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.mg-foot-grow {
+  flex: 1;
+}
+.mg-foot-sep {
+  width: 1px;
+  height: 12px;
+  margin: 0 3px;
+  background: var(--mg-border);
+}

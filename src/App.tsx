@@ -27,6 +27,8 @@ import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
 import { TipLayer } from "./components/TipLayer";
+import { ActivityStrip } from "./components/ActivityStrip";
+import { StatusBar } from "./components/StatusBar";
 import { WorkspaceCycler } from "./components/WorkspaceCycler";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
@@ -254,6 +256,7 @@ export default function App() {
         >
           <Toolbar />
           <div className="flex min-h-0 flex-1">
+            <ActivityStrip />
             {sidebarOpen && (
               <>
                 {/* 幅は掴んで変えられる。窓を狭めたときに本文が 0 にならないよう、
@@ -280,6 +283,7 @@ export default function App() {
             )}
             <PaneGroup />
           </div>
+          <StatusBar />
           <CommandPalette />
         </div>
       )}

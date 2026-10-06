@@ -36,7 +36,7 @@ import {
 } from "../lib/review";
 import { defaultName } from "../lib/versions";
 import { DARK_THEME_IDS } from "../lib/themes";
-import { closePane, inEditable, inFloating, WIDTH_CLASS } from "../lib/ui";
+import { closePane, inEditable, inFloating, splitInto, WIDTH_CLASS } from "../lib/ui";
 import {
   screenOpenAtom,
   syncLedger,
@@ -64,8 +64,8 @@ import {
   wideTableAtom,
   railAtom,
   railWidthAtom,
-  watchModeAtom,
   type Pane,
+  savingCountAtom,
 } from "../state/atoms";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
@@ -95,6 +95,7 @@ import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import { CommentRail } from "./review/CommentRail";
 import { MenuButton } from "./MenuButton";
+import { TextBtn } from "./Chrome";
 import { SidebarGrip } from "./SidebarGrip";
 import {
   readingMarks,
@@ -115,7 +116,6 @@ import { CommentComposer } from "./review/CommentComposer";
 import { SelectionAct, SelectionMenu } from "./review/SelectionMenu";
 import { Toc } from "./Toc";
 import { markDocShown } from "../lib/boot";
-import { Tooltip } from "./Tooltip";
 
 // 外の書き換えを取り込むまでの待ち。エージェントは 1 回の作業で何度も書くので、
 // 続けて来た分をまとめる。
@@ -134,7 +134,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const wide = useAtomValue(wideTableAtom);
   const dark = DARK_THEME_IDS.has(theme);
   const rail = useAtomValue(railAtom);
-  const watchMode = useAtomValue(watchModeAtom);
   const [activeId, setActiveId] = useAtom(activePaneIdAtom);
   // 重ねた画面が出ているか。本文向けのキー操作をそこへ効かせないための判定。
   // コメント・バージョンの画面が出ているあいだ、読む画面は隠れているだけで
@@ -234,15 +233,14 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     if (drawn) markDocShown();
   }, [drawn]);
 
-  // 保存の途中が分かるようにする。件数で数えるのは、続けて保存したときに
-  // 先に終わった 1 件で印が消えないため。
-  const [saving, setSaving] = useState(0);
+  // 保存の途中が足元の帯で分かるようにする。件数で数えるのは、続けて保存した
+  // ときに先に終わった 1 件で印が消えないため。
   const write = useCallback(
     (rel: string, text: string, opts?: { checkpoint?: boolean }) => {
-      setSaving((n) => n + 1);
-      void saveFile(rel, text, opts).finally(() => setSaving((n) => n - 1));
+      store.set(savingCountAtom, (n) => n + 1);
+      void saveFile(rel, text, opts).finally(() => store.set(savingCountAtom, (n) => n - 1));
     },
-    [saveFile],
+    [saveFile, store],
   );
 
   // 編集面から「今すぐ組み直して渡せ」と頼む口。編集面が入れる。
@@ -1449,8 +1447,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           : ""
       }`}
     >
-      {/* ヘッダー */}
-      <header className="mg-pane-head flex items-center gap-2 border-b border-[var(--mg-border)] bg-[var(--mg-panel)]/80 px-4 py-2 backdrop-blur">
+      {/* 場所の段。左にパンくず、右にこの文書に効く操作を字で並べる。保存中と
+          見張りの状態は足元の帯に出す。 */}
+      <header className="mg-crumbs">
         {isDraft ? (
           // 置き場の道筋は人に見せない。まだ保存先が無いことだけを出す。
           <div className="flex min-w-0 flex-1 items-center">
@@ -1460,78 +1459,52 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             </span>
           </div>
         ) : (
-          <div className="min-w-0 flex-1 truncate text-[12px] text-[var(--mg-muted)]">
+          <div className="mg-crumbs-path">
             {/* 1 枚だけ開いているときは、どこのファイルか分かるよう絶対パスで出す。 */}
             <Breadcrumbs path={sole ?? shownPath} paneId={pane.id} lazy={!!sole} />
           </div>
         )}
-        {path && isDoc && (
+        {path && isDoc && isDraft && (
+          // 下書きは版を持てない。同じ場所に、行き先を決める口を置く。
+          <TextBtn tip="名前を付けて保存" keys="⌘S" quiet onClick={() => void saveDraft()}>
+            名前を付けて保存
+          </TextBtn>
+        )}
+        {path && isDoc && !isDraft && (
           <>
-            {isDraft ? (
-              // 下書きは版を持てない。同じ場所に、行き先を決める釦を置く。
-              <button
-                onClick={() => void saveDraft()}
-                title="名前を付けて保存 (⌘S)"
-                className="grid h-6 w-6 place-items-center rounded text-[var(--mg-accent)] transition hover:bg-[var(--mg-hover)]"
-              >
-                <Icon name="save" size={16} />
-              </button>
-            ) : (
-              <button
-                onClick={() => (naming === null ? startNaming() : setNaming(null))}
-                title="バージョンを保存 (⌘S)"
-                className={`grid h-6 w-6 place-items-center rounded transition ${
-                  naming !== null
-                    ? "bg-[var(--mg-accent-soft)] text-[var(--mg-accent)]"
-                    : "text-[var(--mg-muted)] hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-                }`}
-              >
-                <Icon name="save_as" size={16} />
-              </button>
-            )}
+            <TextBtn
+              tip="今の本文を版として保存"
+              keys="⌘S"
+              quiet
+              on={naming !== null}
+              onClick={() => (naming === null ? startNaming() : setNaming(null))}
+            >
+              版を保存
+            </TextBtn>
+            <TextBtn tip="版の履歴" keys="⌘Y" quiet onClick={showVersions}>
+              履歴
+            </TextBtn>
           </>
         )}
-        {/* 毎分押すものではない操作は畳む。並べておくと、どれが何なのか絵だけ
-            では読み取れなくなる。 */}
-        {(canCopy || (path && isDoc)) && (
+        {path && isDoc && (
+          <TextBtn tip="HTML で書き出す" keys="⌘⇧E" quiet onClick={() => void handOut()}>
+            書き出し
+          </TextBtn>
+        )}
+        {pane.tabs.length > 0 && (
+          <TextBtn tip="右に分割" keys={"⌘\\"} quiet onClick={() => splitInto(store, "row")}>
+            分割
+          </TextBtn>
+        )}
+        {(canCopy || (path && isDoc) || isSplit) && (
           <MenuButton
-            icon="more_vert"
-            title="そのほか"
-            size={16}
+            icon="more_horiz"
+            label="その他"
+            title="ほかの操作"
             dot={!!data || broken}
-            className="relative grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
             items={[
               ...(canCopy
-                ? [
-                    {
-                      icon: "content_copy",
-                      label: "全文をコピー",
-                      keys: "⌘⌥C",
-                      run: () => void copyAll(),
-                    },
-                  ]
-                : []),
-              ...(path && isDoc
-                ? [
-                    {
-                      icon: "html",
-                      label: "HTML で書き出す",
-                      keys: "⌘⇧E",
-                      run: () => void handOut(),
-                    },
-                  ]
-                : []),
-              // 下書きは版も指摘も持たない。行き先が決まってからのものなので、
-              // 履歴の口は出さない。
-              ...(path && isDoc && !isDraft
-                ? [
-                    {
-                      icon: "history",
-                      label: "バージョン履歴",
-                      keys: "⌘Y",
-                      run: showVersions,
-                    },
-                  ]
+                ? [{ icon: "content_copy", label: "全文をコピー", keys: "⌘⌥C", run: () => void copyAll() }]
                 : []),
               ...(path && isDoc
                 ? [
@@ -1544,42 +1517,12 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                     },
                   ]
                 : []),
+              { icon: "horizontal_split", label: "下に分割", run: () => splitInto(store, "col") },
+              ...(isSplit
+                ? [{ icon: "close", label: "このペインを閉じる", run: doClosePane }]
+                : []),
             ]}
           />
-        )}
-        {saving > 0 && (
-          <span title="保存中" className="shrink-0 text-[var(--mg-muted)]">
-            <Icon name="progress_activity" size={13} className="mg-spin" />
-          </span>
-        )}
-        <Tooltip
-          align="end"
-          label={
-            watchMode === "observer"
-              ? "変更をリアルタイム監視中"
-              : watchMode === "polling"
-                ? "変更を監視中（ポーリング）"
-                : "監視は停止中"
-          }
-        >
-          <span
-            className={`h-2 w-2 shrink-0 cursor-help rounded-full ${
-              watchMode === "observer"
-                ? "bg-emerald-400"
-                : watchMode === "polling"
-                  ? "bg-amber-400"
-                  : "bg-zinc-500"
-            }`}
-          />
-        </Tooltip>
-        {isSplit && (
-          <button
-            onClick={doClosePane}
-            title="このペインを閉じる"
-            className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-          >
-            <Icon name="close" size={16} />
-          </button>
         )}
       </header>
 

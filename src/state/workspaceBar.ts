@@ -13,6 +13,9 @@ export const barAtom = atomWithStorage<string[]>("fude:wsbar", [], undefined, {
 // ⌘ を押したままにしているあいだ、札に ⌘1〜9 の番号を出す。
 export const hintsAtom = atom(false);
 
+// ⌘J の一覧を開く頼み（札の並びの ▾ から）。
+export const cyclerAskAtom = atom(0);
+
 // このウィンドウで開いた順（新しいものが先頭）。⌃Tab で直前のものへ戻るのに使う。
 export const visitedAtom = atom<string[]>([]);
 

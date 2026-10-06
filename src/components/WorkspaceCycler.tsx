@@ -6,7 +6,7 @@ import { keyedIn, movedIn } from "../lib/pointer";
 import { colorVar, type Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
-import { barAtom, visitedAtom } from "../state/workspaceBar";
+import { barAtom, cyclerAskAtom, visitedAtom } from "../state/workspaceBar";
 
 // ワークスペースの一覧。並べるのはツールバーの札と同じもので、最近開いた順。
 // ⌘J は見るための一覧で、Enter かクリックで選ぶまで開いたまま。
@@ -59,6 +59,12 @@ export function WorkspaceCycler() {
     mode: "hold" | "pick";
   } | null>(null);
 
+  const beginRef = useRef<() => void>(() => {});
+  const ask = useAtomValue(cyclerAskAtom);
+  useEffect(() => {
+    if (ask > 0) beginRef.current();
+  }, [ask]);
+
   useEffect(() => {
     const end = () => {
       if (live.current) window.clearTimeout(live.current.timer);
@@ -77,6 +83,27 @@ export function WorkspaceCycler() {
       cur.at = (cur.at + by + n) % n;
       setAt(cur.at);
       keyedIn(document.querySelector<HTMLElement>(".mg-ws-cycler .mg-pick-list"));
+    };
+    const begin = (hold: "Meta" | "Control", back: boolean) => {
+      const known = store.get(A.workspacesAtom);
+      const here = store.get(A.workspaceAtom);
+      const order = cycleOrder(store.get(barAtom), store.get(visitedAtom), here?.id);
+      const found = order
+        .map((id) => (here?.id === id ? here : known.find((w) => w.id === id)))
+        .filter((w): w is Workspace => !!w);
+      if (found.length < 2) return;
+      const start = back ? found.length - 1 : 1;
+      const mode = hold === "Meta" ? "pick" : "hold";
+      live.current = {
+        list: found,
+        at: start,
+        mode,
+        timer: mode === "pick" ? 0 : window.setTimeout(() => setShown(true), SHOW_AFTER_MS),
+      };
+      setList(found);
+      setAt(start);
+      setPicking(mode === "pick");
+      if (mode === "pick") setShown(true);
     };
     const onDown = (e: KeyboardEvent) => {
       const cur = live.current;
@@ -112,25 +139,10 @@ export function WorkspaceCycler() {
         step(e.shiftKey ? -1 : 1);
         return;
       }
-      const known = store.get(A.workspacesAtom);
-      const here = store.get(A.workspaceAtom);
-      const order = cycleOrder(store.get(barAtom), store.get(visitedAtom), here?.id);
-      const found = order
-        .map((id) => (here?.id === id ? here : known.find((w) => w.id === id)))
-        .filter((w): w is Workspace => !!w);
-      if (found.length < 2) return;
-      const start = e.shiftKey ? found.length - 1 : 1;
-      const mode = hold === "Meta" ? "pick" : "hold";
-      live.current = {
-        list: found,
-        at: start,
-        mode,
-        timer: mode === "pick" ? 0 : window.setTimeout(() => setShown(true), SHOW_AFTER_MS),
-      };
-      setList(found);
-      setAt(start);
-      setPicking(mode === "pick");
-      if (mode === "pick") setShown(true);
+      begin(hold, e.shiftKey);
+    };
+    beginRef.current = () => {
+      if (!live.current) begin("Meta", false);
     };
     const onUp = (e: KeyboardEvent) => {
       const cur = live.current;

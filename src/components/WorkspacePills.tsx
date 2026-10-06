@@ -11,7 +11,7 @@ import {
   workspacesAtom,
 } from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
-import { barAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
+import { barAtom, cyclerAskAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 
 // ツールバーの中に並べるワークスペースの札。1 回押せば切り替わる。
@@ -78,6 +78,7 @@ export function WorkspacePills() {
 
   // ⌘ を押したままにしているあいだ（useKeyHints）、札に ⌘1〜9 の番号を出す。
   const hints = useAtomValue(hintsAtom);
+  const askCycler = useSetAtom(cyclerAskAtom);
 
   const indexAt = (e: React.DragEvent<HTMLDivElement>): number => {
     const pills = Array.from(
@@ -207,7 +208,18 @@ export function WorkspacePills() {
       </div>
       <button
         type="button"
-        title="ワークスペースを新規作成（⌘T）"
+        data-tip="ワークスペースを選ぶ"
+        data-key="⌘J"
+        aria-label="ワークスペースを選ぶ"
+        onClick={() => askCycler((n) => n + 1)}
+        className="mg-ws-pill-add"
+      >
+        <Icon name="expand_more" size={16} />
+      </button>
+      <button
+        type="button"
+        data-tip="ワークスペースを作る"
+        data-key="⌘T"
         aria-expanded={!!making}
         onClick={(e) => {
           const box = e.currentTarget.getBoundingClientRect();

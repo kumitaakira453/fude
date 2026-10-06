@@ -39,7 +39,9 @@ import {
   isShownAtom,
   workspaceAtom,
   workspaceMenuAtom,
+  rootCreateAtom,
 } from "../state/atoms";
+import { IconBtn, TextBtn } from "./Chrome";
 import { colorVar } from "../lib/workspaces";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
@@ -673,6 +675,15 @@ export function FileTree() {
     [setExpandedOpen, lone],
   );
 
+  // 左の欄の頭の「新規」から、根に作る頼み。根が 1 つのときだけ受ける。
+  const createAsk = useAtomValue(rootCreateAtom);
+  const seenAsk = useRef(createAsk?.nonce ?? 0);
+  useEffect(() => {
+    if (!createAsk || createAsk.nonce === seenAsk.current) return;
+    seenAsk.current = createAsk.nonce;
+    if (lone && !noAdd) startCreate(lone, createAsk.kind);
+  }, [createAsk, lone, noAdd, startCreate]);
+
   // 行へ焦点を戻す。入力欄から行へ戻るときは、行が描き直されるのを待つ。
   const focusRow = useCallback((path: string) => {
     requestAnimationFrame(() => {
@@ -792,52 +803,29 @@ export function FileTree() {
   return (
     <div className="flex min-h-0 flex-col">
       {/* 木そのものへの操作。押せるものが無ければ段ごと出さない。 */}
-      {((!noAdd && lone) || multi) && (
-        <div className="flex items-center justify-end gap-0.5 px-2 pb-1">
-          {multi && (
-            <>
-              <span className="mg-tree-count mr-auto text-[11px] text-[var(--mg-muted)]">
-                フォルダ {roots.length}
-              </span>
-              {here && (
-                <button
-                  onClick={(e) => {
-                    const box = e.currentTarget.getBoundingClientRect();
-                    setWsMenu({ id: here.id, x: box.left, y: box.bottom + 4, step: "folders" });
-                  }}
-                  title="フォルダを追加"
-                  className="mg-tree-add-root grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-                >
-                  <Icon name="create_new_folder" size={16} />
-                </button>
-              )}
-              <button
-                onClick={toggleRoots}
-                title={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
-                className="mg-tree-roots grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                <Icon name={allRootsOpen ? "unfold_less" : "unfold_more"} size={16} />
-              </button>
-            </>
+      {/* フォルダを複数並べているときの、並べた根への操作。作る口は左の欄の頭。 */}
+      {multi && (
+        <div className="mg-tree-head">
+          <span className="mg-tree-count">フォルダ {roots.length}</span>
+          {here && (
+            <TextBtn
+              tip="このワークスペースにフォルダを追加"
+              quiet
+              className="mg-tree-add-root"
+              onClick={(e) => {
+                const box = e.currentTarget.getBoundingClientRect();
+                setWsMenu({ id: here.id, x: box.left, y: box.bottom + 4, step: "folders" });
+              }}
+            >
+              追加
+            </TextBtn>
           )}
-          {!noAdd && lone && (
-            <>
-              <button
-                onClick={() => startCreate(lone, "file")}
-                title="ルートに新規ファイル"
-                className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                <Icon name="note_add" size={16} />
-              </button>
-              <button
-                onClick={() => startCreate(lone, "dir")}
-                title="ルートに新規フォルダ"
-                className="grid h-6 w-6 place-items-center rounded text-[var(--mg-muted)] transition hover:bg-[var(--mg-hover)] hover:text-[var(--mg-fg)]"
-              >
-                <Icon name="create_new_folder" size={16} />
-              </button>
-            </>
-          )}
+          <IconBtn
+            tip={allRootsOpen ? "すべてのフォルダを畳む" : "すべてのフォルダを開く"}
+            icon={allRootsOpen ? "unfold_less" : "unfold_more"}
+            className="mg-tree-roots"
+            onClick={toggleRoots}
+          />
         </div>
       )}
 
