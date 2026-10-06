@@ -39,6 +39,8 @@ const { activeFolderIdAtom, contentCacheAtom } = await import("../../state/atoms
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+  // jsdom に無いもの。印（::highlight）の登録先を探すときに見る。
+  (globalThis as { CSS?: { escape: (s: string) => string } }).CSS ??= { escape: (s) => s };
   if (!globalThis.ResizeObserver) {
     globalThis.ResizeObserver = class {
       observe() {}
@@ -77,9 +79,10 @@ function show() {
   store.set(ledgerAtom, {
     version: 1,
     threads: [thread("t1", "ひとつめ"), thread("t2", "ふたつめ")],
+    versions: [],
   } as never);
   store.set(activeFolderIdAtom, "/docs");
-  store.set(contentCacheAtom, new Map([["a.md", "本文\n"]]));
+  store.set(contentCacheAtom, new Map([["/docs/a.md", "本文\n"]]));
   store.set(reviewThreadAtom, "t1");
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -117,5 +120,34 @@ describe("一覧から解決にする", () => {
       await Promise.resolve();
     });
     expect(cards().join("")).toContain("ひとつめ");
+  });
+});
+
+// 同じファイルの別のコメントへ移るとき。本文は組み直さず（右の表示を作り直すと
+// 選ぶたびに 1 秒以上固まった）、返信の下書きは持ち越さない。
+describe("同じファイルのコメントを渡り歩く", () => {
+  const settle = () =>
+    act(async () => {
+      await new Promise((ok) => setTimeout(ok, 60));
+    });
+  const draft = () =>
+    document.querySelector<HTMLTextAreaElement>('textarea[placeholder^="返信を書く"]');
+
+  it("本文を出している入れ物はそのまま、返信の下書きは空に戻る", async () => {
+    show();
+    await settle();
+    const doc = document.querySelector(".mg-doc");
+    expect(doc).not.toBeNull();
+    const box = draft()!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, "下書き");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(draft()!.value).toBe("下書き");
+    const second = document.querySelectorAll<HTMLElement>(".mg-thread-card")[1];
+    act(() => second.click());
+    await settle();
+    expect(document.querySelector(".mg-doc")).toBe(doc);
+    expect(draft()!.value).toBe("");
   });
 });

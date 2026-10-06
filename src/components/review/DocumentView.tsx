@@ -29,9 +29,9 @@ const MARK = "mg-review-selection";
 // 最初の一塊は小さく取る。ここを大きくすると、指摘を選んでから何かが
 // 出るまでの間がそのまま伸びる。
 const FIRST_CHUNK = 8;
-// 残りを足す 1 回分。小さく刻むと、そのたびに一覧全体の突き合わせが走るので
-// かえって遅い。対象へ着いたあとの穴埋めなので、大きく取る。
-const NEXT_CHUNK = 160;
+// 残りを足す 1 回分。1 ブロックの組み立てに数 ms かかるので、大きく取ると
+// その 1 回で画面が固まる（160 で 1 秒を超えた）。読む画面と同じ刻みにする。
+const NEXT_CHUNK = 24;
 
 export function DocumentView({
   spot,
@@ -43,7 +43,11 @@ export function DocumentView({
   goTo,
   onSettled,
   selection,
+  subject,
 }: {
+  // どのコメントのために出しているか。同じ本文のまま別のコメントへ移ったときに、
+  // 寄せ直しと「寄せ終わった」の知らせをやり直す合図にする。
+  subject: string;
   blocks: Block[];
   // 指摘の箇所が今どうなっているか。版との突き合わせで出したもの。
   spot: SpotDiff;
@@ -64,6 +68,9 @@ export function DocumentView({
   onSettled?: () => void;
 }) {
   const [limit, setLimit] = useState(FIRST_CHUNK);
+  // 描いた数。同じ本文のまま別のコメントへ移っても減らさない（描き直さずに済む）。
+  const limitRef = useRef(limit);
+  limitRef.current = limit;
   const root = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
   // 選ばれていた文字列そのものに印を付けられたときの、その位置
@@ -104,16 +111,16 @@ export function DocumentView({
   useEffect(() => {
     touchedRef.current = false;
     settledRef.current = false;
-    setLimit(opening);
-    if (total <= opening) return;
-    let shownCount = opening;
+    let shownCount = Math.min(total, Math.max(limitRef.current, opening));
+    setLimit(shownCount);
+    if (shownCount >= total) return;
     let frame = requestAnimationFrame(function step() {
       shownCount = Math.min(shownCount + NEXT_CHUNK, total);
       setLimit(shownCount);
       if (shownCount < total) frame = requestAnimationFrame(step);
     });
     return () => cancelAnimationFrame(frame);
-  }, [total, spotKey, opening]);
+  }, [total, spotKey, opening, subject]);
 
   useEffect(() => {
     const mark = () => {
@@ -160,7 +167,7 @@ export function DocumentView({
     return () => {
       registry.delete(MARK);
     };
-  }, [selection, limit, spotKey]);
+  }, [selection, limit, spotKey, subject]);
 
   // 描き足すたびに位置を合わせ直す。上にある画像や数式が遅れて入ると
   // 対象が押し下げられるため、1 回きりだと狙った場所からずれる。
@@ -175,7 +182,7 @@ export function DocumentView({
       settledRef.current = true;
       onSettled?.();
     }
-  }, [limit, spotKey, marked, focus, at, onSettled]);
+  }, [limit, spotKey, marked, focus, at, onSettled, subject]);
 
   // 頼まれたら戻す。自分でスクロールしていても、このときだけは動かす。
   useEffect(() => {

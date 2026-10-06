@@ -212,10 +212,15 @@ export function ReviewScreen() {
     [threads],
   );
   const selected = useMemo(() => pick(selectedId), [pick, selectedId]);
-  const shown = useMemo(
-    () => (pending ? null : pick(shownId ?? null)),
-    [pending, pick, shownId],
-  );
+  // 待っているあいだは前に出していたものを残す（上に骨組みを重ねて隠す）。
+  // 消すと右の詳しい表示が作り直しになり、同じファイルでも本文を組み直す。
+  const lastShown = useRef<ReviewThread | null>(null);
+  const shown = useMemo(() => {
+    if (pending) return lastShown.current;
+    const next = pick(shownId ?? null);
+    lastShown.current = next;
+    return next;
+  }, [pending, pick, shownId]);
   // 解決した後に見せる指摘。決めておかないと、選択が暗黙で先頭へ倒れて
   // 中央ペインが作り直され、一瞬ちらつく。
   const nextId = useMemo(() => {
@@ -507,7 +512,9 @@ export function ReviewScreen() {
           // 先に外すと、本文が出てから対象へ動くまでの間が待たされて見える。
           <div className="relative flex min-w-0 flex-1">
             <ThreadDetail
-              key={shown.id}
+              // 同じファイルのあいだは作り直さない。本文の組み立て直しで、
+              // 選ぶたびに 1 秒以上固まっていた。コメントごとの状態は中で戻す。
+              key={shown.file}
               thread={shown}
               nextId={nextId}
               onResolve={resolveOne}
@@ -713,6 +720,25 @@ function ThreadDetail({
   const removingRef = useRef(false);
   // 押すたびに本文を指摘の箇所へ戻す。
   const [focus, setFocus] = useState(0);
+  // 「次の変更へ」で今見ている所。
+  const [goTo, setGoTo] = useState<{ at: number; nonce: number } | null>(null);
+
+  // 同じファイルの別のコメントへ移ったら、コメントごとに持つものを戻す。
+  // 描く前に戻すので、前のコメントの返信の下書きが一瞬でも出ることはない。
+  const [seenId, setSeenId] = useState(thread.id);
+  if (seenId !== thread.id) {
+    setSeenId(thread.id);
+    setReply("");
+    setSeeReply(false);
+    setSending(false);
+    setResolving(false);
+    setRemoving(false);
+    setFocus(0);
+    setGoTo(null);
+    sendingRef.current = false;
+    resolvingRef.current = false;
+    removingRef.current = false;
+  }
 
   // 本文の控えの鍵（絶対パス）。開いているフォルダの外なら null。
   const rel = useMemo(() => insideOf(roots, thread.file), [roots, thread.file]);
@@ -743,22 +769,28 @@ function ThreadDetail({
     };
   }, [thread.base_version]);
 
+  // ブロックへの分割と、版からの動きは本文と版だけで決まる。同じファイルの
+  // コメントを渡り歩くあいだは作り直さない。
+  const blocks = useMemo(
+    () => (currentBody === null ? null : splitBlocks(currentBody)),
+    [currentBody],
+  );
+  const moved = useMemo(
+    () => (blocks === null || baseText === null ? [] : changesSince(baseText, blocks)),
+    [baseText, blocks],
+  );
   const view = useMemo(() => {
-    if (currentBody === null) return null;
-    const blocks = splitBlocks(currentBody);
+    if (blocks === null) return null;
     const spot = spotDiff(thread, blocks, baseText);
     // 指摘の箇所の外で動いた所。コメントへの対応は、指摘された塊の外で
     // 行われることがある。
-    const changes =
-      baseText === null
-        ? []
-        : changesSince(baseText, blocks).filter((c) => c.index !== spot.index);
+    const changes = moved.filter((c) => c.index !== spot.index);
     const crumbs =
       spot.state === "unknown"
         ? thread.section_path
         : sectionPathAt(blocks, Math.min(spot.index, blocks.length - 1));
     return { blocks, spot, changes, crumbs };
-  }, [baseText, currentBody, thread]);
+  }, [baseText, blocks, moved, thread]);
 
   // その指摘への対応の記録（AI が直したあとに打つ版）。これが今の本文と同じなら、
   // 動いた分は「その対応そのもの」と言い切れる。違えば、そのあとの編集も
@@ -778,7 +810,6 @@ function ThreadDetail({
   }, [answer, raw]);
 
   // 「次の変更へ」。指摘の箇所の外で動いた所を順に送る。
-  const [goTo, setGoTo] = useState<{ at: number; nonce: number } | null>(null);
   const nextChange = () => {
     const list = view?.changes ?? [];
     if (list.length === 0) return;
@@ -935,6 +966,7 @@ function ThreadDetail({
                 style={style}
                 focusNonce={focus}
                 selection={thread.selection}
+                subject={thread.id}
                 onSettled={settle}
               />
             </markdownContext.Provider>
