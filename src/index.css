@@ -8174,6 +8174,7 @@ body.mg-carrying {
 }
 .mg-ws-pill {
   position: relative;
+  user-select: none;
   display: inline-flex;
   width: 12.5rem;
   height: 1.75rem;
@@ -8408,6 +8409,9 @@ body.mg-carrying {
 
 /* 選ぶ一覧の行。マウスの塗りは :hover でその場で出し、キー操作の当たりは
    data-on で塗る。マウスが一覧の上にあるあいだは、マウスの行だけを塗る。 */
+.mg-pick-row {
+  user-select: none;
+}
 .mg-pick-row:hover,
 .mg-pick-row[data-on] {
   background: var(--mg-accent-soft);

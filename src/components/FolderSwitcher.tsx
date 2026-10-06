@@ -44,12 +44,16 @@ export function FolderSwitcher() {
           const box = e.currentTarget.getBoundingClientRect();
           openMenu({ id: ws.id, x: box.left, y: box.bottom + 4 });
         }}
+        onMouseDown={(e) => {
+          // 右ボタンで押した瞬間に、下の語が選ばれるのを止める。
+          if (e.button === 2) e.preventDefault();
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           openMenu({ id: ws.id, x: e.clientX, y: e.clientY });
         }}
         title="ワークスペースのメニュー"
-        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
+        className="flex w-full select-none items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--mg-hover)]"
       >
         <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
         <span className="truncate text-[13px] font-semibold text-[var(--mg-fg)]">{ws.name}</span>

@@ -191,6 +191,10 @@ export function WorkspaceSwitcher() {
                 data-idx={i}
                 onMouseMove={() => hover(i)}
                 onClick={(e) => choose(i, e.metaKey)}
+                onMouseDown={(e) => {
+                  // 右ボタンで押した瞬間に、下の語が選ばれるのを止める。
+                  if (e.button === 2) e.preventDefault();
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   openMenu({ id: ws.id, x: e.clientX, y: e.clientY });

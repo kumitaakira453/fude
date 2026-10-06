@@ -187,6 +187,22 @@ describe("手入れ：どこで右クリックしても同じメニュー", () =
   });
 });
 
+describe("右クリックで字を選ばせない", () => {
+  it("札の上で右ボタンを押しても、下の語の選択を始めない", async () => {
+    const { el } = await show();
+    const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 2 });
+    act(() => {
+      pill(el, "b").dispatchEvent(down);
+    });
+    expect(down.defaultPrevented).toBe(true);
+    const left = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 });
+    act(() => {
+      pill(el, "b").dispatchEvent(left);
+    });
+    expect(left.defaultPrevented).toBe(false);
+  });
+});
+
 describe("手入れ：画面を指して開く", () => {
   it("フォルダを選ぶ画面を指せば、メニューを経ずにその画面から開く", async () => {
     const { store } = await show();
