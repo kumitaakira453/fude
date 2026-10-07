@@ -4114,6 +4114,12 @@ svg[id^="mmd-"] foreignObject div {
   color: var(--mg-muted);
   font-size: var(--mg-t-xs);
 }
+/* 切り替えを押してから一覧を組み直すまでの間。止まって見えないよう薄くする。 */
+.mg-inbox-list.is-pending {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
 /* 一覧を狭めても 1 行に収める（入り切らない分は省く）。 */
 .mg-inbox-head-label {
   min-width: 0;

@@ -193,6 +193,26 @@ describe("絞り込みと並び", () => {
     expect(document.querySelector(".mg-thread-done")?.getAttribute("title")).toContain("未解決に戻す");
   });
 
+  it("切り替えは押した 1 枚で効いた見た目になり、一覧はその後で組み直す", async () => {
+    show(list(), "todo");
+    // 開いた直後の受け取りを済ませてから押す。
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, 60));
+    });
+    const done = [...document.querySelectorAll<HTMLButtonElement>(".mg-seg button")].find((b) =>
+      b.textContent?.startsWith("解決済み"),
+    )!;
+    act(() => done.click());
+    expect(done.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector(".mg-inbox-list.is-pending")).not.toBeNull();
+    expect(cards().join("")).not.toContain("片付いた");
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, 60));
+    });
+    expect(document.querySelector(".mg-inbox-list.is-pending")).toBeNull();
+    expect(cards().join("")).toContain("片付いた");
+  });
+
   it("↓ と ↑ で一覧の前後へ移る", () => {
     const store = show(list(), "open");
     const at = () => store.get(reviewThreadAtom);

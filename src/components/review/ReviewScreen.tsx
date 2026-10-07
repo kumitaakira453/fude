@@ -206,6 +206,13 @@ export function ReviewScreen() {
   );
   const [filter, setFilter] = useAtom(reviewFilterAtom);
   const [grouped, setGrouped] = useAtom(reviewGroupedAtom);
+  // 押した値は切り替えの見た目にすぐ出し、一覧の組み直しは押した 1 枚を描き切って
+  // から受け取る。同じ描画で組み直すと、行が多いときに押しても反応しないように見える。
+  const listFilter = useAfterPaint(filter) ?? filter;
+  const listGrouped = useAfterPaint(grouped) ?? grouped;
+  const listPending = listFilter !== filter || listGrouped !== grouped;
+  const listFilterRef = useRef(listFilter);
+  listFilterRef.current = listFilter;
   const [listWidth, setListWidth] = useAtom(reviewListWidthAtom);
   const listRef = useRef<HTMLElement>(null);
   const counts = useMemo(() => {
@@ -219,21 +226,21 @@ export function ReviewScreen() {
   const goingRef = useRef(going);
   goingRef.current = going;
   const threads = useMemo(() => {
-    const done = filter === "done";
+    const done = listFilter === "done";
     const list = inFolder.filter((t) => {
       if (going.has(t.id)) return false;
       if (isOpen(t) === done) return false;
       // 見ている指摘は、返信して「未対応」から外れても選び直すまで残す。
       // 返した瞬間に一覧から消えると、読んでいた場所ごと飛ばされる。
-      return filter !== "todo" || awaitsMe(t) || t.id === selectedId;
+      return listFilter !== "todo" || awaitsMe(t) || t.id === selectedId;
     });
     // 新しい順は最後の発言の時刻で並べる。まとめるときはファイルごとに寄せる。
     list.sort((x, y) => lastAt(y) - lastAt(x));
-    if (grouped) list.sort((x, y) => x.file.localeCompare(y.file));
+    if (listGrouped) list.sort((x, y) => x.file.localeCompare(y.file));
     return list;
     // 選び直しのたびに並びを組み直さないよう、選んでいる id は見張らない
     // （残すかどうかは、絞り込みや台帳が変わったときにだけ決め直せば足りる）。
-  }, [inFolder, going, filter, grouped]);
+  }, [inFolder, going, listFilter, listGrouped]);
   // 解決の処理の中で「次の指摘」を引くための控え。押した瞬間の並びを見る。
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -340,7 +347,7 @@ export function ReviewScreen() {
       setGoing((prev) => new Set(prev).add(id));
       if (store.get(reviewThreadAtom) === id) setSelectedId(next);
       // 解決済みの一覧から押したときは、未解決に戻す。
-      const back = store.get(reviewFilterAtom) === "done";
+      const back = listFilterRef.current === "done";
       try {
         if (!(back ? await reopenThread(id) : await resolveThread(id, REVIEW_AUTHOR))) return;
         await syncLedger(store);
@@ -482,7 +489,7 @@ export function ReviewScreen() {
       key={thread.id}
       thread={thread}
       where={factsById.get(thread.id)?.where ?? thread.section_path.join(" › ")}
-      file={grouped ? null : fileLabel(label, thread.file).name}
+      file={listGrouped ? null : fileLabel(label, thread.file).name}
       active={thread.id === selected?.id}
       onPick={() => setSelectedId(thread.id)}
       onResolve={() => void resolveOne(thread.id)}
@@ -540,7 +547,7 @@ export function ReviewScreen() {
       <div className="flex min-h-0 flex-1">
         <nav ref={listRef} className="mg-inbox" style={{ width: listWidth }}>
           <div className="mg-inbox-head">
-            <span className="mg-inbox-head-label">{grouped ? "ファイルごと" : "新しい順"}</span>
+            <span className="mg-inbox-head-label">{listGrouped ? "ファイルごと" : "新しい順"}</span>
             <button
               onClick={() => setGrouped(!grouped)}
               aria-pressed={grouped}
@@ -549,18 +556,18 @@ export function ReviewScreen() {
               ファイルでまとめる
             </button>
           </div>
-          <div className="mg-inbox-list">
+          <div className={`mg-inbox-list${listPending ? " is-pending" : ""}`}>
             {threads.length === 0 && (
               <p className="mg-inbox-none">
-                {filter === "todo"
+                {listFilter === "todo"
                   ? "未対応のコメントはありません。片付いています。"
-                  : filter === "open"
+                  : listFilter === "open"
                     ? "未解決のコメントはありません。"
                     : "解決済みのコメントはありません。"}
-                {elsewhere > 0 && filter !== "done" && " 他のフォルダのコメントは、そのフォルダを開くと出ます。"}
+                {elsewhere > 0 && listFilter !== "done" && " 他のフォルダのコメントは、そのフォルダを開くと出ます。"}
               </p>
             )}
-            {grouped
+            {listGrouped
               ? groups.map(([file, list]) => (
                   <section key={file}>
                     <h2 className="mg-inbox-file" title={file}>
@@ -575,7 +582,7 @@ export function ReviewScreen() {
                       >
                         <Icon name={copiedFile === file ? "check" : "content_copy"} size={13} />
                       </button>
-                      {filter !== "done" && (
+                      {listFilter !== "done" && (
                         <button
                           onClick={() => void resolveFile(file, list)}
                           disabled={bulkFile !== null}
