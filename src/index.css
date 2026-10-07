@@ -1204,25 +1204,24 @@ button.mg-task-check:hover {
   font-size: 10.5px;
 }
 /* 左の欄の下に出す、Claude のセッションが書いたファイル。 */
+/* 送り棒は欄の端に付ける。余白は外側に置かず、頭と送る箱の内側に持つ。 */
 .mg-sess {
   flex: none;
-  padding: 6px 8px 8px;
+  padding: 6px 0 0;
   border-top: 1px solid var(--mg-line);
+}
+.mg-sess > .mg-sess-head {
+  padding: 0 8px;
+}
+.mg-sess > .overflow-y-auto {
+  padding: 0 8px 8px;
 }
 .mg-sess.is-fill {
   display: flex;
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  padding: 6px 0 0;
   border-top: 0;
-}
-/* 欄の高さいっぱいに並べるときは、送り棒を欄の端に付ける。余白は送る箱の内側に持つ。 */
-.mg-sess.is-fill > .mg-sess-head {
-  padding: 0 8px;
-}
-.mg-sess.is-fill > .overflow-y-auto {
-  padding: 0 8px 8px;
 }
 .mg-sess-head {
   display: flex;
