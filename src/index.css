@@ -4114,6 +4114,14 @@ svg[id^="mmd-"] foreignObject div {
   color: var(--mg-muted);
   font-size: var(--mg-t-xs);
 }
+/* 一覧を狭めても 1 行に収める（入り切らない分は省く）。 */
+.mg-inbox-head-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mg-inbox-list {
   min-height: 0;
   flex: 1;

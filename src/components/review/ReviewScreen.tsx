@@ -540,7 +540,7 @@ export function ReviewScreen() {
       <div className="flex min-h-0 flex-1">
         <nav ref={listRef} className="mg-inbox" style={{ width: listWidth }}>
           <div className="mg-inbox-head">
-            <span className="flex-1">{grouped ? "ファイルごと" : "新しい順・ファイルをまたいで 1 本"}</span>
+            <span className="mg-inbox-head-label">{grouped ? "ファイルごと" : "新しい順"}</span>
             <button
               onClick={() => setGrouped(!grouped)}
               aria-pressed={grouped}

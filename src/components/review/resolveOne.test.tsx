@@ -229,6 +229,12 @@ describe("一覧の幅", () => {
     expect(store.get(reviewListWidthAtom)).toBe(480);
   });
 
+  it("頭の段の説明は短く、狭めても折り返さない", () => {
+    show();
+    const label = document.querySelector(".mg-inbox-head-label");
+    expect(label?.textContent).toBe("新しい順");
+  });
+
   it("下限より狭くならず、二度押しで 400px に戻る", () => {
     const store = show();
     at("pointerdown", 400, grip());
