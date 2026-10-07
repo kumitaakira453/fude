@@ -32,6 +32,18 @@ export function fitReviewSideWidth(w: number): number {
   return Math.min(Math.max(Math.round(w), REVIEW_SIDE_MIN), REVIEW_SIDE_MAX);
 }
 
+// レビュー画面の左の一覧（受信箱）の幅。
+//
+// コメントの 1 行目を長く読みたいときは広げ、本文を広く見たいときは縮めたい。
+// 下限は、時刻と状態が 1 行に収まる幅。
+export const REVIEW_LIST_WIDTH = 400;
+export const REVIEW_LIST_MIN = 280;
+export const REVIEW_LIST_MAX = 640;
+
+export function fitReviewListWidth(w: number): number {
+  return Math.min(Math.max(Math.round(w), REVIEW_LIST_MIN), REVIEW_LIST_MAX);
+}
+
 // 本文の横に出すコメントの欄。
 //
 // 指摘には表やコードが入ることがあり、狭いと折り返しばかりになる。既定の幅を

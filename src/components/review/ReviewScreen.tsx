@@ -17,7 +17,12 @@ import {
 import { copyText } from "../../lib/clip";
 import { fontStack } from "../../lib/fonts";
 import { answerOf } from "../../lib/versions";
-import { REVIEW_SIDE_WIDTH, fitReviewSideWidth } from "../../lib/sidebar";
+import {
+  REVIEW_LIST_WIDTH,
+  REVIEW_SIDE_WIDTH,
+  fitReviewListWidth,
+  fitReviewSideWidth,
+} from "../../lib/sidebar";
 import { buildProjection } from "../../lib/projection";
 import { inEditable, PAD_CLASS, WIDTH_CLASS } from "../../lib/ui";
 import { parseFrontmatter } from "../../lib/frontmatter";
@@ -49,6 +54,7 @@ import {
   readingWidthAtom,
   reviewFilterAtom,
   reviewGroupedAtom,
+  reviewListWidthAtom,
   rootsAtom,
   reviewSideWidthAtom,
   contentCacheAtom,
@@ -200,6 +206,8 @@ export function ReviewScreen() {
   );
   const [filter, setFilter] = useAtom(reviewFilterAtom);
   const [grouped, setGrouped] = useAtom(reviewGroupedAtom);
+  const [listWidth, setListWidth] = useAtom(reviewListWidthAtom);
+  const listRef = useRef<HTMLElement>(null);
   const counts = useMemo(() => {
     const open = inFolder.filter(isOpen);
     return { todo: open.filter(awaitsMe).length, open: open.length };
@@ -530,7 +538,7 @@ export function ReviewScreen() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="mg-inbox">
+        <nav ref={listRef} className="mg-inbox" style={{ width: listWidth }}>
           <div className="mg-inbox-head">
             <span className="flex-1">{grouped ? "ファイルごと" : "新しい順・ファイルをまたいで 1 本"}</span>
             <button
@@ -588,6 +596,13 @@ export function ReviewScreen() {
               : threads.map((thread) => row(thread))}
           </div>
         </nav>
+        <SidebarGrip
+          target={listRef}
+          width={listWidth}
+          onWidth={setListWidth}
+          fit={fitReviewListWidth}
+          reset={REVIEW_LIST_WIDTH}
+        />
 
         {threads.length === 0 ? (
           <p className="p-8 text-[length:13px] text-[var(--mg-muted)]">

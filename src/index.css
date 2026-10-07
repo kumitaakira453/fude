@@ -4097,7 +4097,6 @@ svg[id^="mmd-"] foreignObject div {
    左右に余白を置かない（スクロールの棒は右端に重なる）。 */
 .mg-inbox {
   display: flex;
-  width: 400px;
   min-height: 0;
   flex: none;
   flex-direction: column;

@@ -2,7 +2,7 @@ import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import { rootOf, type TreeNode } from "../lib/fsAccess";
 import { rootName, type DocEntry, type FolderEntry } from "../lib/idb";
-import { RAIL_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
+import { RAIL_WIDTH, REVIEW_LIST_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
 import type { Workspace } from "../lib/workspaces";
@@ -283,6 +283,11 @@ export const sidebarWidthAtom = atomWithStorage<number>(
 export const reviewSideWidthAtom = atomWithStorage<number>(
   windowScopedKey("mdglow:reviewsidew"),
   REVIEW_SIDE_WIDTH,
+);
+// レビュー画面の左の一覧の幅。右の欄と同じく窓ごとに覚える。
+export const reviewListWidthAtom = atomWithStorage<number>(
+  windowScopedKey("mdglow:reviewlistw"),
+  REVIEW_LIST_WIDTH,
 );
 // 本文の右に何を出すか。目次とコメントは同じ場所を取り合うので、択一で持つ。
 // 「なし」はコメントの印も本文から引っ込める——読むだけのときに蛍光ペンが

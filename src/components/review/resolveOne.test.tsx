@@ -34,7 +34,9 @@ vi.mock("../../state/review", async (real) => {
 
 const { ReviewScreen } = await import("./ReviewScreen");
 const { ledgerAtom, reviewThreadAtom } = await import("../../state/review");
-const { activeFolderIdAtom, contentCacheAtom, reviewFilterAtom } = await import("../../state/atoms");
+const { activeFolderIdAtom, contentCacheAtom, reviewFilterAtom, reviewListWidthAtom } = await import(
+  "../../state/atoms",
+);
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -204,5 +206,38 @@ describe("絞り込みと並び", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
     });
     expect(at()).toBe("a");
+  });
+});
+
+// 左の一覧も、右の欄と同じ仕切りで幅を変えられる。上下限で収め、二度押しで戻る。
+describe("一覧の幅", () => {
+  const at = (name: string, x: number, target: EventTarget = window) =>
+    act(() => {
+      target.dispatchEvent(new MouseEvent(name, { bubbles: true, clientX: x, button: 0 }));
+    });
+  const list = () => document.querySelector<HTMLElement>(".mg-inbox")!;
+  const grip = () => list().nextElementSibling as HTMLElement;
+
+  it("仕切りを引くと一覧の幅が変わり、離したときに覚える", () => {
+    const store = show();
+    expect(list().style.width).toBe("400px");
+    expect(grip().classList.contains("mg-side-grip")).toBe(true);
+    at("pointerdown", 400, grip());
+    at("pointermove", 480);
+    expect(list().style.width).toBe("480px");
+    at("pointerup", 480);
+    expect(store.get(reviewListWidthAtom)).toBe(480);
+  });
+
+  it("下限より狭くならず、二度押しで 400px に戻る", () => {
+    const store = show();
+    at("pointerdown", 400, grip());
+    at("pointermove", 100);
+    at("pointerup", 100);
+    expect(store.get(reviewListWidthAtom)).toBe(280);
+    act(() => {
+      grip().dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(store.get(reviewListWidthAtom)).toBe(400);
   });
 });
