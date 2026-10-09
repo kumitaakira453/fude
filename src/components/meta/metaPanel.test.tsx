@@ -53,6 +53,17 @@ describe("本文の上のメタ情報", () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
+  it("欄の頭に名前と項目数を出し、頭の「編集」から欄全体の小窓を開く", () => {
+    const open = vi.fn();
+    const el = show("---\ntitle: a\ndate: 2026-10-02\n---\n", open);
+    const head = el.querySelector<HTMLElement>(".mg-meta-panel-head")!;
+    expect(head.textContent).toContain("メタ情報 · 2 項目");
+    // 編集の釦は頭の段にだけ置き、行には重ねない。
+    expect(el.querySelector("table button")).toBeNull();
+    act(() => head.querySelector<HTMLElement>("button")!.click());
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
   it("メタ情報が無ければ何も出さない", () => {
     expect(show("").textContent).toBe("");
   });

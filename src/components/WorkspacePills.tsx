@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
 import type { Phase } from "../lib/claude";
 import { currentWindowLabel } from "../lib/windows";
 import { colorVar, liveWorkspaces } from "../lib/workspaces";
@@ -12,13 +13,13 @@ import {
   workspaceSwitcherOpenAtom,
 } from "../state/atoms";
 import { phaseForAtom } from "../state/claude";
-import { barAtom, hintsAtom, moveInBar, removeFromBar } from "../state/workspaceBar";
+import { addToBar, barAtom, hintsAtom, moveInBar } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 
 // ツールバーの中に並べるワークスペースの札。1 回押せば切り替わる。
 // ファイルのタブとは段も形も分ける（同じ形で 2 段に重ねると、どちらがどちらか
 // 読めない）。右押しで手入れのメニュー、末尾の ＋ で作る。
-// 掴んで並べ替え、× か中クリックでツールバーから外す（⌘1〜9 はこの並びの位置を指す）。
+// 掴んで並べ替え、× か中クリックでワークスペースを削除する（⌘1〜9 はこの並びの位置を指す）。
 
 const DRAG_TYPE = "application/x-fude-ws";
 
@@ -45,6 +46,7 @@ export function WorkspacePills() {
   const openMenu = useSetAtom(workspaceMenuAtom);
   const [making, setMaking] = useAtom(newWorkspaceAtom);
   const { openWorkspace } = useWorkspace();
+  const { closeWorkspace } = useWorkspaceOps();
   // 別のウィンドウで開いているもの。押すとそのウィンドウが前に出る。
   const [elsewhere, setElsewhere] = useState<Set<string>>(new Set());
   const [dropAt, setDropAt] = useState<number | null>(null);
@@ -58,6 +60,14 @@ export function WorkspacePills() {
       return ws ? [ws] : [];
     });
   }, [bar, list, current]);
+
+  // 札はワークスペースそのもの。並びに載っていないもの（他の窓で作ったもの
+  // など）は末尾に足す。
+  useEffect(() => {
+    const missing = list.filter((w) => !bar.includes(w.id));
+    if (missing.length === 0) return;
+    setBar((was) => missing.reduce((acc, w) => addToBar(acc, w.id), was));
+  }, [list, bar, setBar]);
 
   useEffect(() => {
     const me = currentWindowLabel();
@@ -146,7 +156,7 @@ export function WorkspacePills() {
                 }
               }}
               onAuxClick={(e) => {
-                if (e.button === 1) setBar((was) => removeFromBar(was, ws.id));
+                if (e.button === 1) void closeWorkspace(ws.id);
               }}
               onMouseDown={(e) => {
                 // 右ボタンで押した瞬間に、下の語が選ばれるのを止める。
@@ -180,14 +190,14 @@ export function WorkspacePills() {
               {phase && PHASE_BADGE[phase] && (
                 <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_BADGE[phase]}</span>
               )}
-              {/* ツールバーから外すだけ。ワークスペースは消えない（⌘⇧P からまた開ける）。 */}
+              {/* ワークスペースを消す（確かめてから）。フォルダとファイルは残る。 */}
               <span
                 role="button"
                 tabIndex={-1}
-                title="ツールバーから外す（ワークスペースは残ります）"
+                title="ワークスペースを削除"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setBar((was) => removeFromBar(was, ws.id));
+                  void closeWorkspace(ws.id);
                 }}
                 className="mg-ws-pill-x"
               >

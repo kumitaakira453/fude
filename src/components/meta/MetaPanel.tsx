@@ -17,9 +17,13 @@ export function MetaPanel({
   const entries = data ? Object.entries(data) : [];
   return (
     <section className="mg-meta-panel" aria-label="メタ情報">
+      {/* 編集は欄全体のもの。行に重ねると、その行の編集に見える。 */}
       <header className="mg-meta-panel-head">
-        <span>メタ情報</span>
-        <button type="button" className="mg-tbtn is-quiet" data-tip="メタ情報を編集" data-key="⌘⇧M" onClick={onOpen}>
+        <span>
+          メタ情報
+          {!broken && <span className="mg-meta-panel-count"> · {entries.length} 項目</span>}
+        </span>
+        <button type="button" className="mg-tbtn" data-tip="メタ情報を編集" data-key="⌘⇧M" onClick={onOpen}>
           <Icon name="edit" size={12} />
           編集
         </button>

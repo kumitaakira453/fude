@@ -1,10 +1,13 @@
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
 import { colName, CSV_TONES, csvLines, csvRows, delimOf } from "../lib/csv";
+import { isActive, shownRows, type ColFilter, type ColSort, type Filters } from "../lib/csvFilter";
 import { readText } from "../lib/fsAccess";
 import { measureText, widestText } from "../lib/textWidth";
 import { assetVersionAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
+import { CsvFilterPop } from "./CsvFilterPop";
+import { Icon } from "./Icon";
 import { SourceView } from "./SourceView";
 import { ValuePeek } from "./ValuePeek";
 
@@ -46,6 +49,21 @@ export function CsvDoc({ abs }: { abs: string }) {
   const table = view === "table";
   const width = rows?.[0]?.length ?? 0;
 
+  // 列ごとの絞り込みと並べ替え。そのファイルを見ている間だけ持ち、別の
+  // ファイルへは持ち越さない。
+  const [filters, setFilters] = useState<Filters>({});
+  const [sort, setSort] = useState<ColSort | null>(null);
+  useEffect(() => {
+    setFilters({});
+    setSort(null);
+  }, [abs]);
+  const order = useMemo(
+    () => (rows ? shownRows(rows, filters, sort) : []),
+    [rows, filters, sort],
+  );
+  const narrowed = table && Object.values(filters).some(isActive);
+  const all = Math.max(0, (rows?.length ?? 0) - 1);
+
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {/* 端で勢いよく送っても弾ませない。弾むと固定した見出しごと枠がずれ、
@@ -56,7 +74,22 @@ export function CsvDoc({ abs }: { abs: string }) {
             このファイルは字として読めませんでした
           </div>
         ) : table ? (
-          rows && <CsvTable rows={rows} abs={abs} />
+          rows && (
+            <CsvTable
+              rows={rows}
+              abs={abs}
+              order={order}
+              filters={filters}
+              sort={sort}
+              onFilter={(col, next) =>
+                setFilters((was) => {
+                  const { [col]: _, ...rest } = was;
+                  return next ? { ...rest, [col]: next } : rest;
+                })
+              }
+              onSort={setSort}
+            />
+          )
         ) : (
           text !== null && lines && <SourceView code={text} lang={null} painted={lines} />
         )}
@@ -67,6 +100,16 @@ export function CsvDoc({ abs }: { abs: string }) {
             ? ""
             : `${delim === "\t" ? "TSV" : "CSV"} · ${rows.length.toLocaleString()} 行 × ${width.toLocaleString()} 列`}
         </span>
+        {narrowed && (
+          <>
+            <span className="mg-imgdoc-scale">
+              {order.length.toLocaleString()} / {all.toLocaleString()} 行
+            </span>
+            <button type="button" className="mg-small" onClick={() => setFilters({})}>
+              絞り込みを解除
+            </button>
+          </>
+        )}
         {!lost && (
           <button
             type="button"
@@ -96,9 +139,26 @@ const SAMPLE_ROWS = 20_000;
 // 表。上に列の名前（A・B・…）、その下に 1 行目（ヘッダー行）を固定し、
 // 左に行番号を固定する。番号と列の名前は字ではなく data-n から描く
 // （⌘F の探し先や、選んで写した中身に混ざらない）。
-function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
+function CsvTable({
+  rows,
+  abs,
+  order,
+  filters,
+  sort,
+  onFilter,
+  onSort,
+}: {
+  rows: string[][];
+  abs: string;
+  // 出す行の並び（rows の中の位置）。絞り込みと並べ替えを当てた後のもの。
+  order: number[];
+  filters: Filters;
+  sort: ColSort | null;
+  onFilter: (col: number, next: ColFilter | null) => void;
+  onSort: (next: ColSort | null) => void;
+}) {
   const head = rows[0] ?? [];
-  const body = Math.max(0, rows.length - 1);
+  const body = order.length;
   const box = useRef<HTMLTableElement>(null);
   // 行の並びの上には、固定した 2 行（列の名前とヘッダー行）がある。
   const [start, end] = useVisibleRows(box, body, TABLE_ROW, TABLE_ROW * 2);
@@ -170,8 +230,9 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
     const sc = box.current?.parentElement;
     if (!sc) return;
     const fixedTop = TABLE_ROW * 2;
-    if (c.row > 0) {
-      const top = fixedTop + (c.row - 1) * TABLE_ROW;
+    const at = order.indexOf(c.row);
+    if (c.row > 0 && at >= 0) {
+      const top = fixedTop + at * TABLE_ROW;
       if (top < sc.scrollTop + fixedTop) sc.scrollTop = top - fixedTop;
       else if (top + TABLE_ROW > sc.scrollTop + sc.clientHeight)
         sc.scrollTop = top + TABLE_ROW - sc.clientHeight;
@@ -200,8 +261,11 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
     const move = MOVES[e.key];
     if (move) {
       e.preventDefault();
+      // 上下は出している並びの中で動く（0 は見出し行）。
+      const at = sel.row === 0 ? -1 : order.indexOf(sel.row);
+      const to = Math.min(order.length - 1, Math.max(-1, at + move[0]));
       const next = {
-        row: Math.min(rows.length - 1, Math.max(0, sel.row + move[0])),
+        row: to < 0 ? 0 : order[to],
         col: Math.min(head.length - 1, Math.max(0, sel.col + move[1])),
       };
       setSel(next);
@@ -229,6 +293,10 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
     window.addEventListener("mousedown", onDown, true);
     return () => window.removeEventListener("mousedown", onDown, true);
   }, [sel]);
+
+  // 開いている絞り込みの小窓。押した ▽ の位置に出す。
+  const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);
+  const closeAsk = useCallback(() => setAsking(null), []);
 
   const on = (r: number, c: number) =>
     sel && sel.row === r && sel.col === c ? "is-sel" : undefined;
@@ -266,11 +334,39 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
           </tr>
           <tr className="mg-csv-head">
             <th className="mg-csv-no" data-n={1} />
-            {head.map((v, i) => (
-              <th key={i} data-r={0} data-c={i} className={on(0, i)}>
-                {v}
-              </th>
-            ))}
+            {head.map((v, i) => {
+              const filtered = isActive(filters[i]);
+              const sorted = sort?.col === i ? sort.dir : null;
+              const narrowing = filtered || sorted !== null;
+              // 入口は漏斗で示す（∨ は開け閉めの印に見える）。並べ替えだけの
+              // 列は向きの矢印にして、どちら向きかも読めるようにする。
+              const mark =
+                sorted && !filtered
+                  ? sorted === "asc"
+                    ? "arrow_upward"
+                    : "arrow_downward"
+                  : "filter_list";
+              return (
+                <th key={i} data-r={0} data-c={i} className={on(0, i)}>
+                  <span className="mg-csv-hcell">
+                    <span className="mg-csv-hname">{v}</span>
+                    <button
+                      type="button"
+                      className={`mg-csv-funnel${narrowing ? " is-on" : ""}`}
+                      title={`${v || colName(i)} の絞り込み・並べ替え`}
+                      aria-pressed={narrowing}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const at = e.currentTarget.getBoundingClientRect();
+                        setAsking((was) => (was?.col === i ? null : { col: i, at }));
+                      }}
+                    >
+                      <Icon name={mark} size={12} />
+                    </button>
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -279,13 +375,14 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
               <td colSpan={head.length + 1} />
             </tr>
           )}
-          {rows.slice(start + 1, end + 1).map((row, n) => (
+          {order.slice(start, end).map((r, n) => (
             // 1 行おきに地を変える。見えている行だけを組むので、何行目かは
-            // 組んだ並びの中の位置ではなく、表の中の位置で決める。
-            <tr key={start + n} className={(start + n) % 2 === 1 ? "is-even" : undefined}>
-              <th className="mg-csv-no" data-n={start + n + 2} />
-              {row.map((v, i) => (
-                <td key={i} data-r={start + n + 1} data-c={i} className={on(start + n + 1, i)}>
+            // 組んだ並びの中の位置ではなく、出している並びの中の位置で決める。
+            // 行番号は元の行のまま出す（絞り込んだとき、どの行が残ったか分かる）。
+            <tr key={r} className={(start + n) % 2 === 1 ? "is-even" : undefined}>
+              <th className="mg-csv-no" data-n={r + 1} />
+              {rows[r].map((v, i) => (
+                <td key={i} data-r={r} data-c={i} className={on(r, i)}>
                   {v}
                 </td>
               ))}
@@ -298,6 +395,19 @@ function CsvTable({ rows, abs }: { rows: string[][]; abs: string }) {
           )}
         </tbody>
       </table>
+      {asking && (
+        <CsvFilterPop
+          rows={rows}
+          col={asking.col}
+          name={head[asking.col] || colName(asking.col)}
+          anchor={asking.at}
+          filter={filters[asking.col]}
+          sort={sort}
+          onFilter={(next) => onFilter(asking.col, next)}
+          onSort={onSort}
+          onClose={closeAsk}
+        />
+      )}
       {peek && (
         <ValuePeek
           boxRef={peekBox}

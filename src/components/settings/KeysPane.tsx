@@ -80,6 +80,16 @@ const GROUPS: { title: string; face: Face; rows: [string, string][] }[] = [
     ],
   },
   {
+    title: "PDF を見る",
+    face: "misc",
+    rows: [
+      ["ピンチ", "指した場所を中心に拡大・縮小"],
+      ["⌘+ ⌘-", "拡大・縮小"],
+      ["⌘0", "実寸で表示"],
+      ["⌘⇧0", "幅に合わせる"],
+    ],
+  },
+  {
     title: "メタ情報の編集（⌘⇧M）",
     face: "misc",
     rows: [

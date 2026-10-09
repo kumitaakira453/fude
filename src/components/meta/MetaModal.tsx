@@ -386,14 +386,13 @@ export function MetaModal({
     if (rows.length === 0)
       return (
         <div className="mg-meta-empty">
-          <Icon name="label" size={30} className="text-[var(--mg-muted)]/50" />
           <p>まだ何もありません</p>
           <button
             type="button"
-            className="mg-meta-add"
+            className="mg-tbtn mg-meta-add"
             onClick={() => addRow(fm === "" ? newFrontmatter() : fm)}
           >
-            <Icon name="add" size={16} />
+            <Icon name="add" size={13} />
             最初の項目を追加
           </button>
         </div>
@@ -408,7 +407,7 @@ export function MetaModal({
             return (
               <div key={i} className="mg-meta-row">
                 <span className="mg-meta-kind" title={kind.id}>
-                  <Icon name={kind.icon} size={15} />
+                  <Icon name={kind.icon} size={14} />
                 </span>
                 {hole(field, "key", null, "mg-meta-key")}
                 <span className="mg-meta-val">
@@ -430,7 +429,7 @@ export function MetaModal({
                       title={kind.act.title}
                       onClick={() => kind.act!.run(one.text)}
                     >
-                      <Icon name={kind.act.icon} size={13} />
+                      <Icon name={kind.act.icon} size={12} />
                     </button>
                   )}
                   <button
@@ -438,7 +437,7 @@ export function MetaModal({
                     title={`「${field.key}」を消す`}
                     onClick={() => remove(field)}
                   >
-                    <Icon name="close" size={13} />
+                    <Icon name="close" size={12} />
                   </button>
                 </span>
               </div>
@@ -446,31 +445,34 @@ export function MetaModal({
           })}
         </div>
         <div className="mg-meta-foot">
-          <button type="button" className="mg-meta-add" onClick={() => addRow(text.current)}>
-            <Icon name="add" size={16} />
+          <button type="button" className="mg-tbtn mg-meta-add" onClick={() => addRow(text.current)}>
+            <Icon name="add" size={13} />
             項目を追加
           </button>
-          <span className="mg-meta-hint">⌥↑ ⌥↓ で並べ替え</span>
+          <span className="mg-meta-hint">
+            <kbd className="mg-key">⌥↑</kbd>
+            <kbd className="mg-key">⌥↓</kbd>
+            並べ替え
+          </span>
         </div>
       </>
     );
   };
 
   return createPortal(
-    <div className="mg-meta-back" onMouseDown={onClose}>
+    <div className="mg-meta-back mg-scrim" onMouseDown={onClose}>
       <div
         ref={box}
         className="mg-meta"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mg-meta-head">
-          <Icon name="label" size={17} className="text-[var(--mg-accent)]" />
           <span className="mg-meta-title">メタ情報</span>
           <span className="mg-meta-file" title={name}>
             {name}
           </span>
-          <button type="button" title="閉じる（Esc）" onClick={onClose}>
-            <Icon name="close" size={16} />
+          <button type="button" className="mg-ibtn" title="閉じる（Esc）" onClick={onClose}>
+            <Icon name="close" size={14} />
           </button>
         </div>
         <div className="mg-meta-body">{body()}</div>

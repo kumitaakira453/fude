@@ -1,11 +1,9 @@
-import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
 import { colorVar, WORKSPACE_COLORS } from "../lib/workspaces";
 import { workspaceAtom, workspaceMenuAtom, workspacesAtom } from "../state/atoms";
-import { addToBar, barAtom, removeFromBar } from "../state/workspaceBar";
 import { ClaudeMark } from "./ClaudeMark";
 import { FolderChooser } from "./FolderChooser";
 import { Icon } from "./Icon";
@@ -21,7 +19,6 @@ export function WorkspaceMenu() {
   const [at, setAt] = useAtom(workspaceMenuAtom);
   const list = useAtomValue(workspacesAtom);
   const current = useAtomValue(workspaceAtom);
-  const [bar, setBar] = useAtom(barAtom);
   const ops = useWorkspaceOps();
   const ime = useImeSafeEnter();
   const [step, setStep] = useState<"menu" | "rename" | "folders">(at?.step ?? "menu");
@@ -58,15 +55,10 @@ export function WorkspaceMenu() {
   if (!at || !ws) return null;
 
   const here = ws.id === current?.id;
-  const inBar = bar.includes(ws.id);
 
-  const askDelete = async () => {
+  const askDelete = () => {
     close();
-    const ok = await confirm(
-      `ワークスペース「${ws.name}」を削除しますか？\nフォルダとファイルは削除されません。`,
-      { title: "ワークスペースの削除", kind: "warning" },
-    );
-    if (ok) await ops.deleteWorkspace(ws.id);
+    void ops.closeWorkspace(ws.id);
   };
 
   return (
@@ -114,7 +106,7 @@ export function WorkspaceMenu() {
               ))}
             </div>
             <MenuItem icon="create_new_folder" label="フォルダを追加…" onClick={() => setStep("folders")} />
-            <div className="mg-ws-menu-sep" />
+            {(!here || ws.claude) && <div className="mg-ws-menu-sep" />}
             {!here && (
               <MenuItem
                 icon="open_in_new"
@@ -125,14 +117,6 @@ export function WorkspaceMenu() {
                 }}
               />
             )}
-            <MenuItem
-              icon={inBar ? "visibility_off" : "visibility"}
-              label={inBar ? "ツールバーから外す" : "ツールバーに表示"}
-              onClick={() => {
-                setBar((was) => (inBar ? removeFromBar(was, ws.id) : addToBar(was, ws.id)));
-                close();
-              }}
-            />
             {ws.claude && (
               <MenuItem
                 icon=""
@@ -144,12 +128,8 @@ export function WorkspaceMenu() {
                 }}
               />
             )}
-            {!here && (
-              <>
-                <div className="mg-ws-menu-sep" />
-                <MenuItem icon="delete" label="削除" danger onClick={() => void askDelete()} />
-              </>
-            )}
+            <div className="mg-ws-menu-sep" />
+            <MenuItem icon="delete" label="削除" danger onClick={askDelete} />
           </>
         )}
 

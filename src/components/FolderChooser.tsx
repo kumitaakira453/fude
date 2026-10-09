@@ -120,6 +120,11 @@ export function FolderChooser({
     }
   };
 
+  const footNote =
+    picked.length > 0
+      ? `${picked.length} 個のフォルダを選択中`
+      : "選んでいないときは、カーソルのあるフォルダを使います";
+
   return (
     <>
       <div className="mg-pal-in">
@@ -182,7 +187,7 @@ export function FolderChooser({
               className="mg-pick-row mg-pal-row cursor-pointer"
             >
               <span className={`mg-check${on ? " is-on" : ""}`} aria-hidden>
-                {on && <Icon name="check" size={11} stroke={2.2} />}
+                {on && <Icon name="check" size={10} stroke={3} />}
               </span>
               <span className="mg-pal-name text-[var(--mg-fg)]">{folderDisplayName(f)}</span>
               {mode === "create" && order === 0 && picked.length > 1 && (
@@ -210,8 +215,8 @@ export function FolderChooser({
       </div>
 
       <div className="mg-pal-foot">
-        <span className="mr-auto">
-          {picked.length > 0 ? `${picked.length} 個のフォルダを選択中` : "選んでいないときは、カーソルのあるフォルダを使います"}
+        <span className="mg-pal-foot-note" title={footNote}>
+          {footNote}
         </span>
         <span>
           <kbd className="mg-key">space</kbd> 選ぶ

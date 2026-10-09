@@ -194,3 +194,127 @@ describe("升目の選択と列の幅", () => {
     expect(store.get(csvWidthsAtom)["/本/表.csv"]).toBeUndefined();
   });
 });
+
+// 見出しの ▽ から、列ごとに絞り込み・並べ替える（Excel のオートフィルタ）。
+describe("列ごとの絞り込み", () => {
+  const SALES = "名前,部署,金額\n佐藤,営業,1200\n鈴木,開発,300\n高橋,営業,45\n";
+  const key = (el: Element, k: string) =>
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    });
+  const table = async () => {
+    content = SALES;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const names = (el: HTMLElement) =>
+    [...el.querySelectorAll("tbody tr")].map((tr) => tr.querySelector("td")?.textContent);
+  const numbers = (el: HTMLElement) =>
+    [...el.querySelectorAll("tbody tr .mg-csv-no")].map((n) => n.getAttribute("data-n"));
+  const funnel = (el: HTMLElement, col: number) =>
+    el.querySelectorAll<HTMLButtonElement>(".mg-csv-funnel")[col];
+  const pop = () => document.querySelector<HTMLElement>(".mg-csv-filter-pop");
+  const row = (label: string) =>
+    [...pop()!.querySelectorAll<HTMLButtonElement>(".mg-csv-filter-row, button")].find((b) =>
+      b.textContent?.includes(label),
+    )!;
+  const bar = (el: HTMLElement, label: string) =>
+    [...el.querySelectorAll<HTMLButtonElement>(".mg-imgdoc-bar button")].find(
+      (b) => b.textContent === label,
+    );
+
+  it("値を外すとその行が消え、残った行は元の行番号のまま出る。帯に件数と解除が出る", async () => {
+    const { el } = await table();
+    act(() => funnel(el, 1).click());
+    act(() => row("開発").click());
+    expect(names(el)).toEqual(["佐藤", "高橋"]);
+    expect(numbers(el)).toEqual(["2", "4"]);
+    expect(funnel(el, 1).classList.contains("is-on")).toBe(true);
+    expect(el.querySelector(".mg-imgdoc-bar")!.textContent).toContain("2 / 3 行");
+
+    act(() => bar(el, "絞り込みを解除")!.click());
+    expect(names(el)).toEqual(["佐藤", "鈴木", "高橋"]);
+    expect(bar(el, "絞り込みを解除")).toBeUndefined();
+  });
+
+  it("見出しの入口は漏斗の印で、並べ替えた列は向きの矢印になる", async () => {
+    const { el } = await table();
+    const mark = (col: number) => funnel(el, col).querySelector("[data-icon]")!.getAttribute("data-icon");
+    expect([mark(0), mark(1), mark(2)]).toEqual(["filter_list", "filter_list", "filter_list"]);
+    act(() => funnel(el, 2).click());
+    act(() => row("昇順").click());
+    expect(mark(2)).toBe("arrow_upward");
+    expect(funnel(el, 2).classList.contains("is-on")).toBe(true);
+  });
+
+  it("含む文字で絞り、数の列は数として並べ替える", async () => {
+    const { el } = await table();
+    act(() => funnel(el, 2).click());
+    act(() => row("昇順").click());
+    expect(names(el)).toEqual(["高橋", "鈴木", "佐藤"]);
+    const input = pop()!.querySelector("input")!;
+    act(() => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "00");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(names(el)).toEqual(["鈴木", "佐藤"]);
+  });
+
+  it("矢印の上下は、残った行だけを辿る", async () => {
+    const { el } = await table();
+    act(() => funnel(el, 1).click());
+    act(() => row("開発").click());
+    act(() => {
+      el.querySelector("tbody td")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const t = el.querySelector("table")!;
+    key(t, "ArrowDown");
+    expect(el.querySelector<HTMLElement>(".is-sel")!.dataset.r).toBe("3");
+  });
+
+  it("数の列だけに範囲の欄を出し、「以上」を打つとその場で絞る", async () => {
+    const { el } = await table();
+    act(() => funnel(el, 1).click());
+    expect(pop()!.querySelector(".mg-csv-filter-range")).toBeNull();
+    act(() => funnel(el, 2).click());
+    const min = pop()!.querySelector<HTMLInputElement>('[aria-label="以上"]')!;
+    act(() => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(min, "300");
+      min.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(names(el)).toEqual(["佐藤", "鈴木"]);
+    // 値の一覧も範囲に入るものだけになる。
+    expect(
+      [...pop()!.querySelectorAll(".mg-csv-filter-value")].map((v) => v.textContent),
+    ).toEqual(["300", "1200"]);
+  });
+
+  it("値が 1 つだけの列では「すべて」を出さない（その値と同じことを指す）", async () => {
+    content = "名前,区分\n佐藤,A\n鈴木,A\n";
+    const shown = await show();
+    act(() => button(shown.el).click());
+    act(() => funnel(shown.el, 1).click());
+    expect(pop()!.querySelector(".is-all")).toBeNull();
+    act(() => funnel(shown.el, 0).click());
+    expect(pop()!.querySelector(".is-all")).not.toBeNull();
+  });
+
+  it("外を押すと小窓を閉じ、▽ をもう一度押しても閉じる", async () => {
+    const { el } = await table();
+    act(() => funnel(el, 0).click());
+    expect(pop()).not.toBeNull();
+    act(() => {
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(pop()).toBeNull();
+    act(() => funnel(el, 0).click());
+    act(() => {
+      funnel(el, 0).dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      funnel(el, 0).click();
+    });
+    expect(pop()).toBeNull();
+  });
+});

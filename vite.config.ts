@@ -1,11 +1,48 @@
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// pdf.js が開いた PDF に応じて取りに来るもの（文字の対応表・標準の書体・画像の
+// 復号器・色の定義）。pdfjs/ の下に置き、dev では同じ道筋で返す。
+const PDFJS_DIRS = ["cmaps", "standard_fonts", "wasm", "iccs"];
+
+function pdfjsAssets(): Plugin {
+  const root = fileURLToPath(new URL("./node_modules/pdfjs-dist/", import.meta.url));
+  return {
+    name: "pdfjs-assets",
+    configureServer(server) {
+      server.middlewares.use("/pdfjs", (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? "").split("?")[0]).replace(/^\/+/, "");
+        const file = path.join(root, rel);
+        if (!PDFJS_DIRS.includes(rel.split("/")[0]) || !file.startsWith(root)) return next();
+        try {
+          res.end(readFileSync(file));
+        } catch {
+          next();
+        }
+      });
+    },
+    generateBundle() {
+      for (const dir of PDFJS_DIRS) {
+        for (const name of readdirSync(path.join(root, dir))) {
+          this.emitFile({
+            type: "asset",
+            fileName: `pdfjs/${dir}/${name}`,
+            source: readFileSync(path.join(root, dir, name)),
+          });
+        }
+      }
+    },
+  };
+}
+
 // Tauri と連携するための固定ポート。mermaid は手動チャンク分割で初期ロードを軽く保つ。
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), pdfjsAssets()],
   clearScreen: false,
   resolve: {
     alias: {

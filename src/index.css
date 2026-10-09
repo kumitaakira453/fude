@@ -103,6 +103,10 @@ html,
 body {
   background: var(--mg-bg);
   overscroll-behavior: none;
+  /* 画面の骨組みは送らない。送るのは各面（左の欄・本文・右の欄・一覧）の
+     中だけ。窓の外へはみ出すもの（画面の座標で置く線や小窓など）があっても、
+     帯や本文の枠ごと動かない。 */
+  overflow: hidden;
 }
 
 /* Material Symbols: 揃えとレンダリング */
@@ -770,6 +774,18 @@ body {
   counter-increment: mg-item;
   /* 2 桁でも字に掛からない幅。 */
   padding-left: 1.9em;
+}
+/* 並びとその前後の塊の間。typography の既定（1.25em）では段落の間と同じだけ
+   空き、並びが本文から浮いて見える。項目どうしと見出しの前の空きは変えない。
+   重なる 2 つの余白は大きい方が効くので、両側を揃えて詰める。端の塊（先頭・
+   末尾の 0）はそのまま残す。 */
+:is(.mg-prose, .mg-pm) :not(li) > :not(h1, h2, h3, h4, h5, h6):has(+ :is(ul, ol)),
+:is(.mg-prose, .mg-pm) :not(li) > :is(ul, ol):has(+ *) {
+  margin-bottom: 0.75em;
+}
+:is(.mg-prose, .mg-pm) :not(li) > * + :is(ul, ol),
+:is(.mg-prose, .mg-pm) :not(li) > :is(ul, ol) + :not(h1, h2, h3, h4, h5, h6) {
+  margin-top: 0.75em;
 }
 /* 番号は右で揃え、字との間を点と同じにする。桁が増えても字の頭は動かない。 */
 :is(.mg-prose, .mg-pm) ol > li::before {
@@ -1556,6 +1572,85 @@ button.mg-sess-row:hover {
 }
 
 /* ============================================================
+   PDF を 1 枚で開く
+   ============================================================ */
+.mg-pdfdoc {
+  background: var(--mg-chrome);
+  /* 縦の送り棒は常に出す。出たり消えたりすると枠の幅が変わり、幅に合わせる
+     倍率がそれを追いかけて大きさが揺れ続ける。 */
+  overflow-y: scroll;
+}
+/* 頁は縦に並べて真ん中に置く。広げて枠より大きくなったら、横にも送れる
+   よう、並びの幅は中身に合わせる（枠より狭いときは枠の幅）。 */
+.mg-pdfdoc-pages {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+/* 紙は PDF のとおり白地。テーマの地に関わらず変えない。 */
+.mg-pdfdoc-page {
+  position: relative;
+  flex: none;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}
+.mg-pdfdoc-page > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* 字を選んで写すための透明な字の層（pdf.js の TextLayer）。置き方は
+   pdf.js の pdf_viewer.css の該当分だけを写している。 */
+.mg-pdfdoc-page > .textLayer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  transform-origin: 0 0;
+}
+.mg-pdfdoc-page > .textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.mg-pdfdoc-page > .textLayer > :not(.markedContent),
+.mg-pdfdoc-page > .textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.mg-pdfdoc-page > .textLayer .markedContent {
+  display: contents;
+}
+.mg-pdfdoc-page > .textLayer ::selection {
+  background: color-mix(in srgb, var(--mg-accent) 30%, transparent);
+}
+.mg-pdfdoc-page > .textLayer br::selection {
+  background: transparent;
+}
+/* 選んでいる途中に字の無いところへ出ても、選択が飛ばないようにする受け皿。 */
+.mg-pdfdoc-page > .textLayer .endOfContent {
+  position: absolute;
+  inset: 100% 0 0;
+  display: block;
+  cursor: default;
+  user-select: none;
+}
+
+/* ============================================================
    原文を一面で見る
    ============================================================ */
 .mg-source {
@@ -1756,6 +1851,159 @@ body.mg-col-resizing * {
 }
 .mg-csv-table thead .mg-csv-no {
   z-index: 3;
+}
+/* 見出し行の升目。名前は … で省き、右端に絞り込みの ▽ を置く。 */
+.mg-csv-hcell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.mg-csv-hname {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg-csv-funnel {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+}
+.mg-csv-funnel:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+/* 条件のある列。塗って、どの列で絞っているかを一目で分かるようにする。 */
+.mg-csv-funnel.is-on {
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+}
+.mg-csv-filter-pop {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  width: 260px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  font-size: var(--mg-t-s);
+}
+.mg-csv-filter-sort {
+  display: flex;
+  gap: 6px;
+}
+.mg-csv-filter-sort > button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.mg-csv-filter-sort > button[aria-pressed="true"] {
+  border-color: var(--mg-accent);
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-csv-filter-text {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: var(--mg-bg);
+  color: var(--mg-muted);
+}
+.mg-csv-filter-text:focus-within {
+  border-color: var(--mg-accent);
+}
+.mg-csv-filter-text > input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  color: var(--mg-fg);
+  outline: none;
+}
+/* 数の列の範囲。以上と以下を「〜」で挟み、含む文字の欄と同じ見た目にする。 */
+.mg-csv-filter-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mg-muted);
+}
+.mg-csv-filter-range > input {
+  height: 28px;
+  min-width: 0;
+  flex: 1;
+  padding: 0 8px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: var(--mg-bg);
+  color: var(--mg-fg);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.mg-csv-filter-range > input:focus {
+  border-color: var(--mg-accent);
+}
+.mg-csv-filter-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0 -4px;
+}
+.mg-csv-filter-row {
+  display: flex;
+  width: 100%;
+  height: 24px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  border-radius: var(--mg-r1);
+  color: var(--mg-fg-dim);
+  text-align: left;
+}
+.mg-csv-filter-row:hover {
+  background: var(--mg-hover);
+}
+.mg-csv-filter-row.is-all {
+  color: var(--mg-fg);
+  font-weight: 600;
+}
+.mg-csv-filter-value {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-csv-filter-value.is-blank {
+  color: var(--mg-muted);
+}
+.mg-csv-filter-count {
+  flex: none;
+  color: var(--mg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mg-csv-filter-more {
+  padding: 4px;
+  color: var(--mg-muted);
+}
+.mg-csv-filter-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--mg-border);
+}
+/* チェックの印は一覧の行を指したときにアクセント寄りの枠にする（フォルダを
+   選ぶ画面と同じ）。 */
+.mg-csv-filter-row:hover .mg-check:not(.is-on) {
+  border-color: color-mix(in srgb, var(--mg-accent) 70%, transparent);
 }
 /* 番号と列の名前は字として置かない（⌘F の探し先や、写した中身に混ざる）。 */
 .mg-csv-table [data-n]::before {
@@ -7039,7 +7287,8 @@ body.mg-carrying {
 }
 
 
-/* ---- メタ情報の小窓 ---- */
+/* ---- メタ情報の小窓 ----
+   ほかの浮くもの（.mg-pop）と同じ枠。幕はぼかさず薄く暗くするだけ。 */
 
 .mg-meta-back {
   position: fixed;
@@ -7050,44 +7299,38 @@ body.mg-carrying {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
-  background: color-mix(in srgb, var(--mg-bg) 62%, transparent);
-  backdrop-filter: blur(6px);
-  animation: mg-meta-back-in 140ms ease-out both;
+  padding: 24px 12px;
+  animation: mg-meta-fade 120ms ease-out both;
 }
 .mg-meta {
   display: flex;
   flex-direction: column;
-  width: min(34rem, 100%);
+  width: min(544px, 100%);
   /* 背は画面で抑える。越えた分は中身（.mg-meta-body）の側でスクロールする。 */
-  max-height: min(38rem, calc(100dvh - 4rem));
+  max-height: min(608px, calc(100dvh - 48px));
   border: 1px solid var(--mg-border);
-  border-radius: 1rem;
-  background: var(--mg-panel);
-  box-shadow: 0 24px 60px -12px rgb(0 0 0 / 0.35);
-  animation: mg-meta-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  border-radius: var(--mg-r2);
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
+  animation: mg-meta-fade 120ms ease-out both;
 }
-@keyframes mg-meta-back-in {
+@keyframes mg-meta-fade {
   from {
     opacity: 0;
-  }
-}
-@keyframes mg-meta-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
   }
 }
 
 .mg-meta-head {
   display: flex;
+  height: 36px;
+  flex: none;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 0.8rem 0.75rem 1rem;
+  gap: 8px;
+  padding: 0 6px 0 12px;
   border-bottom: 1px solid var(--mg-border);
 }
 .mg-meta-title {
-  font-size: 13.5px;
+  font-size: var(--mg-t-m);
   font-weight: 600;
   color: var(--mg-fg);
 }
@@ -7098,77 +7341,53 @@ body.mg-carrying {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
   color: var(--mg-muted);
-}
-.mg-meta-head > button {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 0.4rem;
-  color: var(--mg-muted);
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.mg-meta-head > button:hover {
-  background: var(--mg-hover);
-  color: var(--mg-fg);
 }
 
 .mg-meta-body {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem;
+  padding: 6px;
 }
 
-/* 行。種類の印・鍵・値・操作。鍵は静かに、値を主役にする。 */
+/* 行。種類の印・鍵・値・操作。鍵は本文の上の欄と同じ等幅の淡色で、値を主役にする。 */
 .mg-meta-row {
   display: flex;
+  min-height: 28px;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.4rem;
-  border-radius: 0.55rem;
-  transition: background 0.12s;
-  animation: mg-meta-row-in 220ms ease-out both;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: var(--mg-r1);
 }
 .mg-meta-row:hover {
   background: var(--mg-hover);
 }
-@keyframes mg-meta-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-}
 .mg-meta-kind {
   display: grid;
+  width: 14px;
   flex: none;
   place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 0.45rem;
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
+  color: var(--mg-muted);
 }
 .mg-meta-key {
   flex: none;
-  width: 8rem;
+  width: 128px;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
   color: var(--mg-muted);
 }
 .mg-meta-val {
   min-width: 0;
   flex: 1;
-  font-size: 13px;
+  font-size: var(--mg-t-m);
   color: var(--mg-fg);
 }
 .mg-meta-sep {
-  margin: 0 0.35rem;
+  margin: 0 6px;
   color: var(--mg-muted);
 }
 .mg-meta-key,
@@ -7177,15 +7396,10 @@ body.mg-carrying {
   cursor: text;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  border-radius: 0.3rem;
-  padding: 0.1rem 0.25rem;
-  margin: -0.1rem -0.25rem;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: -1px -4px;
   caret-color: var(--mg-accent);
-  transition: background 0.12s;
-}
-.mg-meta-key:hover,
-.mg-meta-cell:hover {
-  background: var(--mg-hover);
 }
 .mg-meta-key:focus,
 .mg-meta-cell:focus {
@@ -7205,21 +7419,17 @@ body.mg-carrying {
 .mg-meta-acts {
   display: flex;
   flex: none;
-  gap: 0.15rem;
+  gap: 2px;
 }
 .mg-meta-acts > button {
   display: grid;
+  width: 22px;
+  height: 22px;
   place-items: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  border-radius: 0.35rem;
+  border-radius: var(--mg-r1);
   color: var(--mg-muted);
   opacity: 0;
   pointer-events: none;
-  transition:
-    opacity 0.12s,
-    background 0.12s,
-    color 0.12s;
 }
 .mg-meta-row:hover .mg-meta-acts > button,
 .mg-meta-acts > button:focus-visible {
@@ -7227,67 +7437,51 @@ body.mg-carrying {
   pointer-events: auto;
 }
 .mg-meta-acts > button:hover {
-  background: var(--mg-panel);
-  color: var(--mg-accent);
+  background: var(--mg-pop);
+  color: var(--mg-fg);
 }
 
 .mg-meta-foot {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.3rem;
-  padding: 0.4rem 0.4rem 0.15rem;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 0 0;
   border-top: 1px solid var(--mg-border);
 }
 .mg-meta-hint {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--mg-muted);
-}
-.mg-meta-add {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.7rem 0.3rem 0.5rem;
-  border: 1px dashed var(--mg-border);
-  border-radius: 999px;
-  font-size: 12.5px;
+  gap: 4px;
+  margin-left: auto;
+  padding-right: 6px;
+  font-size: 11px;
   color: var(--mg-muted);
-  transition:
-    border-color 0.12s,
-    background 0.12s,
-    color 0.12s;
-}
-.mg-meta-add:hover {
-  border-color: var(--mg-accent);
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
 }
 
 .mg-meta-empty {
   display: grid;
   justify-items: center;
-  gap: 0.6rem;
-  padding: 3rem 1rem;
-  font-size: 13px;
+  gap: 8px;
+  padding: 36px 12px;
+  font-size: var(--mg-t-m);
   color: var(--mg-muted);
 }
 .mg-meta-broken {
-  padding: 0.5rem;
+  padding: 6px;
 }
 .mg-meta-say {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  margin: 0 0 0.5rem;
-  font-size: 12.5px;
+  gap: 4px;
+  margin: 0 0 6px;
+  font-size: var(--mg-t-s);
   color: var(--mg-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mg-meta-back,
-  .mg-meta,
-  .mg-meta-row {
+  .mg-meta {
     animation: none;
   }
 }
@@ -9157,7 +9351,7 @@ html[data-hints] .mg-seg {
 }
 .mg-pal-foot {
   display: flex;
-  height: 28px;
+  min-height: 36px;
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
@@ -9165,6 +9359,24 @@ html[data-hints] .mg-seg {
   border-top: 1px solid var(--mg-border);
   color: var(--mg-muted);
   font-size: 11px;
+}
+/* キーとその説明は 1 塊。幅が足りなくても折らない。 */
+.mg-pal-foot > * {
+  flex: none;
+  white-space: nowrap;
+}
+.mg-pal-foot > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* 左に置く説明。縮めるのはここだけで、入り切らない分は … で省く。 */
+.mg-pal-foot > .mg-pal-foot-note {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mg-pal-note {
   padding: 8px 12px;
@@ -9193,19 +9405,30 @@ html[data-hints] .mg-seg {
 .mg-pick-name > input::placeholder {
   color: var(--mg-muted);
 }
-/* 選ぶ印。4px 角の枠で、選ぶとアクセントの線と印になる。 */
+/* 選ぶ印。4px 角の枠で、選ぶとアクセントで塗り、印を地の色で抜く。 */
 .mg-check {
   display: grid;
   width: 14px;
   height: 14px;
   flex: none;
   place-items: center;
-  border: 1px solid var(--mg-border);
+  border: 1px solid color-mix(in srgb, var(--mg-fg) 28%, transparent);
   border-radius: var(--mg-r1);
-  color: var(--mg-accent);
+  background: transparent;
+  color: var(--mg-bg);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
-.mg-check.is-on {
+.mg-pick-row:hover .mg-check,
+.mg-pick-row[data-on] .mg-check {
+  border-color: color-mix(in srgb, var(--mg-accent) 70%, transparent);
+}
+.mg-check.is-on,
+.mg-pick-row:hover .mg-check.is-on,
+.mg-pick-row[data-on] .mg-check.is-on {
   border-color: var(--mg-accent);
+  background: var(--mg-accent);
 }
 /* 主な操作の釦。アクセントで塗った 24px。 */
 .mg-go {
@@ -9228,29 +9451,28 @@ html[data-hints] .mg-seg {
   opacity: 0.4;
   cursor: default;
 }
-/* 本文の上のメタ情報。本文より一段小さく、細い線の表にする。 */
+/* 本文の上のメタ情報。名前の段と表を 1 つの枠で囲み、編集は段の右端に置く
+   （欄全体の編集だと、位置と囲みで分かる）。本文より一段小さくする。 */
 .mg-meta-panel {
   margin: 0 0 24px;
-  border-top: 1px solid var(--mg-line);
-  border-bottom: 1px solid var(--mg-line);
+  overflow: hidden;
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r2);
   font-family: var(--mg-font-sans);
 }
-/* 名前は左上に小さく添えるだけ。編集は表を指したときだけ出す。 */
 .mg-meta-panel-head {
   display: flex;
-  height: 24px;
+  height: 28px;
   align-items: center;
   justify-content: space-between;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--mg-line);
+  background: color-mix(in srgb, var(--mg-chrome) 45%, var(--mg-bg));
   color: var(--mg-muted);
-  font-size: var(--mg-t-xs);
+  font-size: 11px;
 }
-.mg-meta-panel-head .mg-tbtn {
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.mg-meta-panel:hover .mg-meta-panel-head .mg-tbtn,
-.mg-meta-panel-head .mg-tbtn:focus-visible {
-  opacity: 1;
+.mg-meta-panel-count {
+  font-family: var(--mg-font-mono);
 }
 .mg-meta-panel-table {
   width: 100%;
@@ -9261,18 +9483,18 @@ html[data-hints] .mg-seg {
 }
 .mg-meta-panel-table th,
 .mg-meta-panel-table td {
-  padding: 5px 0;
+  padding: 5px 12px;
   border: 0;
   vertical-align: top;
   text-align: left;
 }
-.mg-meta-panel-table tr > * {
+.mg-meta-panel-table tr + tr > * {
   border-top: 1px solid var(--mg-line);
 }
 .mg-meta-panel-table th {
   width: 1%;
   max-width: 9rem;
-  padding-right: 24px;
+  padding-right: 12px;
   white-space: nowrap;
   color: var(--mg-muted);
   font-family: var(--mg-font-mono);
@@ -9301,11 +9523,8 @@ html[data-hints] .mg-seg {
 }
 .mg-meta-panel-broken {
   width: 100%;
-  padding: 6px 0 8px;
+  padding: 6px 12px 8px;
   color: var(--mg-muted);
   font-size: var(--mg-t-s);
   text-align: left;
-}
-.mg-pal-foot kbd + kbd {
-  margin-left: 3px;
 }

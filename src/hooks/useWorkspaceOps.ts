@@ -1,3 +1,4 @@
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { useStore } from "jotai";
 import { useCallback } from "react";
 import { claudeSessionFiles, FIRST_TABS, type ClaudeSession, type Wrote } from "../lib/claude";
@@ -7,6 +8,7 @@ import { registerFolder, rootName } from "../lib/idb";
 import { remapLeafPaths } from "../lib/ui";
 import { currentWindowLabel, openWorkspaceWindow } from "../lib/windows";
 import {
+  bindWindow,
   deleteWorkspace as dropWorkspaceFile,
   focusWorkspace,
   freeColor,
@@ -18,7 +20,7 @@ import {
 } from "../lib/workspaces";
 import * as A from "../state/atoms";
 import { notify, notifyBusy, settle } from "../state/toast";
-import { upsertWorkspace } from "../state/workspace";
+import { dropWorkspaceSave, upsertWorkspace } from "../state/workspace";
 import { barAtom, removeFromBar } from "../state/workspaceBar";
 import { useWorkspace } from "./useWorkspace";
 
@@ -199,6 +201,45 @@ export function useWorkspaceOps() {
     [store],
   );
 
+  // 札の × と右押しの「削除」。確かめてから消す。開いているものは、札の並びで
+  // 右隣（無ければ左隣）へ移ってから消す。移る先が無ければスタート画面へ戻す。
+  const closeWorkspace = useCallback(
+    async (id: string): Promise<void> => {
+      const here = store.get(A.workspaceAtom);
+      const ws = here?.id === id ? here : store.get(A.workspacesAtom).find((w) => w.id === id);
+      if (!ws) return;
+      // 確かめた後に断らない。別の窓で開いているものは先に知らせる。
+      if (await focusWorkspace(id, currentWindowLabel()).catch(() => false)) {
+        notify(store, "別のウィンドウで開いています。そのウィンドウを閉じてから削除してください");
+        return;
+      }
+      const ok = await confirm(
+        `ワークスペース「${ws.name}」を削除しますか？\nフォルダとファイルは削除されません。`,
+        { title: "ワークスペースの削除", kind: "warning" },
+      );
+      if (!ok) return;
+      if (store.get(A.workspaceAtom)?.id === id) {
+        const bar = store.get(barAtom);
+        const at = bar.indexOf(id);
+        const list = store.get(A.workspacesAtom);
+        const known = (other: string | undefined) => list.find((w) => w.id === other);
+        const next = at < 0 ? undefined : (known(bar[at + 1]) ?? known(bar[at - 1]));
+        if (next) await openWorkspace(next);
+        // 移れなかった（移る先が別の窓で開いていた）ときも、スタート画面へ戻す。
+        if (store.get(A.workspaceAtom)?.id === id) {
+          dropWorkspaceSave(id);
+          await bindWindow(currentWindowLabel(), null).catch(() => {});
+          store.set(A.layoutOwnerAtom, null);
+          store.set(A.workspaceAtom, null);
+          store.set(A.soleAtom, null);
+          store.set(A.activeFolderIdAtom, null);
+        }
+      }
+      await deleteWorkspace(id);
+    },
+    [store, openWorkspace, deleteWorkspace],
+  );
+
   // Claude のセッションからワークスペースを作って開く（ベータ）。
   //
   // 根は、書いたファイルを含む登録済みのフォルダ。どれにも入らなければ
@@ -285,6 +326,7 @@ export function useWorkspaceOps() {
     pickOtherFolder,
     removeRoot,
     deleteWorkspace,
+    closeWorkspace,
     openInNewWindow,
     createFromSession,
     unlinkSession,

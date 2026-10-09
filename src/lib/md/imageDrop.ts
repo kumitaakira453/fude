@@ -10,6 +10,8 @@ import {
   type Held,
   type Incoming,
 } from "../images";
+import { intoItem } from "./listDrop";
+import { isList } from "./listTree";
 import { schema } from "./schema";
 
 // 外から持ち込まれた画像を本文へ入れる。落とすのと貼るの 2 経路。
@@ -130,6 +132,18 @@ export function dropSpot(
     const rect = el.getBoundingClientRect();
     const top = after instanceof HTMLElement ? rect.top : rect.bottom;
     return { pos: at.pos, line: { top, left: rect.left, width: rect.width } };
+  }
+  // 箇条書きの中。項目と項目の間には置けないので、項目の中（字の下に字下げ
+  // した子）へ入れる。入れる項目が無ければ並びの前に置く。
+  for (let d = 1; d <= $at.depth; d++) {
+    if (!isList($at.node(d))) continue;
+    const listPos = $at.before(d);
+    const listEl = view.nodeDOM(listPos);
+    if (!(listEl instanceof HTMLElement)) return null;
+    const inside = intoItem(view, listEl, y);
+    if (inside) return canHold(view, inside.pos) ? inside : null;
+    const rect = listEl.getBoundingClientRect();
+    return { pos: listPos, line: { top: rect.top, left: rect.left, width: rect.width } };
   }
   const start = $at.before($at.depth);
   const el = view.nodeDOM(start);

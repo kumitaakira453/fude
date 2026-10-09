@@ -89,6 +89,23 @@ describe("吹き出し", () => {
     expect(tip()).toBeNull();
   });
 
+  // PDF・HTML を出す器。title を持ち字を持たないが、絵の釦ではない。中へ
+  // 入ると指した位置が親に届かないので、出しっぱなしにもしない。
+  it("iframe の上では出さず、出ていたものも消す", async () => {
+    const el = mount(
+      '<div title="見本.pdf"><iframe title="見本.pdf"></iframe></div><button data-tip="閉じる"></button>',
+    );
+    over(el.querySelector("iframe")!);
+    await wait(450);
+    expect(tip()).toBeNull();
+
+    over(el.querySelector("button")!);
+    await wait(450);
+    expect(tip()).not.toBeNull();
+    over(el.querySelector("iframe")!);
+    expect(tip()).toBeNull();
+  });
+
   it("押すと消える", async () => {
     const el = mount('<button data-tip="閉じる"></button>');
     over(el.querySelector("button")!);

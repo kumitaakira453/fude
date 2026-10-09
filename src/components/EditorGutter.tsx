@@ -26,6 +26,7 @@ import {
   itemOutTr,
 } from "../lib/md/listTree";
 import { loneImage, type ImageGoes } from "../lib/md/imageDrop";
+import { intoItem } from "../lib/md/listDrop";
 import { blockKindOf } from "../lib/md/marks";
 import { schema } from "../lib/md/schema";
 import { SLASH_ITEMS } from "../lib/md/slash";
@@ -585,6 +586,20 @@ export function EditorGutter({
         const hit = blockAtY(view, y);
         const node = hit ? view.state.doc.nodeAt(hit.pos) : null;
         if (!hit || !node) return;
+        // 箇条書きの上では、項目の中（字の下に字下げした子）へ入れる。
+        // 掴んだ並びそのものの上では入れない（自分の中へは運べない）。
+        const inside =
+          isList(node) && hit.pos !== held.spot.pos ? intoItem(view, hit.el, y) : null;
+        if (inside) {
+          toRef.current = inside.pos;
+          setGuide({
+            kind: "block",
+            top: inside.line.top - base.top,
+            left: inside.line.left - base.left,
+            length: inside.line.width,
+          });
+          return;
+        }
         const box = hit.el.getBoundingClientRect();
         const after = y > box.top + box.height / 2;
         toRef.current = after ? hit.pos + node.nodeSize : hit.pos;

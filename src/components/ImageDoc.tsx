@@ -1,6 +1,7 @@
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { imageUrl, peekImageUrl } from "../lib/fsAccess";
+import { usePinch } from "../hooks/usePinch";
 import { svgSize } from "../lib/svgSize";
 import {
   clampPan,
@@ -144,6 +145,20 @@ export function ImageDoc({ abs }: { abs: string }) {
     at.addEventListener("wheel", onWheel, { passive: false });
     return () => at.removeEventListener("wheel", onWheel);
   }, [sized, fit, natural, box]);
+
+  // WebKit のピンチ。始まりの倍率に比を掛ける。
+  const pinchFrom = useRef(1);
+  usePinch(host, {
+    start: () => {
+      pinchFrom.current = shown.scale;
+    },
+    change: (ratio, at) => {
+      if (!sized) return;
+      setView((was) =>
+        zoomAt(was ?? { scale: fit, x: 0, y: 0 }, natural, box, pinchFrom.current * ratio, at),
+      );
+    },
+  });
 
   const onKey = (e: React.KeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.altKey) return;

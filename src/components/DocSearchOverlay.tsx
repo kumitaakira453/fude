@@ -61,6 +61,7 @@ export function DocSearchOverlay({
   const [open, setOpen] = useAtom(docFindOpenAtom);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
 
   // 見つけた範囲を測って矩形にする。探し直しは伴わないので、枠の中を
   // スクロールしただけのときはこちらだけを呼ぶ。
@@ -238,6 +239,27 @@ export function DocSearchOverlay({
     setHighlight(null);
   }, [setHighlight]);
 
+  // ⌘F の窓は、その場で探すためのもの。窓の外を押したとき・別のファイルへ
+  // 移ったときは閉じて、語も印も残さない（残すと、別のファイルでも前の語の
+  // 印が出続ける）。
+  useEffect(() => {
+    if (!isActive || !open) return;
+    const onDown = (e: PointerEvent) => {
+      if (widgetRef.current?.contains(e.target as Node)) return;
+      close();
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [isActive, open, close]);
+  const shownPath = useRef(path);
+  useEffect(() => {
+    if (shownPath.current === path) return;
+    shownPath.current = path;
+    // 開いているのは共有の値。並べた別のペインの切り替えでは閉じない。
+    if (open && isActive) close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
+
   // 外部（ディレクトリ検索のジャンプ等）でハイライト語が変わったら入力欄へ反映
   useEffect(() => {
     const t = highlight?.term ?? "";
@@ -324,7 +346,7 @@ export function DocSearchOverlay({
       {/* find ウィジェットは ⌘F で開いた時だけ。ディレクトリ検索(⌘⇧F)では
          本文ハイライト（ピル）のみで、per-file の件数ウィジェットは出さない。 */}
       {open && (
-      <div className="mg-find">
+      <div ref={widgetRef} className="mg-find">
         <input
           ref={inputRef}
           className="mg-find-input"

@@ -461,6 +461,11 @@ const TreeItem = memo(function TreeItem({
   );
 });
 
+// 「ツリーで表示」の合図のうち、もう出したもの。合図は出した後も残り続ける
+// ので、効果が走り直すたび（木の組み直し・欄の行き来）に古い合図で行が
+// 飛ばないようにする。木の外に置くのは、組み直しで忘れないため。
+let shownReveal = 0;
+
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
   const loading = useAtomValue(loadingAtom);
@@ -628,6 +633,7 @@ export function FileTree() {
   const reveal = useAtomValue(revealInTreeAtom);
   useEffect(() => {
     if (!reveal || !treeKey || !activeFolderId) return;
+    if (reveal.nonce === shownReveal) return;
     const target = reveal.path;
     // 根を行として並べているときは、根の行も開く。
     const root = rootOf(roots, target);
@@ -645,6 +651,7 @@ export function FileTree() {
     // 名前の変更に入るときは入力欄が行と入れ替わる。探す相手が居なくなるので、
     // スクロールと強調は行わない（入力欄が焦点を取って見える位置まで動く）。
     if (reveal.edit) {
+      shownReveal = reveal.nonce;
       setEditingPath(target);
       return;
     }
@@ -656,6 +663,7 @@ export function FileTree() {
           `[data-path="${CSS.escape(target)}"]`,
         );
         if (!el) return;
+        shownReveal = reveal.nonce;
         // リストが十分スクロール可能なら中央付近に、そうでなければ見える位置に。
         el.scrollIntoView({ block: "center" });
         el.classList.add("mg-tree-reveal");

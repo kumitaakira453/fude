@@ -3,8 +3,8 @@ import { atomWithStorage } from "jotai/utils";
 
 // ワークスペースの列（タブの上に横一列で並べるもの）。
 //
-// ブラウザのタブと同じ考え方で、開いたワークスペースが末尾に入り、× で列から
-// 外す（ワークスペースそのものは消さない）。並びは全ウィンドウで共有する。
+// 札はワークスペースそのもの。作った・開いたワークスペースが末尾に入り、
+// × でワークスペースごと消す。並びは全ウィンドウで共有する。
 // ⌘1〜9 はこの並びの位置を指す。
 export const barAtom = atomWithStorage<string[]>("fude:wsbar", [], undefined, {
   getOnInit: true,

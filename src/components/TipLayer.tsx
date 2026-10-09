@@ -32,8 +32,13 @@ function bare(el: Element): boolean {
   return (clone.textContent ?? "").trim() === "";
 }
 
+// 別の文書を抱える器（PDF・HTML を出す iframe など）。中へ入ると指した位置が
+// 親に届かなくなるので、吹き出しの相手にしない。
+const FRAME = "iframe, embed, object";
+
 // 指した位置から、吹き出しを出す部品を探す。
 export function tipTarget(from: Element | null): HTMLElement | null {
+  if (from?.closest(FRAME)) return null;
   let el = from instanceof HTMLElement ? from : (from?.parentElement ?? null);
   while (el && el !== document.body) {
     if (el.dataset.tip) return el;

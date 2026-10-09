@@ -271,7 +271,9 @@ export function WorkspaceSwitcher() {
         </div>
 
         <div className="mg-pal-foot">
-          <span className="mr-auto">右クリックで名前・色・フォルダの変更、削除</span>
+          <span className="mg-pal-foot-note" title="右クリックで名前・色・フォルダの変更、削除">
+            右クリックで名前・色・フォルダの変更、削除
+          </span>
           <span>
             <kbd className="mg-key">⏎</kbd> 開く
           </span>

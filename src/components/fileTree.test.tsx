@@ -13,6 +13,7 @@ import {
   workspaceAtom,
   workspaceMenuAtom,
   rootCreateAtom,
+  revealInTreeAtom,
 } from "../state/atoms";
 import { FileTree } from "./FileTree";
 import { Sidebar } from "./Sidebar";
@@ -328,5 +329,78 @@ describe("フォルダを複数並べているとき", () => {
     const el = show(null);
     expect(el.querySelector(".mg-tree-root")).toBeNull();
     expect(el.querySelector(".mg-tree-roots")).toBeNull();
+  });
+});
+
+// 「ツリーで表示」の合図。合図は出した後も残り続けるので、同じ合図で
+// 二度は送らない（名前を変えた後などに、開いているファイルの行へ飛ばない）。
+describe("ツリーで表示する合図", () => {
+  const key = (el: Element, k: string) =>
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    });
+  const frame = () => act(() => new Promise((r) => setTimeout(r, 60)));
+  // 送った行の道筋を順に受ける。
+  let sent: string[] = [];
+  // 合図ごとに違う nonce。済みにした合図は試験をまたいで覚えている。
+  let nonce = 1000;
+  const ask = (rel: string) =>
+    act(() => last!.set(revealInTreeAtom, { path: `/本/${rel}`, nonce: ++nonce }));
+  const tree = () => [file("a.md"), file("b.md"), file("c.md")];
+
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = function (this: HTMLElement) {
+      sent.push(this.dataset.path ?? "");
+    };
+  });
+  afterEach(() => {
+    sent = [];
+  });
+
+  it("合図を置くと、その行を送る", async () => {
+    show(null, tree());
+    ask("a.md");
+    await frame();
+    expect(sent).toEqual(["/本/a.md"]);
+  });
+
+  it("ツリーを作り直しても、同じ合図ではもう送らない", async () => {
+    show(null, tree());
+    ask("a.md");
+    await frame();
+    const store = last!;
+    act(() => root?.unmount());
+    root = createRoot(host!);
+    act(() =>
+      root!.render(
+        <Provider store={store}>
+          <FileTree />
+        </Provider>,
+      ),
+    );
+    await frame();
+    expect(sent).toEqual(["/本/a.md"]);
+  });
+
+  it("新しい合図なら、また送る", async () => {
+    show(null, tree());
+    ask("a.md");
+    await frame();
+    ask("a.md");
+    await frame();
+    expect(sent).toEqual(["/本/a.md", "/本/a.md"]);
+  });
+
+  it("名前を変えて Enter を押し、木を組み直しても、合図の行へは送らない", async () => {
+    const el = show(null, tree());
+    ask("a.md");
+    await frame();
+    rowOf(el, "c.md").focus();
+    key(rowOf(el, "c.md"), "Enter");
+    key(el.querySelector("input")!, "Enter");
+    await frame();
+    act(() => last!.set(treeAtom, [file("a.md"), file("b.md"), file("d.md")]));
+    await frame();
+    expect(sent).toEqual(["/本/a.md"]);
   });
 });

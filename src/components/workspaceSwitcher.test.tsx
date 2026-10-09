@@ -40,6 +40,7 @@ vi.mock("../hooks/useWorkspaceOps", () => ({
     renameWorkspace: (id: string, name: string) => log("rename")({ id, name }),
     recolorWorkspace: (id: string, color: string) => log("recolor")({ id, color }),
     deleteWorkspace: async (id: string) => log("delete")(id),
+    closeWorkspace: async (id: string) => log("close")(id),
     unlinkSession: (id: string) => log("unlink")(id),
   }),
 }));
@@ -148,7 +149,6 @@ describe("手入れ：どこで右クリックしても同じメニュー", () =
       "名前を変更",
       "フォルダを追加…",
       "新しいウィンドウで開く",
-      "ツールバーから外す",
       "Claude のセッションとの連携を解除",
       "削除",
     ]);
@@ -164,14 +164,21 @@ describe("手入れ：どこで右クリックしても同じメニュー", () =
     expect(menuItems()).toContain("削除");
   });
 
-  it("開いているワークスペースは、メニューから削除できない", async () => {
+  it("開いているワークスペースも、メニューから削除できる", async () => {
     const { el } = await show();
     rightClick(pill(el, "a"));
-    expect(menuItems()).not.toContain("削除");
+    expect(menuItems()).toContain("削除");
     expect(menuItems()).not.toContain("新しいウィンドウで開く");
   });
 
-  it("メニューから名前・色・ツールバー・削除が効く", async () => {
+  it("ツールバーから外す項目は持たない", async () => {
+    const { el } = await show();
+    rightClick(pill(el, "b"));
+    expect(menuItems()).not.toContain("ツールバーから外す");
+    expect(menuItems()).not.toContain("ツールバーに表示");
+  });
+
+  it("メニューから名前・色・削除が効く", async () => {
     const { el, store } = await show();
     rightClick(pill(el, "b"));
     act(() => button("名前を変更").click());
@@ -187,11 +194,10 @@ describe("手入れ：どこで右クリックしても同じメニュー", () =
     expect(calls.at(-1)?.op).toBe("recolor");
 
     rightClick(pill(el, "b"));
-    act(() => button("ツールバーから外す").click());
-    expect(store.get(barAtom)).toEqual(["a"]);
-
-    rightClick(pill(el, "a"));
-    expect(menuItems()).toContain("ツールバーから外す");
+    act(() => button("削除").click());
+    expect(calls.at(-1)).toEqual({ op: "close", arg: "b" });
+    // 札の並びは削除の中で書き換える。メニューは触らない。
+    expect(store.get(barAtom)).toEqual(["a", "b"]);
   });
 });
 
@@ -343,10 +349,28 @@ describe("Claude のセッションの終わり", () => {
 });
 
 describe("札の ×", () => {
-  it("× はツールバーから外すだけで、切り替えもしない", async () => {
-    const { el, store } = await show();
+  it("× はワークスペースの削除を頼み、押した札へは切り替えない", async () => {
+    const { el } = await show();
     act(() => pill(el, "b").querySelector<HTMLElement>(".mg-ws-pill-x")!.click());
-    expect(store.get(barAtom)).toEqual(["a"]);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual([{ op: "close", arg: "b" }]);
+  });
+
+  it("中クリックでも削除を頼む", async () => {
+    const { el } = await show();
+    act(() => {
+      pill(el, "b").dispatchEvent(new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+    });
+    expect(calls).toEqual([{ op: "close", arg: "b" }]);
+  });
+});
+
+describe("札の並び", () => {
+  it("並びに載っていないワークスペースも、末尾に札が出る", async () => {
+    const { el, store } = await show((s) => s.set(barAtom, ["b"]));
+    expect(store.get(barAtom)).toEqual(["b", "a"]);
+    expect(Array.from(el.querySelectorAll("[data-ws]")).map((p) => p.getAttribute("data-ws"))).toEqual([
+      "b",
+      "a",
+    ]);
   });
 });
