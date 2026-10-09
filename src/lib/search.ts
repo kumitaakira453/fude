@@ -54,6 +54,28 @@ export interface QuickOpenOpts {
   limit?: number;
 }
 
+// 名前で当たったときの加点。道筋をまたいで当たったものより上に置く。
+const NAME_FIRST = 20;
+
+// まずファイル名だけに当て、当たらなければ道筋全体に当てる。
+//
+// 道筋全体に当てると、字は左から最初に見つかった所で拾われる。`01_a.md` を
+// 打つと、フォルダ名の日付（`20260929_…`）の中の 0 や 1 が先に当たり、
+// 名前の部分は当たらない。当たり方が道筋ごとにばらばらになり、同じ名前の
+// ファイルでも点数が揃わない（新しさの加点で並べられない）。
+function matchFile(
+  query: string,
+  node: TreeNode,
+): { score: number; matches: number[]; named: boolean } | null {
+  const named = query ? fuzzyMatch(query, node.name) : null;
+  if (!named) {
+    const m = fuzzyMatch(query, node.rel);
+    return m && { ...m, named: false };
+  }
+  const at = node.rel.length - node.name.length;
+  return { score: named.score, matches: named.matches.map((i) => i + at), named: true };
+}
+
 // 絞り込みが空のときは新しく触ったものから並べる。開いた直後に出るのは
 // 「さっきまで書いていたファイル」であってほしい。
 // 絞り込みがあるときは名前の一致を主に、新しさを添えて順を決める。
@@ -65,10 +87,12 @@ export function quickOpen(
   const { touched, now = Date.now(), limit = 40 } = opts;
   const results: FuzzyResult[] = [];
   for (const node of files) {
-    const m = fuzzyMatch(query, node.rel);
+    const m = matchFile(query, node);
     if (!m) continue;
+    // 新しさの加点は一致の強さから出す（名前の加点は含めない）。
     const bonus = query ? recencyBonus(m.score, touched?.get(node.path), now) : 0;
-    results.push({ node, score: m.score + bonus, matches: m.matches });
+    const first = m.named ? NAME_FIRST : 0;
+    results.push({ node, score: m.score + bonus + first, matches: m.matches });
   }
   if (query) {
     results.sort((a, b) => b.score - a.score);

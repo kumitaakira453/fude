@@ -42,6 +42,7 @@ import {
 } from "../lib/md/taskMarks";
 import { taskMarksAtom, wideTableAtom } from "../state/atoms";
 import { useAtomValue } from "jotai";
+import { remarkCjkAutolink } from "../lib/md/cjkAutolink";
 import { rehypeKatexSafe } from "../lib/md/katexSafe";
 import { rehypeSummaryInline } from "../lib/md/summaryInline";
 import { foldKey, recallFold, rememberFold } from "../lib/folds";
@@ -50,6 +51,8 @@ import { Mermaid } from "./Mermaid";
 
 const remarkPlugins = [
   remarkGfm,
+  // URL の直後の全角の「）」「：」などをリンクから外す（編集面と同じ木にする）。
+  remarkCjkAutolink,
   // 日本語で **強調（かっこ)**を数える のように閉じ記号の直後が CJK 文字だと
   // CommonMark のフランキング規則で太字が成立しない問題を解消する
   remarkCjkFriendly,

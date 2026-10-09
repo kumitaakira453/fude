@@ -197,3 +197,36 @@ describe("⌘/", () => {
     expect(store.get(settingsOpenAtom)).toBe(false);
   });
 });
+
+// 全画面の窓は、ページが受けなかった Esc で全画面をやめる。Esc はほかの受け手が
+// すべて走った後で止め、窓へは渡さない。
+describe("Esc を窓へ渡さない", () => {
+  const esc = (init: KeyboardEventInit = {}) => {
+    const e = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    act(() => {
+      document.body.dispatchEvent(e);
+    });
+    return e;
+  };
+
+  it("ほかの受け手の後で止める。後から付いた受け手も、止められる前の Esc を受ける", () => {
+    rig();
+    const seen: boolean[] = [];
+    const later = (e: KeyboardEvent) => seen.push(e.defaultPrevented);
+    window.addEventListener("keydown", later);
+    const e = esc();
+    window.removeEventListener("keydown", later);
+    expect(seen).toEqual([false]);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it("変換中の Esc と、Esc 以外のキーは止めない", () => {
+    rig();
+    expect(esc({ isComposing: true }).defaultPrevented).toBe(false);
+    const a = new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true });
+    act(() => {
+      document.body.dispatchEvent(a);
+    });
+    expect(a.defaultPrevented).toBe(false);
+  });
+});

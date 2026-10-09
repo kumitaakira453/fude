@@ -2,6 +2,7 @@ import { Fragment, type Mark, type Node as PmNode } from "prosemirror-model";
 import type { Root, RootContent, PhrasingContent } from "mdast";
 import remarkCjkFriendly from "remark-cjk-friendly";
 import remarkGfm from "remark-gfm";
+import { trimCjkAutolinks } from "./cjkAutolink";
 import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -37,7 +38,7 @@ const processor = unified()
 
 // 直列化した結果を読み直して確かめる側からも使う。
 export const parseTree = (text: string): Root => {
-  const tree = processor.parse(text) as Root;
+  const tree = trimCjkAutolinks(processor.parse(text) as Root);
   // 字として残っている印（`- [/] `・`- [ ]` だけの行）を項目へ移す。
   readTaskMarks(tree);
   return tree;

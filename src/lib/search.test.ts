@@ -79,6 +79,34 @@ describe("quickOpen", () => {
     ]);
   });
 
+  it("同じ名前は、フォルダ名に数字が入っていても新しい順に並ぶ", () => {
+    const same = [
+      file("incidents/20260929_連携失敗/01_INCIDENT.md"),
+      file("incidents/20260930_保存エラー/01_INCIDENT.md"),
+      file("incidents/20261009_所属重複エラー/01_INCIDENT.md"),
+    ];
+    const touched = new Map([
+      ["incidents/20260929_連携失敗/01_INCIDENT.md", NOW - 10 * DAY],
+      ["incidents/20260930_保存エラー/01_INCIDENT.md", NOW - 9 * DAY],
+      ["incidents/20261009_所属重複エラー/01_INCIDENT.md", NOW - 60 * 1000],
+    ]);
+    const got = quickOpen(same, "01_INCIDENT.md", { touched, now: NOW });
+    expect(paths(got)).toEqual([
+      "incidents/20261009_所属重複エラー/01_INCIDENT.md",
+      "incidents/20260930_保存エラー/01_INCIDENT.md",
+      "incidents/20260929_連携失敗/01_INCIDENT.md",
+    ]);
+    // 強調するのは名前の部分。
+    const rel = got[0].node.rel;
+    expect(got[0].matches.map((i) => rel[i]).join("")).toBe("01_INCIDENT.md");
+    expect(got[0].matches[0]).toBe(rel.length - "01_INCIDENT.md".length);
+  });
+
+  it("フォルダ名を含めて打ったときは、道筋全体で当てる", () => {
+    const files = [file("alpha/note.md"), file("beta/note.md")];
+    expect(paths(quickOpen(files, "beta/note", { now: NOW }))).toEqual(["beta/note.md"]);
+  });
+
   it("新しさで名前の一致を覆さない", () => {
     const files = [file("guide.md"), file("g-u-i-d-e-old.md")];
     const touched = new Map([["g-u-i-d-e-old.md", NOW]]);

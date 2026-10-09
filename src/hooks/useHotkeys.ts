@@ -230,4 +230,25 @@ export function useHotkeys() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [store]);
+
+  // macOS の全画面の窓は、ページが受けなかった Esc で全画面をやめる。小窓を
+  // 閉じるなどで受けた Esc も窓へ渡ると全画面が解けるので、ページで受けた
+  // ことにして渡さない。
+  //
+  // 止めるのは、ほかの受け手がすべて走った後。先に止めると、止められたかを
+  // 見て動きを変える受け手（defaultPrevented を見るもの）が Esc を受けなくなる。
+  // 走っている最中に window へ足した受け手は、その回の最後に呼ばれる。
+  useEffect(() => {
+    const last = (e: KeyboardEvent) => e.preventDefault();
+    const onEsc = (e: KeyboardEvent) => {
+      // 変換中の Esc は変換の取り消し。入力の側に任せる。
+      if (e.key !== "Escape" || e.isComposing || e.keyCode === 229) return;
+      window.addEventListener("keydown", last, { once: true });
+    };
+    window.addEventListener("keydown", onEsc, true);
+    return () => {
+      window.removeEventListener("keydown", onEsc, true);
+      window.removeEventListener("keydown", last);
+    };
+  }, []);
 }

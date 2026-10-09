@@ -44,10 +44,11 @@
 
   /* 画面の周りの面。どのテーマにも、地から導いた値を置く（テーマの側で
      直に決めてあればそちらが勝つ）。
-     chrome は上の段・縦の帯・足元の帯の地で、本文の地より一段沈める。
+     chrome は画面の周り（上の段・縦の帯・左右の欄・タブの段・足元の帯）の地で、
+     本文の地より一段沈める。本文につながる今のタブと場所の段は本文の地のまま。
      line は欄の内側の区切り線で、縁より一段淡い。pop は浮くものの地。 */
   --mg-chrome: light-dark(
-    color-mix(in srgb, var(--mg-bg) 95%, #5c4a28),
+    color-mix(in srgb, var(--mg-bg) 91%, #5c4a28),
     color-mix(in srgb, var(--mg-bg) 78%, #000)
   );
   --mg-line: color-mix(in srgb, var(--mg-border) 60%, var(--mg-bg));
@@ -516,12 +517,12 @@ body {
   --mg-pop: #161b22;
 }
 [data-theme="paper"] {
-  --mg-chrome: #f3eee3;
+  --mg-chrome: #ece6d8;
   --mg-line: #ece5d8;
   --mg-pop: #fffdf8;
 }
 [data-theme="business"] {
-  --mg-chrome: #f5f6f8;
+  --mg-chrome: #eceef2;
   --mg-line: #e8ebef;
   --mg-pop: #ffffff;
 }
@@ -4045,7 +4046,7 @@ svg[id^="mmd-"] foreignObject div {
 .mg-rail {
   overflow: hidden;
   border-left: 1px solid var(--mg-border);
-  background: var(--mg-panel);
+  background: var(--mg-chrome);
 }
 /* 流れる列。札は絶対配置で、行き先は CommentRail が測って入れる。 */
 .mg-rail-flow {
@@ -8618,14 +8619,14 @@ body.mg-carrying {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--mg-panel);
+  background: var(--mg-chrome);
 }
 .mg-tree-root.mg-tree-root:hover,
 .mg-tree-root.mg-tree-root:focus-visible {
-  background: linear-gradient(var(--mg-hover), var(--mg-hover)), var(--mg-panel);
+  background: linear-gradient(var(--mg-hover), var(--mg-hover)), var(--mg-chrome);
 }
 .mg-tree-root.mg-tree-root[data-drop] {
-  background: linear-gradient(var(--mg-accent-soft), var(--mg-accent-soft)), var(--mg-panel);
+  background: linear-gradient(var(--mg-accent-soft), var(--mg-accent-soft)), var(--mg-chrome);
 }
 .mg-tree-root-name {
   font-size: 11px;
@@ -8915,7 +8916,8 @@ html[data-hints] .mg-seg {
 .mg-strip-badge {
   position: absolute;
   top: -3px;
-  right: -5px;
+  /* 左上に置く。右に出すと、隣の左の欄へ食い込んで目に入る。 */
+  left: -5px;
   min-width: 15px;
   padding: 0 3px;
   border-radius: 3px;
@@ -8934,7 +8936,7 @@ html[data-hints] .mg-seg {
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  background: var(--mg-panel);
+  background: var(--mg-chrome);
 }
 .mg-pane-side-head {
   display: flex;
@@ -9012,7 +9014,7 @@ html[data-hints] .mg-seg {
   /* 下の線は地に描く。今のタブはその地を自分の色で覆い、下の段とつながる
      （タブは横に送る箱の中にあるので、はみ出して覆うと箱に切られる）。 */
   box-shadow: inset 0 -1px 0 var(--mg-border);
-  background: var(--mg-panel);
+  background: var(--mg-chrome);
 }
 .mg-tab {
   position: relative;
@@ -9134,7 +9136,7 @@ html[data-hints] .mg-seg {
   gap: 6px;
   padding: 0 8px 0 12px;
   border-bottom: 1px solid var(--mg-line);
-  background: var(--mg-panel);
+  background: var(--mg-chrome);
 }
 .mg-rail-head > .mg-rail-title {
   flex: 1;
