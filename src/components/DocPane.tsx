@@ -1494,7 +1494,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
         {path && isDoc && isDraft && (
           // 下書きは版を持てない。同じ場所に、行き先を決める口を置く。
-          <TextBtn tip="名前を付けて保存" keys="⌘S" quiet onClick={() => void saveDraft()}>
+          <TextBtn tip="名前を付けて保存" keys="⌘S" onClick={() => void saveDraft()}>
             名前を付けて保存
           </TextBtn>
         )}
@@ -1503,19 +1503,18 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <TextBtn
               tip="今の本文をバージョンとして保存"
               keys="⌘S"
-              quiet
               on={naming !== null}
               onClick={() => (naming === null ? startNaming() : setNaming(null))}
             >
               バージョンを保存
             </TextBtn>
-            <TextBtn tip="バージョン履歴" keys="⌘Y" quiet onClick={showVersions}>
+            <TextBtn tip="バージョン履歴" keys="⌘Y" onClick={showVersions}>
               履歴
             </TextBtn>
           </>
         )}
         {path && isDoc && (
-          <TextBtn tip="HTML で書き出す" keys="⌘⇧E" quiet onClick={() => void handOut()}>
+          <TextBtn tip="HTML で書き出す" keys="⌘⇧E" onClick={() => void handOut()}>
             書き出し
           </TextBtn>
         )}
@@ -1523,6 +1522,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           <MenuButton
             icon="more_horiz"
             label="その他"
+            framed
             title="ほかの操作"
             items={[
               ...(canCopy

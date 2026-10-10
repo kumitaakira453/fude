@@ -52,6 +52,12 @@
     color-mix(in srgb, var(--mg-bg) 78%, #000)
   );
   --mg-line: color-mix(in srgb, var(--mg-border) 60%, var(--mg-bg));
+  /* 字の釦と切り替えの面。周りの沈んだ地の上でも面として見えるよう、地は一段明るく、
+     枠は縁より一段濃くする。on は押している・選んでいる側の地。 */
+  --mg-ctl: light-dark(var(--mg-bg), color-mix(in srgb, var(--mg-bg) 92%, #fff));
+  --mg-ctl-border: color-mix(in srgb, var(--mg-border) 78%, var(--mg-fg));
+  --mg-ctl-hover: color-mix(in srgb, var(--mg-ctl) 94%, var(--mg-fg));
+  --mg-ctl-on: color-mix(in srgb, var(--mg-ctl) 86%, var(--mg-fg));
   --mg-pop: light-dark(var(--mg-panel), color-mix(in srgb, var(--mg-panel) 95%, #fff));
   --mg-warn: light-dark(#b7791f, #e2a33b);
   --mg-ok: light-dark(#2f855a, #3fb68b);
@@ -8874,8 +8880,9 @@ html[data-hints] .mg-seg {
   align-items: center;
   gap: 4px;
   padding: 0 7px;
-  border: 1px solid var(--mg-border);
+  border: 1px solid var(--mg-ctl-border);
   border-radius: var(--mg-r1);
+  background: var(--mg-ctl);
   /* 押せるものは字の濃さの 2 段目。淡色（muted）は手がかりだけに使う。 */
   color: var(--mg-fg-dim);
   font-size: var(--mg-t-s);
@@ -8885,10 +8892,18 @@ html[data-hints] .mg-seg {
   height: auto;
   padding: 2px 6px;
   border-color: transparent;
+  background: transparent;
 }
-.mg-tbtn:hover:not(:disabled),
-.mg-tbtn.is-on {
+.mg-tbtn:hover:not(:disabled) {
+  background: var(--mg-ctl-hover);
+  color: var(--mg-fg);
+}
+.mg-tbtn.is-quiet:hover:not(:disabled) {
   background: var(--mg-hover);
+}
+.mg-tbtn.is-on,
+.mg-tbtn.is-on:hover:not(:disabled) {
+  background: var(--mg-ctl-on);
   color: var(--mg-fg);
 }
 .mg-tbtn:disabled {
@@ -9074,8 +9089,9 @@ html[data-hints] .mg-seg {
   display: flex;
   height: 22px;
   overflow: hidden;
-  border: 1px solid var(--mg-border);
+  border: 1px solid var(--mg-ctl-border);
   border-radius: var(--mg-r1);
+  background: var(--mg-ctl);
 }
 .mg-seg > button {
   padding: 0 9px;
@@ -9083,12 +9099,17 @@ html[data-hints] .mg-seg {
   font-size: var(--mg-t-s);
   font-weight: 500;
 }
+.mg-seg > button + button {
+  border-left: 1px solid var(--mg-ctl-border);
+}
 .mg-seg > button:hover {
+  background: var(--mg-ctl-hover);
   color: var(--mg-fg);
 }
 .mg-seg > button[aria-pressed="true"] {
-  background: var(--mg-hover);
+  background: var(--mg-ctl-on);
   color: var(--mg-fg);
+  font-weight: 600;
 }
 
 /* 場所の段。 */
@@ -9126,7 +9147,7 @@ html[data-hints] .mg-seg {
   color: var(--mg-fg-dim);
   font-weight: 500;
 }
-.mg-pathbar .mg-tbtn.is-quiet {
+.mg-pathbar .mg-tbtn {
   font-family: var(--mg-font-sans);
 }
 /* コメント一覧の場所の段。フォルダの側を省き、ファイル名は残す。 */
@@ -9176,6 +9197,7 @@ html[data-hints] .mg-seg {
   user-select: none;
 }
 .mg-foot-item {
+  position: relative;
   display: inline-flex;
   height: 20px;
   align-items: center;
@@ -9218,11 +9240,21 @@ html[data-hints] .mg-seg {
 .mg-foot-grow {
   flex: 1;
 }
+/* 枠を付けるには帯が低いので、隣り合う項目の間に縦の線を入れて区切る。 */
+.mg-foot-item + .mg-foot-item::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: -2px;
+  width: 1px;
+  background: var(--mg-ctl-border);
+  content: "";
+}
 .mg-foot-sep {
   width: 1px;
   height: 12px;
   margin: 0 3px;
-  background: var(--mg-border);
+  background: var(--mg-ctl-border);
 }
 
 /* 浮くもの（一覧・メニュー・吹き出し）。角丸 6px、弱い影 1 つ、縁は 1px。 */
