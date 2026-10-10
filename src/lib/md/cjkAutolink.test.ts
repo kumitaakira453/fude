@@ -1,6 +1,7 @@
 import type { Link, Paragraph, Root } from "mdast";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
+import { Slice } from "prosemirror-model";
 import { unified } from "unified";
 import { describe, expect, it } from "vitest";
 import { trimCjkAutolinks } from "./cjkAutolink";
@@ -82,6 +83,14 @@ describe("自動リンクの末尾の全角の区切り", () => {
   });
 });
 
+it("残りは後ろの字と 1 つにまとめる（編集面の字の束ね方と合わせる）", () => {
+  const para = parse("例（https://x.example/a）が設定 されている").children[0] as Paragraph;
+  expect(para.children.map((n) => n.type)).toEqual(["text", "link", "text"]);
+  const tail = para.children[2];
+  expect("value" in tail && tail.value).toBe("）が設定 されている");
+  expect(tail.position?.start.offset).toBe("例（https://x.example/a".length);
+});
+
 describe("編集面", () => {
   const src = "見本（資料、https://x.example/a/b）：本文\n";
 
@@ -92,6 +101,18 @@ describe("編集面", () => {
       if (n.isText && n.marks.some((m) => m.type === schema.marks.link)) linked.push(n.text ?? "");
     });
     expect(linked).toEqual(["https://x.example/a/b"]);
+  });
+
+  it("段落の 1 文字を消しても、その 1 文字だけが変わる", () => {
+    const body = "例2: URL（https://example.com）がA, Bに設定されている\n";
+    const loaded = fromMarkdown(body);
+    let at = -1;
+    loaded.doc.descendants((n, pos) => {
+      if (at < 0 && n.isText && n.text!.includes("設定")) at = pos + n.text!.indexOf("設定");
+      return at < 0;
+    });
+    const edited = loaded.doc.replace(at, at + 1, Slice.empty);
+    expect(toMarkdown(edited, loaded)).toBe("例2: URL（https://example.com）がA, Bに定されている\n");
   });
 
   it("書き戻すと原文のまま戻る", () => {

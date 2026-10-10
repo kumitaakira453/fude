@@ -98,14 +98,15 @@ export function useWatcher() {
         for (const abs of event.paths) {
           if (!abs.startsWith(`${root}/`)) continue;
           if (isMarkdown(abs)) {
-            // 触られた時刻を今にしておく。クイックオープンの並び順が、
-            // 外から書き換わった分（エージェントの編集など）も追いかける。
+            // 触られた時刻を今にしておく（Markdown 以外も同じ）。クイックオープンの
+            // 並び順が、外から書き換わった分（エージェントの編集など）も追いかける。
             touched.set(abs, Date.now());
             // 消えた合図なら読み直しても意味が無い。木を取り直して、
             // 現れた名前と組にできるか見る。
             if (!gone && known.has(abs)) void reloadFile(abs);
             else structural = true;
           } else if (kindOf(abs) !== "other") {
+            touched.set(abs, Date.now());
             // 画像はキャッシュを捨てて取り直させる。HTML・PDF・字のファイルは
             // 描いている器が中身を抱えているので、版を上げて貼り直す。
             if (isImage(abs)) invalidateImage(abs);

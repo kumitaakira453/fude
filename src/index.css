@@ -3041,6 +3041,22 @@ body.mg-dragging .mg-sel-menu {
   text-transform: uppercase;
   margin-bottom: 0.3rem;
 }
+/* 編集面の囲み。中身の入れ物は箱を作らず、段落が見出しの直後に並ぶ。 */
+.mg-callout-flow {
+  display: contents;
+}
+.mg-prose .mg-callout .mg-callout-flow > :last-child {
+  margin-bottom: 0;
+}
+/* 目印（[!IMPORTANT] など）。ふだんは隠し、その段落に入ったときだけ淡く出す。 */
+.mg-callout-mark {
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: var(--mg-t-s);
+}
+.mg-callout-mark.is-hidden {
+  display: none;
+}
 /* トグル。枠は付けず、三角と見出しを 1 行に並べ、中身をその下に字下げする。
    読む面はブラウザの details にそのまま開閉させ、編集面（.mg-details）は
    同じ形を組み立てる。印は 2 面で 1 か所に持つ。 */
@@ -8860,8 +8876,9 @@ html[data-hints] .mg-seg {
   padding: 0 7px;
   border: 1px solid var(--mg-border);
   border-radius: var(--mg-r1);
-  color: var(--mg-muted);
-  font-size: 11.5px;
+  /* 押せるものは字の濃さの 2 段目。淡色（muted）は手がかりだけに使う。 */
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-s);
   white-space: nowrap;
 }
 .mg-tbtn.is-quiet {
@@ -8910,23 +8927,20 @@ html[data-hints] .mg-seg {
   background: var(--mg-accent);
   content: "";
 }
-.mg-strip-badge-host {
+.mg-strip-dot-host {
   position: relative;
 }
-.mg-strip-badge {
+/* 未解決があることを示す点。釦の中の、絵の右上に置く（帯の外へはみ出さない）。
+   帯の地の色の縁で、絵の線から離す。 */
+.mg-strip-dot {
   position: absolute;
-  top: -3px;
-  /* 左上に置く。右に出すと、隣の左の欄へ食い込んで目に入る。 */
-  left: -5px;
-  min-width: 15px;
-  padding: 0 3px;
-  border-radius: 3px;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: var(--mg-accent);
-  color: var(--mg-bg);
-  font-family: var(--mg-font-mono);
-  font-size: 9.5px;
-  line-height: 14px;
-  text-align: center;
+  box-shadow: 0 0 0 1.5px var(--mg-chrome);
   pointer-events: none;
 }
 
@@ -9065,8 +9079,8 @@ html[data-hints] .mg-seg {
 }
 .mg-seg > button {
   padding: 0 9px;
-  color: var(--mg-muted);
-  font-size: 11.5px;
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-s);
   font-weight: 500;
 }
 .mg-seg > button:hover {
@@ -9157,8 +9171,8 @@ html[data-hints] .mg-seg {
   padding: 0 6px;
   border-top: 1px solid var(--mg-border);
   background: var(--mg-chrome);
-  color: var(--mg-muted);
-  font-size: var(--mg-t-xs);
+  color: var(--mg-fg-dim);
+  font-size: var(--mg-t-s);
   user-select: none;
 }
 .mg-foot-item {
@@ -9169,6 +9183,10 @@ html[data-hints] .mg-seg {
   padding: 0 7px;
   border-radius: 3px;
   white-space: nowrap;
+}
+/* 押せない手がかり（字数・行番号・保存の状態など）は淡いまま。 */
+.mg-foot-item.is-static {
+  color: var(--mg-muted);
 }
 .mg-foot-item:not(.is-static):hover {
   background: var(--mg-hover);
@@ -9307,6 +9325,13 @@ html[data-hints] .mg-seg {
 }
 .mg-pal-in > input::placeholder {
   color: var(--mg-muted);
+}
+/* ファイルの行の頭の絵。ツリーと同じ絵で、幅を決めて名前の頭を揃える。 */
+.mg-pal-ficon {
+  display: inline-flex;
+  width: 16px;
+  flex: none;
+  justify-content: center;
 }
 .mg-pal-name {
   min-width: 0;

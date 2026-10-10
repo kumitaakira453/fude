@@ -48,15 +48,23 @@ export function ActivityStrip() {
           onClick={() => pick("claude")}
         />
       )}
-      <span className="mg-strip-badge-host">
+      {/* 未解決があることは点だけで示し、数は吹き出しで出す。数字の札は釦の外へ
+          はみ出して、帯の中で浮いて見える。 */}
+      <span className="mg-strip-dot-host">
         <IconBtn
-          tip={isDraft ? "コメントは保存先を決めてから" : "コメント一覧（全ファイル）"}
+          tip={
+            isDraft
+              ? "コメントは保存先を決めてから"
+              : openTotal > 0
+                ? `コメント一覧（全ファイル）・未解決 ${openTotal} 件`
+                : "コメント一覧（全ファイル）"
+          }
           keys="⌘⇧R"
           icon="comment"
           disabled={isDraft}
           onClick={() => setReview(true)}
         />
-        {openTotal > 0 && !isDraft && <span className="mg-strip-badge">{openTotal}</span>}
+        {openTotal > 0 && !isDraft && <span className="mg-strip-dot" aria-hidden />}
       </span>
     </nav>
   );

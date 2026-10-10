@@ -111,6 +111,19 @@ describe("⌘⇧P：操作の一覧", () => {
     type("分割");
     expect(words().every((w) => w.includes("分割方針"))).toBe(true);
   });
+
+  it("ファイルの行には、ツリーと同じ絵を名前の頭に出す。Markdown 以外も並ぶ", () => {
+    const store = rig();
+    store.set(A.filesAtom, [
+      { name: "分割方針.md", path: "/w/分割方針.md", rel: "分割方針.md", abs: "/w/分割方針.md", kind: "file" },
+      { name: "集計.py", path: "/w/集計.py", rel: "集計.py", abs: "/w/集計.py", kind: "file" },
+    ]);
+    store.set(A.touchedAtom, new Map([["/w/集計.py", Date.now()]]));
+    key({ key: "p", code: "KeyP", metaKey: true });
+    const rows = Array.from(document.querySelectorAll(".mg-pick-row"));
+    expect(rows[0].textContent).toContain("集計.py");
+    expect(rows.every((r) => r.querySelector(".mg-pal-ficon svg, .mg-pal-ficon [data-icon], .mg-pal-ficon *"))).toBe(true);
+  });
 });
 
 describe("⌘E：閲覧と編集", () => {

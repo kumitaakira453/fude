@@ -26,6 +26,7 @@ import { quickOpen } from "../lib/search";
 import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
+import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
 import { Marked } from "./Marked";
 import { keyedIn, movedIn } from "../lib/pointer";
@@ -246,6 +247,9 @@ export function CommandPalette() {
                     </>
                   ) : (
                     <>
+                      <span className="mg-pal-ficon" aria-hidden>
+                        <FileIcon name={row.r.node.name} abs={row.r.node.abs} size={14} />
+                      </span>
                       <span className="mg-pal-name" title={label(row.r.node.path)}>
                         <Marked text={row.r.node.name} query={query} />
                       </span>

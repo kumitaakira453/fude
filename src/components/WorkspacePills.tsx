@@ -105,10 +105,13 @@ export function WorkspacePills() {
 
   return (
     // 札の並びだけを横に送る。＋ は送る箱の外に置き、端で切れないようにする。
-    <div className="mg-ws-pills-wrap">
+    // 上の段の空きの大半はこの入れ物が覆うので、ここも窓を掴む所にする
+    // （data-tauri-drag-region は押した要素そのものしか見ず、祖先を辿らない）。
+    <div className="mg-ws-pills-wrap" data-tauri-drag-region>
       <div
         role="tablist"
         aria-label="ワークスペース"
+        data-tauri-drag-region
         className="mg-ws-pills"
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;

@@ -102,6 +102,20 @@ describe("quickOpen", () => {
     expect(got[0].matches[0]).toBe(rel.length - "01_INCIDENT.md".length);
   });
 
+  it("触った時刻があれば、Markdown 以外のファイルも新しい順に並ぶ", () => {
+    const files = [file("a/memo.md"), file("a/集計.py"), file("b/表.csv")];
+    const touched = new Map([
+      ["a/memo.md", NOW - DAY],
+      ["a/集計.py", NOW - 60 * 1000],
+      ["b/表.csv", NOW - 2 * DAY],
+    ]);
+    expect(paths(quickOpen(files, "", { touched, now: NOW }))).toEqual([
+      "a/集計.py",
+      "a/memo.md",
+      "b/表.csv",
+    ]);
+  });
+
   it("フォルダ名を含めて打ったときは、道筋全体で当てる", () => {
     const files = [file("alpha/note.md"), file("beta/note.md")];
     expect(paths(quickOpen(files, "beta/note", { now: NOW }))).toEqual(["beta/note.md"]);

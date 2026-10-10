@@ -34,6 +34,7 @@ import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { composingKeys } from "./ime";
 import { insideBlock } from "./nodeViews";
+import { calloutMarks } from "./calloutMarks";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { BLANK, flipped } from "./taskMarks";
 import { slashMenu } from "./slash";
@@ -1126,6 +1127,8 @@ export function editorPlugins({
     // コードの色と、カーソルの居る塊の印（図だけを出しているときに使う）。
     highlightCode,
     insideBlock,
+    // 囲み（> [!IMPORTANT] など）の目印は、その段落に入ったときだけ出す。
+    calloutMarks,
     // 掴んでいるあいだ実体を薄くする印。
     lifted,
     // 指摘の居場所。打っても付いてくるように、位置を写していく。

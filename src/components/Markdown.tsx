@@ -29,7 +29,7 @@ import { Icon } from "./Icon";
 import { TableModal, tablePlain } from "./TableModal";
 import { TaskBox } from "./TaskBox";
 import { markdownContext } from "./MarkdownContext";
-import { CALLOUT_RE } from "../lib/callout";
+import { CALLOUT_KINDS, CALLOUT_RE } from "../lib/callout";
 import { openHtmlContainers } from "../lib/htmlBlocks";
 import { remarkSoftBreaks } from "../lib/md/softBreaks";
 import {
@@ -140,13 +140,6 @@ function childrenToString(children: ReactNode): string {
 
 // ---- エディトリアル組版（ベータ）用のヘルパー ----
 
-const CALLOUT: Record<string, { k: string; cls: string; icon: string }> = {
-  NOTE: { k: "Note", cls: "note", icon: "info" },
-  TIP: { k: "Tip", cls: "tip", icon: "lightbulb" },
-  IMPORTANT: { k: "Important", cls: "important", icon: "priority_high" },
-  WARNING: { k: "Warning", cls: "warning", icon: "warning" },
-  CAUTION: { k: "Caution", cls: "caution", icon: "report" },
-};
 
 // blockquote 先頭の [!TYPE] マーカーを表示から取り除く
 function stripCalloutMarker(children: ReactNode): ReactNode {
@@ -268,7 +261,7 @@ function TableWrap({ children }: { children: ReactNode }) {
 }
 
 function Callout({ type, children }: { type: string; children: ReactNode }) {
-  const c = CALLOUT[type] ?? CALLOUT.NOTE;
+  const c = CALLOUT_KINDS[type] ?? CALLOUT_KINDS.NOTE;
   return (
     <div className={`mg-callout ${c.cls}`}>
       <span className="mg-callout-ico">

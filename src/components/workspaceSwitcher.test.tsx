@@ -365,6 +365,14 @@ describe("札の ×", () => {
 });
 
 describe("札の並び", () => {
+  it("札の並びの空きは窓を掴む所にし、札そのものは掴む所にしない", async () => {
+    const { el } = await show();
+    expect(el.querySelector(".mg-ws-pills-wrap")!.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(el.querySelector(".mg-ws-pills")!.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(pill(el, "a").hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
+
+
   it("並びに載っていないワークスペースも、末尾に札が出る", async () => {
     const { el, store } = await show((s) => s.set(barAtom, ["b"]));
     expect(store.get(barAtom)).toEqual(["b", "a"]);

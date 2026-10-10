@@ -68,7 +68,17 @@ export function trimCjkAutolinks(tree: Root): Root {
         const text = literal(node);
         const tail = text && split(node, text);
         if (tail) {
-          parent.children.splice(i + 1, 0, tail);
+          // 後ろが字なら 1 つにまとめる。編集面は隣り合う字を 1 つの字に束ねるので、
+          // 分けたままだと原文の位置の数と合わず、書き換えた段落を原文へ差し戻せない。
+          const next = parent.children[i + 1];
+          if (next?.type === "text") {
+            next.value = tail.value + next.value;
+            if (tail.position && next.position) {
+              next.position = { start: tail.position.start, end: next.position.end };
+            }
+          } else {
+            parent.children.splice(i + 1, 0, tail);
+          }
           i++;
         }
         continue;

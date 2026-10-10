@@ -19,6 +19,7 @@ import type { ImageGoes } from "./imageDrop";
 import { cssWidth, type ImageAlign } from "./imageHtml";
 import { DONE, flipped, markDone, markShapes } from "./taskMarks";
 import { schema } from "./schema";
+import { CALLOUT_KINDS, calloutKind } from "../callout";
 
 // 編集面の専用の描画。
 //
@@ -912,6 +913,59 @@ class MathBlockView implements NodeView {
   }
 }
 
+// 引用。先頭に [!IMPORTANT] などの目印があれば、読む画面と同じ囲み（絵・見出し・
+// 色）で描く。中身は引用のままなので、ふつうに打てる。目印の字の出し入れは
+// calloutMarks が受け持つ。
+//
+// 目印の無い引用は、組版の描き方（toDOM）と同じ blockquote にする。
+const kindOfQuote = (node: PmNode): string | null =>
+  calloutKind(node.firstChild?.textContent ?? "");
+
+class BlockquoteView implements NodeView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+  private kind: string | null;
+
+  constructor(node: PmNode) {
+    this.kind = kindOfQuote(node);
+    const c = this.kind ? CALLOUT_KINDS[this.kind] : null;
+    if (!c) {
+      this.dom = document.createElement("blockquote");
+      this.dom.className = "mg-pull";
+      this.contentDOM = this.dom;
+      return;
+    }
+    this.dom = document.createElement("div");
+    this.dom.className = `mg-callout ${c.cls}`;
+    const ico = document.createElement("span");
+    ico.className = "mg-callout-ico";
+    ico.contentEditable = "false";
+    ico.appendChild(icon(c.icon, 17, true));
+    const body = document.createElement("div");
+    body.className = "mg-callout-body";
+    const k = document.createElement("div");
+    k.className = "mg-callout-k";
+    k.contentEditable = "false";
+    k.textContent = c.k;
+    // 中身の入れ物は箱を作らない（display: contents）。段落が見出しの直後に
+    // 並び、囲みの中の余白の指定がそのまま効く。
+    this.contentDOM = document.createElement("div");
+    this.contentDOM.className = "mg-callout-flow";
+    body.append(k, this.contentDOM);
+    this.dom.append(ico, body);
+  }
+
+  // 種類が変わった・目印が付いた/外れたときは作り直す。
+  update(node: PmNode) {
+    if (node.type !== schema.nodes.blockquote) return false;
+    return kindOfQuote(node) === this.kind;
+  }
+
+  ignoreMutation(m: ViewMutationRecord) {
+    return !this.contentDOM.contains(m.target);
+  }
+}
+
 // 箇条書きの項目。checked が付いているものだけ、読むときと同じチェックを出す。
 //
 // チェックは編集の対象ではないので、中身とは別の入れ物に分ける。印の無い項目は
@@ -1185,6 +1239,7 @@ export function nodeViews(deps: EditorDeps) {
     mathBlock: (node: PmNode, view: EditorView, getPos: () => number | undefined) =>
       new MathBlockView(node, view, getPos),
     table: (node: PmNode) => new TableView(node),
+    blockquote: (node: PmNode) => new BlockquoteView(node),
   };
 }
 

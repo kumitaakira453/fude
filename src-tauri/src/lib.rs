@@ -324,13 +324,6 @@ fn dropped(gi: &ignore::gitignore::Gitignore, rel: &str, dir: bool) -> bool {
     gi.matched(rel, dir).is_ignore()
 }
 
-fn is_markdown(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    [".md", ".markdown", ".mdx", ".mdown", ".mkd"]
-        .iter()
-        .any(|ext| lower.ends_with(ext))
-}
-
 fn stamps_in(
     dir: &std::path::Path,
     prefix: &str,
@@ -353,7 +346,7 @@ fn stamps_in(
                 continue;
             }
             stamps_in(&entry.path(), &rel, gi, out);
-        } else if kind.is_file() && is_markdown(&name) && !dropped(gi, &rel, false) {
+        } else if kind.is_file() && !dropped(gi, &rel, false) {
             let mtime = entry
                 .metadata()
                 .ok()
