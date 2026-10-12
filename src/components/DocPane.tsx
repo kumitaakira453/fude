@@ -1594,14 +1594,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         />
       )}
 
-      {/* 読書プログレスバー */}
-      <div className="h-0.5 w-full bg-transparent">
-        <div
-          ref={progressRef}
-          className="h-full bg-[var(--mg-accent)]"
-          style={{ width: 0 }}
-        />
-      </div>
+      {/* 読書プログレスバー。動かせるのは Markdown の面がスクロールしたときだけで、
+          ほかの種類（HTML は iframe の中で送る）では止まったままになるので出さない。 */}
+      {!(path && !isDoc) && (
+        <div className="h-0.5 w-full bg-transparent">
+          <div
+            ref={progressRef}
+            className="h-full bg-[var(--mg-accent)]"
+            style={{ width: 0 }}
+          />
+        </div>
+      )}
 
       {/* 本文 + 目次 */}
       <div className="flex min-h-0 flex-1">
@@ -1612,7 +1615,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             {kind === "image" ? (
               <ImageDoc abs={absPath ?? path} />
             ) : kind === "html" ? (
-              <HtmlDoc abs={absPath ?? path} />
+              <HtmlDoc abs={absPath ?? path} active={isActive} />
             ) : kind === "pdf" ? (
               <PdfDoc abs={absPath ?? path} />
             ) : kind === "text" && delimOf(path) ? (

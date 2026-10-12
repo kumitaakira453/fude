@@ -1557,22 +1557,39 @@ button.mg-sess-row:hover {
 .mg-imgdoc-bar {
   display: flex;
   flex: none;
-  gap: 0.25rem;
+  height: 24px;
+  gap: 2px;
   align-items: center;
-  padding: 0.3rem 0.6rem;
+  padding: 0 6px;
   border-top: 1px solid var(--mg-border);
   background: var(--mg-bg);
 }
+/* 絵の釦も字の釦も同じ高さの箱の真ん中に置き、倍率の字と縦をそろえる。 */
+.mg-imgdoc-bar .mg-small {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 3px;
+}
 /* 大きさは左、倍率は釦の間。倍率は数字が変わっても釦が動かないよう幅を取る。 */
 .mg-imgdoc-size {
+  display: flex;
+  align-items: center;
   margin-right: auto;
   font-size: 11.5px;
+  line-height: 20px;
   color: var(--mg-muted);
   font-variant-numeric: tabular-nums;
+}
+.mg-htmldoc-reload {
+  color: var(--mg-fg-dim);
 }
 .mg-imgdoc-scale {
   min-width: 3.4rem;
   font-size: 11.5px;
+  line-height: 20px;
   color: var(--mg-fg-dim);
   text-align: center;
   font-variant-numeric: tabular-nums;

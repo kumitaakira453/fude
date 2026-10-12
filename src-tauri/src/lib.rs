@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 mod cli;
 #[cfg(target_os = "macos")]
@@ -549,6 +549,27 @@ async fn installed_apps(apps: Vec<String>) -> Vec<String> {
     .unwrap_or_default()
 }
 
+const RELOAD_PAGE: &str = "reload-page";
+
+// 標準のメニューに「再読み込み ⌘R」を足す。HTML の中を押した後はキーがその
+// ページにしか届かないので、ページより先に受けられるメニューのキーで受ける。
+fn install_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    let menu = Menu::default(app)?;
+    let reload = MenuItem::with_id(app, RELOAD_PAGE, "再読み込み", true, Some("CmdOrCtrl+R"))?;
+    let view = menu
+        .items()?
+        .into_iter()
+        .filter_map(|item| item.as_submenu().cloned())
+        .find(|sub| sub.text().map(|t| t == "View").unwrap_or(false));
+    match view {
+        Some(sub) => sub.prepend(&reload)?,
+        None => menu.append(&reload)?,
+    }
+    app.set_menu(menu)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -602,7 +623,20 @@ pub fn run() {
                 workspaces::window_closed(window.label());
             }
         })
+        .on_menu_event(|app, event| {
+            if event.id() == RELOAD_PAGE {
+                // 押した窓へだけ送る。受けるのはその窓で今の欄に出ている HTML。
+                if let Some(win) = app
+                    .webview_windows()
+                    .into_values()
+                    .find(|w| w.is_focused().unwrap_or(false))
+                {
+                    let _ = win.emit_to(win.label(), RELOAD_PAGE, ());
+                }
+            }
+        })
         .setup(|app| {
+            install_menu(app.handle())?;
             // 主窓は隠して作ってある。前回のテーマの明暗と地を当ててから出す。
             if let Some(main) = app.get_webview_window("main") {
                 windows::apply_look(&main, &windows::saved_look());

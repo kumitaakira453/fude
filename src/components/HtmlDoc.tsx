@@ -17,17 +17,39 @@ const STEP = 1.25;
 const MIN = 0.25;
 const MAX = 4;
 
-export function HtmlDoc({ abs }: { abs: string }) {
+export function HtmlDoc({ abs, active }: { abs: string; active: boolean }) {
   const version = useAtomValue(assetVersionAtom);
   const [source, setSource] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [zoom, setZoom] = useState(1);
+  // 読み込み直した回数。iframe の key に混ぜ、増やすと作り直してスクリプトの状態も初めに戻す。
+  const [loads, setLoads] = useState(0);
   const src = useMemo(() => assetSrc(abs, version), [abs, version]);
 
   useEffect(() => {
     setReading(false);
     setZoom(1);
   }, [abs]);
+
+  // ⌘R はメニューで受けて、押した窓へ送られてくる（ページの中を押した後は
+  // キーがページにしか届かないため）。読み込み直すのは今の欄に出ているものだけ。
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    let stop: (() => void) | undefined;
+    void import("@tauri-apps/api/webviewWindow")
+      .then(({ getCurrentWebviewWindow }) =>
+        getCurrentWebviewWindow().listen("reload-page", () => setLoads((n) => n + 1)),
+      )
+      .then(
+        (un) => (alive ? (stop = un) : un()),
+        (e: unknown) => console.warn("⌘R の再読み込みを受けられない", e),
+      );
+    return () => {
+      alive = false;
+      stop?.();
+    };
+  }, [active]);
 
   // ソースは見せると決めてから読む。描くだけなら要らない。
   useEffect(() => {
@@ -68,7 +90,7 @@ export function HtmlDoc({ abs }: { abs: string }) {
       ) : (
         <div className="min-h-0 flex-1 overflow-auto bg-white">
           <iframe
-            key={src}
+            key={`${src}#${loads}`}
             src={src}
             title={abs.split("/").pop() ?? ""}
             sandbox="allow-scripts allow-popups"
@@ -79,7 +101,22 @@ export function HtmlDoc({ abs }: { abs: string }) {
       )}
 
       <div className="mg-imgdoc-bar">
-        <span className="mg-imgdoc-size">{reading ? "ソース" : ""}</span>
+        <span className="mg-imgdoc-size">
+          {reading ? (
+            "ソース"
+          ) : (
+            <button
+              type="button"
+              className="mg-small mg-htmldoc-reload"
+              data-tip="ページを読み込み直す（スクリプトの状態も初めに戻る）"
+              data-key="⌘R"
+              onClick={() => setLoads((n) => n + 1)}
+            >
+              <Icon name="refresh" size={14} />
+              再読み込み
+            </button>
+          )}
+        </span>
         {!reading && (
           <>
             <button type="button" className="mg-small" onClick={() => step(1 / STEP)}>
