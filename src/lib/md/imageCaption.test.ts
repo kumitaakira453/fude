@@ -97,6 +97,51 @@ describe("画像のキャプション", () => {
     expect(at.img().classList.contains("has-cap")).toBe(true);
   });
 
+  describe("変換の確定・取り消しでは離れない", () => {
+    const key = (field: HTMLInputElement, init: KeyboardEventInit) =>
+      field.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
+
+    it("変換中の Enter では離れず、本文も書き換えない", () => {
+      const at = editor("![](./images/図解.png)\n");
+      const field = at.cap();
+      field.focus();
+      field.dispatchEvent(new CompositionEvent("compositionstart"));
+      field.value = "滞留";
+      key(field, { key: "Enter", isComposing: true });
+      expect(document.activeElement).toBe(field);
+      expect(at.out()).toBe("![](./images/図解.png)\n");
+    });
+
+    it("確定の知らせの後、キーが離れる前に来た Enter でも離れない", () => {
+      // WebKit は確定の Enter を、変換中でない打鍵として知らせの後に寄こすことがある。
+      const at = editor("![](./images/図解.png)\n");
+      const field = at.cap();
+      field.focus();
+      field.dispatchEvent(new CompositionEvent("compositionstart"));
+      field.value = "滞留";
+      field.dispatchEvent(new CompositionEvent("compositionend"));
+      key(field, { key: "Enter" });
+      expect(document.activeElement).toBe(field);
+      expect(at.out()).toBe("![](./images/図解.png)\n");
+
+      // キーが離れた後の Enter は、今までどおり書いて離れる。
+      field.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+      key(field, { key: "Enter" });
+      expect(at.out()).toBe("![滞留](./images/図解.png)\n");
+    });
+
+    it("変換中の Escape では字を戻さない", () => {
+      const at = editor("![滞留の内訳](./images/図解.png)\n");
+      const field = at.cap();
+      field.focus();
+      field.dispatchEvent(new CompositionEvent("compositionstart"));
+      field.value = "打ちかけ";
+      key(field, { key: "Escape", isComposing: true });
+      expect(field.value).toBe("打ちかけ");
+      expect(document.activeElement).toBe(field);
+    });
+  });
+
   it("Escape なら書かずに戻す", () => {
     const at = editor("![滞留の内訳](./images/図解.png)\n");
     const field = at.cap();

@@ -572,7 +572,29 @@ class ImageView implements NodeView {
       // 何も書かずに離れたら、欄を出したままにしない。
       this.showCap(!!this.cap.value);
     });
+    // 変換を確定・取り消す Enter / Escape では離れない。WebKit は確定の Enter を
+    // 変換が終わった知らせの後に、変換中でない打鍵として寄こすことがあるので、
+    // 知らせの後はキーが離れるまでの 1 打も確定の分として捨てる（useImeSafeEnter
+    // と同じ見分け方）。
+    let composing = false;
+    let ending = false;
+    this.cap.addEventListener("compositionstart", () => {
+      composing = true;
+      ending = false;
+    });
+    this.cap.addEventListener("compositionend", () => {
+      composing = false;
+      ending = true;
+    });
+    this.cap.addEventListener("keyup", () => {
+      ending = false;
+    });
     this.cap.addEventListener("keydown", (event) => {
+      if (composing || event.isComposing || event.keyCode === 229) return;
+      if (ending) {
+        ending = false;
+        return;
+      }
       if (event.key === "Escape") this.cap.value = this.alt;
       if (event.key === "Enter" || event.key === "Escape") {
         event.preventDefault();

@@ -3967,7 +3967,8 @@ svg[id^="mmd-"] foreignObject div {
   position: absolute;
   z-index: 5;
   top: calc(100% + 0.35rem);
-  left: 0;
+  /* 札は右の欄の右寄りにあるので、右端にそろえて左へ広げる（右へ広げると窓の外へ出る）。 */
+  right: 0;
   width: 13.5rem;
   padding: 0.25rem;
   border: 1px solid var(--mg-border);
