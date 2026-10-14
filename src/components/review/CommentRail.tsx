@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
+import { placeNear, roomOf } from "../../lib/floatAt";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
 import { headOf, type Resolution } from "../../lib/blockDiff";
 import {
@@ -58,7 +60,10 @@ interface Card {
 //
 // 帯（タブ）で分けていた頃は「面の切り替え」に見えて、いま何で絞っているのか
 // が読み取れなかった。選んでいるものだけを札に出し、他は開いたときに見せる。
-function FilterChip({
+//
+// 一覧は body へ出して窓に対して置く。右の欄は札を流すために外を切っていて、
+// 欄の中に置くと、札が欄のどこにあるかでどちらかの端が切れる。
+export function FilterChip({
   now,
   counts,
   onPick,
@@ -69,22 +74,50 @@ function FilterChip({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement | null>(null);
+  const pop = useRef<HTMLDivElement | null>(null);
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+
+  // 札の右端にそろえて札の下に置き、窓の中に収める。一覧の大きさは出してから測る。
+  useLayoutEffect(() => {
+    if (!open) {
+      setAt(null);
+      return;
+    }
+    const seat = box.current?.getBoundingClientRect();
+    const size = pop.current?.getBoundingClientRect();
+    if (!seat || !size) return;
+    setAt(
+      placeNear(
+        { top: seat.top, bottom: seat.bottom, left: seat.right - size.width },
+        { width: size.width, height: size.height },
+        roomOf(null),
+      ),
+    );
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (box.current?.contains(target) || pop.current?.contains(target)) return;
+      setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation();
       setOpen(false);
     };
+    // 送ると札から離れる。掴み直せるように閉じる。
+    const move = () => setOpen(false);
     window.addEventListener("mousedown", away);
     window.addEventListener("keydown", esc, true);
+    window.addEventListener("scroll", move, true);
+    window.addEventListener("resize", move);
     return () => {
       window.removeEventListener("mousedown", away);
       window.removeEventListener("keydown", esc, true);
+      window.removeEventListener("scroll", move, true);
+      window.removeEventListener("resize", move);
     };
   }, [open]);
 
@@ -101,8 +134,14 @@ function FilterChip({
         {here.name}
         <b>{counts[now]}</b>
       </button>
-      {open && (
-        <div className="mg-rail-menu">
+      {open &&
+        createPortal(
+        <div
+          ref={pop}
+          className="mg-rail-menu"
+          // 測る前の 1 枚は見せない（置き場所が決まってから出す）。
+          style={at ? { top: at.top, left: at.left } : { top: 0, left: 0, visibility: "hidden" }}
+        >
           {RAIL_FILTERS.map((one) => (
             <button
               key={one.id}
@@ -124,8 +163,9 @@ function FilterChip({
               <b>{counts[one.id]}</b>
             </button>
           ))}
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </div>
   );
 }
