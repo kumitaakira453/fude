@@ -454,7 +454,18 @@ export function useWorkspace() {
         store.set(A.contentCacheAtom, content);
         store.set(A.mtimeCacheAtom, mtime);
       } catch {
-        /* noop */
+        // 消えた・移したファイルは本文が入らないので、そのままだと面が読み込み中で
+        // 止まる。無いと分かったらタブを外して知らせる。1 枚だけで開いているものは
+        // openDoc が畳んで知らせるので、ここでは触らない。
+        if (store.get(A.soleAtom) === path || (await pathExists(path))) return;
+        let dropped = false;
+        remapLeafPaths(store, (p) => {
+          if (p !== path) return p;
+          dropped = true;
+          return null;
+        });
+        // タブに無い所から読んだとき（レビュー画面など）は、読むたびに出さない。
+        if (dropped) notify(store, "そのファイルはもうありません");
       }
     },
     [store],

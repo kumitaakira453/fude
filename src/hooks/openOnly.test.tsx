@@ -23,6 +23,12 @@ vi.mock("../lib/idb", async (real) => ({
   ...(await real<typeof import("../lib/idb")>()),
   registerFolder: async () => [],
 }));
+// 開くファイルはあるものとして扱う（無いファイルはタブから外れる）。
+vi.mock("../lib/fsAccess", async (real) => ({
+  ...(await real<typeof import("../lib/fsAccess")>()),
+  readFile: async () => ({ text: "", lastModified: 0 }),
+  pathExists: async () => true,
+}));
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
