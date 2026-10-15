@@ -196,7 +196,14 @@ export const jsonViewAtom = atomWithStorage<"tree" | "source">("mdglow:jsonview"
 // フォルダに付けたアイコン（Material Symbols の名前）。鍵はフォルダの絶対パス。
 // 覚えるのはアプリの中だけで、フォルダには何も書かない。fude で動かしたときは
 // useWorkspace が付け替える。
-export const folderIconsAtom = atomWithStorage<Record<string, string>>("mdglow:foldericons", {});
+// 名前の変更・移動・削除で画面を介さず前の値を元に書き換えるので、作った時点で
+// 読んでおく（読む前の空の値を元に書くと、付けたアイコンが全部消える）。
+export const folderIconsAtom = atomWithStorage<Record<string, string>>(
+  "mdglow:foldericons",
+  {},
+  undefined,
+  { getOnInit: true },
+);
 // CSV の表で、つまみで変えた列の幅（px）。ファイルの道筋ごと・列の番号ごとに
 // 覚える。見た目だけの設定で、ファイルには書かない。
 export const csvWidthsAtom = atomWithStorage<Record<string, Record<number, number>>>(
@@ -324,9 +331,12 @@ export interface ClosedTab {
 export const closedTabsAtom = atom<ClosedTab[]>([]);
 
 // ---- ファイルツリー開閉状態（フォルダ ID ごとに永続化・ウィンドウごと） ----
+// 前の値に書き足す形で画面の外からも書くので、作った時点で読んでおく。
 export const expandedByFolderAtom = atomWithStorage<Record<string, string[]>>(
   windowScopedKey("mdglow:expanded"),
   {},
+  undefined,
+  { getOnInit: true },
 );
 
 // ---- ツリーで対象を表示（パンくずクリック等） ----
