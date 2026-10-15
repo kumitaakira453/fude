@@ -35,6 +35,16 @@ export function revealInFinder(abs: string): void {
   });
 }
 
+// 既定のブラウザで開く（.html を別のアプリに結び付けていてもブラウザで開く）。
+export function openInBrowser(abs: string): void {
+  void invoke("open_in_browser", { path: abs }).catch((e) => {
+    void message(`ブラウザで開けませんでした。\n${String(e)}`, {
+      title: "fude",
+      kind: "error",
+    });
+  });
+}
+
 // 指定アプリで開く。失敗したら理由を出す（黙って何も起きないのを避ける）。
 export function openWith(abs: string, app: ExternalApp, isDir: boolean): void {
   const done =

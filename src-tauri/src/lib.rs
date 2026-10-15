@@ -229,6 +229,62 @@ async fn open_in_app(app: String, path: String) -> Result<(), String> {
     }
 }
 
+// 既定のブラウザ（https を開くアプリ）の場所。素の open は「.html の既定のアプリ」で
+// 開くので、.html をエディタに結び付けているとブラウザにならない。
+#[cfg(target_os = "macos")]
+fn default_browser() -> Option<String> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    use std::ffi::{CStr, CString};
+    unsafe {
+        let text = CString::new("https://example.com").ok()?;
+        let s: *mut AnyObject = msg_send![class!(NSString), stringWithUTF8String: text.as_ptr()];
+        let url: *mut AnyObject = msg_send![class!(NSURL), URLWithString: s];
+        if url.is_null() {
+            return None;
+        }
+        let ws: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let app: *mut AnyObject = msg_send![ws, URLForApplicationToOpenURL: url];
+        if app.is_null() {
+            return None;
+        }
+        let path: *mut AnyObject = msg_send![app, path];
+        if path.is_null() {
+            return None;
+        }
+        let raw: *const std::os::raw::c_char = msg_send![path, UTF8String];
+        if raw.is_null() {
+            return None;
+        }
+        Some(CStr::from_ptr(raw).to_string_lossy().into_owned())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn default_browser() -> Option<String> {
+    None
+}
+
+#[tauri::command]
+async fn open_in_browser(path: String) -> Result<(), String> {
+    let status = tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new("/usr/bin/open");
+        if let Some(app) = default_browser() {
+            cmd.arg("-a").arg(app);
+        }
+        cmd.arg("--").arg(&path).status()
+    })
+    .await
+    .map_err(|e| format!("起動処理に失敗しました: {e}"))?
+    .map_err(|e| format!("open コマンドを実行できませんでした: {e}"))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err("ブラウザを起動できませんでした。".into())
+    }
+}
+
 // ログインシェル。fude はアプリとして起動しているので、PATH や nvim の設定は
 // ログインシェルを通さないと読まれない。
 fn login_shell() -> String {
@@ -580,6 +636,7 @@ pub fn run() {
         .manage(watch::Watches::default())
         .invoke_handler(tauri::generate_handler![
             open_in_app,
+            open_in_browser,
             open_in_terminal,
             installed_apps,
             folder_mtimes,
@@ -668,6 +725,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 既定のブラウザはアプリの場所（…/X.app）で返る。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn default_browser_is_an_app() {
+        let app = default_browser().expect("既定のブラウザが取れない");
+        assert!(app.ends_with(".app"), "{app}");
+    }
 
     fn sieve(only: &[&str], skip: &[&str]) -> Sieve {
         Sieve {

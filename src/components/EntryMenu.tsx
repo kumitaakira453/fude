@@ -6,10 +6,12 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import {
   availableApps,
   type ExternalApp,
+  openInBrowser,
   openWith,
   revealInFinder,
 } from "../lib/external";
 import type { TreeNode } from "../lib/fsAccess";
+import { kindOf } from "../lib/kind";
 import { toneColor, type Tone } from "../lib/tone";
 import { openToSide } from "../lib/ui";
 import { Icon } from "./Icon";
@@ -119,6 +121,16 @@ export function EntryMenu({
       tone: "open",
       action: () => revealInFinder(absPath),
     },
+    ...(node.kind === "file" && kindOf(node.name) === "html"
+      ? [
+          {
+            icon: "language",
+            label: "ブラウザで開く",
+            tone: "open",
+            action: () => openInBrowser(absPath),
+          } satisfies MI,
+        ]
+      : []),
     ...editors.map((a) => ({
       icon: a.icon,
       label: a.label,
