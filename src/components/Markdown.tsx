@@ -1,6 +1,7 @@
 import {
   Children,
   cloneElement,
+  createContext,
   isValidElement,
   memo,
   useContext,
@@ -211,10 +212,15 @@ function TaskCheck({
   );
 }
 
+// 表を置くだけにする合図。押せず横にも送らない所（⌘P の本文の頭）では、
+// 溢れの見張りも 1 列目の固定も「大きく開く」も要らない。
+export const stillTablesContext = createContext(false);
+
 // 表の入れ物。幅の長い表は、包みから溢れたときだけ「大きく開く」を出す。
 // 収まっている表に釦を出しても押す理由が無い。
 function TableWrap({ children }: { children: ReactNode }) {
-  const on = useAtomValue(wideTableAtom);
+  const still = useContext(stillTablesContext);
+  const on = useAtomValue(wideTableAtom) && !still;
   const wrap = useRef<HTMLDivElement>(null);
   const [over, setOver] = useState(false);
   const [open, setOpen] = useState(false);

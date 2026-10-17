@@ -7,9 +7,10 @@ import { PHASE_LABEL } from "../lib/claude";
 import { folderDisplayName, rootName } from "../lib/idb";
 import { ago } from "../lib/when";
 import { currentWindowLabel } from "../lib/windows";
-import { colorVar, liveWorkspaces, rootsSummary, type Workspace } from "../lib/workspaces";
+import { colorVar, liveWorkspaces, type Workspace } from "../lib/workspaces";
 import {
   foldersAtom,
+  layoutAtom,
   workspaceAtom,
   workspaceMenuAtom,
   workspacesAtom,
@@ -20,7 +21,9 @@ import { refreshWorkspaces } from "../state/workspace";
 import { barAtom, visitedAtom } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 import { Marked } from "./Marked";
+import { FileNames, PathList, PathText, PickDetail, PickPanel } from "./PickPanel";
 import { keyedIn, movedIn } from "../lib/pointer";
+import { absoluteLayout, tabsOf } from "../lib/ui";
 
 // ワークスペースの一覧（⌘J・札の並びの ▾）。札の列に出していないものや、まだ
 // ワークスペースになっていないフォルダもここから開ける。役目は探して開くこと
@@ -45,6 +48,7 @@ export function WorkspaceSwitcher() {
   const current = useAtomValue(workspaceAtom);
   const folders = useAtomValue(foldersAtom);
   const phaseFor = useAtomValue(phaseForAtom);
+  const layout = useAtomValue(layoutAtom);
   const openMenu = useSetAtom(workspaceMenuAtom);
   const store = useStore();
   const { openWorkspace, openFolder, openFolderInNewWindow } = useWorkspace();
@@ -158,9 +162,62 @@ export function WorkspaceSwitcher() {
     else void openFolder(folder.path);
   };
 
+  // 右の中身。今選んでいる行のもの。
+  const detail = (() => {
+    const row = rows[active];
+    if (row) {
+      const { ws } = row;
+      const here = current?.id === ws.id;
+      const phase = phaseFor(ws);
+      // 今いるものは今のタブ、ほかは控えのタブ（相対で控えた頃のものは根から読む）。
+      const tabs = here
+        ? tabsOf(layout)
+        : ws.layout
+          ? tabsOf(ws.roots[0] ? absoluteLayout(ws.layout, ws.roots[0]) : ws.layout)
+          : [];
+      return (
+        <PickDetail
+          color={colorVar(ws.color)}
+          title={ws.name}
+          facts={[
+            here ? <b>今</b> : ws.lastOpened > 0 ? <b>{ago(ws.lastOpened, now)}</b> : null,
+            tabs.length > 0 ? (
+              <>
+                <b>{tabs.length}</b> ファイル
+              </>
+            ) : null,
+            phase && PHASE_LABEL[phase] ? (
+              <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>
+            ) : null,
+            here ? "このウィンドウ" : elsewhere.has(ws.id) ? "別のウィンドウ" : null,
+          ]}
+          sections={[
+            ["フォルダ", ws.roots.length > 0 ? <PathList paths={ws.roots} /> : null],
+            ["開いているファイル", tabs.length > 0 ? <FileNames names={tabs.map(baseName)} /> : null],
+          ]}
+        />
+      );
+    }
+    const folder = loose[active - rows.length];
+    if (folder) {
+      return (
+        <PickDetail
+          icon={<Icon name="folder" size={16} className="text-[var(--mg-muted)]" />}
+          title={folderDisplayName(folder)}
+          facts={[<b>{ago(folder.lastOpened, now)}</b>]}
+          sections={[["フォルダ", <PathText path={folder.path} />]]}
+        />
+      );
+    }
+    return <span />;
+  })();
+
   return (
-    <div className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[52px]" onClick={close}>
-      <div className="mg-pop mg-pal" onClick={(e) => e.stopPropagation()}>
+    <PickPanel
+      onClose={close}
+      listRef={listRef}
+      detail={detail}
+      head={
         <div className="mg-pal-in">
           <Icon name="search" size={15} stroke={1.7} className="text-[var(--mg-muted)]" />
           <input
@@ -192,8 +249,9 @@ export function WorkspaceSwitcher() {
           />
           <kbd className="mg-key">esc</kbd>
         </div>
-
-        <div ref={listRef} className="mg-pick-list max-h-[56vh] overflow-y-auto">
+      }
+      list={
+        <>
           {total === 0 && (
             <div className="px-3 py-6 text-center text-[13px] text-[var(--mg-muted)]">
               {list.length === 0 && folders.length === 0
@@ -202,7 +260,7 @@ export function WorkspaceSwitcher() {
             </div>
           )}
           {rows.length > 0 && <div className="mg-pal-group">ワークスペース</div>}
-          {rows.map(({ ws, names }, i) => {
+          {rows.map(({ ws }, i) => {
             const here = current?.id === ws.id;
             const other = elsewhere.get(ws.id);
             const phase = phaseFor(ws);
@@ -232,11 +290,6 @@ export function WorkspaceSwitcher() {
                 )}
                 {here && <span className="mg-pal-word">このウィンドウ</span>}
                 {!here && other && <span className="mg-pal-word">別のウィンドウ</span>}
-                <span className="mg-pal-word mg-pal-place" title={ws.roots.join("\n")}>
-                  <bdi>
-                    <Marked text={rootsSummary(names)} query={query} />
-                  </bdi>
-                </span>
                 <span className="mg-pal-keys mg-pal-word">
                   {!here && ws.lastOpened > 0 ? ago(ws.lastOpened, now) : ""}
                 </span>
@@ -268,8 +321,9 @@ export function WorkspaceSwitcher() {
               </div>
             );
           })}
-        </div>
-
+        </>
+      }
+      foot={
         <div className="mg-pal-foot">
           <span className="mg-pal-foot-note" title="右クリックで名前・色・フォルダの変更、削除">
             右クリックで名前・色・フォルダの変更、削除
@@ -281,7 +335,9 @@ export function WorkspaceSwitcher() {
             <kbd className="mg-key">⌘⏎</kbd> 新しいウィンドウ
           </span>
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
+
+const baseName = (path: string): string => path.split("/").pop() ?? path;

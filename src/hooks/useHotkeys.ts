@@ -1,6 +1,6 @@
 import { useStore } from "jotai";
 import { useEffect, useRef } from "react";
-import { closeAll, closeOthers, closeTab, inEditable, reopenTab, splitPane } from "../lib/ui";
+import { closeAll, closeOthers, closeTab, inEditable, reopenTab, splitPane, stepTab } from "../lib/ui";
 import { RAIL_ROOM } from "../lib/sidebar";
 import { delimOf } from "../lib/csv";
 import { isJsonPath } from "../lib/jsonTree";
@@ -99,6 +99,16 @@ export function useHotkeys() {
         // ⌘J: ワークスペースの一覧。名前で絞り込んで、Enter で移る。
         e.preventDefault();
         store.set(A.workspaceSwitcherOpenAtom, !store.get(A.workspaceSwitcherOpenAtom));
+      } else if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.code === "KeyL") {
+        // ⌘L: 開いているファイルの一覧。⌘ だけで受ける（⌃L は文中の操作に残す）。
+        e.preventDefault();
+        store.set(A.openFilesOpenAtom, !store.get(A.openFilesOpenAtom));
+      } else if (e.metaKey && e.shiftKey && !e.altKey && (e.key === "}" || e.key === "{")) {
+        // ⌘⇧] / ⌘⇧[: 今のペインの次・前のタブへ（ブラウザと同じ）。⇧ を足すと
+        // 字は } { になる（US・JIS とも）。字で見るのは、JIS では [ ] の位置の
+        // コードが US と食い違うため。
+        e.preventDefault();
+        stepTab(store, e.key === "}" ? 1 : -1);
       } else if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.code === "KeyE") {
         // ⌃E は文中で行末へ移るキーなので、⌘ だけで受ける。
         // ⌘E: 閲覧と編集を切り替える。書いている最中でも効かせる（編集から出る口）。

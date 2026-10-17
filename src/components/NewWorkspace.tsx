@@ -10,6 +10,7 @@ import {
   claudeLinkAtom,
   claudeSessionsAtom,
   foldersAtom,
+  layoutAtom,
   newWorkspaceAtom,
   workspaceAtom,
   workspacesAtom,
@@ -17,6 +18,8 @@ import {
 import { FolderChooser } from "./FolderChooser";
 import { Icon } from "./Icon";
 import { Marked } from "./Marked";
+import { FileNames, PathList, PathText, PickDetail, PickPanel } from "./PickPanel";
+import { tabsOf } from "../lib/ui";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { keyedIn, movedIn } from "../lib/pointer";
 
@@ -37,6 +40,7 @@ export function NewWorkspace() {
   const folders = useAtomValue(foldersAtom);
   const claudeOn = useAtomValue(claudeLinkAtom);
   const claude = useAtomValue(claudeSessionsAtom);
+  const layout = useAtomValue(layoutAtom);
   const ops = useWorkspaceOps();
   const { openWorkspace } = useWorkspace();
   const ime = useImeSafeEnter();
@@ -140,15 +144,16 @@ export function NewWorkspace() {
     else void ops.createFromSession(row.s);
   };
 
-  return (
-    <div className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[52px]" onClick={close}>
-      <div
-        role="dialog"
-        aria-label="新しいワークスペース"
-        className="mg-pop mg-pal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {choosing ? (
+  // フォルダを選ぶ段は、その段だけの枠で出す（右の中身は持たない）。
+  if (choosing) {
+    return (
+      <div className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[52px]" onClick={close}>
+        <div
+          role="dialog"
+          aria-label="新しいワークスペース"
+          className="mg-pop mg-pal"
+          onClick={(e) => e.stopPropagation()}
+        >
           <FolderChooser
             mode="create"
             // 今のフォルダを最初から選んでおかない。新しく作るときは、たいてい別の組み合わせにする。
@@ -161,102 +166,176 @@ export function NewWorkspace() {
               void ops.createWorkspace({ roots, name, newWindow });
             }}
           />
-        ) : (
-          <>
-            <div className="mg-pal-in">
-              <Icon name="add" size={15} stroke={1.7} className="text-[var(--mg-muted)]" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyUp={ime.onKeyUp}
-                onCompositionStart={ime.onCompositionStart}
-                onCompositionEnd={ime.onCompositionEnd}
-                onKeyDown={(e) => {
-                  if (ime.isComposing(e)) return;
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    setActive((a) => Math.min(a + 1, rows.length - 1));
-                  } else if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    setActive((a) => Math.max(a - 1, 0));
-                  } else if (e.key === "Enter") {
-                    e.preventDefault();
-                    choose(active);
-                  } else if (e.key === "Escape") {
-                    e.stopPropagation();
-                    close();
-                  }
-                }}
-                placeholder={claudeOn ? "新しいワークスペース（セッション名で絞り込み）" : "新しいワークスペース"}
-              />
-              <kbd className="mg-key">esc</kbd>
-            </div>
-            <div ref={listRef} className="mg-pick-list max-h-[60vh] overflow-y-auto">
-              {rows.map((row, i) => {
-                const head =
-                  i === 0 && row.kind === "make"
-                    ? "作り方"
-                    : row.kind === "session" && (i === 0 || rows[i - 1].kind !== "session")
-                      ? "Claude のセッションから作成"
-                      : null;
-                return (
-                  <div key={row.id}>
-                    {head && (
-                      <div className="mg-pal-group">
-                        {head}
-                        {row.kind === "session" && <span className="mg-set-beta ml-1.5">Beta</span>}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      data-idx={i}
-                      data-on={i === active || undefined}
-                      onMouseMove={(e) => movedIn(e) && setActive(i)}
-                      onClick={() => choose(i)}
-                      data-tip={
-                        row.kind === "session"
-                          ? row.ws
-                            ? `ワークスペース「${row.ws.name}」を開く`
-                            : "このセッションからワークスペースを作成"
-                          : undefined
-                      }
-                      className="mg-pick-row mg-pal-row"
-                    >
-                      {row.kind === "make" ? (
-                        <>
-                          <Icon name={row.icon} size={14} className="text-[var(--mg-muted)]" />
-                          <span className="mg-pal-name">{row.label}</span>
-                          <span className="mg-pal-word">{row.note}</span>
-                        </>
-                      ) : (
-                        <SessionRow s={row.s} ws={row.ws} now={now} query={query} />
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-              {claudeOn && !claude && <p className="mg-pal-note">セッションを読み込んでいます…</p>}
-              {claudeOn && claude?.error && (
-                <p className="mg-pal-note" data-tip={claude.error}>
-                  Claude のセッションを読み込めません（設定の「Claude」で原因を確認できます）
-                </p>
-              )}
-              {rows.length === 0 && <p className="mg-pal-note">当てはまるものがありません</p>}
-            </div>
-            <div className="mg-pal-foot">
-              <span>
-                <kbd className="mg-key">⏎</kbd> 作る・開く
-              </span>
-              <span>
-                <kbd className="mg-key">↑</kbd>
-                <kbd className="mg-key">↓</kbd> 選ぶ
-              </span>
-            </div>
-          </>
-        )}
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  // 右の中身。今選んでいる行のもの。
+  const picked = rows[active];
+  const detail = !picked ? (
+    <span />
+  ) : picked.kind === "session" ? (
+    <SessionDetail s={picked.s} ws={picked.ws} now={now} />
+  ) : (
+    <PickDetail
+      icon={<Icon name={picked.icon} size={16} className="text-[var(--mg-muted)]" />}
+      title={picked.label}
+      sections={[
+        [
+          "フォルダ",
+          picked.id !== "pick" && current && current.roots.length > 0 ? (
+            <PathList paths={current.roots} />
+          ) : null,
+        ],
+        [
+          "引き継ぐタブ",
+          picked.id === "copy" && tabsOf(layout).length > 0 ? (
+            <FileNames names={tabsOf(layout).map((p) => p.split("/").pop() ?? p)} />
+          ) : null,
+        ],
+      ]}
+    />
+  );
+
+  return (
+    <PickPanel
+      label="新しいワークスペース"
+      onClose={close}
+      listRef={listRef}
+      detail={detail}
+      head={
+        <div className="mg-pal-in">
+          <Icon name="add" size={15} stroke={1.7} className="text-[var(--mg-muted)]" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyUp={ime.onKeyUp}
+            onCompositionStart={ime.onCompositionStart}
+            onCompositionEnd={ime.onCompositionEnd}
+            onKeyDown={(e) => {
+              if (ime.isComposing(e)) return;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive((a) => Math.min(a + 1, rows.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((a) => Math.max(a - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                choose(active);
+              } else if (e.key === "Escape") {
+                e.stopPropagation();
+                close();
+              }
+            }}
+            placeholder={claudeOn ? "新しいワークスペース（セッション名で絞り込み）" : "新しいワークスペース"}
+          />
+          <kbd className="mg-key">esc</kbd>
+        </div>
+      }
+      list={
+        <>
+          {rows.map((row, i) => {
+            const head =
+              i === 0 && row.kind === "make"
+                ? "作り方"
+                : row.kind === "session" && (i === 0 || rows[i - 1].kind !== "session")
+                  ? "Claude のセッションから作成"
+                  : null;
+            return (
+              <div key={row.id}>
+                {head && (
+                  <div className="mg-pal-group">
+                    {head}
+                    {row.kind === "session" && <span className="mg-set-beta ml-1.5">Beta</span>}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  data-idx={i}
+                  data-on={i === active || undefined}
+                  onMouseMove={(e) => movedIn(e) && setActive(i)}
+                  onClick={() => choose(i)}
+                  data-tip={
+                    row.kind === "session"
+                      ? row.ws
+                        ? `ワークスペース「${row.ws.name}」を開く`
+                        : "このセッションからワークスペースを作成"
+                      : undefined
+                  }
+                  className="mg-pick-row mg-pal-row"
+                >
+                  {row.kind === "make" ? (
+                    <>
+                      <Icon name={row.icon} size={14} className="text-[var(--mg-muted)]" />
+                      <span className="mg-pal-name">{row.label}</span>
+                      <span className="mg-pal-word">{row.note}</span>
+                    </>
+                  ) : (
+                    <SessionRow s={row.s} ws={row.ws} now={now} query={query} />
+                  )}
+                </button>
+              </div>
+            );
+          })}
+          {claudeOn && !claude && <p className="mg-pal-note">セッションを読み込んでいます…</p>}
+          {claudeOn && claude?.error && (
+            <p className="mg-pal-note" data-tip={claude.error}>
+              Claude のセッションを読み込めません（設定の「Claude」で原因を確認できます）
+            </p>
+          )}
+          {rows.length === 0 && <p className="mg-pal-note">当てはまるものがありません</p>}
+        </>
+      }
+      foot={
+        <div className="mg-pal-foot">
+          <span>
+            <kbd className="mg-key">⏎</kbd> 作る・開く
+          </span>
+          <span>
+            <kbd className="mg-key">↑</kbd>
+            <kbd className="mg-key">↓</kbd> 選ぶ
+          </span>
+        </div>
+      }
+    />
+  );
+}
+
+// セッションの中身。書いたファイルの数は、ワークスペースと結び付いているときだけ
+// 手元にある（結び付いていないものは記録を読み直さないと分からない）。
+function SessionDetail({
+  s,
+  ws,
+  now,
+}: {
+  s: ClaudeSession;
+  ws: Workspace | undefined;
+  now: number;
+}) {
+  const phase = phaseOf(s, { readable: true, transcriptGone: false });
+  return (
+    <PickDetail
+      icon={<Icon name="claude" size={14} stroke={1.8} className="text-[var(--mg-muted)]" />}
+      title={s.name || s.sessionId.slice(0, 8)}
+      facts={[
+        PHASE_LABEL[phase] ? (
+          <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>
+        ) : null,
+        s.startedAt ? <b>{ago(s.startedAt, now)}</b> : null,
+        ws?.claude?.wrote ? (
+          <>
+            書いたファイル <b>{ws.claude.wrote.length}</b> 件
+          </>
+        ) : null,
+      ]}
+      sections={[
+        ["場所", s.cwd ? <PathText path={s.cwd} /> : null],
+        ["ワークスペース", ws ? ws.name : "まだ無い"],
+      ]}
+    />
   );
 }
 

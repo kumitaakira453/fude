@@ -1232,14 +1232,12 @@ button.mg-task-check:hover {
   flex: none;
   border-top: 1px solid var(--mg-line);
 }
+/* 頭の段は帯として地を塗り、上のファイルの木とも下の一覧とも分ける（行と頭が
+   同じ地・同じ高さで並ぶと、どこからが中身か読めない）。周りの沈んだ地に字の色を
+   少し混ぜるので、明るいテーマでは一段暗く、暗いテーマでは一段明るくなる。 */
 .mg-sess > .mg-sess-head {
   padding: 0 8px;
-}
-/* 一覧を開いているときは、頭の段の下に線を引いて中身と分ける（行と頭が同じ地・
-   同じ高さで並ぶので、線が無いとどこからが中身か読めない）。周りの沈んだ地でも
-   見えるよう、欄の内側の線より一段濃い縁の色にする。 */
-.mg-sess:has(> .overflow-y-auto) > .mg-sess-head {
-  border-bottom: 1px solid var(--mg-border);
+  background: color-mix(in srgb, var(--mg-chrome) 95%, var(--mg-fg));
 }
 .mg-sess > .overflow-y-auto {
   padding: 4px 8px 8px;
@@ -1274,6 +1272,16 @@ button.mg-task-check:hover {
 }
 button.mg-sess-row:hover {
   background: var(--mg-hover);
+}
+/* 書いた後に移した・消したファイル。並びには残すが、押せないと分かる形にする。 */
+.mg-sess-row.is-gone,
+button.mg-sess-row.is-gone:hover {
+  background: transparent;
+  color: var(--mg-muted);
+  cursor: default;
+}
+.mg-sess-row.is-gone .mg-sess-name {
+  text-decoration: line-through;
 }
 .mg-sess-name {
   min-width: 0;
@@ -5315,6 +5323,7 @@ svg[id^="mmd-"] foreignObject div {
 
 /* 本文。指摘の箇所だけ地色を敷き、上端に札を出す。 */
 .mg-doc {
+  position: relative;
   padding-top: 0.5rem;
 }
 /* 指摘を選んだときに寄せる位置。真上に貼り付くと前の文脈が見えないので
@@ -5473,9 +5482,9 @@ svg[id^="mmd-"] foreignObject div {
 }
 
 /* 選ばれていた文字列そのものへの印。表のように大きなブロックでは、
-   ブロック全体を塗ってもどのセルの話か分からない。 */
-::highlight(mg-review-selection) {
-  background-color: color-mix(in srgb, var(--mg-accent) 34%, transparent);
+   ブロック全体を塗ってもどのセルの話か分からない。箱は .mg-sel と同じ作り。 */
+.mg-sel-box.mg-review-mark {
+  background: color-mix(in srgb, var(--mg-accent) 34%, transparent);
 }
 
 /* コメント時点と今の組。書き換わった箇所だけをここで並べる。
@@ -9464,6 +9473,288 @@ html[data-hints] .mg-seg {
   padding: 8px 12px;
   color: var(--mg-muted);
   font-size: 12px;
+}
+
+/* 一覧と中身を左右に並べる一覧（⌘J・札の ＋・⌘L）。画面の上下中央に出す。左は 1 行 40px、右に選んで
+   いる行の中身。狭い窓では右を畳む。 */
+.mg-pal.is-wide {
+  width: 960px;
+}
+.mg-pal.is-wide .mg-pal-in {
+  height: 48px;
+  padding: 0 16px;
+}
+.mg-pal.is-wide .mg-pal-in > input {
+  font-size: 15px;
+}
+.mg-pal-split {
+  display: grid;
+  min-height: min(420px, 60vh);
+  grid-template-columns: minmax(0, 1fr) 400px;
+}
+.mg-pal-split.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.mg-pal-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+.mg-pal.is-wide .mg-pal-group {
+  padding: 12px 10px 6px;
+  font-size: 11px;
+}
+.mg-pal.is-wide .mg-pal-row {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: var(--mg-r1);
+  font-size: 13.5px;
+}
+/* 名前と場所だけを縮める。札や「このウィンドウ」のような短い語は折らず、縮めない
+   （縮めると 1 字ずつ折れて 2 行になる）。場所は元の幅を 0 にして、名前が取った
+   残りの幅だけを使う。名前は行に入らないときだけ切れる（場所の中身は右の欄で
+   見られる）。 */
+.mg-pal.is-wide .mg-pal-name {
+  flex: 0 1 auto;
+  max-width: none;
+}
+.mg-pal.is-wide .mg-pal-place {
+  flex: 1 1 0;
+}
+.mg-pal.is-wide .mg-pal-word:not(.mg-pal-place) {
+  flex: none;
+}
+.mg-pal.is-wide .mg-pal-dot {
+  width: 9px;
+  height: 9px;
+}
+.mg-pal.is-wide .mg-pal-foot {
+  min-height: 40px;
+  padding: 0 16px;
+}
+.mg-pal-detail {
+  display: flex;
+  max-height: 60vh;
+  min-width: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: 12px;
+  border-left: 1px solid var(--mg-border);
+  font-size: var(--mg-t-s);
+}
+/* 見出しの段。色を持つもの（ワークスペース）は、上端にその色の帯を引き、
+   地をその色から下へ薄れさせる。 */
+.mg-pal-detail-head {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--mg-line);
+}
+/* 色の無い段（ファイル・操作・セッションなど）は 1 行に詰める。絵と名前を左、
+   要点を右端に小さく。名前が長いときは名前だけ折り返す。 */
+.mg-pal-detail-head:not(.is-tinted) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 18px;
+}
+.mg-pal-detail-head:not(.is-tinted) .mg-pal-detail-title {
+  font-size: var(--mg-t-m);
+}
+.mg-pal-detail-head:not(.is-tinted) .mg-pal-detail-facts {
+  justify-content: flex-end;
+  gap: 4px 10px;
+  padding-top: 1px;
+  font-size: var(--mg-t-xs);
+}
+/* ⌘P の右は、欄の線で区切らず、余白を空けて紙を浮かせる。紙の上に道筋、紙の
+   上端から中身が始まり、欄の残りの高さを全部使う。本文を読める幅にするため、
+   右の欄だけを広げる（左の一覧は同じ幅）。 */
+.mg-pal.is-wide.is-paper {
+  width: 1120px;
+}
+.mg-pal.is-wide.is-paper .mg-pal-split {
+  grid-template-columns: minmax(0, 1fr) 560px;
+}
+.mg-pal-paper-path {
+  flex: none;
+  padding: 0 4px 10px;
+}
+.mg-pal-split.is-paper > .mg-pal-detail {
+  padding: 14px;
+  border-left: 0;
+}
+.mg-pal-paper {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 20px 22px 0;
+  border: 1px solid var(--mg-border);
+  border-radius: 10px;
+  background: var(--mg-bg);
+}
+.mg-pal-paper > .mg-pal-peek {
+  min-height: 0;
+  max-height: none;
+  flex: 1;
+}
+.mg-pal-paper-icon {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--mg-muted);
+}
+/* 見出し無しの中身は、欄の残りの高さを全部使う。 */
+.mg-pal-detail-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 14px 18px 0;
+}
+.mg-pal-detail-body > .mg-pal-peek {
+  min-height: 0;
+  max-height: none;
+  flex: 1;
+}
+.mg-pal-detail-head.is-tinted {
+  padding-top: 22px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mg-tint) 10%, var(--mg-pop)),
+    var(--mg-pop)
+  );
+}
+.mg-pal-detail-head.is-tinted::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--mg-tint);
+  content: "";
+}
+.mg-pal-detail-title {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--mg-fg);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.mg-pal-detail-title > :first-child:not(:last-child) {
+  flex: none;
+  margin-top: 0.2em;
+}
+.mg-pal-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--mg-muted);
+}
+.mg-pal-detail-facts b {
+  color: var(--mg-fg);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.mg-pal-detail-sec {
+  display: grid;
+  gap: 8px;
+  padding: 14px 18px 0;
+  color: var(--mg-fg-dim);
+}
+.mg-pal-detail-sec > h4 {
+  margin: 0;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.mg-pal-detail-paths {
+  display: grid;
+  gap: 4px;
+}
+.mg-pal-detail-path {
+  font-family: var(--mg-font-mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+.mg-pal-detail-path .is-up {
+  color: var(--mg-muted);
+}
+.mg-pal-detail-path .is-leaf {
+  color: var(--mg-fg);
+  font-weight: 600;
+}
+.mg-pal-detail-files {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mg-pal-detail-files > li {
+  display: flex;
+  height: 24px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.mg-pal-detail-fname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-pal-detail-files .is-more {
+  color: var(--mg-muted);
+}
+/* ファイルの本文の頭（⌘P）。読むときの見た目のまま小さく描き、欄の下で淡く消す。
+   中は押せない（リンクや印を押して一覧の外へ出ないように）。 */
+.mg-pal-peek {
+  max-height: 340px;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 85%, transparent);
+}
+/* 行番号は要らない。 */
+.mg-pal-peek .mg-source-no {
+  display: none;
+}
+.mg-pal-peek .mg-source code {
+  padding-left: 1rem;
+}
+/* 画像は欄に収め、下端の淡い消しを掛けない。 */
+.mg-pal-peek.is-img {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  mask-image: none;
+}
+.mg-pal-peek.is-img > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  zoom: 1;
+}
+/* 字の大きさではなく全体を縮める。コードの塊や表は字の大きさを px で持つので、
+   font-size で縮めると本文だけが小さくなって釣り合わない。 */
+.mg-pal-peek > * {
+  zoom: 0.8;
+}
+@media (max-width: 760px) {
+  .mg-pal-split,
+  .mg-pal.is-wide.is-paper .mg-pal-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mg-pal-detail {
+    display: none;
+  }
 }
 /* 選ぶ一覧の名前の欄（新しいワークスペース）。入力の行の下に 1 段。 */
 .mg-pick-name {

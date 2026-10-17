@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef } from "react";
 import { CommandPalette } from "./components/CommandPalette";
+import { OpenFiles } from "./components/OpenFiles";
 import { Settings } from "./components/Settings";
 import { Landing } from "./components/Landing";
 import { PaneGroup } from "./components/PaneGroup";
@@ -17,6 +18,7 @@ import { useAfterPaint } from "./hooks/useAfterPaint";
 import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useKeyHints } from "./hooks/useKeyHints";
+import { useRecentFiles } from "./hooks/useRecentFiles";
 import { watchStalls } from "./lib/measure";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useReviewLedger } from "./hooks/useReviewLedger";
@@ -83,6 +85,7 @@ export default function App() {
 
   useHotkeys();
   useKeyHints();
+  useRecentFiles();
   useEffect(watchStalls, []);
   useDragging();
   useWatcher();
@@ -296,6 +299,7 @@ export default function App() {
           </div>
           <StatusBar />
           <CommandPalette />
+          <OpenFiles />
         </div>
       )}
 

@@ -297,6 +297,34 @@ describe("探して開く：⌘⇧P", () => {
   });
 });
 
+describe("探して開く：右の中身", () => {
+  const detail = () => document.querySelector<HTMLElement>(".mg-pal-detail");
+  const input = () => document.querySelector<HTMLInputElement>(".mg-pal-in input")!;
+  const key = (k: string) =>
+    act(() => {
+      input().dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    });
+
+  it("選んでいるワークスペースのフォルダと開いているファイルを出し、↑↓ で替わる", async () => {
+    await show((s) => {
+      s.set(A.workspaceSwitcherOpenAtom, true);
+      s.set(A.layoutAtom, { kind: "leaf", id: "p1", tabs: ["/w/a/メモ.md"], active: 0 });
+    });
+    // 開いた時点では 2 番目（直前のもの）を選んでいる。
+    expect(detail()?.textContent).toContain("Slack 対応");
+    expect(detail()?.textContent).toContain("/w/b");
+    key("ArrowUp");
+    expect(detail()?.textContent).toContain("要件定義");
+    expect(detail()?.textContent).toContain("メモ.md");
+    expect(detail()?.textContent).toContain("このウィンドウ");
+  });
+
+  it("中身に押せるものを置かない（一覧の行と取り違えない）", async () => {
+    await show((s) => s.set(A.workspaceSwitcherOpenAtom, true));
+    expect(detail()?.querySelector("button, [data-idx]")).toBeNull();
+  });
+});
+
 describe("作る：＋", () => {
   it("作り方を並べ、今のフォルダで作るのは 1 回押すだけ", async () => {
     const { el } = await show();
@@ -334,6 +362,29 @@ describe("作る：＋", () => {
     act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
     act(() => button("結びつき済み").click());
     expect(calls.at(-1)).toEqual({ op: "open", arg: "b" });
+  });
+
+  it("指したセッションの中身を右に出す（場所・ワークスペースの有無）", async () => {
+    const { el } = await show((s) => {
+      s.set(A.claudeLinkAtom, true);
+      s.set(A.claudeSessionsAtom, {
+        sessions: [{ sessionId: "t", name: "[V]新しいセッション", kind: "background", cwd: "/w/t" }],
+        error: null,
+        gone: new Set<string>(),
+      });
+    });
+    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
+    // 作り方の 3 行の下にセッションが並ぶ。↓ で選んでいく。
+    const input = document.querySelector<HTMLInputElement>(".mg-pal-in input")!;
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      });
+    }
+    const detail = document.querySelector(".mg-pal-detail")!.textContent ?? "";
+    expect(detail).toContain("[V]新しいセッション");
+    expect(detail).toContain("/w/t");
+    expect(detail).toContain("まだ無い");
   });
 });
 

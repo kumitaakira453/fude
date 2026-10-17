@@ -126,6 +126,38 @@ describe("⌘⇧P：操作の一覧", () => {
   });
 });
 
+describe("⌘P の右の中身", () => {
+  it("ファイルの行を選ぶと、右の紙に本文の頭が出る（開いている本文はそのまま使う）", () => {
+    const store = rig();
+    store.set(A.contentCacheAtom, new Map([["/w/分割方針.md", "---\ntitle: x\n---\n# 方針\n\n左右に分ける。\n"]]));
+    key({ key: "p", code: "KeyP", metaKey: true });
+    const detail = document.querySelector(".mg-pal-detail")!;
+    // 紙の上に道筋を全部出す。
+    expect(detail.querySelector(".mg-pal-paper-path")?.textContent).toContain("分割方針.md");
+    const peek = detail.querySelector(".mg-pal-paper .mg-pal-peek")!;
+    expect(peek.querySelector("h1")?.textContent).toBe("方針");
+    // 先頭のメタ情報は出さない。
+    expect(peek.textContent).not.toContain("title");
+  });
+
+  it("本文の頭の表は置くだけ（溢れの印も「拡大」も付けない）", () => {
+    const store = rig();
+    store.set(A.contentCacheAtom, new Map([["/w/分割方針.md", "| a | b |\n| - | - |\n| 1 | 2 |\n"]]));
+    key({ key: "p", code: "KeyP", metaKey: true });
+    const peek = document.querySelector(".mg-pal-peek")!;
+    expect(peek.querySelector("table")).not.toBeNull();
+    expect(peek.querySelector(".mg-table-wrap.is-wide")).toBeNull();
+    expect(peek.querySelector(".mg-table-zoom")).toBeNull();
+  });
+
+  it("当てはまるものが無いときは、右の欄を出さない", () => {
+    rig();
+    key({ key: "p", code: "KeyP", metaKey: true });
+    type("見つからない名前");
+    expect(document.querySelector(".mg-pal-detail")).toBeNull();
+  });
+});
+
 describe("⌘E：閲覧と編集", () => {
   it("押すたびに切り替わる。⌃E（行末へ）は奪わない", () => {
     const store = rig();

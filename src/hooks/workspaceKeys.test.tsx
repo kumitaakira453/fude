@@ -194,6 +194,52 @@ describe("⌘T で作るメニュー", () => {
   });
 });
 
+describe("タブのキー", () => {
+  const tabs = (store: ReturnType<typeof rig>, active: number) => {
+    store.set(A.layoutAtom, { kind: "leaf", id: "p1", tabs: ["/w/a.md", "/w/b.md", "/w/c.md"], active });
+    store.set(A.activePaneIdAtom, "p1");
+  };
+  const at = (store: ReturnType<typeof rig>) => {
+    const layout = store.get(A.layoutAtom);
+    return layout.kind === "leaf" ? layout.active : -1;
+  };
+
+  it("⌘L で開いているファイルの一覧を開き、もう一度押すと閉じる", () => {
+    const store = rig();
+    key({ key: "l", code: "KeyL", metaKey: true });
+    expect(store.get(A.openFilesOpenAtom)).toBe(true);
+    key({ key: "l", code: "KeyL", metaKey: true });
+    expect(store.get(A.openFilesOpenAtom)).toBe(false);
+  });
+
+  it("⌃L では開かない（文中の操作に残す）", () => {
+    const store = rig();
+    key({ key: "l", code: "KeyL", ctrlKey: true });
+    expect(store.get(A.openFilesOpenAtom)).toBe(false);
+  });
+
+  it("⌘⇧] で次、⌘⇧[ で前のタブへ。端では反対の端へ回る", () => {
+    const store = rig();
+    tabs(store, 1);
+    key({ key: "}", code: "BracketRight", metaKey: true, shiftKey: true });
+    expect(at(store)).toBe(2);
+    key({ key: "}", code: "BracketRight", metaKey: true, shiftKey: true });
+    expect(at(store)).toBe(0);
+    key({ key: "{", code: "BracketLeft", metaKey: true, shiftKey: true });
+    expect(at(store)).toBe(2);
+  });
+
+  it("⌘[ ⌘] は今までどおり戻る・進む（タブは動かさない）", () => {
+    const store = rig();
+    tabs(store, 1);
+    const back = vi.spyOn(history, "back").mockImplementation(() => {});
+    key({ key: "[", code: "BracketLeft", metaKey: true });
+    expect(back).toHaveBeenCalled();
+    expect(at(store)).toBe(1);
+    back.mockRestore();
+  });
+});
+
 describe("一覧の並び", () => {
   it("今いるものが先頭、続いて最近開いた順、残りは札の並び順", () => {
     expect(cycleOrder(["a", "b", "c", "d"], ["b", "d", "a"], "b")).toEqual(["b", "d", "a", "c"]);

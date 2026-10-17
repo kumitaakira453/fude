@@ -3,6 +3,7 @@ import { useAtom, useAtomValue, useStore } from "jotai";
 import {
   activePaneIdAtom,
   activeFolderIdAtom,
+  contentCacheAtom,
   filesAtom,
   paletteModeAtom,
   paletteOpenAtom,
@@ -26,9 +27,17 @@ import { quickOpen } from "../lib/search";
 import { markInTree } from "../lib/ui";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
+import { langOf } from "../lib/code";
+import { imageUrl, peekImageUrl, readText } from "../lib/fsAccess";
+import { parseFrontmatter } from "../lib/frontmatter";
+import { kindOf } from "../lib/kind";
 import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
+import { LoadingBody } from "./LoadingBody";
+import { Markdown, stillTablesContext } from "./Markdown";
 import { Marked } from "./Marked";
+import { PathText, PickDetail, PickPanel } from "./PickPanel";
+import { SourceView } from "./SourceView";
 import { keyedIn, movedIn } from "../lib/pointer";
 
 // 触ってからの経過。細かい数字は要らないので、桁が分かる粒度で出す。
@@ -53,11 +62,112 @@ type Row =
   | { kind: "cmd"; cmd: Command; section: Section }
   | { kind: "file"; r: ReturnType<typeof quickOpen>[number]; section: Section };
 
-// ファイルの置き場。名前が同じファイルはどこにあるかで見分けるので、フォルダの
-// 道筋を全部出す（長いときは頭を省き、ファイルに近い側を残す）。
-function placeOf(label: string): string {
-  const parts = label.split("/");
-  return parts.slice(0, -1).join(" / ");
+
+// 右に出す本文の頭。Markdown は先頭の字数、それ以外は先頭の行数で切る。
+const PEEK_CHARS = 8000;
+const PEEK_LINES = 80;
+// 中身を出せる種類。
+const PEEKABLE = new Set(["markdown", "text", "image"]);
+// ↑↓ で送っている間は読まない。選んだまま止まったら読む。
+const PEEK_WAIT = 120;
+
+// 選んでいるファイルの中身。字のファイルは本文の頭、画像は絵そのもの。
+// PDF・HTML などは出さない。中は押せない。
+function FilePeek(props: { path: string; abs: string; kept: Map<string, string | null> }) {
+  const kind = kindOf(props.path);
+  if (kind === "image") return <ImagePeek abs={props.abs} />;
+  if (kind === "markdown" || kind === "text") return <TextPeek {...props} />;
+  return null;
+}
+
+// 画像。開いたときと同じ読み方（控えがあればすぐ）で出し、欄に収める。
+function ImagePeek({ abs }: { abs: string }) {
+  const [url, setUrl] = useState<string | null>(() => peekImageUrl(abs));
+  useEffect(() => {
+    const ready = peekImageUrl(abs);
+    setUrl(ready);
+    if (ready) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      void imageUrl(abs).then((u) => {
+        if (live) setUrl(u);
+      });
+    }, PEEK_WAIT);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [abs]);
+  if (!url) return null;
+  return (
+    <div className="mg-pal-peek is-img" aria-hidden>
+      <img src={url} alt="" />
+    </div>
+  );
+}
+
+// 本文の頭。開いている本文があればそれを、無ければ読む。
+// 読んだものは一覧を開いている間だけ控えておく（kept）。
+function TextPeek({
+  path,
+  abs,
+  kept,
+}: {
+  path: string;
+  abs: string;
+  kept: Map<string, string | null>;
+}) {
+  const cache = useAtomValue(contentCacheAtom);
+  const kind = kindOf(path);
+  const known = cache.get(path) ?? kept.get(path);
+  const [text, setText] = useState<string | null | undefined>(known);
+  useEffect(() => {
+    if (known !== undefined) {
+      setText(known);
+      return;
+    }
+    setText(undefined);
+    let live = true;
+    const timer = window.setTimeout(() => {
+      readText(abs)
+        .then((t) => t, () => null)
+        .then((t) => {
+          kept.set(path, t);
+          if (live) setText(t);
+        });
+    }, PEEK_WAIT);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [path, abs, known, kept]);
+
+  if (text === null) return null;
+  if (text === undefined) {
+    return (
+      <div className="mg-pal-peek">
+        <LoadingBody />
+      </div>
+    );
+  }
+  if (kind === "markdown") {
+    const { body } = parseFrontmatter(text);
+    return (
+      <div className="mg-pal-peek is-doc" aria-hidden>
+        <div className="mg-prose prose mg-editorial">
+          <stillTablesContext.Provider value={true}>
+            <Markdown body={body.slice(0, PEEK_CHARS)} editorial />
+          </stillTablesContext.Provider>
+        </div>
+      </div>
+    );
+  }
+  // ファイルを開いたときと同じく、言語で色を付ける。
+  return (
+    <div className="mg-pal-peek is-src" aria-hidden>
+      <SourceView code={text.split("\n").slice(0, PEEK_LINES).join("\n")} lang={langOf(path)} />
+    </div>
+  );
 }
 
 // 操作の一覧に混ぜて出すファイルの数。
@@ -74,6 +184,8 @@ export function CommandPalette() {
   const here = useAtomValue(workspaceAtom);
   const panes = useAtomValue(panesAtom);
   const store = useStore();
+  // 右に出すために読んだ本文。開くたびに空にする。
+  const peeked = useMemo(() => new Map<string, string | null>(), [open]);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -188,9 +300,44 @@ export function CommandPalette() {
     markInTree(store, row.r.node.path);
   };
 
+  // 右の中身。選んでいる行のもの。
+  const picked = rows[active];
+  // ファイルは見出しを置かず、紙に中身だけを出す（名前・置き場・時刻は左の行にある）。
+  // 中身を出せないもの（PDF・HTML など）は、紙の真ん中に絵だけを置く。
+  // 紙の上には道筋を全部出す（左の行の置き場は残りの幅に入るぶんしか出ない）。
+  const detail = !picked ? null : picked.kind === "file" ? (
+    <>
+      <div className="mg-pal-paper-path">
+        <PathText path={label(picked.r.node.path)} />
+      </div>
+      <div className="mg-pal-paper">
+        {PEEKABLE.has(kindOf(picked.r.node.path)) ? (
+          <FilePeek path={picked.r.node.path} abs={picked.r.node.abs} kept={peeked} />
+        ) : (
+          <div className="mg-pal-paper-icon">
+            <FileIcon name={picked.r.node.name} abs={picked.r.node.abs} size={40} />
+          </div>
+        )}
+      </div>
+    </>
+  ) : (
+    <PickDetail
+      title={picked.cmd.label}
+      facts={[
+        picked.cmd.group,
+        picked.cmd.keys ? <kbd className="mg-key">{picked.cmd.keys}</kbd> : null,
+      ]}
+    />
+  );
+
   return (
-    <div className="mg-scrim fixed inset-0 z-50 flex items-start justify-center pt-[52px]" onClick={() => setOpen(false)}>
-      <div className="mg-pop mg-pal" onClick={(e) => e.stopPropagation()}>
+    <PickPanel
+      label={mode === "files" ? "ファイルを探す" : "操作とファイルを探す"}
+      onClose={() => setOpen(false)}
+      listRef={listRef}
+      detail={detail}
+      paper={picked?.kind === "file"}
+      head={
         <div className="mg-pal-in">
           <Icon name="search" size={15} stroke={1.7} className="text-[var(--mg-muted)]" />
           <input
@@ -219,7 +366,9 @@ export function CommandPalette() {
           />
           <kbd className="mg-key">esc</kbd>
         </div>
-        <div ref={listRef} className="mg-pick-list max-h-[50vh] overflow-y-auto">
+      }
+      list={
+        <>
           {rows.map((row, i) => {
             const head =
               mode === "all" && (i === 0 || rows[i - 1].section !== row.section) ? row.section : null;
@@ -253,11 +402,6 @@ export function CommandPalette() {
                       <span className="mg-pal-name" title={label(row.r.node.path)}>
                         <Marked text={row.r.node.name} query={query} />
                       </span>
-                      <span className="mg-pal-word mg-pal-place">
-                        <bdi>
-                          <Marked text={placeOf(label(row.r.node.path))} query={query} />
-                        </bdi>
-                      </span>
                       {/* いつ触ったか。並び順の理由が読めるように添える。 */}
                       <span className="mg-pal-keys mg-pal-word">
                         {since(touched.get(row.r.node.path), now)}
@@ -273,7 +417,9 @@ export function CommandPalette() {
               {mode === "files" ? "ファイルが見つかりません" : "当てはまるものがありません"}
             </div>
           )}
-        </div>
+        </>
+      }
+      foot={
         <div className="mg-pal-foot">
           <span>
             <kbd className="mg-key">⏎</kbd> 開く・実行
@@ -292,7 +438,7 @@ export function CommandPalette() {
             </span>
           )}
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
