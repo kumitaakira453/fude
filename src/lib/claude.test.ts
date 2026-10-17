@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newlyWritten, phaseOf, type ClaudeSession } from "./claude";
+import { followMoves, newlyWritten, phaseOf, type ClaudeSession } from "./claude";
 
 const session = (over: Partial<ClaudeSession>): ClaudeSession => ({
   sessionId: "s",
@@ -41,5 +41,52 @@ describe("新しく書いたファイル", () => {
       { path: "/b.md", at: 5 },
     ];
     expect(newlyWritten(before, now).map((w) => w.path)).toEqual(["/b.md", "/c.md"]);
+  });
+});
+
+describe("fude の中で動かしたファイルへ寄せる", () => {
+  const wrote = [
+    { path: "/根/a/x.md", at: 3 },
+    { path: "/根/a/y.md", at: 2 },
+    { path: "/根/b/z.md", at: 1 },
+  ];
+
+  it("動かした記録が無ければそのまま", () => {
+    expect(followMoves(wrote, undefined)).toEqual(wrote);
+  });
+
+  it("ファイルの名前を変えたら、新しい名前を指す", () => {
+    expect(followMoves(wrote, [["/根/a/x.md", "/根/a/X2.md"]]).map((w) => w.path)).toEqual([
+      "/根/a/X2.md",
+      "/根/a/y.md",
+      "/根/b/z.md",
+    ]);
+  });
+
+  it("フォルダごと動かしたら、中のファイルも追う（名前が似ているだけのフォルダは追わない）", () => {
+    const more = [...wrote, { path: "/根/ab/w.md", at: 0 }];
+    expect(followMoves(more, [["/根/a", "/根/c/a"]]).map((w) => w.path)).toEqual([
+      "/根/c/a/x.md",
+      "/根/c/a/y.md",
+      "/根/b/z.md",
+      "/根/ab/w.md",
+    ]);
+  });
+
+  it("続けて動かしたら、最後の場所を指す", () => {
+    expect(
+      followMoves(wrote, [
+        ["/根/a/x.md", "/根/b/x.md"],
+        ["/根/b", "/根/c"],
+      ]).map((w) => w.path),
+    ).toEqual(["/根/c/x.md", "/根/a/y.md", "/根/c/z.md"]);
+  });
+
+  it("動かした先にも書いていたら 1 つにまとめ、新しい時刻を残す", () => {
+    const both = [
+      { path: "/根/new.md", at: 5 },
+      { path: "/根/old.md", at: 2 },
+    ];
+    expect(followMoves(both, [["/根/old.md", "/根/new.md"]])).toEqual([{ path: "/根/new.md", at: 5 }]);
   });
 });

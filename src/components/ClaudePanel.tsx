@@ -1,9 +1,10 @@
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
 import { PHASE_LABEL } from "../lib/claude";
+import { pathExists } from "../lib/fsAccess";
 import { ago } from "../lib/when";
 import { markInTree } from "../lib/ui";
 import { wroteTree, type WroteNode } from "../lib/wroteTree";
@@ -12,6 +13,7 @@ import { bindWindow } from "../lib/workspaces";
 import {
   activeFolderIdAtom,
   claudeFilesViewAtom,
+  filesAtom,
   layoutOwnerAtom,
   pathLabelAtom,
   workspaceAtom,
@@ -102,13 +104,39 @@ export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
     () => (view === "tree" ? wroteTree(wrote, label) : []),
     [view, wrote, label],
   );
+  // 書いた後に移した・消したファイル。並びには残し、淡く出して押せなくする
+  // （古い道筋のまま押すと、無いファイルを開くことになる）。確かめ直すのは、
+  // 書いたものが増えたときと、木が組み直されたとき（移動・削除を拾ったとき）。
+  const files = useAtomValue(filesAtom);
+  const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    const paths = view === "list" ? wrote.slice(0, SHOWN).map((w) => w.path) : wrote.map((w) => w.path);
+    void Promise.all(paths.map(async (p) => [p, await pathExists(p)] as const)).then((seen) => {
+      if (alive) setGone(new Set(seen.filter(([, there]) => !there).map(([p]) => p)));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [wrote, files, view]);
   if (!ws?.claude) return null;
 
   const show = (path: string) => {
+    if (gone.has(path)) return;
     openFile(path);
     markInTree(store, path);
     seenTab(store, path);
   };
+  // ファイルの行の見た目。無いものは淡く出し、押せないことと理由を添える。
+  // disabled にすると指したときの吹き出しが出ないので、押しても何もしない形で止める。
+  const rowFace = (path: string) =>
+    gone.has(path)
+      ? {
+          className: "mg-sess-row is-gone",
+          "aria-disabled": true,
+          "data-tip": "移動または削除されています",
+        }
+      : { className: "mg-sess-row", title: path };
   const toggle = (key: string) =>
     setShut((was) => {
       const next = new Set(was);
@@ -139,10 +167,9 @@ export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
       ) : (
         <button
           key={`f:${n.path}`}
-          title={n.path}
+          {...rowFace(n.path)}
           onClick={() => show(n.path)}
           style={{ paddingLeft: 18 + depth * 14 }}
-          className="mg-sess-row"
         >
           <span className="mg-sess-name">{n.name}</span>
           <span className="mg-sess-time">{ago(n.at, now)}</span>
@@ -185,9 +212,8 @@ export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
             wrote.slice(0, SHOWN).map((w) => (
               <button
                 key={w.path}
-                title={w.path}
+                {...rowFace(w.path)}
                 onClick={() => show(w.path)}
-                className="mg-sess-row"
                 style={{ paddingLeft: 18 }}
               >
                 <span className="mg-sess-name">

@@ -382,6 +382,29 @@ describe("ツリーで表示する合図", () => {
     expect(sent).toEqual(["/本/a.md"]);
   });
 
+  it("合図の時点でまだ描かれていない行も、描かれたら送る", async () => {
+    // ファイルを開くのと同時に合図が来ると、本文の重い描画に押されて、木の行が
+    // 描かれるまで何フレームもかかる。
+    show(null, [file("a.md")]);
+    ask("late.md");
+    await frame();
+    expect(sent).toEqual([]);
+    act(() => last!.set(treeAtom, [file("a.md"), file("late.md")]));
+    await frame();
+    expect(sent).toEqual(["/本/late.md"]);
+  });
+
+  it("待っている間に別の合図が来たら、新しい方だけ送る", async () => {
+    show(null, [file("a.md")]);
+    ask("late.md");
+    await frame();
+    ask("a.md");
+    await frame();
+    act(() => last!.set(treeAtom, [file("a.md"), file("late.md")]));
+    await frame();
+    expect(sent).toEqual(["/本/a.md"]);
+  });
+
   it("新しい合図なら、また送る", async () => {
     show(null, tree());
     ask("a.md");

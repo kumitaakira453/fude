@@ -20,6 +20,15 @@ export function upsertWorkspace(list: readonly Workspace[], ws: Workspace): Work
   );
 }
 
+// ワークスペースを差し替えてすぐ控える。今開いているものなら、開いている側も替える。
+export function putWorkspace(store: Store, ws: Workspace): void {
+  store.set(A.workspacesAtom, (list) => upsertWorkspace(list, ws));
+  if (store.get(A.workspaceAtom)?.id === ws.id) store.set(A.workspaceAtom, ws);
+  void saveWorkspace(ws).catch((e: unknown) => {
+    console.error("ワークスペースを控えられません", e);
+  });
+}
+
 export const sameList = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((x, i) => x === b[i]);
 

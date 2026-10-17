@@ -70,3 +70,21 @@ describe("名前の重なり", () => {
     expect(uniqueName("docs", ["docs", "docs 2"])).toBe("docs 3");
   });
 });
+
+describe("セッションの書いたファイルを追う記録", () => {
+  it("fude の中で動かした「元 → 先」を読み、組になっていないものは捨てる", () => {
+    const got = asWorkspace({
+      id: "a",
+      name: "a",
+      roots: ["/x"],
+      claude: {
+        sessionId: "s",
+        moved: [["/x/a.md", "/x/b.md"], ["/x/c.md"], ["/x/d", 1], "壊れた値", ["/x/e", "/x/f"]],
+      },
+    });
+    expect(got?.claude?.moved).toEqual([
+      ["/x/a.md", "/x/b.md"],
+      ["/x/e", "/x/f"],
+    ]);
+  });
+});

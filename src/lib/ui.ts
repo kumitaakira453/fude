@@ -100,7 +100,7 @@ function firstLeafId(node: LayoutNode): string {
   return node.kind === "leaf" ? node.id : firstLeafId(node.children[0]);
 }
 
-function findLeaf(node: LayoutNode, id: string): LeafNode | null {
+export function findLeaf(node: LayoutNode, id: string): LeafNode | null {
   if (node.kind === "leaf") return node.id === id ? node : null;
   for (const child of node.children) {
     const hit = findLeaf(child, id);
@@ -190,6 +190,15 @@ export function appendTab(store: Store, path: string): boolean {
 
 function collectTabs(node: LayoutNode): string[] {
   return node.kind === "leaf" ? node.tabs : node.children.flatMap(collectTabs);
+}
+
+// 今のペインの隣のタブへ（step が 1 なら右、-1 なら左）。端では反対の端へ回る。
+export function stepTab(store: Store, step: 1 | -1) {
+  const root = store.get(A.layoutAtom);
+  const target = findLeaf(root, store.get(A.activePaneIdAtom)) ?? findLeaf(root, firstLeafId(root));
+  if (!target || target.tabs.length < 2) return;
+  const n = target.tabs.length;
+  activateTab(store, target.id, (target.active + step + n) % n);
 }
 
 export function activateTab(store: Store, paneId: string, index: number) {
@@ -418,6 +427,32 @@ export function remapLeafPaths(store: Store, mapper: (path: string) => string | 
   store.set(A.layoutAtom, walk(store.get(A.layoutAtom)));
 }
 
+// 無くなったファイルのタブを全部のペインから外す。外したのが見ていたタブなら、
+// back に覚えていたそのペインのタブ（押す前に見ていたもの）へ戻し、無ければ
+// 左隣を選ぶ。右隣へ繰り上げると、押していないファイルが開いたように見える。
+// 1 つでも外したら true。
+export function dropGoneTab(
+  store: Store,
+  path: string,
+  back: ReadonlyMap<string, string> = new Map(),
+): boolean {
+  let dropped = false;
+  const walk = (n: LayoutNode): LayoutNode => {
+    if (n.kind !== "leaf") return { ...n, children: n.children.map(walk) };
+    const at = n.tabs.indexOf(path);
+    if (at < 0) return n;
+    dropped = true;
+    const tabs = n.tabs.filter((p) => p !== path);
+    const seen = n.tabs[n.active];
+    if (seen !== path) return leaf(n.id, tabs, tabs.indexOf(seen));
+    const prev = back.get(n.id);
+    const to = prev !== undefined && tabs.includes(prev) ? tabs.indexOf(prev) : at - 1;
+    return leaf(n.id, tabs, to);
+  };
+  store.set(A.layoutAtom, walk(store.get(A.layoutAtom)));
+  return dropped;
+}
+
 // レイアウトを単一空ペインにリセット（フォルダ切替時など）。
 export function resetLayout(store: Store) {
   store.set(A.layoutAtom, emptyLeaf("p1"));
@@ -479,6 +514,21 @@ export function reviveLayout(
   };
   const layout = walk(node);
   return { layout, active: newActive || firstLeafId(layout) };
+}
+
+// レイアウト（今のもの・控え）に並んでいるタブの道筋。ペインをまたいで重なりは 1 つに。
+export function tabsOf(node: StoredNode | LayoutNode): string[] {
+  const out: string[] = [];
+  const walk = (n: StoredNode | LayoutNode) => {
+    if (n.kind === "split") {
+      n.children.forEach(walk);
+      return;
+    }
+    const tabs = n.tabs ?? ("path" in n && n.path ? [n.path] : []);
+    for (const t of tabs) if (!out.includes(t)) out.push(t);
+  };
+  walk(node);
+  return out;
 }
 
 // 控えのレイアウトのタブを絶対パスに読み替える。根からの相対で控えていた

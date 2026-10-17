@@ -126,6 +126,18 @@ describe("書き足したファイル", () => {
     expect(store.get(A.freshTabsAtom).has("/w/b.md")).toBe(true);
     expect(store.get(A.workspaceAtom)?.claude?.wrote).toEqual(wrote);
   });
+
+  it("fude の中で動かしたものは、記録を読み直しても今の場所を指す", async () => {
+    // 記録は書いたときの道筋（/w/a.md）のまま。fude の中で /w/docs/a.md へ動かした。
+    sessions = [{ sessionId: "s1", name: "[V]fude", kind: "background", state: "working" }];
+    wrote = [{ path: "/w/a.md", at: 1 }];
+    const store = await rig(
+      linked({ wrote: [{ path: "/w/docs/a.md", at: 1 }], moved: [["/w/a.md", "/w/docs/a.md"]] }),
+    );
+    expect(store.get(A.workspaceAtom)?.claude?.wrote).toEqual([{ path: "/w/docs/a.md", at: 1 }]);
+    // 動かした先は前から知っているので、新しく書いたものとしてタブにも足さない。
+    expect(store.get(A.freshTabsAtom).size).toBe(0);
+  });
 });
 
 describe("セッションが一覧から外れたとき", () => {

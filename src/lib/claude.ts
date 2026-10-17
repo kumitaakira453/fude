@@ -71,6 +71,32 @@ export async function claudeSessionFiles(
   return invoke("claude_session_files", { sessionId, transcript });
 }
 
+// fude の中で動かした「元 → 先」（古い順）を、書いたファイルの道筋に当てる。
+// 元そのものか、元のフォルダの下なら先へ付け替える。付け替えで同じ道筋に
+// なったものは 1 つにまとめ、時刻は新しい方を残す。並びは新しい順（同時刻は道筋順）。
+export function followMoves(
+  wrote: readonly Wrote[],
+  moved: readonly (readonly [string, string])[] | undefined,
+): Wrote[] {
+  if (!moved || moved.length === 0) return [...wrote];
+  const follow = (path: string): string => {
+    let at = path;
+    for (const [from, to] of moved) {
+      if (at === from) at = to;
+      else if (at.startsWith(`${from}/`)) at = `${to}${at.slice(from.length)}`;
+    }
+    return at;
+  };
+  const latest = new Map<string, number>();
+  for (const w of wrote) {
+    const path = follow(w.path);
+    latest.set(path, Math.max(latest.get(path) ?? w.at, w.at));
+  }
+  return [...latest]
+    .map(([path, at]) => ({ path, at }))
+    .sort((a, b) => b.at - a.at || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
 // 新しく現れたファイル（前に知っていなかったもの）。古い順に返す（タブに足す順）。
 export function newlyWritten(before: readonly Wrote[], now: readonly Wrote[]): Wrote[] {
   const known = new Set(before.map((w) => w.path));

@@ -18,6 +18,9 @@ export interface ClaudeLink {
   transcript?: string;
   // そのセッションが書いたファイル（絶対パス）と、書いた時刻（ms）。
   wrote?: { path: string; at: number }[];
+  // fude の中で動かした（名前を変えた・移した）「元 → 先」。古い順。セッションの
+  // 記録は書いたときの道筋のままなので、読み直すたびにこれを当てて今の場所へ寄せる。
+  moved?: [string, string][];
 }
 
 export interface Workspace {
@@ -110,6 +113,15 @@ export function asWorkspace(value: unknown): Workspace | null {
                     !!w &&
                     typeof (w as { path?: unknown }).path === "string" &&
                     typeof (w as { at?: unknown }).at === "number",
+                )
+              : undefined,
+            moved: Array.isArray(claude.moved)
+              ? claude.moved.filter(
+                  (m): m is [string, string] =>
+                    Array.isArray(m) &&
+                    m.length === 2 &&
+                    typeof m[0] === "string" &&
+                    typeof m[1] === "string",
                 )
               : undefined,
           }

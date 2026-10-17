@@ -465,6 +465,8 @@ const TreeItem = memo(function TreeItem({
 // ので、効果が走り直すたび（木の組み直し・欄の行き来）に古い合図で行が
 // 飛ばないようにする。木の外に置くのは、組み直しで忘れないため。
 let shownReveal = 0;
+// 合図の行が描かれるのを待つフレーム数（約 1 秒）。それでも無ければ諦める。
+const REVEAL_TRIES = 60;
 
 export function FileTree() {
   const tree = useAtomValue(treeAtom);
@@ -655,25 +657,31 @@ export function FileTree() {
       setEditingPath(target);
       return;
     }
-    // 展開が反映されてから対象行を探してスクロール＆強調
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        const el = listRef.current?.querySelector<HTMLElement>(
-          `[data-path="${CSS.escape(target)}"]`,
-        );
-        if (!el) return;
-        shownReveal = reveal.nonce;
-        // リストが十分スクロール可能なら中央付近に、そうでなければ見える位置に。
-        el.scrollIntoView({ block: "center" });
-        el.classList.add("mg-tree-reveal");
-        window.setTimeout(() => el.classList.remove("mg-tree-reveal"), 1400);
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+    // 展開が反映されてから対象行を探してスクロール＆強調。行が描かれるまで毎フレーム
+    // 探し直す。ファイルを開くのと同時に来た合図は、本文の重い描画に押されて、
+    // 開いたフォルダの行が描かれるまで何フレームもかかる（2 フレームで諦めると、
+    // セッションの一覧や ⌘P から開いたときにツリーが動かなかった）。
+    let raf = 0;
+    let tries = 0;
+    const seek = () => {
+      const el = listRef.current?.querySelector<HTMLElement>(
+        `[data-path="${CSS.escape(target)}"]`,
+      );
+      if (!el) {
+        if (++tries < REVEAL_TRIES) raf = requestAnimationFrame(seek);
+        return;
+      }
+      shownReveal = reveal.nonce;
+      // リストが十分スクロール可能なら中央付近に、そうでなければ見える位置に。
+      el.scrollIntoView({ block: "center" });
+      el.classList.add("mg-tree-reveal");
+      window.setTimeout(() => el.classList.remove("mg-tree-reveal"), 1400);
     };
+    // 1 フレーム目は展開を描く前に走るので、2 フレーム目から探す。
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(seek);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [reveal, treeKey, activeFolderId, setExpandedByFolder, roots, multi]);
 
   const startCreate = useCallback(

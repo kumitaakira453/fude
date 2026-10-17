@@ -46,10 +46,15 @@ import { bindWindow, focusWorkspace, saveWorkspace, type Workspace } from "../li
 import {
   flushWorkspaceSave,
   folderWorkspace,
+  putWorkspace,
   refreshWorkspaces,
   sameList,
   upsertWorkspace,
 } from "../state/workspace";
+import { followMoves } from "../lib/claude";
+
+// セッションの書いたファイルを追うために覚える「元 → 先」の数。古いものから捨てる。
+const MOVES_KEPT = 200;
 import { addToBar, barAtom, visit, visitedAtom } from "../state/workspaceBar";
 import { stashRoots, takeStash } from "../state/rootStash";
 import { moveReviewFile } from "../lib/review";
@@ -66,6 +71,8 @@ import { notify, notifyBusy, settle } from "../state/toast";
 import { moveViewpoints } from "../lib/viewpoint";
 import { dropFolderIcons, moveFolderIcons } from "../lib/folderIcons";
 import {
+  dropGoneTab,
+  findLeaf,
   remapLeafPaths,
   resetLayout,
   reviveLayout,
@@ -416,6 +423,20 @@ export function useWorkspace() {
         void moveReviewFile(from, to).then(() => syncLedger(store));
         // フォルダに付けたアイコンも、動いた先（と下のフォルダ）へ連れていく。
         store.set(A.folderIconsAtom, (was) => moveFolderIcons(was, from, to));
+        // セッションの書いたファイルも追う。記録は書いたときの道筋のままなので、
+        // 動かしたことを覚えておき、読み直すたびに当てる（useClaude）。
+        const ws = store.get(A.workspaceAtom);
+        if (ws?.claude) {
+          const pair: [string, string] = [from, to];
+          putWorkspace(store, {
+            ...ws,
+            claude: {
+              ...ws.claude,
+              moved: [...(ws.claude.moved ?? []), pair].slice(-MOVES_KEPT),
+              wrote: ws.claude.wrote && followMoves(ws.claude.wrote, [pair]),
+            },
+          });
+        }
       }
       remapLeafPaths(store, remap);
       await refreshTreeStructure();
@@ -437,6 +458,9 @@ export function useWorkspace() {
     await refreshWorkspaces(store);
   }, [store]);
 
+  // 開いたファイルが読めなかったときに戻す先。ファイルの道筋 → ペイン → 開く前に
+  // そのペインで見ていたタブ。
+  const backTo = useRef(new Map<string, Map<string, string>>());
 
   const reloadFile = useCallback(
     async (path: string) => {
@@ -457,13 +481,11 @@ export function useWorkspace() {
         // 消えた・移したファイルは本文が入らないので、そのままだと面が読み込み中で
         // 止まる。無いと分かったらタブを外して知らせる。1 枚だけで開いているものは
         // openDoc が畳んで知らせるので、ここでは触らない。
+        const back = backTo.current.get(path);
+        backTo.current.delete(path);
         if (store.get(A.soleAtom) === path || (await pathExists(path))) return;
-        let dropped = false;
-        remapLeafPaths(store, (p) => {
-          if (p !== path) return p;
-          dropped = true;
-          return null;
-        });
+        // 押す前に見ていたタブへ戻す（右隣へ繰り上げない）。
+        const dropped = dropGoneTab(store, path, back);
         // タブに無い所から読んだとき（レビュー画面など）は、読むたびに出さない。
         if (dropped) notify(store, "そのファイルはもうありません");
       }
@@ -474,8 +496,16 @@ export function useWorkspace() {
   const openFile = useCallback(
     (path: string, paneId?: string) => {
       const targetPane = paneId ?? store.get(A.activePaneIdAtom);
+      const reading = !store.get(A.contentCacheAtom).has(path);
+      // 読めなかったときに戻す先として、そのペインで見ていたタブを覚えておく。
+      const seen = A.activePath(findLeaf(store.get(A.layoutAtom), targetPane) ?? undefined);
+      if (reading && seen && seen !== path) {
+        const panes = new Map(backTo.current.get(path));
+        panes.set(targetPane, seen);
+        backTo.current.set(path, panes);
+      }
       openInPane(store, targetPane, path);
-      if (!store.get(A.contentCacheAtom).has(path)) void reloadFile(path);
+      if (reading) void reloadFile(path);
     },
     [store, reloadFile],
   );

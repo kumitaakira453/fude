@@ -1,11 +1,10 @@
 import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
-import { claudeSessionFiles, claudeSessions, newlyWritten } from "../lib/claude";
+import { claudeSessionFiles, claudeSessions, followMoves, newlyWritten } from "../lib/claude";
 import { pathExists } from "../lib/fsAccess";
 import { appendTab } from "../lib/ui";
-import { saveWorkspace, type Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
-import { upsertWorkspace } from "../state/workspace";
+import { putWorkspace } from "../state/workspace";
 
 // Claude のセッションを追いかける（ベータ）。
 //
@@ -15,14 +14,6 @@ import { upsertWorkspace } from "../state/workspace";
 // ワークスペースなら、そのセッションが新しく書いたファイルをタブに足す。
 
 const EVERY = 5000;
-
-function put(store: ReturnType<typeof useStore>, ws: Workspace): void {
-  store.set(A.workspacesAtom, (list) => upsertWorkspace(list, ws));
-  if (store.get(A.workspaceAtom)?.id === ws.id) store.set(A.workspaceAtom, ws);
-  void saveWorkspace(ws).catch((e: unknown) => {
-    console.error("ワークスペースを控えられません", e);
-  });
-}
 
 export function useClaude(): void {
   const store = useStore();
@@ -80,7 +71,7 @@ export function useClaude(): void {
           if (name && name !== ws.claude.lastName) {
             const fresh =
               store.get(A.workspaceAtom)?.id === ws.id ? store.get(A.workspaceAtom)! : ws;
-            put(store, {
+            putWorkspace(store, {
               ...fresh,
               name: fresh.claude?.nameFollows ? name : fresh.name,
               claude: {
@@ -99,8 +90,10 @@ export function useClaude(): void {
         const link = ws?.claude;
         const transcript = link && (byId.get(link.sessionId)?.transcript ?? link.transcript);
         if (!ws || !link || !transcript) return;
-        const { wrote, gone: lost } = await claudeSessionFiles(link.sessionId, transcript);
-        if (dead || lost) return;
+        const read = await claudeSessionFiles(link.sessionId, transcript);
+        if (dead || read.gone) return;
+        // 記録は書いたときの道筋のまま。fude の中で動かしたものは今の場所へ寄せる。
+        const wrote = followMoves(read.wrote, link.moved);
         const before = link.wrote ?? [];
         const added = newlyWritten(before, wrote);
         const changed =
@@ -116,7 +109,7 @@ export function useClaude(): void {
           for (const w of added) if (appendTab(store, w.path)) fresh.add(w.path);
           store.set(A.freshTabsAtom, fresh);
         }
-        put(store, { ...now, claude: { ...now.claude, wrote } });
+        putWorkspace(store, { ...now, claude: { ...now.claude, wrote } });
       } finally {
         busy = false;
       }

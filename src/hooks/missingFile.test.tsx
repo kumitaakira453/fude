@@ -88,6 +88,46 @@ describe("消えたファイルを開く", () => {
     expect(r.store.get(A.contentCacheAtom).get("/本/ある.md")).toBe("# 本文\n");
   });
 
+  describe("外した後にどのタブを選ぶか", () => {
+    const lay = (store: ReturnType<typeof createStore>, list: string[], active: number) =>
+      store.set(A.layoutAtom, { kind: "leaf", id: "p1", tabs: list, active });
+    const shown = (store: ReturnType<typeof createStore>) => {
+      const layout = store.get(A.layoutAtom);
+      return layout.kind === "leaf" ? layout.tabs[layout.active] : null;
+    };
+
+    it("押す前に見ていたタブへ戻す（右隣へ繰り上げない）", async () => {
+      // 右隣には、外から足された別のファイルが並んでいる。
+      const r = rig();
+      lay(r.store, ["/本/A.md", "/本/B.md", "/本/C.md"], 0);
+      act(() => r.ws().openFile("/本/消えた.md"));
+      expect(shown(r.store)).toBe("/本/消えた.md");
+      await settle();
+      expect(tabs(r.store)).toEqual(["/本/A.md", "/本/B.md", "/本/C.md"]);
+      expect(shown(r.store)).toBe("/本/A.md");
+    });
+
+    it("読み終わる前に別のタブへ移っていたら、そのまま", async () => {
+      const r = rig();
+      lay(r.store, ["/本/A.md", "/本/B.md", "/本/C.md"], 0);
+      act(() => r.ws().openFile("/本/消えた.md"));
+      // 消えた.md は A の右隣（1 番目）に入った。C（3 番目）へ移る。
+      act(() => lay(r.store, tabs(r.store), 3));
+      await settle();
+      expect(shown(r.store)).toBe("/本/C.md");
+    });
+
+    it("押して開いたのでないもの（戻したタブなど）は、左隣を選ぶ", async () => {
+      const r = rig();
+      lay(r.store, ["/本/A.md", "/本/消えた.md", "/本/B.md"], 1);
+      await act(async () => {
+        await r.ws().reloadFile("/本/消えた.md");
+      });
+      expect(tabs(r.store)).toEqual(["/本/A.md", "/本/B.md"]);
+      expect(shown(r.store)).toBe("/本/A.md");
+    });
+  });
+
   it("1 枚だけで開いているファイルは、ここでは外さない（開く側が畳む）", async () => {
     const r = rig();
     r.store.set(A.soleAtom, "/本/消えた.md");
