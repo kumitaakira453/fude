@@ -30,7 +30,18 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/**"]
+        "scope": {
+          "allow": ["$HOME/**"],
+          "deny": [
+            "$HOME/.ssh/**",
+            "$HOME/.gnupg/**",
+            "$HOME/.aws/**",
+            "$HOME/.config/gh/**",
+            "$HOME/.netrc",
+            "$HOME/Library/Keychains/**"
+          ],
+          "requireLiteralLeadingDot": false
+        }
       }
     }
   },
