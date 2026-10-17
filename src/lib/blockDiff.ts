@@ -85,6 +85,23 @@ export function headOf(resolution: Resolution): Block | null {
     : null;
 }
 
+// 今の版での指摘の原文。ブロックをまたいだ指摘（quote が複数のブロック）は、
+// 見つけたブロックから同じ数だけ先までの原文にする。今の版で続きのブロックが
+// 足りなければ、ある所まで。今の版に無ければ空。
+export function headSpan(
+  resolution: Resolution,
+  quote: string,
+  head: readonly Block[],
+  body: string,
+): string {
+  const first = headOf(resolution);
+  if (!first) return "";
+  const covered = quoteBlocks(quote).length;
+  if (covered <= 1) return first.src;
+  const last = head[Math.min(first.index + covered - 1, head.length - 1)];
+  return last && last.end > first.start ? body.slice(first.start, last.end) : first.src;
+}
+
 // 指摘が付いていたブロックが、差分の何番目にあたるかを返す。無ければ -1。
 //
 // quote はブロック本文の逐語コピー。指摘を付けた時点の記録なので当たれば確実。

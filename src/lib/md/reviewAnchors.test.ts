@@ -314,13 +314,26 @@ describe("targetOfSpan / targetOfBlock", () => {
     );
   });
 
-  it("ブロックをまたいだ範囲は、始まったブロックの終わりまでに丸める", () => {
+  it("ブロックをまたいだ範囲は、またいだブロックをまとめて対象にする", () => {
+    // 「はじめの段落。」の途中から「まんなかの段落。」の途中まで（見出しを挟む）。
+    const { loaded, state } = opened(SRC);
+    const first = posOf(state.doc, 1);
+    const third = posOf(state.doc, 3);
+    const target = targetOfSpan(state.doc, loaded, "", first + 4, third + 4);
+    expect(target?.pos).toBe(first);
+    expect(target?.quote).toBe("はじめの段落。\n\n## 中の見出し\n\nまんなかの段落。");
+    expect(target?.text).toBe("の段落。\n\n中の見出し\n\nまんな");
+    expect(target?.offset).toBe(3);
+    expect(target?.spot).toEqual({ from: first + 4, to: third + 4 });
+    expect(target?.unit).toBeUndefined();
+  });
+
+  it("文書の終わりまで選んだら、最後のブロックまでを対象にする", () => {
     const { loaded, state } = opened(SRC);
     const at = posOf(state.doc, 3);
     const far = state.doc.content.size;
-    const target = targetOfSpan(state.doc, loaded, "", at + 3, far);
-    expect(target?.quote).toBe("まんなかの段落。");
-    expect(target?.text).toBe("なかの段落。");
+    const target = targetOfSpan(state.doc, loaded, "", at + 3, far - 1);
+    expect(target?.quote).toBe("まんなかの段落。\n\nおわりの段落。");
   });
 
   it("ブロック丸ごとは箇所を持たない", () => {

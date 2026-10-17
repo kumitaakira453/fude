@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "../../lib/blocks";
 import { applyDiffMarks } from "../../lib/diffMarks";
 import { readBlockText, rangeAt } from "../../lib/domText";
+import { rangeRects, type Rect } from "../../lib/md/selectionRects";
 import { findPlain, findPlainLoose } from "../../lib/projection";
 import {
   SPOT_NAME,
@@ -23,8 +24,9 @@ import { Markdown } from "../Markdown";
 // 全ブロックを 1 回のペイントで描くと大きなファイルで固まるので、
 // 本文と同じく先頭から順に足していく。
 
-// 選ばれていた文字列に付ける印の名前。描画側は ::highlight() で拾う。
-const MARK = "mg-review-selection";
+// 選ばれていた文字列の塗りを測るときの帯。範囲は 1 つのコメントの分だけ
+// なので、見えている所に詰めずに全部測る。
+const WHOLE = { top: -Infinity, bottom: Infinity };
 
 // 最初の一塊は小さく取る。ここを大きくすると、指摘を選んでから何かが
 // 出るまでの間がそのまま伸びる。
@@ -76,6 +78,9 @@ export function DocumentView({
   // 選ばれていた文字列そのものに印を付けられたときの、その位置
   const markRef = useRef<HTMLElement | null>(null);
   const [marked, setMarked] = useState(false);
+  // 選ばれていた文字列の範囲と、それを行ごとに束ねた塗り
+  const [range, setRange] = useState<Range | null>(null);
+  const [boxes, setBoxes] = useState<Rect[]>([]);
   // 自分でスクロールしたら、そこから先は勝手に動かさない
   const touchedRef = useRef(false);
   // 対象へ寄せ終わったことを 1 度だけ知らせる
@@ -143,31 +148,45 @@ export function DocumentView({
 
   // 選ばれていた文字列そのものに印を付ける。表のように大きなブロックでは、
   // ブロック全体を塗っても「どのセルの話か」が分からない。
-  // 本文の DOM は書き換えず、範囲だけを描画側に渡す。
+  // 本文の DOM は書き換えず、字の箱に合わせて行ごとに束ねた矩形を重ねる
+  // （::highlight() は字の断片ごとに行の箱の高さで塗るので、行内コードの
+  // 前後や語の間で塗りが途切れる）。
   useEffect(() => {
-    const registry = "highlights" in CSS ? CSS.highlights : null;
     const block = targetRef.current;
     markRef.current = null;
     setMarked(false);
-    if (!registry) return;
-    registry.delete(MARK);
+    setRange(null);
     const needle = selection.trim();
     if (!block || !needle) return;
     const text = readBlockText(block);
     const hit = findPlain(text.plain, needle) ?? findPlainLoose(text.plain, needle);
     if (!hit) return;
-    const range = rangeAt(text, hit.start, hit.end);
-    if (!range) return;
-    registry.set(MARK, new Highlight(range));
+    const found = rangeAt(text, hit.start, hit.end);
+    if (!found) return;
+    setRange(found);
     markRef.current =
-      range.startContainer.parentElement instanceof HTMLElement
-        ? range.startContainer.parentElement
+      found.startContainer.parentElement instanceof HTMLElement
+        ? found.startContainer.parentElement
         : null;
     setMarked(true);
-    return () => {
-      registry.delete(MARK);
-    };
   }, [selection, limit, spotKey, subject]);
+
+  // 塗りを測る。描き足しで上が伸びたときと、幅が変わって折り返しが変わったときは
+  // 測り直す。
+  useEffect(() => {
+    const host = root.current;
+    // 位置を測れない環境（jsdom）では塗らない。
+    if (!host || !range || typeof range.getClientRects !== "function") {
+      setBoxes([]);
+      return;
+    }
+    const measure = () => setBoxes(rangeRects(range, host, WHOLE, host.getBoundingClientRect()));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(host);
+    return () => watch.disconnect();
+  }, [range, limit]);
 
   // 描き足すたびに位置を合わせ直す。上にある画像や数式が遅れて入ると
   // 対象が押し下げられるため、1 回きりだと狙った場所からずれる。
@@ -219,6 +238,17 @@ export function DocumentView({
 
   return (
     <div ref={root} className="mg-doc">
+      {boxes.length > 0 && (
+        <div className="mg-sel" aria-hidden>
+          {boxes.map((b, i) => (
+            <div
+              key={i}
+              className="mg-sel-box mg-review-mark"
+              style={{ left: b.left, top: b.top, width: b.width, height: b.height }}
+            />
+          ))}
+        </div>
+      )}
       {shown.map((block, i) => {
         const gone = i === at && spot.state === "removed";
         const isSpot = i === at && !gone;

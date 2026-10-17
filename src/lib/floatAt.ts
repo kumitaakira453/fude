@@ -44,8 +44,19 @@ export function placeNear(
   const foot = room.top + room.height - EDGE;
   const below = at.bottom + GAP;
   const above = at.top - GAP - size.height;
-  // 下に入るなら下。入らないなら上。どちらにも入らなければ下のまま。
-  const want = below + size.height <= foot ? below : above >= head ? above : below;
+  // 下に入るなら下。入らないなら上。相手の上下どちらも重ならない所に置く。
+  const fitsBelow = below + size.height <= foot;
+  const fitsAbove = above >= head;
+  // どちらにも入らない（相手が枠より高い）ときは、相手の終わりのすぐ下を枠の
+  // 下端までに収める。重なるのは相手の最後の数行だけにする（上へ回して枠の上端で
+  // 止めると、相手の頭から重なって選んだところが読めなくなる）。
+  if (!fitsBelow && !fitsAbove) {
+    return {
+      top: within(below, size.height, head, foot),
+      left: within(at.left, size.width, room.left + EDGE, room.left + room.width - EDGE),
+    };
+  }
+  const want = fitsBelow ? below : above;
   return {
     // 横は流れないので、止めるかどうかに関わらず枠の中に収める。
     top: hold ? within(want, size.height, head, foot) : want,

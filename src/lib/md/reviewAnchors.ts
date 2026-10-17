@@ -219,8 +219,9 @@ const leafText = (node: PmNode): string =>
     ? ((node.attrs.raw as string | null) ?? `$${node.attrs.tex as string}$`)
     : "";
 
-// 選んだ範囲を対象にする。範囲がブロックをまたぐときは、始まったブロックの
-// 終わりまでに丸める（読むとき側の readSelection と同じ扱い）。
+// 選んだ範囲を対象にする。範囲がブロックをまたぐときは、またいだブロックを
+// まとめて対象にする（読むとき側と同じく、引用は最初から最後のブロックまでの
+// 原文、選んだ字はブロックの間を空行でつなぐ）。
 export function targetOfSpan(
   doc: PmNode,
   loaded: Loaded,
@@ -233,16 +234,22 @@ export function targetOfSpan(
   const pos = $from.before(1);
   const node = doc.nodeAt(pos);
   if (!node) return null;
-  const end = Math.min(to, pos + node.nodeSize - 1);
+  if (to <= from) return null;
+  const $to = doc.resolve(to);
+  // 終わりがある最上位のブロック。文書の端など最上位の外なら、最初のブロックまで。
+  const last = $to.depth === 0 ? pos : $to.before(1);
+  const across = last > pos;
+  const end = across ? to : Math.min(to, pos + node.nodeSize - 1);
   if (end <= from) return null;
-  const built = build(doc, loaded, prefix, pos);
+  const built = build(doc, loaded, prefix, pos, last);
   if (!built) return null;
   return {
     ...built,
     spot: { from, to: end },
-    text: doc.textBetween(from, end, "", leafText),
+    text: doc.textBetween(from, end, across ? "\n\n" : "", leafText),
     offset: doc.textBetween(pos + 1, from, "", leafText).length,
-    unit: unitAt(doc, pos, from),
+    // 項目・セルを丸ごと相手にするのは、1 つのブロックの中だけ。
+    unit: across ? undefined : unitAt(doc, pos, from),
   };
 }
 
@@ -257,19 +264,37 @@ export function targetOfBlock(
   return built ? { ...built, spot: null, text: "", offset: 0 } : null;
 }
 
+// last を渡すと、pos から last までのブロックをまとめた原文を引用にする。
 function build(
   doc: PmNode,
   loaded: Loaded,
   prefix: string,
   pos: number,
+  last: number = pos,
 ): Omit<Target, "spot" | "text" | "offset"> | null {
   const { text, parts } = toMarkdownParts(doc, loaded);
   const part = parts.find((p) => p.pos === pos);
   if (!part) return null;
   return {
     pos,
-    quote: part.src,
+    quote: last > pos ? quoteAcross(text, parts, pos, last) ?? part.src : part.src,
     sectionPath: sectionPathTo(doc, pos),
     source: prefix + text,
   };
+}
+
+// 書き出した全文の中から、pos のブロックの頭から last のブロックの終わりまでを
+// 切り出す。ブロックの間の空行も原文どおりに入る。部品は全文に順に並んでいる
+// ので、前から順に探して位置を決める。見つからなければ null。
+function quoteAcross(text: string, parts: Part[], pos: number, last: number): string | null {
+  let cursor = 0;
+  let start = -1;
+  for (const part of parts) {
+    const at = text.indexOf(part.src, cursor);
+    if (at < 0) return null;
+    cursor = at + part.src.length;
+    if (part.pos === pos) start = at;
+    if (part.pos === last) return start < 0 ? null : text.slice(start, cursor);
+  }
+  return null;
 }

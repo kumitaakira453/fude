@@ -104,13 +104,16 @@ export function CommentComposer({
     Math.max(area.left + GAP, area.right - width - GAP),
   );
   // 下に開いて下へ伸びるのが基本。書いた文が下に足されていく向きと揃う。
-  // 上に開くのは、下では小窓が成り立たないほど狭く、かつ上の方が広いときだけ。
+  // 上に開くのは、下では小窓が成り立たないほど狭く、上なら成り立つときだけ。
+  // 上にも入らない（選んだところが画面より高い）ときは下のまま開き、画面の下端で
+  // 止める。重なるのは選んだ最後の数行だけになる（上へ回して上端で止めると、
+  // 選んだ頭の行から重なって読めなくなる）。
   // 向きは開いた時点で決める。書いている途中で上下が入れ替わると読めなくなる。
   const upwardRef = useRef<boolean | null>(null);
   if (upwardRef.current === null) {
     const below = area.bottom - anchor.bottom - GAP * 2;
     const above = anchor.top - area.top - GAP * 2;
-    upwardRef.current = below < CHROME + MIN_INPUT && above > below;
+    upwardRef.current = below < CHROME + MIN_INPUT && above >= CHROME + MIN_INPUT;
   }
   const openUpward = upwardRef.current;
   // 入力欄の上限。本文の領域に収まる高さと、その 45% の小さい方。

@@ -1074,10 +1074,13 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         setEditSel(null);
         return;
       }
+      // 上下は選択の全体（最初の行の上〜最後の行の下）で持つ。最後の行だけで
+      // 持つと、下に入らないときに「その行の上」＝選んだ前の行の上へ帯や小窓が
+      // 重なる。横は選び終えた最後の行に合わせる。
       setEditSel({
         from: span.from,
         to: span.to,
-        rect: { top: rc.top, bottom: rc.bottom, left: rc.left },
+        rect: { top: rects[0].top, bottom: rc.bottom, left: rc.left },
       });
     };
     // 出すのは離したとき。引いている間に出すと、そのままドラッグの行き先を
@@ -1744,7 +1747,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
                 <EmptyPane />
               )}
             </div>
-            {shownPath && (settling || !loaded || opening) && (
+            {/* 行き先がタブ無し（ワークスペースを切り替えた直後など）でも、追いつく
+                までは重ねる。重ねないと前の本文がそのまま見える。 */}
+            {(shownPath || settling) && (settling || !loaded || opening) && (
               <div className={`absolute inset-0 z-10 overflow-hidden bg-[var(--mg-bg)] py-8 ${PAD_CLASS[width]}`}>
                 <div className={`${WIDTH_CLASS[width]} mx-auto`}>
                   <LoadingBody />

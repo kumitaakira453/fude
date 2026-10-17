@@ -165,18 +165,16 @@ describe("選択の矩形", () => {
     const view = editor(`${"あ".repeat(25)}\n`);
     const rects = selectionRects(view, 1, 26, all, base);
     expect(rects.map((r) => r.top)).toEqual([0, LINE, 2 * LINE]);
-    // 途中の行は塊の右端まで伸ばす。最後の行は字の終わりで止める。
-    expect(rects.map((r) => r.width)).toEqual([
-      RIGHT - LEFT,
-      RIGHT - LEFT,
-      5 * CHAR,
-    ]);
+    // どの行も字の終わりで止める（塊の右端までは伸ばさない）。
+    expect(rects.map((r) => r.width)).toEqual([WRAP * CHAR, WRAP * CHAR, 5 * CHAR]);
   });
 
   it("複数のブロックをまたぐ選択はブロックごとに分かれる", () => {
     const view = editor("あ\n\nい\n\nう\n");
     const rects = selectionRects(view, head(view), tail(view), all, base);
     expect(rects.map((r) => r.top)).toEqual([0, LINE, 2 * LINE]);
+    // 1 字だけの塊も、字のぶんだけを塗る。
+    expect(rects.map((r) => r.width)).toEqual([CHAR, CHAR, CHAR]);
   });
 
   it("箇条書きの記号のぶんは塗らない", () => {

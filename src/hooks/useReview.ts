@@ -10,6 +10,8 @@ import {
 import {
   diffBlocks,
   headOf,
+  headSpan,
+  quoteBlocks,
   resolveInDiff,
   type BlockChange,
   type Resolution,
@@ -174,10 +176,16 @@ export function useReview({
   // 同じ内容を書き直して無駄にロックを取らないよう、送った分を覚えておく。
   const sentRef = useRef(new Map<string, string>());
   useEffect(() => {
+    // ブロックをまたいだ指摘は、またいだ分まで控える（CLI が探す手がかりになる）。
+    // ブロックに分けるのは、そういう指摘があるときだけ。
+    let head: Block[] | null = null;
     for (const thread of threads) {
       const resolution = resolutions.get(thread.id);
       if (!resolution) continue;
-      const headQuote = headOf(resolution)?.src ?? "";
+      const headQuote =
+        quoteBlocks(thread.quote).length > 1
+          ? headSpan(resolution, thread.quote, (head ??= getBlocks()), body)
+          : (headOf(resolution)?.src ?? "");
       const signature = `${resolution.state}\u0000${headQuote}`;
       if (sentRef.current.get(thread.id) === signature) continue;
       if (
@@ -190,7 +198,7 @@ export function useReview({
       sentRef.current.set(thread.id, signature);
       void setResolved(thread.id, resolution.state, headQuote);
     }
-  }, [resolutions, threads]);
+  }, [resolutions, threads, getBlocks, body]);
 
   useEffect(() => {
     if (!content || !isActive || isDraft) {

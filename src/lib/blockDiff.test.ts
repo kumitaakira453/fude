@@ -5,6 +5,7 @@ import {
   diffBlocks,
   headIndexAt,
   headOf,
+  headSpan,
   quoteBlocks,
   resolveInDiff,
   targetIndex,
@@ -277,3 +278,29 @@ describe("resolveInDiff", () => {
     expect(headOf(r)).toBeNull();
   });
 });
+
+describe("今の版での指摘の原文（台帳に控える分）", () => {
+  const body = "# 題\n\nはじめの段落。\n\n## 中の見出し\n\nまんなかの段落。\n\nおわりの段落。\n";
+  const head = splitBlocks(body);
+  const quote = "はじめの段落。\n\n## 中の見出し\n\nまんなかの段落。";
+
+  it("ブロックをまたいだ指摘は、またいだ数だけ先までの原文", () => {
+    const diff = diffBlocks(splitBlocks(body), head);
+    const resolution = resolveInDiff(diff, quote);
+    expect(headSpan(resolution, quote, head, body)).toBe(quote);
+  });
+
+  it("1 つのブロックの指摘は、そのブロックの原文", () => {
+    const diff = diffBlocks(splitBlocks(body), head);
+    const resolution = resolveInDiff(diff, "まんなかの段落。");
+    expect(headSpan(resolution, "まんなかの段落。", head, body)).toBe("まんなかの段落。");
+  });
+
+  it("今の版で続きのブロックが足りなければ、ある所まで", () => {
+    const short = "# 題\n\nはじめの段落。\n\n## 中の見出し\n";
+    const now = splitBlocks(short);
+    const resolution = resolveInDiff(diffBlocks(splitBlocks(body), now), quote);
+    expect(headSpan(resolution, quote, now, short)).toBe("はじめの段落。\n\n## 中の見出し");
+  });
+});
+

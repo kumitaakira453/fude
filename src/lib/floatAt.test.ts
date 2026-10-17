@@ -91,6 +91,23 @@ describe("枠が画面ぜんたいでないとき", () => {
   });
 });
 
+describe("背の高い選択（何行にもわたる）", () => {
+  it("下に入らなければ、選択の頭より上に出す（選んだ行に重ねない）", () => {
+    const at = { top: 100, bottom: 760, left: 300 };
+    const spot = placeNear(at, SIZE, ROOM);
+    expect(spot.top + SIZE.height).toBeLessThanOrEqual(at.top);
+  });
+
+  it("上下どちらにも入らないときは、選択の終わりのすぐ下を画面の下端までに収める", () => {
+    // 上へ回して画面の上端で止めると、選んだ頭の行から重なってしまう。
+    const at = { top: 20, bottom: 770, left: 300 };
+    for (const hold of [true, false]) {
+      const spot = placeNear(at, SIZE, ROOM, hold);
+      expect(spot.top).toBe(ROOM.height - 8 - SIZE.height);
+    }
+  });
+});
+
 describe("縦を止めないとき", () => {
   const PANE = { top: 120, left: 300, width: 600, height: 500 };
 

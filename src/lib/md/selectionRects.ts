@@ -36,8 +36,7 @@ export interface Rect {
 // 手前の余裕を兼ねる。境目で 1 行落とすより、少し余分に測る方が安い。
 const MARGIN = 200;
 
-// 字が並ぶ入れ物として扱うタグ。矩形を右へ伸ばす先と、横スクロールする塊で
-// はみ出しを切る先に使う。
+// 字が並ぶ入れ物として扱うタグ。横スクロールする塊ではみ出しを切る先に使う。
 const BLOCKS = new Set([
   "P",
   "LI",
@@ -61,8 +60,6 @@ const BLOCKS = new Set([
 interface Box {
   left: number;
   right: number;
-  // 内容の右端（余白と枠線を除いた位置）。矩形を伸ばす先。
-  inner: number;
 }
 
 // 字の入れ物を辿る。編集面そのものも入れ物として扱うので、必ず見つかる。
@@ -77,15 +74,7 @@ function boxOf(el: HTMLElement, kept: Map<HTMLElement, Box>): Box {
   const was = kept.get(el);
   if (was) return was;
   const rect = el.getBoundingClientRect();
-  const how = getComputedStyle(el);
-  const box: Box = {
-    left: rect.left,
-    right: rect.right,
-    inner:
-      rect.right -
-      (parseFloat(how.paddingRight) || 0) -
-      (parseFloat(how.borderRightWidth) || 0),
-  };
+  const box: Box = { left: rect.left, right: rect.right };
   kept.set(el, box);
   return box;
 }
@@ -164,10 +153,24 @@ export function selectionRects(
     return [];
   }
   if (range.collapsed) return [];
+  return rangeRects(range, view.dom, band, base);
+}
 
+// 範囲を、視覚行ごとに 1 本へ束ねた矩形にする。root は字の入れ物を辿る上限。
+//
+// 塗るのは字のあるところまで。続きのある行も入れ物の右端までは伸ばさない
+// （見出しや短い項目で、字の無い右側まで塗られて見栄えが悪い）。
+export function rangeRects(
+  range: Range,
+  root: HTMLElement,
+  band: Band,
+  base: Base,
+): Rect[] {
+  if (range.collapsed) return [];
+  const doc = root.ownerDocument;
   const rows: Row[] = [];
   const span = doc.createRange();
-  const { walk, first } = walkerFrom(view.dom, {
+  const { walk, first } = walkerFrom(root, {
     node: range.startContainer,
     offset: range.startOffset,
   });
@@ -187,7 +190,7 @@ export function selectionRects(
     span.setStart(node, s);
     span.setEnd(node, e);
 
-    const block = blockOf(node, view.dom);
+    const block = blockOf(node, root);
     for (const rect of span.getClientRects()) {
       if (rect.height <= 0) continue;
       // 帯より下へ出たら、以降は全部その下にある。
@@ -217,19 +220,10 @@ export function selectionRects(
 
   const kept = new Map<HTMLElement, Box>();
   const out: Rect[] = [];
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (const row of rows) {
     const box = boxOf(row.block, kept);
-    // 続きがある行は、その入れ物の右端まで伸ばす。字の終わりで切ると、
-    // 段落をまたいで選んだときに右側がぎざぎざに残る。最後の行は伸ばさない
-    // （そこで選択が終わっているので、字のところまでで正しい）。
-    const stretch = i < rows.length - 1 || tail < to;
-    const right = Math.min(
-      stretch ? Math.max(row.right, box.inner) : row.right,
-      box.right,
-      base.right,
-    );
     // 横スクロールする塊（コードの塊）では、字が入れ物の外へ流れる。
+    const right = Math.min(row.right, box.right, base.right);
     const left = Math.max(row.left, box.left, base.left);
     if (right <= left) continue;
     out.push({
