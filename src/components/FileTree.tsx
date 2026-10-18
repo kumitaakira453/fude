@@ -1,6 +1,15 @@
 import { message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useImeSafeEnter } from "../hooks/useImeSafeEnter";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
@@ -16,6 +25,7 @@ import {
 import { setDragChip } from "../lib/dragImage";
 import { bringIn, INTAKE_LIMIT } from "../lib/intake";
 import { makeSpring } from "../lib/spring";
+import { holdRow, rowTop, scrollerOf, trimSlack } from "../lib/keepRow";
 import { dirOf } from "../lib/paths";
 import {
   absoluteIn,
@@ -617,9 +627,20 @@ export function FileTree() {
     [noAdd, intake, setExpandedOpen, lone],
   );
 
+  // 開閉した行を画面の同じ高さに残す（lib/keepRow）。押す前の高さを覚えておき、
+  // 描き直した後でずれた分を送り戻す。末尾の空きは送り戻す幅が足りないときだけ伸びる。
+  const held = useRef<{ path: string; top: number } | null>(null);
+  const slackRef = useRef<HTMLDivElement>(null);
+  const rowEl = (path: string) =>
+    listRef.current?.querySelector<HTMLElement>(`[data-row="dir"][data-path="${CSS.escape(path)}"]`) ??
+    null;
+
   const toggle = useCallback(
     (path: string) => {
       if (!treeKey || !activeFolderId) return;
+      const row = rowEl(path);
+      const scroller = scrollerOf(listRef.current);
+      held.current = row && scroller ? { path, top: rowTop(scroller, row) } : null;
       setExpandedByFolder((prev) => {
         const set = new Set((prev[treeKey] ?? []).map((p) => absoluteIn(p, activeFolderId)));
         if (set.has(path)) set.delete(path);
@@ -632,6 +653,27 @@ export function FileTree() {
 
   // パンくず等からの「ツリーで表示」: 祖先を展開し、対象行へスクロール＋強調
   const listRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const scroller = scrollerOf(listRef.current);
+    const slack = slackRef.current;
+    const was = held.current;
+    held.current = null;
+    if (!scroller || !slack) return;
+    const row = was ? rowEl(was.path) : null;
+    if (was && row) holdRow(scroller, row, was.top, slack);
+    // 開いて下が伸びたときは、見えなくなった空きを縮める。
+    trimSlack(scroller, slack);
+  }, [expanded]);
+
+  useEffect(() => {
+    const scroller = scrollerOf(listRef.current);
+    const slack = slackRef.current;
+    if (!scroller || !slack) return;
+    const trim = () => trimSlack(scroller, slack);
+    scroller.addEventListener("scroll", trim, { passive: true });
+    return () => scroller.removeEventListener("scroll", trim);
+  }, []);
   const reveal = useAtomValue(revealInTreeAtom);
   useEffect(() => {
     if (!reveal || !treeKey || !activeFolderId) return;
@@ -865,6 +907,8 @@ export function FileTree() {
             <TreeItem key={n.path} node={n} depth={0} ctx={ctx} />
           ))
         )}
+        {/* 閉じた行を同じ高さに残すための末尾の空き。高さは keepRow が直に書く。 */}
+        <div ref={slackRef} aria-hidden />
       </div>
 
       {menu && (
