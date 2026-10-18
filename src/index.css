@@ -60,6 +60,8 @@
   --mg-ctl-on: color-mix(in srgb, var(--mg-ctl) 86%, var(--mg-fg));
   --mg-pop: light-dark(var(--mg-panel), color-mix(in srgb, var(--mg-panel) 95%, #fff));
   --mg-warn: light-dark(#b7791f, #e2a33b);
+  /* Claude の印の色。テーマに寄らず同じ色で、Claude のものだと分かるようにする。 */
+  --mg-claude: #d97757;
   --mg-ok: light-dark(#2f855a, #3fb68b);
 
   --mg-font-sans: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
@@ -9713,6 +9715,39 @@ html[data-hints] .mg-seg {
 }
 .mg-pal-detail-files .is-more {
   color: var(--mg-muted);
+}
+.mg-pal-detail-at {
+  flex: none;
+  margin-left: auto;
+  color: var(--mg-muted);
+  font-size: var(--mg-t-xs);
+}
+/* セッションの会話の頭と終わり。それぞれ 3 行まで。 */
+.mg-pal-talk {
+  display: grid;
+  gap: 8px;
+}
+.mg-pal-talk > p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  border-radius: var(--mg-r2);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.mg-pal-talk > p.is-ask {
+  background: color-mix(in srgb, var(--mg-fg) 5%, var(--mg-pop));
+}
+.mg-pal-talk > p.is-answer {
+  border: 1px solid var(--mg-line);
+}
+.mg-pal-talk small {
+  display: block;
+  color: var(--mg-muted);
+  font-size: 10.5px;
 }
 /* ファイルの本文の頭（⌘P）。読むときの見た目のまま小さく描き、欄の下で淡く消す。
    中は押せない（リンクや印を押して一覧の外へ出ないように）。 */

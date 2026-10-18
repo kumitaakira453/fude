@@ -672,6 +672,7 @@ pub fn run() {
             workspaces::live_workspaces,
             claude::claude_sessions,
             claude::claude_session_files,
+            claude::claude_session_talk,
             claude::claude_bin_path
         ])
         // 窓が閉じたら控えに時刻を付ける。起動し直したときに戻す窓を決めるのに使う。

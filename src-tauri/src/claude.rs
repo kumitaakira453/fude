@@ -375,6 +375,160 @@ pub async fn claude_session_files(
         .map_err(|e| e.to_string())
 }
 
+// 会話の頭と終わり。一覧の右の欄に、何をしたセッションかを見せるために使う。
+//
+// 記録は数百 MB になることがあるので、全部は読まない。最初の依頼は先頭から、
+// 最後の返答は末尾から、決めた量だけ読む。
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct Talk {
+    pub first: Option<String>,
+    pub last: Option<String>,
+}
+
+const HEAD_LIMIT: u64 = 2 * 1024 * 1024;
+const TAIL_STEPS: [u64; 2] = [256 * 1024, 1024 * 1024];
+const TALK_CHARS: usize = 300;
+
+// 道筋 → (大きさ, 更新時刻, 読んだもの)。同じものを選び直しても読み直さない。
+static TALKS: Mutex<Option<HashMap<PathBuf, (u64, i64, Talk)>>> = Mutex::new(None);
+
+fn clip(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text.chars().take(TALK_CHARS).collect())
+}
+
+fn tag_of<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let from = text.find(&open)? + open.len();
+    let to = text[from..].find(&close)? + from;
+    Some(text[from..to].trim())
+}
+
+// 人が書いた依頼の文。道具の結果・メタの行・コマンドの出力は飛ばす。
+// スラッシュコマンドで始めたものは「/名前 引数」にして返す。
+fn asked(line: &Value) -> Option<String> {
+    if str_of(line, "type").as_deref() != Some("user") {
+        return None;
+    }
+    if line.get("isMeta").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    let content = line.get("message")?.get("content")?;
+    let text = match content {
+        Value::String(s) => s.clone(),
+        Value::Array(parts) => parts
+            .iter()
+            .filter(|p| p.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|p| p.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => return None,
+    };
+    let text = text.trim();
+    if let Some(name) = tag_of(text, "command-name") {
+        let args = tag_of(text, "command-args").unwrap_or("");
+        return clip(&format!("{name} {args}"));
+    }
+    if text.starts_with('<') || text.starts_with("Caveat:") {
+        return None;
+    }
+    clip(text)
+}
+
+// 返答の文。道具を呼ぶだけで文の無い行は飛ばす。
+fn answered(line: &Value) -> Option<String> {
+    if str_of(line, "type").as_deref() != Some("assistant") {
+        return None;
+    }
+    let parts = line.get("message")?.get("content")?.as_array()?;
+    let text = parts
+        .iter()
+        .filter(|p| p.get("type").and_then(Value::as_str) == Some("text"))
+        .filter_map(|p| p.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("\n");
+    clip(&text)
+}
+
+fn first_ask(file: &Path) -> std::io::Result<Option<String>> {
+    let mut head = Vec::new();
+    File::open(file)?.take(HEAD_LIMIT).read_to_end(&mut head)?;
+    let text = String::from_utf8_lossy(&head);
+    Ok(text
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find_map(|v| asked(&v)))
+}
+
+fn last_answer(file: &Path, size: u64) -> std::io::Result<Option<String>> {
+    for step in TAIL_STEPS {
+        let from = size.saturating_sub(step);
+        let mut f = File::open(file)?;
+        f.seek(SeekFrom::Start(from))?;
+        let mut tail = Vec::new();
+        f.read_to_end(&mut tail)?;
+        let text = String::from_utf8_lossy(&tail);
+        // 途中から読んだときの頭の 1 行は切れているので使わない。
+        let lines: Vec<&str> = text.lines().collect();
+        let skip = usize::from(from > 0);
+        if let Some(found) = lines[skip.min(lines.len())..]
+            .iter()
+            .rev()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .find_map(|v| answered(&v))
+        {
+            return Ok(Some(found));
+        }
+        if from == 0 {
+            break;
+        }
+    }
+    Ok(None)
+}
+
+pub fn read_talk(transcript: &Path) -> Talk {
+    let Ok(meta) = fs::metadata(transcript) else {
+        return Talk::default();
+    };
+    let size = meta.len();
+    let stamp = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as i64);
+    {
+        let guard = TALKS.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((s, t, talk)) = guard.as_ref().and_then(|m| m.get(transcript)) {
+            if *s == size && *t == stamp {
+                return talk.clone();
+            }
+        }
+    }
+    let talk = Talk {
+        first: first_ask(transcript).unwrap_or_else(|e| {
+            log::warn!("{} を読めません: {e}", transcript.display());
+            None
+        }),
+        last: last_answer(transcript, size).unwrap_or(None),
+    };
+    let mut guard = TALKS.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .get_or_insert_with(HashMap::new)
+        .insert(transcript.to_path_buf(), (size, stamp, talk.clone()));
+    talk
+}
+
+#[tauri::command]
+pub async fn claude_session_talk(transcript: String) -> Result<Talk, String> {
+    tauri::async_runtime::spawn_blocking(move || read_talk(Path::new(&transcript)))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +543,50 @@ mod tests {
     const CALL_CODE: &str = r#"{"type":"assistant","timestamp":"2026-10-05T11:45:00.000Z","message":{"content":[{"type":"tool_use","id":"t4","name":"Write","input":{"file_path":"/w/main.rs"}}]}}"#;
     const OK_CODE: &str = r#"{"type":"user","timestamp":"2026-10-05T11:45:01.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t4","content":"ok"}]},"toolUseResult":{"filePath":"/w/main.rs"}}"#;
     const TITLE: &str = r#"{"type":"custom-title","customTitle":"x","sessionId":"s"}"#;
+
+    #[test]
+    fn talk_skips_meta_and_tools() {
+        let dir = temp("talk");
+        let file = dir.join("s.jsonl");
+        let mut f = File::create(&file).unwrap();
+        writeln!(f, r#"{{"type":"user","isMeta":true,"message":{{"content":"Caveat: ..."}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"user","message":{{"content":"<local-command-stdout>x</local-command-stdout>"}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"user","message":{{"content":[{{"type":"text","text":"表を直して"}}]}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"直しました"}}]}}}}"#).unwrap();
+        writeln!(f, "{CALL_WRITE}").unwrap();
+        writeln!(f, "{OK_WRITE}").unwrap();
+        drop(f);
+        let talk = read_talk(&file);
+        assert_eq!(talk.first.as_deref(), Some("表を直して"));
+        assert_eq!(talk.last.as_deref(), Some("直しました"));
+    }
+
+    #[test]
+    fn talk_names_slash_commands() {
+        let dir = temp("talk-cmd");
+        let file = dir.join("s.jsonl");
+        let mut f = File::create(&file).unwrap();
+        writeln!(f, r#"{{"type":"user","message":{{"content":"<command-message>r</command-message>\n<command-name>/release</command-name>\n<command-args>1.4.0</command-args>"}}}}"#).unwrap();
+        drop(f);
+        let talk = read_talk(&file);
+        assert_eq!(talk.first.as_deref(), Some("/release 1.4.0"));
+        assert_eq!(talk.last, None);
+    }
+
+    #[test]
+    fn talk_reads_only_the_tail_for_the_answer() {
+        let dir = temp("talk-tail");
+        let file = dir.join("s.jsonl");
+        let mut f = File::create(&file).unwrap();
+        writeln!(f, r#"{{"type":"user","message":{{"content":"はじめ"}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"古い返答"}}]}}}}"#).unwrap();
+        // 末尾の 256KB を超える、文の無い行を挟む。
+        let big = "x".repeat(300 * 1024);
+        writeln!(f, r#"{{"type":"user","message":{{"content":[{{"type":"tool_result","content":"{big}"}}]}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"新しい返答"}}]}}}}"#).unwrap();
+        drop(f);
+        assert_eq!(read_talk(&file).last.as_deref(), Some("新しい返答"));
+    }
 
     fn temp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("fude-claude-{name}-{}", std::process::id()));

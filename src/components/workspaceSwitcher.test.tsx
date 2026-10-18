@@ -364,7 +364,7 @@ describe("作る：＋", () => {
     expect(calls.at(-1)).toEqual({ op: "open", arg: "b" });
   });
 
-  it("指したセッションの中身を右に出す（場所・ワークスペースの有無）", async () => {
+  it("指したセッションの中身を右に出す（場所。ワークスペースが無ければその節は出さない）", async () => {
     const { el } = await show((s) => {
       s.set(A.claudeLinkAtom, true);
       s.set(A.claudeSessionsAtom, {
@@ -384,7 +384,7 @@ describe("作る：＋", () => {
     const detail = document.querySelector(".mg-pal-detail")!.textContent ?? "";
     expect(detail).toContain("[V]新しいセッション");
     expect(detail).toContain("/w/t");
-    expect(detail).toContain("まだ無い");
+    expect(detail).not.toContain("ワークスペース");
   });
 });
 

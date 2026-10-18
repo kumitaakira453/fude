@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
-import { PHASE_LABEL, phaseOf, type ClaudeSession } from "../lib/claude";
+import { PHASE_LABEL, claudeSessionTalk, phaseOf, type ClaudeSession, type Talk } from "../lib/claude";
 import { rootName } from "../lib/idb";
 import { ago } from "../lib/when";
 import { rootsSummary, type Workspace } from "../lib/workspaces";
@@ -15,6 +15,7 @@ import {
   workspaceAtom,
   workspacesAtom,
 } from "../state/atoms";
+import { FileIcon } from "./FileIcon";
 import { FolderChooser } from "./FolderChooser";
 import { Icon } from "./Icon";
 import { Marked } from "./Marked";
@@ -304,8 +305,40 @@ export function NewWorkspace() {
   );
 }
 
-// セッションの中身。書いたファイルの数は、ワークスペースと結び付いているときだけ
-// 手元にある（結び付いていないものは記録を読み直さないと分からない）。
+// 会話の頭と終わり。↑↓ で送っている間は読まず、選んだまま止まったら読む。
+// 一度読んだものは控える（Rust 側も大きさと時刻で控えている）。
+const TALK_WAIT = 120;
+const talks = new Map<string, Talk>();
+// 書いたファイルは右の欄では先頭のこの数だけ。
+const WROTE_SHOWN = 4;
+
+function useTalk(transcript: string | null | undefined): Talk | null {
+  const [talk, setTalk] = useState<Talk | null>(() => (transcript ? (talks.get(transcript) ?? null) : null));
+  useEffect(() => {
+    const known = transcript ? (talks.get(transcript) ?? null) : null;
+    setTalk(known);
+    if (!transcript || known) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      claudeSessionTalk(transcript).then(
+        (t) => {
+          talks.set(transcript, t);
+          if (live) setTalk(t);
+        },
+        (e: unknown) => console.warn("会話を読めません", e),
+      );
+    }, TALK_WAIT);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [transcript]);
+  return talk;
+}
+
+// セッションの中身。書いたファイルは、ワークスペースと結び付いているときだけ
+// 手元にある。結び付いていないものは記録を全部読み直さないと分からず、記録は
+// 数百 MB になることもあるので、ここでは読まない。
 function SessionDetail({
   s,
   ws,
@@ -316,24 +349,67 @@ function SessionDetail({
   now: number;
 }) {
   const phase = phaseOf(s, { readable: true, transcriptGone: false });
+  const talk = useTalk(s.transcript);
+  const wrote = [...(ws?.claude?.wrote ?? [])].sort((a, b) => b.at - a.at);
   return (
     <PickDetail
-      icon={<Icon name="claude" size={14} stroke={1.8} className="text-[var(--mg-muted)]" />}
+      color="var(--mg-claude)"
+      icon={<Icon name="claude" size={16} stroke={1.8} className="text-[var(--mg-claude)]" />}
       title={s.name || s.sessionId.slice(0, 8)}
       facts={[
         PHASE_LABEL[phase] ? (
           <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>
         ) : null,
-        s.startedAt ? <b>{ago(s.startedAt, now)}</b> : null,
-        ws?.claude?.wrote ? (
+        s.startedAt ? (
           <>
-            書いたファイル <b>{ws.claude.wrote.length}</b> 件
+            <b>{ago(s.startedAt, now)}</b>に開始
+          </>
+        ) : null,
+        wrote.length > 0 ? (
+          <>
+            書いたファイル <b>{wrote.length}</b> 件
           </>
         ) : null,
       ]}
       sections={[
+        [
+          "会話",
+          talk && (talk.first || talk.last) ? (
+            <div className="mg-pal-talk">
+              {talk.first && (
+                <p className="is-ask">
+                  <small>最初の依頼</small>
+                  {talk.first}
+                </p>
+              )}
+              {talk.last && (
+                <p className="is-answer">
+                  <small>最後の返答</small>
+                  {talk.last}
+                </p>
+              )}
+            </div>
+          ) : null,
+        ],
+        [
+          "書いたファイル",
+          wrote.length > 0 ? (
+            <ul className="mg-pal-detail-files">
+              {wrote.slice(0, WROTE_SHOWN).map((w) => (
+                <li key={w.path} title={w.path}>
+                  <FileIcon name={w.path.split("/").pop() ?? w.path} size={14} />
+                  <span className="mg-pal-detail-fname">{w.path.split("/").pop()}</span>
+                  <span className="mg-pal-detail-at">{ago(w.at, now)}</span>
+                </li>
+              ))}
+              {wrote.length > WROTE_SHOWN && (
+                <li className="is-more">ほか {wrote.length - WROTE_SHOWN} 件</li>
+              )}
+            </ul>
+          ) : null,
+        ],
         ["場所", s.cwd ? <PathText path={s.cwd} /> : null],
-        ["ワークスペース", ws ? ws.name : "まだ無い"],
+        ["ワークスペース", ws ? ws.name : null],
       ]}
     />
   );
@@ -353,7 +429,7 @@ function SessionRow({
   const phase = phaseOf(s, { readable: true, transcriptGone: false });
   return (
     <>
-      <Icon name="claude" size={12} stroke={1.8} className="text-[var(--mg-muted)]" />
+      <Icon name="claude" size={12} stroke={1.8} className="text-[var(--mg-claude)]" />
       <span className="mg-pal-name">
         <Marked text={s.name || s.sessionId.slice(0, 8)} query={query} />
       </span>

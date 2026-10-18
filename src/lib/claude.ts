@@ -71,6 +71,16 @@ export async function claudeSessionFiles(
   return invoke("claude_session_files", { sessionId, transcript });
 }
 
+// 会話の頭と終わり（最初の依頼と最後の返答）。記録の先頭と末尾だけを読む。
+export interface Talk {
+  first: string | null;
+  last: string | null;
+}
+
+export async function claudeSessionTalk(transcript: string): Promise<Talk> {
+  return invoke<Talk>("claude_session_talk", { transcript });
+}
+
 // fude の中で動かした「元 → 先」（古い順）を、書いたファイルの道筋に当てる。
 // 元そのものか、元のフォルダの下なら先へ付け替える。付け替えで同じ道筋に
 // なったものは 1 つにまとめ、時刻は新しい方を残す。並びは新しい順（同時刻は道筋順）。
