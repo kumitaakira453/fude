@@ -18,6 +18,7 @@ import { useAfterPaint } from "./hooks/useAfterPaint";
 import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useKeyHints } from "./hooks/useKeyHints";
+import { useGoneTabs } from "./hooks/useGoneTabs";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { watchStalls } from "./lib/measure";
 import { useUrlSync } from "./hooks/useUrlSync";
@@ -86,6 +87,7 @@ export default function App() {
   useHotkeys();
   useKeyHints();
   useRecentFiles();
+  useGoneTabs();
   useEffect(watchStalls, []);
   useDragging();
   useWatcher();

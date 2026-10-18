@@ -23,6 +23,7 @@ import {
 import {
   docFindNonceAtom,
   freshTabsAtom,
+  goneTabsAtom,
   liveEditAtom,
   type LeafNode,
   showOtherFilesAtom,
@@ -55,6 +56,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
 
   // 外から足されたばかりのタブ（Claude のセッションが書いたもの）。開いたら印を外す。
   const fresh = useAtomValue(freshTabsAtom);
+  const gone = useAtomValue(goneTabsAtom);
   const [live, setLive] = useAtom(liveEditAtom);
   useEffect(() => {
     if (active && fresh.has(active)) seenTab(store, active);
@@ -158,7 +160,7 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               }}
               // 遷移は掛けない。上端のアクセントの線は要素の出現で即座に出る
               // ので、背景だけ遅れると足並みが揃わない（ツリーの行と同じ）。
-              className={`mg-tab group${selected ? " is-on" : ""}`}
+              className={`mg-tab group${selected ? " is-on" : ""}${gone.has(path) ? " is-gone" : ""}`}
             >
               {/* 今のタブの上端の線。分割していて焦点の無いペインでは色を落とす。 */}
               {selected && <span className={`mg-tab-line${isActive ? "" : " is-dim"}`} />}
@@ -166,7 +168,13 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                title={selected ? `${path}\n押すとツリーで表示` : path}
+                title={
+                  gone.has(path)
+                    ? `${path}\n移動または削除されています`
+                    : selected
+                      ? `${path}\n押すとツリーで表示`
+                      : path
+                }
                 // 開いているタブをもう一度押すのは「ここを出して」という合図。
                 // 切り替えのたびにツリーが動くと、狙って触るまで読めなくなる。
                 onClick={() =>

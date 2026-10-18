@@ -363,6 +363,9 @@ export const openFilesOpenAtom = atom<boolean>(false);
 // ファイルを最後に見た時刻（絶対パス → ms）。開いているファイルの一覧を最近見た順に
 // 並べるのに使う。ウィンドウごとで、控えない。
 export const recentFilesAtom = atom<ReadonlyMap<string, number>>(new Map());
+// 開いているタブのうち、消えた・見張っているフォルダの外へ移されたファイル（useGoneTabs）。
+// ウィンドウごとで、控えない。
+export const goneTabsAtom = atom<ReadonlySet<string>>(new Set<string>());
 // 一覧に並べるもの。⌘P はファイルだけ、⌘⇧P は操作とファイル。
 export const paletteModeAtom = atom<"files" | "all">("files");
 // ⌘, で開く設定（⌘/ はその中のキー操作の面）

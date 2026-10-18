@@ -9112,6 +9112,12 @@ html[data-hints] .mg-seg {
   white-space: nowrap;
   user-select: none;
 }
+/* 消えた・フォルダの外へ移されたファイルのタブ。閉じるかどうかはユーザーが決めるので
+   残し、名前だけを淡く取り消す（セッションのファイルの .is-gone と同じ見せ方）。 */
+.mg-tab.is-gone .mg-tab-name {
+  color: var(--mg-muted);
+  text-decoration: line-through;
+}
 .mg-tabrow-acts {
   display: flex;
   flex: none;
