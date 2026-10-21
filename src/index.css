@@ -1209,6 +1209,34 @@ button.mg-task-check:hover {
   color: var(--mg-fg);
 }
 /* 木の 1 行。高さ 26、絵と字の間 6、角丸 4。 */
+/* フォルダの行の「ここに作る」釦。指した行だけ、名前の上に重ねて右端に出す。
+   地は行を指したときと同じ色（木の地に指した色を重ねる）。左端はぼかして、
+   字が釦の手前で途切れて見えないようにする。 */
+.mg-tree-acts {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 14px;
+  border-radius: 0 var(--mg-r1) var(--mg-r1) 0;
+  background: linear-gradient(to right, transparent, var(--mg-chrome) 12px);
+  isolation: isolate;
+}
+/* 落とし先として光っている行では出さない。 */
+.mg-tree-line:hover > .mg-tree-acts:not(.is-off) {
+  display: flex;
+}
+.mg-tree-acts::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(to right, transparent, var(--mg-hover) 12px);
+}
 .mg-tree-line {
   position: relative;
   display: flex;

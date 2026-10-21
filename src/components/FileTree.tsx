@@ -333,12 +333,15 @@ const TreeItem = memo(function TreeItem({
               {node.name}
             </span>
             {heading && <span className="mg-tree-root-count">{countFiles(node)}</span>}
-            {/* ホバー時に「このフォルダ内に作成」アクション。根の行では、指して
-                いないあいだは幅も取らない（名前を削らない）。 */}
+            {/* ホバー時に「このフォルダ内に作成」アクション。指していないあいだは
+                幅を取らない（名前を削らない）。根でない行は名前の上に重ねて出し、
+                指しても名前の切れる位置を動かさない。 */}
             <span
-              className={`ml-auto shrink-0 items-center gap-0.5 ${
-                heading ? "hidden group-hover:flex" : "flex opacity-0 transition group-hover:opacity-100"
-              }`}
+              className={
+                heading
+                  ? "ml-auto hidden shrink-0 items-center gap-0.5 group-hover:flex"
+                  : `mg-tree-acts${isDropTarget ? " is-off" : ""}`
+              }
             >
               <span
                 role="button"
