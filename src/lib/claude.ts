@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { isViewable } from "./kind";
 
 // Claude Code のセッション（ベータ）。一覧と書いたファイルは Rust が読む。
 
@@ -68,7 +69,12 @@ export async function claudeSessionFiles(
   sessionId: string,
   transcript: string,
 ): Promise<{ wrote: Wrote[]; gone: boolean }> {
-  return invoke("claude_session_files", { sessionId, transcript });
+  const read = await invoke<{ wrote: Wrote[]; gone: boolean }>("claude_session_files", {
+    sessionId,
+    transcript,
+  });
+  // 開けるものだけ（ファイルの木と同じ決め方）。書庫や実行物などは並べない。
+  return { ...read, wrote: read.wrote.filter((w) => isViewable(w.path)) };
 }
 
 // 会話の頭と終わり（最初の依頼と最後の返答）。記録の先頭と末尾だけを読む。

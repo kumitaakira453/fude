@@ -174,21 +174,11 @@ static SCANS: Mutex<Option<HashMap<String, Scan>>> = Mutex::new(None);
 
 const WRITERS: [&str; 4] = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 
-// fude で開けるもの。
-const SHOWN: [&str; 19] = [
-    "md", "markdown", "mdx", "mdown", "mkd", "csv", "tsv", "json", "html", "htm", "txt", "pdf",
-    "png", "jpg", "jpeg", "gif", "svg", "webp", "ipynb",
-];
-
+// 見せるもの。開けるかどうか（拡張子）はフロントの isViewable が決める
+// （ファイルの木と同じ決め方を 1 か所に置く）。
 fn shown(path: &str) -> bool {
     // 記憶や道具の出力の置き場（~/.claude/projects）は、書いたものとして見せない。
-    if path.contains("/.claude/projects/") {
-        return false;
-    }
-    Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| SHOWN.contains(&e.to_ascii_lowercase().as_str()))
+    !path.contains("/.claude/projects/")
 }
 
 // "2026-10-05T11:42:11.092Z" をミリ秒に。読めなければ 0。
@@ -542,6 +532,8 @@ mod tests {
     const DENIED: &str = r#"{"type":"user","timestamp":"2026-10-05T11:44:01.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t3","is_error":true,"content":"The user doesn't want to proceed"}]},"toolUseResult":"The user doesn't want to proceed"}"#;
     const CALL_CODE: &str = r#"{"type":"assistant","timestamp":"2026-10-05T11:45:00.000Z","message":{"content":[{"type":"tool_use","id":"t4","name":"Write","input":{"file_path":"/w/main.rs"}}]}}"#;
     const OK_CODE: &str = r#"{"type":"user","timestamp":"2026-10-05T11:45:01.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t4","content":"ok"}]},"toolUseResult":{"filePath":"/w/main.rs"}}"#;
+    const CALL_MEMO: &str = r#"{"type":"assistant","timestamp":"2026-10-05T11:46:00.000Z","message":{"content":[{"type":"tool_use","id":"t5","name":"Write","input":{"file_path":"/u/.claude/projects/p/memory/m.md"}}]}}"#;
+    const OK_MEMO: &str = r#"{"type":"user","timestamp":"2026-10-05T11:46:01.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t5","content":"ok"}]},"toolUseResult":{"filePath":"/u/.claude/projects/p/memory/m.md"}}"#;
     const TITLE: &str = r#"{"type":"custom-title","customTitle":"x","sessionId":"s"}"#;
 
     #[test]
@@ -610,22 +602,22 @@ mod tests {
     }
 
     #[test]
-    fn 書けたものだけを拾い_失敗と拒否と開けないものは拾わない() {
+    fn 書けたものだけを拾い_失敗と拒否と記憶の置き場は拾わない() {
         let dir = temp("pick");
         let main = dir.join("s1.jsonl");
         lines(
             &main,
-            &[CALL_WRITE, OK_WRITE, CALL_EDIT, FAIL_EDIT, CALL_DENIED, DENIED, CALL_CODE, OK_CODE, TITLE],
+            &[
+                CALL_WRITE, OK_WRITE, CALL_EDIT, FAIL_EDIT, CALL_DENIED, DENIED, CALL_CODE, OK_CODE,
+                CALL_MEMO, OK_MEMO, TITLE,
+            ],
         );
         let got = scan_session("pick", &main);
         assert!(!got.gone);
-        assert_eq!(
-            got.wrote,
-            vec![Wrote {
-                path: "/w/a.md".into(),
-                at: 1_791_200_532_000
-            }]
-        );
+        // md 以外（コード）も拾う。開けるかどうかはフロントが決める。
+        let mut paths: Vec<&str> = got.wrote.iter().map(|w| w.path.as_str()).collect();
+        paths.sort();
+        assert_eq!(paths, vec!["/w/a.md", "/w/main.rs"]);
     }
 
     #[test]

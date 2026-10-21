@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { followMoves, newlyWritten, phaseOf, type ClaudeSession } from "./claude";
+import { describe, expect, it, vi } from "vitest";
+import {
+  claudeSessionFiles,
+  followMoves,
+  newlyWritten,
+  phaseOf,
+  type ClaudeSession,
+} from "./claude";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async () => ({
+    gone: false,
+    wrote: [
+      { path: "/w/a.md", at: 3 },
+      { path: "/w/main.ts", at: 2 },
+      { path: "/w/構成.d2", at: 2 },
+      { path: "/w/dist.zip", at: 1 },
+    ],
+  }),
+}));
 
 const session = (over: Partial<ClaudeSession>): ClaudeSession => ({
   sessionId: "s",
@@ -88,5 +106,12 @@ describe("fude の中で動かしたファイルへ寄せる", () => {
       { path: "/根/old.md", at: 2 },
     ];
     expect(followMoves(both, [["/根/old.md", "/根/new.md"]])).toEqual([{ path: "/根/new.md", at: 5 }]);
+  });
+});
+
+describe("セッションが書いたファイル", () => {
+  it("md 以外も、ファイルの木で開けるものは拾い、書庫などは落とす", async () => {
+    const { wrote } = await claudeSessionFiles("s", "/t.jsonl");
+    expect(wrote.map((w) => w.path)).toEqual(["/w/a.md", "/w/main.ts", "/w/構成.d2"]);
   });
 });
