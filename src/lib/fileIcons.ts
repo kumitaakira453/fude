@@ -21,7 +21,7 @@ export interface Face {
 }
 
 const raw = import.meta.glob(
-  "/node_modules/@tabler/icons/icons/outline/{markdown,file-text,file,file-code,file-settings,file-info,file-certificate,file-spreadsheet,file-zip,file-music,file-type-ts,file-type-tsx,file-type-js,file-type-jsx,file-type-html,file-type-css,file-type-php,file-type-pdf,file-type-csv,file-type-png,file-type-jpg,file-type-svg,file-type-txt,file-type-xml,file-type-rs,file-type-sql,file-type-vue,file-type-doc,file-type-xls,file-type-ppt,file-type-docx,braces,brand-python,brand-rust,brand-golang,brand-docker,brand-git,brand-npm,brand-github,brand-swift,brand-kotlin,brand-c-sharp,brand-cpp,brand-php,brand-sass,brand-vite,brand-react,brand-typescript,coffee,diamond,letter-c,terminal-2,database,lock,key,license,photo,movie,gif,table,package,tool,flask,folder,folder-open,folder-code,folder-cog,folders}.svg",
+  "/node_modules/@tabler/icons/icons/outline/{markdown,file-text,file,file-code,file-settings,file-info,file-certificate,file-spreadsheet,file-zip,file-music,file-type-ts,file-type-tsx,file-type-js,file-type-jsx,file-type-html,file-type-css,file-type-php,file-type-pdf,file-type-csv,file-type-png,file-type-jpg,file-type-svg,file-type-txt,file-type-xml,file-type-rs,file-type-sql,file-type-vue,file-type-doc,file-type-xls,file-type-ppt,file-type-docx,braces,brand-python,brand-rust,brand-golang,brand-docker,brand-git,brand-npm,brand-github,brand-swift,brand-kotlin,brand-c-sharp,brand-cpp,brand-php,brand-sass,brand-vite,brand-react,brand-typescript,coffee,diamond,letter-c,terminal-2,database,lock,key,license,photo,movie,gif,table,package,tool,flask,folder,folder-open,folder-code,folder-cog,folders,hierarchy}.svg",
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;
 
@@ -99,6 +99,7 @@ const BY_EXT: Record<string, Face> = {
   toml: face("file-settings", "orange"),
   ini: face("file-settings", "gray"),
   csv: face("file-type-csv", "green"),
+  d2: face("hierarchy", "blue"),
   tsv: face("file-spreadsheet", "green"),
   ts: face("file-type-ts", "blue"),
   mts: face("file-type-ts", "blue"),

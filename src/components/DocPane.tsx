@@ -22,6 +22,7 @@ import {
 import { blocksOf } from "../lib/blocks";
 import { delimOf } from "../lib/csv";
 import { isJsonPath } from "../lib/jsonTree";
+import { isD2Path } from "../lib/diagram";
 import { makeHandout } from "../lib/handout";
 import { fitRailWidth, RAIL_WIDTH } from "../lib/sidebar";
 import { copyImage, copyText } from "../lib/clip";
@@ -69,6 +70,7 @@ import {
   railWidthAtom,
   type Pane,
   savingCountAtom,
+  d2DiagramAtom,
 } from "../state/atoms";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { EditableBody } from "./EditableBody";
@@ -87,6 +89,7 @@ import { PdfDoc } from "./PdfDoc";
 import { TextDoc } from "./TextDoc";
 import { CsvDoc } from "./CsvDoc";
 import { JsonDoc } from "./JsonDoc";
+import { D2Doc } from "./D2Doc";
 import { SelectionBar } from "./SelectionBar";
 import { SaveVersion } from "./version/SaveVersion";
 import {
@@ -404,6 +407,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   const isDraft = inDrafts(sole, draftsDir);
   // 何で見せるか。Markdown 以外は読むだけなので、編集・版・指摘は出さない。
   const kind = path ? kindOf(path) : "markdown";
+  const d2 = useAtomValue(d2DiagramAtom);
   const isDoc = kind === "markdown";
   const [ask, setAsk] = useAtom(draftAskAtom);
 
@@ -1623,6 +1627,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
               <PdfDoc abs={absPath ?? path} />
             ) : kind === "text" && delimOf(path) ? (
               <CsvDoc abs={absPath ?? path} />
+            ) : kind === "text" && d2 && isD2Path(path) ? (
+              <D2Doc key={absPath ?? path} abs={absPath ?? path} />
             ) : kind === "text" && isJsonPath(path) ? (
               <JsonDoc abs={absPath ?? path} />
             ) : kind === "text" ? (

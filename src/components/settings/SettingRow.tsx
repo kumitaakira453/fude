@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue } from "jotai";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOptimisticSetting } from "../../hooks/useOptimisticSetting";
 import { ignoreLines } from "../../lib/ignore";
 import { activeFolderIdAtom, folderIgnoresAtom } from "../../state/atoms";
@@ -28,19 +28,40 @@ export function Switch({ row }: { row: SwitchRow }) {
   const [stored, store] = useAtom(row.atom);
   // 押した瞬間に切り替える（反映に伴う描き直しを待たせない）。
   const [on, set] = useOptimisticSetting(stored, store);
+  // 入にするのに要るものが揃っているか。確かめ終わるまでは null。
+  const [ready, setReady] = useState<boolean | null>(row.requires ? null : true);
+  const check = row.requires?.check;
+  useEffect(() => {
+    if (!check) return;
+    let alive = true;
+    void check().then(
+      (ok) => alive && setReady(ok),
+      () => alive && setReady(false),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [check]);
+  // 揃っていないのに入のまま残っていたら切にする（外したあとなど）。
+  useEffect(() => {
+    if (ready === false && stored) store(false);
+  }, [ready, stored, store]);
+  const missing = ready === false;
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={on}
+      aria-checked={on && !missing}
+      disabled={missing}
       onClick={() => set(!on)}
       className="mg-set-row"
     >
       <span className="mg-set-row-main">
         <RowName name={row.name} beta={row.beta} />
         <span className="mg-set-note">{row.note}</span>
+        {missing && row.requires && <span className="mg-set-missing">{row.requires.missing}</span>}
       </span>
-      <span className={`mg-switch${on ? " is-on" : ""}`}>
+      <span className={`mg-switch${on && !missing ? " is-on" : ""}`}>
         <i />
       </span>
     </button>

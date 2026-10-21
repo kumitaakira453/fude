@@ -8,6 +8,7 @@ mod dock;
 pub mod review;
 mod watch;
 mod claude;
+mod d2;
 mod windows;
 mod workspaces;
 
@@ -673,6 +674,9 @@ pub fn run() {
             claude::claude_sessions,
             claude::claude_session_files,
             claude::claude_session_talk,
+            d2::render_d2,
+            d2::export_d2,
+            d2::d2_available,
             claude::claude_bin_path
         ])
         // 窓が閉じたら控えに時刻を付ける。起動し直したときに戻す窓を決めるのに使う。

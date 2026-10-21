@@ -33,6 +33,23 @@ describe("色の付く範囲", () => {
     expect(got.some((t) => t.text === "2" && t.cls === "hljs-number")).toBe(true);
   });
 
+  it("D2 の予約の鍵・形・線・字・注記・名前を拾う", () => {
+    const code = [
+      "# 流れ",
+      "shape: sequence_diagram",
+      '書く: "下書き" {tooltip: "補足"}',
+      "書く -> 確かめる: 依頼",
+    ].join("\n");
+    const got = slice(code, "d2");
+    expect(got).toContainEqual({ text: "# 流れ", cls: "hljs-comment" });
+    expect(got).toContainEqual({ text: "shape", cls: "hljs-keyword" });
+    expect(got).toContainEqual({ text: "sequence_diagram", cls: "hljs-built_in" });
+    expect(got).toContainEqual({ text: "書く", cls: "hljs-attr" });
+    expect(got).toContainEqual({ text: "tooltip", cls: "hljs-keyword" });
+    expect(got.some((t) => t.text === '"下書き"' && t.cls === "hljs-string")).toBe(true);
+    expect(got).toContainEqual({ text: "->", cls: "hljs-operator" });
+  });
+
   it("入れ子の span はいちばん内側のクラスを採る", () => {
     const got = slice("def f(x):\n    pass", "python");
     // 関数名は hljs-title function_ の二枚重ね。読むときの CSS もこの形で当たる。

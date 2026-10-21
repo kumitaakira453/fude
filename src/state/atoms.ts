@@ -193,6 +193,11 @@ export const showOtherFilesAtom = atomWithStorage<boolean>("mdglow:showfiles", t
 export const csvViewAtom = atomWithStorage<"rainbow" | "table">("mdglow:csvview", "rainbow");
 // JSON をどちらの見た目で開くか。開け閉めできる木か、色付きの原文か。
 export const jsonViewAtom = atomWithStorage<"tree" | "source">("mdglow:jsonview", "tree");
+// .d2 のファイルの見せ方。ソース・分割・図（本文のコードの塊と同じ 3 つ）。
+export type D2View = "code" | "split" | "diagram";
+export const d2ViewAtom = atomWithStorage<D2View>("fude:d2view", "diagram");
+// .d2 の分割で、ソースの欄が占める割合。
+export const d2SplitAtom = atomWithStorage<number>("fude:d2split", 0.42);
 // フォルダに付けたアイコン（Material Symbols の名前）。鍵はフォルダの絶対パス。
 // 覚えるのはアプリの中だけで、フォルダには何も書かない。fude で動かしたときは
 // useWorkspace が付け替える。
@@ -263,6 +268,8 @@ export const taskMarksAtom = atomWithStorage<string[]>("fude:taskmarks", DEFAULT
 // 幅の長い表の手当て（ベータ）。横に送っても先頭の列を残し、溢れている表には
 // 「大きく開く」を出す。切ると今までどおり、ただ横に送るだけになる。
 export const wideTableAtom = atomWithStorage<boolean>("fude:widetable", true);
+// ```d2 のコードの塊を図として描く（ベータ）。Mac の d2 コマンドを使う。
+export const d2DiagramAtom = atomWithStorage<boolean>("fude:d2", false);
 // 今のペインで本文に使える幅（px）。本文の幅の切り替えが効くかを見るのに使う。
 export const bodyRoomAtom = atom<number | null>(null);
 // 本文とコメントの字の大きさ（px の数字の字）。根の要素の CSS 変数へ写す。

@@ -468,8 +468,9 @@ export function isTableBlock(src: string): boolean {
   );
 }
 
-export function isMermaidBlock(src: string): boolean {
-  return /^\s*`{3,}\s*mermaid\b/i.test(src);
+// 図のブロック（mermaid・d2）。コメントの画面では原文を出さない。
+export function isDiagramBlock(src: string): boolean {
+  return /^\s*`{3,}\s*(mermaid|d2)\b/i.test(src);
 }
 
 // 1 行を「エスケープされていない `|`」で分割する（`\|` は区切りにしない）

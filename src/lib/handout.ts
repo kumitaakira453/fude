@@ -348,15 +348,17 @@ const breathe = (): Promise<void> =>
 // 元の絵のまま残す。
 export async function redrawDiagrams(
   out: HTMLElement,
-  draw: (code: string) => Promise<string>,
+  draw: (lang: string, code: string) => Promise<string>,
 ): Promise<void> {
   for (const el of out.querySelectorAll<HTMLElement>(".mg-mermaid[data-mermaid]")) {
     const inner = el.querySelector(".mg-mermaid-inner");
     const code = el.dataset.mermaid ?? "";
+    const lang = el.dataset.lang || "mermaid";
     el.removeAttribute("data-mermaid");
+    el.removeAttribute("data-lang");
     if (!inner || !code) continue;
     try {
-      inner.innerHTML = await draw(code);
+      inner.innerHTML = await draw(lang, code);
     } catch (e) {
       console.error("[書き出し] 図を描き直せませんでした", e);
     }
@@ -368,8 +370,8 @@ export async function makeHandout(article: HTMLElement, look: Look): Promise<str
   const out = tidy(article);
   if (look.redrawDark !== undefined) {
     const dark = look.redrawDark;
-    const { renderMermaid } = await import("./mermaid");
-    await redrawDiagrams(out, (code) => renderMermaid(code, dark));
+    const { renderDiagram } = await import("./diagram");
+    await redrawDiagrams(out, (lang, code) => renderDiagram(lang, code, dark));
   }
   out.querySelectorAll("[data-mermaid]").forEach((el) => el.removeAttribute("data-mermaid"));
   await bakeImages(out);

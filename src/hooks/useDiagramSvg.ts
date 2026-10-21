@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { renderMermaid } from "../lib/mermaid";
+import { renderDiagram } from "../lib/diagram";
 
-// mermaid のソースを SVG にする。構文が通らない間も直前に描けた図を残すので、
+// 図（mermaid・d2）のソースを SVG にする。構文が通らない間も直前に描けた図を残すので、
 // 書いている途中で図が消えてちらつかない。delay を渡すと、その分だけ待って
 // から描く（打つたびに描き直さない）。
-export function useMermaidSvg(
+export function useDiagramSvg(
+  lang: string,
   code: string,
   dark: boolean,
   delay = 0,
@@ -22,12 +23,12 @@ export function useMermaidSvg(
     }
     let alive = true;
     const run = () => {
-      void renderMermaid(trimmed, dark)
+      void renderDiagram(lang, trimmed, dark)
         .then((svg) => {
           if (alive) setState({ svg, error: null });
         })
         .catch((e: { message?: string }) => {
-          console.error("[fude mermaid]", e);
+          console.error(`[fude ${lang}]`, e);
           if (alive) {
             setState((prev) => ({
               svg: prev.svg,
@@ -47,7 +48,7 @@ export function useMermaidSvg(
       alive = false;
       window.clearTimeout(t);
     };
-  }, [code, dark, delay]);
+  }, [lang, code, dark, delay]);
 
   return state;
 }

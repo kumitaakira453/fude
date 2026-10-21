@@ -41,14 +41,15 @@ import {
   marksOf,
   remarkTaskMarks,
 } from "../lib/md/taskMarks";
-import { taskMarksAtom, wideTableAtom } from "../state/atoms";
+import { d2DiagramAtom, taskMarksAtom, wideTableAtom } from "../state/atoms";
 import { useAtomValue } from "jotai";
 import { remarkCjkAutolink } from "../lib/md/cjkAutolink";
 import { rehypeKatexSafe } from "../lib/md/katexSafe";
 import { rehypeSummaryInline } from "../lib/md/summaryInline";
 import { foldKey, recallFold, rememberFold } from "../lib/folds";
 import { MdImage } from "./MdImage";
-import { Mermaid } from "./Mermaid";
+import { Diagram } from "./Diagram";
+import { isDiagramLang } from "../lib/diagram";
 
 const remarkPlugins = [
   remarkGfm,
@@ -397,6 +398,8 @@ export const Markdown = memo(function Markdown({
   // 有効な印は設定から。切り替えたその場で印が出る・字に戻るよう、並びを
   // 作り直して react-markdown に組み直させる。
   const extra = useAtomValue(taskMarksAtom);
+  // d2 の図はベータ。切のときは、ふつうのコードの塊として出す。
+  const d2 = useAtomValue(d2DiagramAtom);
   const remarks = useMemo(
     () => [
       ...(breaks ? remarkPluginsWithBreaks : remarkPlugins),
@@ -441,9 +444,12 @@ export const Markdown = memo(function Markdown({
       components={{
         code({ node: _node, className, children, ...props }) {
           const match = /language-([\w-]+)/.exec(className || "");
-          if (match?.[1] === "mermaid") {
+          if (isDiagramLang(match?.[1], d2)) {
             return (
-              <Mermaid code={childrenToString(children).replace(/\n$/, "")} />
+              <Diagram
+                lang={match![1]}
+                code={childrenToString(children).replace(/\n$/, "")}
+              />
             );
           }
           return (
@@ -456,8 +462,8 @@ export const Markdown = memo(function Markdown({
           const child = Children.toArray(children)[0];
           if (isValidElement(child)) {
             const cls = (child.props as { className?: string }).className || "";
-            if (/language-mermaid/.test(cls)) return <>{children}</>;
             const match = /language-([\w-]+)/.exec(cls);
+            if (isDiagramLang(match?.[1], d2)) return <>{children}</>;
             return (
               <CodeBlock language={match?.[1] ?? null}>{children}</CodeBlock>
             );

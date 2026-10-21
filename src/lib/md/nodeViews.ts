@@ -9,8 +9,9 @@ import {
 } from "prosemirror-view";
 import katex from "katex";
 import { copyText } from "../clip";
-import { renderMermaid } from "../mermaid";
+import { D2, describeDiagramError, isDiagramLang, renderDiagram } from "../diagram";
 import { covers } from "./decos";
+import { drawGate, type DrawGate } from "./drawGate";
 import { katexSafe } from "./katexSafe";
 import { openMath } from "./math";
 import { foldKey, recallFold, rememberFold } from "../folds";
@@ -38,12 +39,25 @@ const MODES: { mode: MermaidMode; icon: string; label: string }[] = [
   { mode: "diagram", icon: "visibility", label: "図" },
 ];
 
+// 最後に描けた図（塊の id と明暗 → SVG）。ProseMirror は IME の確定の後などに塊の
+// NodeView を作り直すことがあり、作り直した NodeView は図を持たない。描き直しが
+// 返るまで（書きかけで描けなければ描けるまで）図の欄が空になるので、前の図を先に出す。
+const figures = new Map<string, string>();
+const FIGURES_KEPT = 200;
+const figureKey = (id: string, dark: boolean) => `${id}\n${dark ? 1 : 0}`;
+
+// 描けなかったとき、エラーを出すまでの待ち。IME の確定や打っている途中の
+// 書きかけでエラーが出入りすると、エラーの段と図が跳ねてちらつく。
+const ERROR_DELAY = 1000;
+
 // 打ち終わってから描き直すまでの待ち。打つたびに描くと図が跳ねる。
 const REDRAW_DELAY = 250;
 
 export interface EditorDeps {
   // 図の明暗。mermaid は暗い / 明るいの 2 通りしか描き分けない。
   dark: boolean;
+  // d2 の図を描くか（ベータの設定）。切のとき d2 はふつうのコードの塊。
+  d2?: boolean;
   // 相対パスの画像をローカルから解く。読むときの MdImage と同じ経路。
   resolveAsset?: (src: string) => Promise<string | null>;
   peekAsset?: (src: string) => string | null;
@@ -178,7 +192,9 @@ function pickLang(
   const draw = (needle: string) => {
     const want = needle.trim().toLowerCase();
     shown = languages(current).filter((name) => !want || name.includes(want));
-    active = 0;
+    // 絞り込んでいないときは今の言語の行を選んでおく（開いた直後に別の行が
+    // 塗られていると、今の言語がどれか分からない）。絞り込んだら先頭。
+    active = want ? 0 : Math.max(0, shown.indexOf(current ?? PLAIN));
     rows = shown.map((name) => {
       const row = document.createElement("button");
       row.type = "button";
@@ -209,6 +225,8 @@ function pickLang(
     below > box.height + 12
       ? `${at.bottom + 4}px`
       : `${Math.max(8, at.top - box.height - 4)}px`;
+  // 置いてから、選んでいる行が見えるところまで一覧を送る。
+  mark();
 
   filter.focus();
   document.addEventListener("mousedown", onOutside, true);
@@ -250,11 +268,9 @@ class CodeBlockView implements NodeView {
   private error: HTMLElement;
   private picks = new Map<MermaidMode, HTMLButtonElement>();
 
-  // 描き直しの待ちと世代。遅れて返った古い図で新しい図を潰さない。
-  private timer = 0;
-  private seq = 0;
+  // 描き直しの間合い（lib/md/drawGate）。遅れて返った古い図で新しい図を潰さない。
+  private gate: DrawGate;
   private svg = "";
-  private dead = false;
   private redraw = () => this.draw(true);
 
   constructor(
@@ -324,19 +340,62 @@ class CodeBlockView implements NodeView {
     this.stage.addEventListener("click", () => this.zoom());
     this.canvas = document.createElement("div");
     this.canvas.className = "mg-mermaid-inner";
-    this.stage.appendChild(this.canvas);
 
+    // エラーは図の欄（プレビュー側）の中、図の上に出す。押しても拡大は開かない。
     this.error = document.createElement("div");
     this.error.className = "mg-mermaid-err";
-    this.error.contentEditable = "false";
+    this.error.addEventListener("click", (e) => e.stopPropagation());
+    this.stage.appendChild(this.error);
+    this.stage.appendChild(this.canvas);
 
     const pre = document.createElement("pre");
     this.contentDOM = document.createElement("code");
     pre.appendChild(this.contentDOM);
     this.dom.appendChild(pre);
     // 図はソースの下。両方出すときは、書いた結果が下に出るほうが読み順に合う。
-    this.dom.appendChild(this.error);
     this.dom.appendChild(this.stage);
+
+    this.gate = drawGate({
+      render: (code) => renderDiagram(this.node.attrs.lang as string, code, this.deps.dark),
+      onSvg: (svg) => {
+        this.svg = svg;
+        this.canvas.innerHTML = svg;
+        this.error.textContent = "";
+        const id = this.figureId();
+        if (id) {
+          const key = figureKey(id, this.deps.dark);
+          figures.delete(key);
+          figures.set(key, svg);
+          if (figures.size > FIGURES_KEPT) {
+            const oldest = figures.keys().next().value;
+            if (oldest !== undefined) figures.delete(oldest);
+          }
+        }
+      },
+      onError: (message) => {
+        // 本文の字と見分けられるよう、警告の絵と題を添えた札にする。
+        const { title, where, text } = describeDiagramError(this.node.attrs.lang as string, message);
+        const head = document.createElement("div");
+        head.className = "mg-mermaid-err-head";
+        head.appendChild(icon("error", 14));
+        const name = document.createElement("span");
+        name.textContent = title;
+        head.appendChild(name);
+        if (where) {
+          const at = document.createElement("span");
+          at.className = "mg-mermaid-err-at";
+          at.textContent = where;
+          head.appendChild(at);
+        }
+        const body = document.createElement("div");
+        body.className = "mg-mermaid-err-text";
+        body.textContent = text;
+        this.error.replaceChildren(head, body);
+      },
+      composing: () => this.view.composing,
+      delay: REDRAW_DELAY,
+      errorDelay: ERROR_DELAY,
+    });
 
     deps.redraws.add(this.redraw);
     this.paint();
@@ -345,7 +404,7 @@ class CodeBlockView implements NodeView {
   // 言語の札と見せ方を、いまの節点に合わせる。
   private paint() {
     const lang = this.node.attrs.lang as string | null;
-    const isMermaid = lang === MERMAID;
+    const isMermaid = isDiagramLang(lang, !!this.deps.d2);
     this.name.textContent = lang ?? PLAIN;
 
     this.dom.classList.toggle("is-mermaid", isMermaid);
@@ -354,6 +413,13 @@ class CodeBlockView implements NodeView {
     for (const [m, b] of this.picks) b.classList.toggle("is-on", m === mode);
 
     if (isMermaid) {
+      // 作り直された NodeView は図を持たない。前に描けた図があれば先に出しておく。
+      const id = this.figureId();
+      const kept = id && !this.svg ? figures.get(figureKey(id, this.deps.dark)) : undefined;
+      if (kept) {
+        this.svg = kept;
+        this.canvas.innerHTML = kept;
+      }
       this.draw();
     } else {
       this.canvas.replaceChildren();
@@ -364,6 +430,15 @@ class CodeBlockView implements NodeView {
 
   private id(): string | null {
     return (this.node.attrs.id as string | null) ?? null;
+  }
+
+  // 図の控えのかぎ。目印の無い塊（書き足した・貼り付けた塊）は、本文の中の位置で
+  // 見分ける。塊の中で打っている間は、塊の頭の位置は動かない。
+  private figureId(): string | null {
+    const id = this.id();
+    if (id) return id;
+    const at = this.getPos();
+    return at === undefined ? null : `@${at}`;
   }
 
   private mode(): MermaidMode {
@@ -404,7 +479,7 @@ class CodeBlockView implements NodeView {
     const at = this.getPos();
     if (at === undefined) return;
     const lang = value === PLAIN ? null : value;
-    if (value === MERMAID) {
+    if (value === MERMAID || (value === D2 && this.deps.d2)) {
       const id = this.id();
       if (id) this.deps.modes.set(id, "split");
     }
@@ -449,29 +524,16 @@ class CodeBlockView implements NodeView {
     const code = this.node.textContent.trim();
     // 書き出しで別の明暗に描き直すときの元の記述
     this.stage.dataset.mermaid = code;
-    window.clearTimeout(this.timer);
+    this.stage.dataset.lang = this.node.attrs.lang as string;
     if (!code) {
+      this.gate.draw("", false);
       this.canvas.replaceChildren();
       this.error.textContent = "";
       this.svg = "";
       return;
     }
-    const run = () => {
-      const token = ++this.seq;
-      void renderMermaid(code, this.deps.dark)
-        .then((svg) => {
-          if (this.dead || token !== this.seq) return;
-          this.svg = svg;
-          this.canvas.innerHTML = svg;
-          this.error.textContent = "";
-        })
-        .catch((e: { message?: string }) => {
-          if (this.dead || token !== this.seq) return;
-          this.error.textContent = String(e?.message || e);
-        });
-    };
-    if (now || !this.svg) run();
-    else this.timer = window.setTimeout(run, REDRAW_DELAY);
+    // まだ何も描けていないときは待たずに描く。
+    this.gate.draw(code, now || !this.svg);
   }
 
   update(node: PmNode): boolean {
@@ -480,7 +542,7 @@ class CodeBlockView implements NodeView {
     const wasLang = this.node.attrs.lang;
     this.node = node;
     if (node.attrs.lang !== wasLang) this.paint();
-    else if (node.attrs.lang === MERMAID && node.textContent !== wasText) this.draw();
+    else if (isDiagramLang(node.attrs.lang, !!this.deps.d2) && node.textContent !== wasText) this.draw();
 
     return true;
   }
@@ -498,9 +560,8 @@ class CodeBlockView implements NodeView {
   }
 
   destroy() {
-    this.dead = true;
     this.deps.redraws.delete(this.redraw);
-    window.clearTimeout(this.timer);
+    this.gate.stop();
   }
 }
 

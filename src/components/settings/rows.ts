@@ -38,6 +38,8 @@ interface Base {
 export interface SwitchRow extends Base {
   kind: "switch";
   atom: Flag;
+  // 入にするのに要るもの。check が false を返したら入にできず、missing を添える。
+  requires?: { check: () => Promise<boolean>; missing: string };
 }
 
 export interface WordsRow extends Base {

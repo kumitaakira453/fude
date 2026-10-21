@@ -4,6 +4,7 @@ import { closeAll, closeOthers, closeTab, inEditable, reopenTab, splitPane, step
 import { RAIL_ROOM } from "../lib/sidebar";
 import { delimOf } from "../lib/csv";
 import { isJsonPath } from "../lib/jsonTree";
+import { isD2Path } from "../lib/diagram";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
@@ -42,11 +43,12 @@ export function useHotkeys() {
 
   useEffect(() => {
     // 見た目を切り替えられるファイル（CSV・TSV と JSON）を出しているか。
-    const switchable = (): "csv" | "json" | null => {
+    const switchable = (): "csv" | "json" | "d2" | null => {
       const pane = store.get(A.panesAtom).find((p) => p.id === store.get(A.activePaneIdAtom));
       const path = pane?.tabs[pane.active];
       if (!path) return null;
       if (delimOf(path) !== null) return "csv";
+      if (isD2Path(path)) return store.get(A.d2DiagramAtom) ? "d2" : null;
       return isJsonPath(path) ? "json" : null;
     };
     const onKey = (e: KeyboardEvent) => {
@@ -184,11 +186,17 @@ export function useHotkeys() {
         e.preventDefault();
         void draft.current();
       } else if (mod && e.shiftKey && (e.key === "v" || e.key === "V") && switchable()) {
-        // ⌘⇧V: CSV・TSV は原文と表、JSON は木と原文を替える。出しているのが
+        // ⌘⇧V: CSV・TSV は原文と表、JSON は木と原文、D2 はソース・分割・図を順に替える。出しているのが
         // それらのときだけ受ける（ほかでは書式を落とした貼り付けとして編集面へ通す）。
         e.preventDefault();
-        if (switchable() === "csv") {
+        const which = switchable();
+        if (which === "csv") {
           store.set(A.csvViewAtom, store.get(A.csvViewAtom) === "table" ? "rainbow" : "table");
+        } else if (which === "d2") {
+          // ソース → 分割 → 図 の順に回す。
+          const order: A.D2View[] = ["code", "split", "diagram"];
+          const at = order.indexOf(store.get(A.d2ViewAtom));
+          store.set(A.d2ViewAtom, order[(at + 1) % order.length]);
         } else {
           store.set(A.jsonViewAtom, store.get(A.jsonViewAtom) === "tree" ? "source" : "tree");
         }

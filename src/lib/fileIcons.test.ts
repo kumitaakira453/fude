@@ -9,6 +9,7 @@ describe("fileFace", () => {
     expect(fileFace("data.json").glyph).toBe("braces");
     expect(fileFace("README.md").glyph).toBe("file-info");
     expect(fileFace("notes.md").glyph).toBe("markdown");
+    expect(fileFace("構成.d2").glyph).toBe("hierarchy");
   });
 
   it("大文字小文字を問わない。道筋でも名前で引く", () => {

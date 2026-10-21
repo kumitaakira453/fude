@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +27,7 @@ import {
   handoutThemeAtom,
   metaOnTopAtom,
   wideTableAtom,
+  d2DiagramAtom,
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
 import { ClaudeMark } from "./ClaudeMark";
@@ -157,6 +159,22 @@ const ROWS: Row[] = [
     note: "横にスクロールしても先頭の列を固定します。はみ出す表には「拡大表示」ボタンを出し、画面いっぱいに表示できるようにします",
     aliases: ["table", "表", "テーブル", "横スクロール", "列"],
   },
+  {
+    kind: "switch",
+    id: "d2",
+    face: "look",
+    group: "表示",
+    beta: true,
+    atom: d2DiagramAtom,
+    name: "D2 の図を描く",
+    note: "```d2 のコードブロックと .d2 のファイルを図として表示します。Mac に d2 コマンド（d2lang.com）が入っている必要があります",
+    aliases: ["d2", "図", "ダイアグラム", "diagram"],
+    requires: {
+      check: () => invoke<boolean>("d2_available"),
+      missing: "d2 コマンドが見つかりません。入れると切り替えられるようになります",
+    },
+  },
+
   {
     kind: "switch",
     id: "live",

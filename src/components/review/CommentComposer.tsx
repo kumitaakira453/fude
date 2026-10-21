@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMarkdownKeys } from "../../hooks/useMarkdownKeys";
-import { isMermaidBlock } from "../../lib/blocks";
+import { isDiagramBlock } from "../../lib/blocks";
 import type { AnchorHit } from "../../lib/review";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
@@ -174,7 +174,7 @@ export function CommentComposer({
     .replace(/\s*\n\s*/g, "\n")
     .trim();
   // 図は描き直すと重いので、書き方をそのまま字で見せる。
-  const shown = source && !isMermaidBlock(source) ? source : null;
+  const shown = source && !isDiagramBlock(source) ? source : null;
 
   const submit = () => {
     const text = body.trim();

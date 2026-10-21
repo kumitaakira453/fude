@@ -231,10 +231,14 @@ describe("書き出しの配色", () => {
       '<div class="mg-mermaid" data-mermaid="graph A"><div class="mg-mermaid-inner">暗い図</div></div>' +
         '<div class="mg-mermaid" data-mermaid="壊れた図"><div class="mg-mermaid-inner">元の図</div></div>',
     );
-    await redrawDiagrams(out, async (code) => {
+    // 言語の印が無い図は mermaid として描き直す。
+    const langs: string[] = [];
+    await redrawDiagrams(out, async (lang, code) => {
+      langs.push(lang);
       if (code === "壊れた図") throw new Error("描けない");
       return `<svg>明るい ${code}</svg>`;
     });
+    expect(langs).toEqual(["mermaid", "mermaid"]);
     const inner = [...out.querySelectorAll(".mg-mermaid-inner")].map((e) => e.innerHTML);
     expect(inner).toEqual(["<svg>明るい graph A</svg>", "元の図"]);
     expect(out.querySelector("[data-mermaid]")).toBeNull();

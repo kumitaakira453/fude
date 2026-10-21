@@ -1,3 +1,5 @@
+import { useAtomValue } from "jotai";
+import { d2DiagramAtom } from "../state/atoms";
 import { EditorState, NodeSelection, TextSelection } from "prosemirror-state";
 import { Fragment, type Node as PmNode } from "prosemirror-model";
 import { CellSelection } from "prosemirror-tables";
@@ -758,6 +760,9 @@ export function BodyEditor({
     color?: { now: string | null; set: (color: string) => void };
   } | null>(null);
 
+  // d2 の図はベータの設定が入のときだけ描く。
+  const d2 = useAtomValue(d2DiagramAtom);
+
   // 専用の描画が要るもの（図・画像）へ渡す口。編集面を作り直さずに差し替えたい
   // ものだけを持つので、中身は書き換えて使う。
   const deps = useRef<EditorDeps>({
@@ -766,6 +771,7 @@ export function BodyEditor({
     redraws: new Set(),
     onZoom: (svg, onEdit) => setZoomed({ svg, onEdit }),
   });
+  deps.current.d2 = d2;
   deps.current.resolveAsset = resolveAsset;
   deps.current.peekAsset = peekAsset;
   deps.current.path = path;
