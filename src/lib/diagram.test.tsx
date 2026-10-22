@@ -90,6 +90,23 @@ describe("d2 の図", () => {
     expect(svg).toContain("fill-B6");
   });
 
+  it("図の下の注釈の付録は外さない", () => {
+    // d2 0.9.0 の --force-appendix の出力を縮めたもの。付録は下地と同じ内側の svg に入る。
+    const svg = cleanSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 211 239" preserveAspectRatio="xMinYMin meet">' +
+        '<svg class="d2-1 d2-svg" width="211" height="239" viewBox="-17 -34 211 239">' +
+        '<rect x="-17" y="-34" width="211" height="239" fill="#FFFFFF" class=" fill-N7"/>' +
+        '<line x1="-41" x2="154" y1="117" y2="117" class=" stroke-B2"/>' +
+        '<g class="appendix"><g transform="translate(0 167)" class="appendix-icon">' +
+        '<circle cx="16" cy="0" r="16" fill="white"/><text class="text-bold" x="16" y="5">1</text></g>' +
+        '<text class="text" x="48" y="172">zzNOTEzz</text></g></svg></svg>',
+    );
+    expect(svg).not.toContain("fill-N7");
+    expect(svg).toContain('class="appendix"');
+    expect(svg).toContain("zzNOTEzz");
+    expect(svg).toContain('height="239"');
+  });
+
   it("同じ記述・同じ明暗は、2 度目はコマンドを呼ばない", async () => {
     asked.length = 0;
     await renderDiagram("d2", "a -> b", false);

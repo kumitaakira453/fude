@@ -14,6 +14,9 @@ const LIMIT: Duration = Duration::from_secs(10);
 // 明るいテーマと暗いテーマ（`d2 themes` の番号）。
 const LIGHT: &str = "0";
 const DARK: &str = "200";
+// 図の周りの余白と、注釈（tooltip）の出し方。注釈はマウスを載せたときだけでなく、
+// 図の下に番号付きの付録として出す（画像として貼った先や印刷でも読めるように）。
+const LOOKS: [&str; 3] = ["--pad", "16", "--force-appendix"];
 
 fn d2_bin() -> Option<PathBuf> {
     // 見つかったものだけ覚える。見つからないときは毎回探し直す（アプリを
@@ -51,11 +54,8 @@ fn find_d2() -> Option<PathBuf> {
 // 組み方（dagre・ELK・TALA）は図の中の `vars: { d2-config: { layout-engine: … } }` で
 // 決める。コマンドでは指定しない。
 pub fn render(code: &str, dark: bool) -> Result<String, String> {
-    let out = run(
-        &["--theme", if dark { DARK } else { LIGHT }, "--pad", "16", "-", "-"],
-        Some(code),
-        None,
-    )?;
+    let theme = ["--theme", if dark { DARK } else { LIGHT }];
+    let out = run(&[&theme[..], &LOOKS, &["-", "-"]].concat(), Some(code), None)?;
     let svg = String::from_utf8_lossy(&out);
     // 先頭の XML 宣言は HTML の中に置けないので外す。
     let start = svg.find("<svg").ok_or("d2 が図を返しませんでした")?;
@@ -69,7 +69,7 @@ pub fn export(path: &Path) -> Result<PathBuf, String> {
     let dest = path.with_extension("svg");
     let src = path.to_string_lossy();
     let to = dest.to_string_lossy();
-    run(&["--theme", LIGHT, "--pad", "16", &src, &to], None, path.parent())?;
+    run(&[&["--theme", LIGHT][..], &LOOKS, &[&src, &to]].concat(), None, path.parent())?;
     Ok(dest)
 }
 
@@ -225,6 +225,28 @@ mod tests {
         export(&src).unwrap();
         let second = std::fs::read_to_string(&dest).unwrap();
         assert_ne!(first, second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn puts_tooltips_below_the_diagram() {
+        if d2_bin().is_none() {
+            return;
+        }
+        // 付録が無いと注釈の字は 2 回（title と tooltip の中）、付録が付くと 3 回出る。
+        let code = r#"a: A {tooltip: "zzNOTEzz"}"#;
+        for dark in [false, true] {
+            let svg = render(code, dark).unwrap();
+            assert_eq!(svg.matches("zzNOTEzz").count(), 3);
+            assert!(svg.contains(r#"class="appendix""#));
+        }
+        let dir = std::env::temp_dir().join(format!("fude-d2-note-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("a.d2");
+        std::fs::write(&src, code).unwrap();
+        let dest = export(&src).unwrap();
+        let svg = std::fs::read_to_string(&dest).unwrap();
+        assert_eq!(svg.matches("zzNOTEzz").count(), 3);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
