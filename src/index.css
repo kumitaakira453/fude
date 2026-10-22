@@ -58,6 +58,13 @@
   --mg-ctl-border: color-mix(in srgb, var(--mg-border) 78%, var(--mg-fg));
   --mg-ctl-hover: color-mix(in srgb, var(--mg-ctl) 94%, var(--mg-fg));
   --mg-ctl-on: color-mix(in srgb, var(--mg-ctl) 86%, var(--mg-fg));
+  /* ボタンの地。周りの地より一段沈めた面（字の色を薄く混ぜた半透明なので、
+     上の段・欄・小窓のどの地の上でも同じだけ沈む）。押している・選んでいる
+     ものは、本文の地で塗って持ち上げる。 */
+  --mg-carve: color-mix(in srgb, var(--mg-fg) 7%, transparent);
+  --mg-carve-hover: color-mix(in srgb, var(--mg-fg) 11%, transparent);
+  --mg-carve-shadow: inset 0 1px 1px rgb(0 0 0 / 0.08);
+  --mg-raise-shadow: 0 1px 1px rgb(0 0 0 / 0.1), 0 0 0 0.5px rgb(0 0 0 / 0.06);
   --mg-pop: light-dark(var(--mg-panel), color-mix(in srgb, var(--mg-panel) 95%, #fff));
   --mg-warn: light-dark(#b7791f, #e2a33b);
   /* Claude の印の色。テーマに寄らず同じ色で、Claude のものだと分かるようにする。 */
@@ -1265,6 +1272,12 @@ button.mg-task-check:hover {
 /* 頭の段は帯として地を塗り、上のファイルの木とも下の一覧とも分ける（行と頭が
    同じ地・同じ高さで並ぶと、どこからが中身か読めない）。周りの沈んだ地に字の色を
    少し混ぜるので、明るいテーマでは一段暗く、暗いテーマでは一段明るくなる。 */
+.mg-sess-count {
+  flex: none;
+  color: var(--mg-muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
 .mg-sess > .mg-sess-head {
   padding: 0 8px;
   background: color-mix(in srgb, var(--mg-chrome) 95%, var(--mg-fg));
@@ -1549,15 +1562,17 @@ button.mg-sess-row.is-gone:hover {
 .mg-small {
   flex: none;
   padding: 0.3rem 0.6rem;
-  border-radius: 0.4rem;
+  border-radius: 5px;
+  background: var(--mg-carve);
+  box-shadow: var(--mg-carve-shadow);
   font-size: 11.5px;
-  color: var(--mg-muted);
+  color: var(--mg-fg-dim);
   transition:
     background 0.12s ease,
     color 0.12s ease;
 }
 .mg-small:hover:not(:disabled) {
-  background: var(--mg-hover);
+  background: var(--mg-carve-hover);
   color: var(--mg-fg);
 }
 .mg-small.is-go {
@@ -1565,7 +1580,7 @@ button.mg-sess-row.is-gone:hover {
   color: var(--mg-accent);
 }
 .mg-small.is-go:hover {
-  background: var(--mg-accent-soft);
+  background: var(--mg-carve-hover);
   color: var(--mg-accent);
 }
 /* 戻せない操作。押し間違えたときの損が大きいので、色で他と分ける。 */
@@ -1576,8 +1591,9 @@ button.mg-sess-row.is-gone:hover {
 
 /* いま効いている状態の小さな釦。 */
 .mg-small.is-on {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
+  background: var(--mg-bg);
+  box-shadow: var(--mg-raise-shadow);
+  color: var(--mg-fg);
 }
 
 /* ============================================================
@@ -1632,12 +1648,81 @@ button.mg-sess-row.is-gone:hover {
 .mg-d2-divider:active {
   background: linear-gradient(var(--mg-accent), var(--mg-accent)) center / 2px 100% no-repeat;
 }
+/* 図の枠と、その下の注釈の一覧を縦に積む。 */
+.mg-d2-figure-col {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
 .mg-d2-stage {
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   outline: none;
+}
+/* 図の下の注釈（d2 の付録）。拡大縮小と関わらない字で並べる。見出しを押して畳める。 */
+.mg-d2-notes {
+  display: flex;
+  max-height: 33%;
+  flex: none;
+  flex-direction: column;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-d2-notes-head {
+  display: flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  color: var(--mg-muted);
+  font-size: 11.5px;
+  text-align: left;
+}
+.mg-d2-notes-head:hover {
+  color: var(--mg-fg);
+}
+.mg-d2-notes-count {
+  font-variant-numeric: tabular-nums;
+}
+.mg-d2-notes-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  overflow-y: auto;
+  padding: 0 16px 10px;
+  color: var(--mg-fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+  list-style: none;
+  user-select: text;
+}
+.mg-d2-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+/* 番号の丸は図の中の丸と同じ見た目（d2 はどちらのテーマでも白地に濃い字で描く）。 */
+.mg-d2-note-n {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  margin-top: 1px;
+  border: 1px solid #dee1eb;
+  border-radius: 50%;
+  background: #fff;
+  color: #0a0f25;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 .mg-d2-figure {
   position: absolute;
@@ -1689,13 +1774,38 @@ button.mg-sess-row.is-gone:hover {
   color: var(--mg-accent);
 }
 /* 絵の釦も字の釦も同じ高さの箱の真ん中に置き、倍率の字と縦をそろえる。 */
+/* 下の帯（24px）は低いので、ボタンを彫り込まない。足元の帯の項目と同じく、
+   地も枠も持たない字にして、隣り合うボタンの間に短い縦線を引く。指すと
+   彫り込みの地、今効いているものは字を濃くして下に線。 */
 .mg-imgdoc-bar .mg-small {
+  position: relative;
   display: inline-flex;
   height: 20px;
   align-items: center;
   gap: 4px;
-  padding: 0 6px;
+  padding: 0 7px;
   border-radius: 3px;
+  background: transparent;
+  box-shadow: none;
+}
+.mg-imgdoc-bar .mg-small:hover:not(:disabled) {
+  background: var(--mg-carve);
+}
+.mg-imgdoc-bar .mg-small + .mg-small::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: -2px;
+  width: 1px;
+  background: var(--mg-ctl-border);
+  opacity: 0.6;
+  content: "";
+}
+.mg-imgdoc-bar .mg-small.is-on {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--mg-accent);
+  border-radius: 0;
+  color: var(--mg-fg);
 }
 /* 大きさは左、倍率は釦の間。倍率は数字が変わっても釦が動かないよう幅を取る。 */
 .mg-imgdoc-size {
@@ -2159,7 +2269,10 @@ body.mg-col-resizing * {
 }
 
 
-/* タブを閉じる印。常に出しておくが、普段は控えめに。 */
+/* タブを閉じる印。今のタブと指したタブにだけ見せる（幅は取ったまま）。 */
+.mg-tab:not(.is-on):not(:hover) .mg-tab-x {
+  visibility: hidden;
+}
 .mg-tab-x {
   display: grid;
   flex: none;
@@ -4053,22 +4166,27 @@ svg[id^="mmd-"] foreignObject div {
   --mg-tone: var(--mg-fg-dim);
 }
 
+/* コメントの欄の絞り込み。ほかの字のボタンと同じく、地に彫り込んだ形。 */
 .mg-rail-chip {
   display: inline-flex;
   height: 22px;
   align-items: center;
   gap: 4px;
-  padding: 0 7px;
-  border: 1px solid var(--mg-border);
-  border-radius: var(--mg-r1);
-  background: transparent;
-  color: var(--mg-muted);
+  padding: 0 8px;
+  border-radius: 5px;
+  background: var(--mg-carve);
+  box-shadow: var(--mg-carve-shadow);
+  color: var(--mg-fg-dim);
   font-size: 11.5px;
   cursor: pointer;
 }
-.mg-rail-chip:hover,
+.mg-rail-chip:hover {
+  background: var(--mg-carve-hover);
+  color: var(--mg-fg);
+}
 .mg-rail-chip.is-open {
-  background: var(--mg-hover);
+  background: var(--mg-bg);
+  box-shadow: var(--mg-raise-shadow);
   color: var(--mg-fg);
 }
 /* 件数は、ツリーに出しているコメントの数と同じ札の形にする。色は状態ごと。 */
@@ -8553,113 +8671,6 @@ body.mg-carrying {
   border-radius: 9999px;
 }
 
-/* ツールバーの中のワークスペースの札。ファイルのタブ（角の四角）と取り違えない
-   よう、丸い札にして段も分ける。今いるものは塗り、ほかは輪郭だけ。 */
-.mg-ws-pills-wrap {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  gap: 2px;
-  align-items: center;
-}
-.mg-ws-pills {
-  display: flex;
-  min-width: 0;
-  gap: 2px;
-  align-items: center;
-  /* 送る箱は札の上下を切るので、縁が欠けないだけの余白を持たせる。 */
-  padding: 1px 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.mg-ws-pills::-webkit-scrollbar {
-  display: none;
-}
-.mg-ws-pill {
-  position: relative;
-  user-select: none;
-  display: inline-flex;
-  width: 168px;
-  height: 26px;
-  flex: none;
-  gap: 7px;
-  align-items: center;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--mg-r1);
-  font-size: 12px;
-  color: var(--mg-muted);
-}
-.mg-ws-pill:hover {
-  background: var(--mg-hover);
-  color: var(--mg-fg-dim);
-}
-/* 今いる札は名前を全部見せる（長さが変わるのは切り替えたときだけ）。 */
-.mg-ws-pill.is-on {
-  width: auto;
-  min-width: 168px;
-  max-width: 300px;
-  border-color: var(--mg-border);
-  background: var(--mg-panel);
-  color: var(--mg-fg);
-  outline: none;
-}
-/* 札と札の境目。今の札とホバーした札は縁と地で分かるので、それ以外のあいだに
-   細い縦線を引く。 */
-.mg-ws-pill:not(.is-on) + .mg-ws-pill:not(.is-on):not(:hover) {
-  background: linear-gradient(
-      color-mix(in srgb, var(--mg-fg) 28%, transparent),
-      color-mix(in srgb, var(--mg-fg) 28%, transparent)
-    )
-    0 50% / 1px 16px no-repeat;
-}
-.mg-ws-pill .mg-ws-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-}
-.mg-ws-pill-name {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mg-ws-pill.is-away {
-  opacity: 0.6;
-}
-.mg-ws-pill.drop-before::before,
-.mg-ws-pill.drop-after::after {
-  position: absolute;
-  top: 0.2rem;
-  bottom: 0.2rem;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--mg-accent);
-  content: "";
-}
-.mg-ws-pill.drop-before::before {
-  left: -0.25rem;
-}
-.mg-ws-pill.drop-after::after {
-  right: -0.25rem;
-}
-.mg-ws-pill-add {
-  display: inline-flex;
-  height: 24px;
-  min-width: 24px;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  padding: 0 5px;
-  border-radius: var(--mg-r1);
-  color: var(--mg-muted);
-}
-.mg-ws-pill-add:hover,
-.mg-ws-pill-add[aria-expanded="true"] {
-  background: var(--mg-hover);
-  color: var(--mg-fg);
-}
 
 /* ワークスペースのメニューと、作る一覧。画面は暗くしない。 */
 .mg-ws-menu {
@@ -8795,23 +8806,6 @@ body.mg-carrying {
   color: var(--mg-fg-dim);
 }
 
-.mg-ws-pill {
-  cursor: pointer;
-}
-/* 札の ×。指していなくても常に出す（どこを押せば外れるかを探させない）。 */
-.mg-ws-pill-x {
-  display: grid;
-  width: 14px;
-  height: 14px;
-  flex: none;
-  place-items: center;
-  border-radius: 3px;
-  opacity: 0.55;
-}
-.mg-ws-pill-x:hover {
-  background: var(--mg-hover);
-  opacity: 1;
-}
 
 /* 根を 2 つ以上並べているときの、フォルダの見出し。小さな太字で、色の四角と
    ファイルの数を添える。スクロールしても、今いる根の見出しは上端に残る（留まって
@@ -8866,18 +8860,6 @@ body.mg-carrying {
   background: transparent;
 }
 
-/* ⌘ を押しているあいだ、札の点の位置に出す番号。 */
-.mg-ws-pill-hint {
-  width: 18px;
-  flex: none;
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--mg-accent);
-  font-family: var(--mg-font-mono);
-  font-size: 10.5px;
-  line-height: 1;
-}
 
 
 /* 吹き出し。画面に 1 つだけ置き、指した部品の位置へ動かして使い回す。 */
@@ -8938,12 +8920,6 @@ html[data-hints] .mg-foot [data-key]::after {
   top: -10px;
   bottom: auto;
 }
-html[data-hints] .mg-strip [data-key]::after {
-  right: -8px;
-  bottom: -4px;
-  left: auto;
-  transform: none;
-}
 /* 閲覧と編集の切り替えは角を丸めるために外を切っている。キーの印だけははみ出させる。 */
 html[data-hints] .mg-seg {
   overflow: visible;
@@ -8977,6 +8953,554 @@ html[data-hints] .mg-seg {
   margin: 0 2px;
   background: var(--mg-border);
 }
+.mg-top-fill {
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+}
+
+/* ---- 左端の帯（ワークスペース） ----
+   畳むと札だけの 40px（lib/sidebar の RAIL_STRIP と対）。
+   開くと、左の欄の木の上へ伸びて見出し付きの一覧になる（幅は App が渡す）。
+   行の左に重ねて置き、幅は style で渡されたものを RAIL_MS（0.2 秒）で動かす。
+   札と開閉ボタンは、開いても閉じても左から 6px・同じ高さに置き、動くのは
+   幅と字の濃さと、まとまりの頭の高さだけにする。 */
+.mg-wsrail {
+  position: absolute;
+  z-index: 15;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  width: 40px;
+  flex-direction: column;
+  padding: 6px 0 6px;
+  border-right: 1px solid var(--mg-border);
+  background: var(--mg-chrome);
+  user-select: none;
+  transition: width 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+/* 伸び縮みの途中で、字が帯の外へはみ出さないようにする。 */
+.mg-wsrail.is-shown {
+  overflow: hidden;
+}
+/* 開いた中身の字。開くときは少し遅らせて薄い所から出し、畳むときはすぐ消す。 */
+.mg-wsrail-fade {
+  opacity: 0;
+  transition: opacity 0.09s ease;
+}
+.mg-wsrail.is-open .mg-wsrail-fade {
+  opacity: 1;
+  animation: mg-wsrail-in 0.14s ease 0.06s both;
+}
+@keyframes mg-wsrail-in {
+  from {
+    opacity: 0;
+  }
+}
+.mg-wsrail-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  height: 28px;
+  margin-bottom: 8px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+/* 開閉ボタンと札の列の区切り。札が上へ送られたとき、ボタンの下へ潜って見えない
+   よう、間を空けて短い線を引く。 */
+.mg-wsrail-head::after {
+  position: absolute;
+  right: 8px;
+  bottom: -5px;
+  left: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--mg-border);
+  content: "";
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-wsrail,
+  .mg-wsrail *,
+  .mg-wsrail.is-open .mg-wsrail-fade {
+    transition: none;
+    animation: none;
+  }
+}
+.mg-wsrail-toggle {
+  display: grid;
+  width: 28px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+}
+.mg-wsrail-toggle:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-wsrail-title {
+  color: var(--mg-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.mg-wsrail-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 0;
+  scrollbar-width: thin;
+}
+/* 畳んだ帯ではスクロールバーを持たせない（overflow: hidden）。バーが幅を取ると
+   その分だけ札が左へずれ、上の開閉ボタンと縦の線がそろわない。送るのは
+   WorkspaceRail がホイールを受けて scrollTop を動かす。 */
+.mg-wsrail:not(.is-open) .mg-wsrail-list {
+  overflow-y: hidden;
+}
+.mg-wsrail-group {
+  display: flex;
+  flex-direction: column;
+}
+.mg-wsrail-group + .mg-wsrail-group {
+  margin-top: 2px;
+}
+.mg-wsrail.is-open .mg-wsrail-group + .mg-wsrail-group {
+  margin-top: 6px;
+}
+.mg-wsrail-item + .mg-wsrail-item {
+  margin-top: 4px;
+}
+.mg-wsrail.is-open .mg-wsrail-item + .mg-wsrail-item {
+  margin-top: 1px;
+}
+.mg-wsrail-group + .mg-wsrail-group,
+.mg-wsrail-item + .mg-wsrail-item {
+  transition: margin-top 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+/* まとまりの頭。畳むと区切り線（7px）、開くと見出し（20px）。 */
+.mg-wsrail-group-top {
+  position: relative;
+  height: 7px;
+  flex: none;
+  transition: height 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+.mg-wsrail-group-top.is-first {
+  height: 0;
+}
+.mg-wsrail.is-open .mg-wsrail-group-top {
+  height: 20px;
+}
+.mg-wsrail-sep {
+  position: absolute;
+  top: 2px;
+  left: 9px;
+  width: 22px;
+  height: 1px;
+  background: var(--mg-border);
+  transition: opacity 0.09s ease;
+}
+.mg-wsrail.is-open .mg-wsrail-sep {
+  opacity: 0;
+}
+.mg-wsrail-group-head {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  left: 6px;
+  overflow: hidden;
+  padding: 2px 6px 3px;
+  color: var(--mg-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 行は左右 4px 空け、札を左から 6px（畳んだ 40px の真ん中）に置く。 */
+.mg-wsrail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  margin: 0 4px;
+  padding: 0 6px 0 2px;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.mg-wsrail.is-open .mg-wsrail-item:hover,
+.mg-wsrail.is-open .mg-wsrail-item:focus-visible {
+  background: var(--mg-hover);
+}
+.mg-wsrail.is-open .mg-wsrail-item.is-on {
+  background: var(--mg-accent-soft);
+}
+.mg-wsrail-item.is-dragging {
+  opacity: 0.4;
+}
+.mg-wsrail-chip {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  opacity: 0.6;
+  transition: opacity 0.12s ease;
+}
+.mg-wsrail-item:hover .mg-wsrail-chip,
+.mg-wsrail-item:focus-visible .mg-wsrail-chip {
+  opacity: 0.9;
+}
+.mg-wsrail-item.is-on .mg-wsrail-chip {
+  opacity: 1;
+  box-shadow:
+    0 0 0 2px var(--mg-chrome),
+    0 0 0 3.5px var(--mg-fg-dim);
+}
+.mg-wsrail-item.is-away .mg-wsrail-chip {
+  opacity: 0.35;
+}
+.mg-wsrail-chip.is-add {
+  border: 1px dashed var(--mg-border);
+  background: none;
+  color: var(--mg-muted);
+  opacity: 1;
+}
+.mg-wsrail-add {
+  flex: none;
+  margin-top: 4px;
+}
+.mg-wsrail-chip .mg-st {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  box-shadow: 0 0 0 2px var(--mg-chrome);
+}
+.mg-wsrail-hint {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--mg-accent);
+  color: var(--mg-bg);
+  font-family: var(--mg-font-mono);
+  font-size: 9.5px;
+  line-height: 13px;
+}
+/* 2 段の字を 32px の行に収める（開いても行の高さを変えない）。 */
+.mg-wsrail-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.mg-wsrail-name {
+  overflow: hidden;
+  color: var(--mg-fg);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-wsrail-where {
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-wsrail-state {
+  flex: none;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.mg-wsrail-state.is-working {
+  color: var(--mg-accent);
+}
+.mg-wsrail-state.is-waiting {
+  color: var(--mg-warn);
+}
+.mg-wsrail-x {
+  display: none;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+}
+.mg-wsrail-item:hover .mg-wsrail-x {
+  display: grid;
+}
+.mg-wsrail-x:hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+html[data-hints] .mg-wsrail [data-key]::after {
+  right: -6px;
+  bottom: -4px;
+  left: auto;
+  transform: none;
+}
+
+/* 一覧やメニューに出すワークスペースの札（WorkspaceChip）。帯の札を小さくしたもの。 */
+.mg-ws-chip {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border-radius: 5px;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+}
+.mg-ws-chip .mg-st {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 1.5px var(--mg-pop);
+}
+
+/* ---- Claude のセッションの状態の印（StatusMark） ---- */
+.mg-st {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  font-style: normal;
+}
+.mg-st.is-waiting {
+  background: var(--mg-warn);
+}
+.mg-st.is-done {
+  border: 1.5px solid var(--mg-muted);
+  background: var(--mg-chrome);
+}
+.mg-st.is-working {
+  border: 1.6px solid var(--mg-accent);
+  border-right-color: transparent;
+  background: var(--mg-chrome);
+  animation: mg-st-spin 1s linear infinite;
+}
+.mg-st.is-working.is-still {
+  border: 0;
+  background: var(--mg-accent);
+  animation: none;
+}
+@keyframes mg-st-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-st.is-working {
+    border: 0;
+    background: var(--mg-accent);
+    animation: none;
+  }
+}
+
+/* ---- 帯の札を指したときの中身の札（WorkspaceCard） ---- */
+.mg-wscard {
+  position: fixed;
+  z-index: 70;
+  width: 340px;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 8px;
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
+  font-size: 12px;
+  pointer-events: none;
+}
+.mg-wscard-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px;
+}
+.mg-wscard-chip {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.mg-wscard-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.mg-wscard-title b {
+  overflow: hidden;
+  color: var(--mg-fg);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-wscard-title span {
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-wscard-phase {
+  display: inline-flex;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--mg-hover);
+  color: var(--mg-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.mg-wscard-phase.is-working {
+  background: color-mix(in srgb, var(--mg-accent) 14%, transparent);
+  color: var(--mg-accent);
+}
+.mg-wscard-phase.is-waiting {
+  background: color-mix(in srgb, var(--mg-warn) 16%, transparent);
+  color: var(--mg-warn);
+}
+.mg-wscard-phase .mg-st {
+  width: 8px;
+  height: 8px;
+}
+.mg-wscard-talk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--mg-border);
+  background: color-mix(in srgb, var(--mg-bg) 60%, var(--mg-pop));
+}
+.mg-wscard-talk p {
+  margin: 0;
+  line-height: 1.5;
+}
+/* 依頼は 2 行、返答は 4 行で切る（札が窓からはみ出さないように）。 */
+.mg-wscard-clamp {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow-wrap: anywhere;
+}
+.mg-wscard-talk .is-ask .mg-wscard-clamp {
+  -webkit-line-clamp: 2;
+}
+.mg-wscard-talk.is-loading p {
+  color: var(--mg-muted);
+}
+.mg-wscard-talk.is-loading .is-ask {
+  width: 45%;
+  animation: mg-wscard-wait 1.2s ease-in-out infinite;
+}
+@keyframes mg-wscard-wait {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-wscard-talk.is-loading .is-ask {
+    animation: none;
+  }
+}
+.mg-wscard-talk .is-ask {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: 10px 10px 3px 10px;
+  background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-pop));
+  color: var(--mg-fg);
+}
+.mg-wscard-talk .is-answer {
+  display: flex;
+  gap: 7px;
+  color: var(--mg-fg-dim);
+}
+.mg-wscard-claude {
+  flex: none;
+  margin-top: 2px;
+  color: var(--mg-claude);
+}
+.mg-wscard-when {
+  align-self: flex-end;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 10px;
+}
+.mg-wscard-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 14px 4px;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-wscard-file {
+  display: inline-flex;
+  max-width: 100%;
+  height: 22px;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 0 7px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-r1);
+  background: var(--mg-bg);
+  color: var(--mg-fg-dim);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-wscard-more {
+  align-self: center;
+  color: var(--mg-muted);
+  font-size: 11px;
+}
+.mg-wscard-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 10px;
+  color: var(--mg-muted);
+  font-size: 11px;
+}
+.mg-wscard-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
 .mg-top-find {
   display: flex;
   width: 260px;
@@ -9061,10 +9585,11 @@ html[data-hints] .mg-seg {
   flex: none;
   align-items: center;
   gap: 4px;
-  padding: 0 7px;
-  border: 1px solid var(--mg-ctl-border);
-  border-radius: var(--mg-r1);
-  background: var(--mg-ctl);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--mg-carve);
+  box-shadow: var(--mg-carve-shadow);
   /* 押せるものは字の濃さの 2 段目。淡色（muted）は手がかりだけに使う。 */
   color: var(--mg-fg-dim);
   font-size: var(--mg-t-s);
@@ -9073,11 +9598,11 @@ html[data-hints] .mg-seg {
 .mg-tbtn.is-quiet {
   height: auto;
   padding: 2px 6px;
-  border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .mg-tbtn:hover:not(:disabled) {
-  background: var(--mg-ctl-hover);
+  background: var(--mg-carve-hover);
   color: var(--mg-fg);
 }
 .mg-tbtn.is-quiet:hover:not(:disabled) {
@@ -9085,7 +9610,8 @@ html[data-hints] .mg-seg {
 }
 .mg-tbtn.is-on,
 .mg-tbtn.is-on:hover:not(:disabled) {
-  background: var(--mg-ctl-on);
+  background: var(--mg-bg);
+  box-shadow: var(--mg-raise-shadow);
   color: var(--mg-fg);
 }
 .mg-tbtn:disabled {
@@ -9093,53 +9619,6 @@ html[data-hints] .mg-seg {
   cursor: default;
 }
 
-/* 縦の帯。 */
-.mg-strip {
-  display: flex;
-  width: 40px;
-  flex: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding-top: 8px;
-  border-right: 1px solid var(--mg-border);
-  background: var(--mg-chrome);
-}
-.mg-strip .mg-ibtn {
-  position: relative;
-  width: 30px;
-  height: 30px;
-}
-.mg-strip .mg-ibtn.is-on {
-  background: var(--mg-accent-soft);
-  color: var(--mg-accent);
-}
-.mg-strip .mg-ibtn.is-on::before {
-  position: absolute;
-  top: 7px;
-  bottom: 7px;
-  left: -5px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--mg-accent);
-  content: "";
-}
-.mg-strip-dot-host {
-  position: relative;
-}
-/* 未解決があることを示す点。釦の中の、絵の右上に置く（帯の外へはみ出さない）。
-   帯の地の色の縁で、絵の線から離す。 */
-.mg-strip-dot {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--mg-accent);
-  box-shadow: 0 0 0 1.5px var(--mg-chrome);
-  pointer-events: none;
-}
 
 /* 左の欄。 */
 .mg-pane-side {
@@ -9157,6 +9636,63 @@ html[data-hints] .mg-seg {
   gap: 4px;
   padding: 0 8px;
   border-bottom: 1px solid var(--mg-line);
+}
+/* 左の欄の頭。字のタブ（箱を作らず、今の面は字を濃くして下に 2px の線）を左に、
+   ファイルの面で使う「開く」「＋」を右端に、1 行に収める。 */
+.mg-pane-side-head.is-faces {
+  height: 34px;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+}
+.mg-side-tabs {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+  gap: 12px;
+}
+.mg-side-tab {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--mg-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.mg-side-tab:hover {
+  color: var(--mg-fg);
+}
+.mg-side-tab.is-on {
+  color: var(--mg-fg);
+  font-weight: 600;
+}
+.mg-side-tab.is-on::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--mg-accent);
+  content: "";
+}
+.mg-side-tab .mg-st {
+  width: 7px;
+  height: 7px;
+}
+.mg-side-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.mg-tbtn.is-icon {
+  width: 22px;
+  justify-content: center;
+  padding: 0;
 }
 .mg-pane-side-title {
   min-width: 0;
@@ -9216,12 +9752,14 @@ html[data-hints] .mg-seg {
   color: var(--mg-muted);
 }
 
-/* タブの段。 */
+/* タブの段。今のタブだけ本文と同じ地にし、上の角を丸めて下の線を切り、本文と
+   つなげる。ほかのタブは箱を作らず字を薄くし、間に短い線だけを引く。 */
 .mg-tabrow {
   display: flex;
-  height: 34px;
+  height: 36px;
   flex: none;
   align-items: stretch;
+  padding: 0 6px;
   /* 下の線は地に描く。今のタブはその地を自分の色で覆い、下の段とつながる
      （タブは横に送る箱の中にあるので、はみ出して覆うと箱に切られる）。 */
   box-shadow: inset 0 -1px 0 var(--mg-border);
@@ -9230,29 +9768,55 @@ html[data-hints] .mg-seg {
 .mg-tab {
   position: relative;
   display: flex;
-  max-width: 220px;
+  max-width: 240px;
   align-items: center;
   gap: 7px;
+  margin-top: 5px;
   padding: 0 10px 0 12px;
-  border-right: 1px solid var(--mg-line);
-  color: var(--mg-muted);
-  font-size: var(--mg-t-s);
+  border-radius: var(--mg-r1) var(--mg-r1) 0 0;
+  color: color-mix(in srgb, var(--mg-fg-dim) 72%, transparent);
+  font-size: 12.5px;
   white-space: nowrap;
+}
+.mg-tab:not(.is-on):hover {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-tab:not(.is-on) + .mg-tab:not(.is-on)::before {
+  content: "";
+  position: absolute;
+  top: 30%;
+  bottom: 30%;
+  left: 0;
+  width: 1px;
+  background: var(--mg-border);
+}
+.mg-tab:not(.is-on):hover::before,
+.mg-tab:not(.is-on):hover + .mg-tab::before {
+  display: none;
 }
 .mg-tab.is-on {
   background: var(--mg-bg);
+  box-shadow:
+    1px 0 0 var(--mg-border),
+    -1px 0 0 var(--mg-border),
+    0 -1px 0 var(--mg-border);
   color: var(--mg-fg);
+  font-weight: 500;
 }
-.mg-tab-line {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 2px;
-  background: var(--mg-accent);
+/* 分割していて焦点の無いペインの今のタブ。字だけ落とす。 */
+.mg-tab.is-on.is-dim {
+  color: var(--mg-fg-dim);
 }
-.mg-tab-line.is-dim {
-  background: var(--mg-border);
+.mg-tab .mg-file-icon,
+.mg-tab > svg {
+  flex: none;
+}
+.mg-tab-where {
+  flex: none;
+  margin-right: -4px;
+  color: var(--mg-muted);
+  font-size: 11.5px;
 }
 .mg-tab-name {
   overflow: hidden;
@@ -9276,26 +9840,25 @@ html[data-hints] .mg-seg {
 .mg-seg {
   display: flex;
   height: 22px;
-  overflow: hidden;
-  border: 1px solid var(--mg-ctl-border);
-  border-radius: var(--mg-r1);
-  background: var(--mg-ctl);
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--mg-carve);
+  box-shadow: var(--mg-carve-shadow);
 }
 .mg-seg > button {
-  padding: 0 9px;
+  padding: 0 8px;
+  border-radius: 4px;
   color: var(--mg-fg-dim);
-  font-size: var(--mg-t-s);
+  font-size: 11.5px;
   font-weight: 500;
 }
-.mg-seg > button + button {
-  border-left: 1px solid var(--mg-ctl-border);
-}
 .mg-seg > button:hover {
-  background: var(--mg-ctl-hover);
   color: var(--mg-fg);
 }
 .mg-seg > button[aria-pressed="true"] {
-  background: var(--mg-ctl-on);
+  background: var(--mg-bg);
+  box-shadow: var(--mg-raise-shadow);
   color: var(--mg-fg);
   font-weight: 600;
 }
@@ -9414,6 +9977,9 @@ html[data-hints] .mg-seg {
   flex: none;
   border-radius: 50%;
   background: var(--mg-muted);
+}
+.mg-foot-dot.is-warn {
+  background: var(--mg-warn);
 }
 .mg-foot-dot.is-ok {
   background: var(--mg-ok);
@@ -9634,14 +10200,14 @@ html[data-hints] .mg-seg {
 /* 一覧と中身を左右に並べる一覧（⌘J・札の ＋・⌘L）。画面の上下中央に出す。左は 1 行 40px、右に選んで
    いる行の中身。狭い窓では右を畳む。 */
 .mg-pal.is-wide {
-  width: 960px;
+  width: min(960px, calc(100vw - 64px));
 }
 .mg-pal.is-wide .mg-pal-in {
-  height: 48px;
-  padding: 0 16px;
+  height: 40px;
+  padding: 0 14px;
 }
 .mg-pal.is-wide .mg-pal-in > input {
-  font-size: 15px;
+  font-size: 14px;
 }
 .mg-pal-split {
   display: grid;
@@ -9657,14 +10223,14 @@ html[data-hints] .mg-seg {
   padding: 0 6px 6px;
 }
 .mg-pal.is-wide .mg-pal-group {
-  padding: 12px 10px 6px;
+  padding: 8px 10px 4px;
   font-size: 11px;
 }
 .mg-pal.is-wide .mg-pal-row {
-  height: 40px;
+  height: 32px;
   padding: 0 10px;
   border-radius: var(--mg-r1);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 /* 名前と場所だけを縮める。札や「このウィンドウ」のような短い語は折らず、縮めない
    （縮めると 1 字ずつ折れて 2 行になる）。場所は元の幅を 0 にして、名前が取った
@@ -9685,8 +10251,8 @@ html[data-hints] .mg-seg {
   height: 9px;
 }
 .mg-pal.is-wide .mg-pal-foot {
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 34px;
+  padding: 0 14px;
 }
 .mg-pal-detail {
   display: flex;
@@ -9703,8 +10269,8 @@ html[data-hints] .mg-seg {
 .mg-pal-detail-head {
   position: relative;
   display: grid;
-  gap: 12px;
-  padding: 20px 18px 16px;
+  gap: 8px;
+  padding: 16px 16px 12px;
   border-bottom: 1px solid var(--mg-line);
 }
 /* 色の無い段（ファイル・操作・セッションなど）は 1 行に詰める。絵と名前を左、
@@ -9725,14 +10291,7 @@ html[data-hints] .mg-seg {
   font-size: var(--mg-t-xs);
 }
 /* ⌘P の右は、欄の線で区切らず、余白を空けて紙を浮かせる。紙の上に道筋、紙の
-   上端から中身が始まり、欄の残りの高さを全部使う。本文を読める幅にするため、
-   右の欄だけを広げる（左の一覧は同じ幅）。 */
-.mg-pal.is-wide.is-paper {
-  width: 1120px;
-}
-.mg-pal.is-wide.is-paper .mg-pal-split {
-  grid-template-columns: minmax(0, 1fr) 560px;
-}
+   上端から中身が始まり、欄の残りの高さを全部使う。幅はほかの一覧と同じ。 */
 .mg-pal-paper-path {
   flex: none;
   padding: 0 4px 10px;
@@ -9777,7 +10336,7 @@ html[data-hints] .mg-seg {
   flex: 1;
 }
 .mg-pal-detail-head.is-tinted {
-  padding-top: 22px;
+  padding-top: 18px;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--mg-tint) 10%, var(--mg-pop)),
@@ -9821,8 +10380,8 @@ html[data-hints] .mg-seg {
 }
 .mg-pal-detail-sec {
   display: grid;
-  gap: 8px;
-  padding: 14px 18px 0;
+  gap: 6px;
+  padding: 10px 16px 0;
   color: var(--mg-fg-dim);
 }
 .mg-pal-detail-sec > h4 {
@@ -9856,7 +10415,7 @@ html[data-hints] .mg-seg {
 }
 .mg-pal-detail-files > li {
   display: flex;
-  height: 24px;
+  height: 22px;
   min-width: 0;
   align-items: center;
   gap: 8px;

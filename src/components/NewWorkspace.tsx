@@ -1,7 +1,8 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
-import { PHASE_LABEL, claudeSessionTalk, phaseOf, type ClaudeSession, type Talk } from "../lib/claude";
+import { PHASE_LABEL, phaseOf, type ClaudeSession } from "../lib/claude";
+import { useTalk } from "../hooks/useTalk";
 import { rootName } from "../lib/idb";
 import { ago } from "../lib/when";
 import { rootsSummary, type Workspace } from "../lib/workspaces";
@@ -66,8 +67,8 @@ export function NewWorkspace() {
 
   const close = () => setOpen(false);
 
-  // セッションを新しく始めた順に。すでにワークスペースがあるものは、そのワーク
-  // スペースを添える（押すと作らずにそれを開く）。
+  // まだワークスペースの無いセッションを、新しく始めた順に。作成済みのものは
+  // 左端の帯から開くので、ここには並べない。
   const sessions = useMemo(() => {
     if (!claudeOn || !claude) return [];
     const byId = new Map<string, Workspace>();
@@ -76,6 +77,7 @@ export function NewWorkspace() {
     }
     return claude.sessions
       .map((s) => ({ s, ws: byId.get(s.sessionId) }))
+      .filter((r) => !r.ws)
       .sort((a, b) => (b.s.startedAt ?? 0) - (a.s.startedAt ?? 0));
   }, [claudeOn, claude, list, current]);
 
@@ -305,36 +307,8 @@ export function NewWorkspace() {
   );
 }
 
-// 会話の頭と終わり。↑↓ で送っている間は読まず、選んだまま止まったら読む。
-// 一度読んだものは控える（Rust 側も大きさと時刻で控えている）。
-const TALK_WAIT = 120;
-const talks = new Map<string, Talk>();
 // 書いたファイルは右の欄では先頭のこの数だけ。
 const WROTE_SHOWN = 4;
-
-function useTalk(transcript: string | null | undefined): Talk | null {
-  const [talk, setTalk] = useState<Talk | null>(() => (transcript ? (talks.get(transcript) ?? null) : null));
-  useEffect(() => {
-    const known = transcript ? (talks.get(transcript) ?? null) : null;
-    setTalk(known);
-    if (!transcript || known) return;
-    let live = true;
-    const timer = window.setTimeout(() => {
-      claudeSessionTalk(transcript).then(
-        (t) => {
-          talks.set(transcript, t);
-          if (live) setTalk(t);
-        },
-        (e: unknown) => console.warn("会話を読めません", e),
-      );
-    }, TALK_WAIT);
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [transcript]);
-  return talk;
-}
 
 // セッションの中身。書いたファイルは、ワークスペースと結び付いているときだけ
 // 手元にある。結び付いていないものは記録を全部読み直さないと分からず、記録は

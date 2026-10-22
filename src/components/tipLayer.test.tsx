@@ -69,7 +69,10 @@ describe("吹き出し", () => {
     const el = mount('<button data-tip="バージョンを保存" data-key="⌘S"><svg></svg></button>');
     over(el.querySelector("button")!);
     expect(tip()).toBeNull();
-    await wait(450);
+    // 通りすがりに出さないよう、0.7 秒は待つ。
+    await wait(500);
+    expect(tip()).toBeNull();
+    await wait(250);
     expect(tip()?.textContent).toBe("バージョンを保存⌘S");
   });
 
@@ -77,7 +80,7 @@ describe("吹き出し", () => {
     const el = mount('<button title="サイドバー (⌘D)"><span class="mg-ui-icon"></span></button>');
     const button = el.querySelector("button")!;
     over(button);
-    await wait(450);
+    await wait(750);
     expect(tip()?.querySelector("kbd")?.textContent).toBe("⌘D");
     expect(button.hasAttribute("title")).toBe(false);
   });
@@ -85,7 +88,7 @@ describe("吹き出し", () => {
   it("字のある行の title（パスの補足など）は出さない", async () => {
     const el = mount('<div title="/Users/me/a.md">a.md</div>');
     over(el.querySelector("div")!);
-    await wait(450);
+    await wait(750);
     expect(tip()).toBeNull();
   });
 
@@ -96,11 +99,11 @@ describe("吹き出し", () => {
       '<div title="見本.pdf"><iframe title="見本.pdf"></iframe></div><button data-tip="閉じる"></button>',
     );
     over(el.querySelector("iframe")!);
-    await wait(450);
+    await wait(750);
     expect(tip()).toBeNull();
 
     over(el.querySelector("button")!);
-    await wait(450);
+    await wait(750);
     expect(tip()).not.toBeNull();
     over(el.querySelector("iframe")!);
     expect(tip()).toBeNull();
@@ -109,7 +112,7 @@ describe("吹き出し", () => {
   it("押すと消える", async () => {
     const el = mount('<button data-tip="閉じる"></button>');
     over(el.querySelector("button")!);
-    await wait(450);
+    await wait(750);
     expect(tip()).not.toBeNull();
     act(() => {
       window.dispatchEvent(new Event("pointerdown"));
@@ -127,6 +130,9 @@ describe("⌘ を押したときの手がかり", () => {
   it("⌘ だけを押したまま待つと、キーを持つ部品に手がかりを出し、離すと消す", async () => {
     mount('<button data-key="⌘S">バージョンを保存</button>');
     press("keydown", { key: "Meta", metaKey: true });
+    await wait(500);
+    // ⌘ と別のキーを続けて押す途中で出ないよう、0.8 秒は待つ。
+    expect(document.documentElement.hasAttribute("data-hints")).toBe(false);
     await wait(350);
     expect(document.documentElement.hasAttribute("data-hints")).toBe(true);
     press("keyup", { key: "Meta" });
@@ -137,7 +143,7 @@ describe("⌘ を押したときの手がかり", () => {
     mount('<button data-key="⌘S">バージョンを保存</button>');
     press("keydown", { key: "Meta", metaKey: true });
     press("keydown", { key: "s", metaKey: true });
-    await wait(350);
+    await wait(900);
     expect(document.documentElement.hasAttribute("data-hints")).toBe(false);
   });
 });

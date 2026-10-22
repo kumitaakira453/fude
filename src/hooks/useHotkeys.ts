@@ -5,6 +5,7 @@ import { RAIL_ROOM } from "../lib/sidebar";
 import { delimOf } from "../lib/csv";
 import { isJsonPath } from "../lib/jsonTree";
 import { isD2Path } from "../lib/diagram";
+import { railOrder } from "../lib/railGroups";
 import { inDrafts } from "../lib/drafts";
 import { useWorkspace } from "./useWorkspace";
 import * as A from "../state/atoms";
@@ -52,7 +53,7 @@ export function useHotkeys() {
       return isJsonPath(path) ? "json" : null;
     };
     const onKey = (e: KeyboardEvent) => {
-      // ⌘1〜9 はツールバーの札の位置へ（⌘9 は一番右）。書いている最中でも
+      // ⌘1〜9 は帯の札の位置へ（⌘9 は一番下）。書いている最中でも
       // 効かせる（編集面はこの組を使っていない）。
       if (e.metaKey && !e.ctrlKey && !e.altKey) {
         const go = (id: string | undefined) => {
@@ -64,7 +65,17 @@ export function useHotkeys() {
         };
         if (!e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
           e.preventDefault();
-          go(barTarget(store.get(barAtom), Number(e.code.slice(5))));
+          // 帯に見えている上からの順（フォルダごとに寄せた並び）。
+          const shown = [...store.get(A.workspacesAtom)];
+          const here = store.get(A.workspaceAtom);
+          if (here && !shown.some((w) => w.id === here.id)) shown.push(here);
+          go(barTarget(railOrder(store.get(barAtom), shown), Number(e.code.slice(5))));
+          return;
+        }
+        if (e.shiftKey && e.code === "KeyB") {
+          // ⌘⇧B: 帯を開いてワークスペースの一覧にする／畳む。
+          e.preventDefault();
+          store.set(A.railOpenAtom, !store.get(A.railOpenAtom));
           return;
         }
       }

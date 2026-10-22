@@ -220,3 +220,17 @@ describe("searchContents", () => {
     expect(results[0].hits[0].line).toBe(3);
   });
 });
+
+describe("字のファイルの全文検索", () => {
+  const opts = { caseSensitive: false, useRegex: false, wholeWord: false };
+  it("yaml の行も当たり、飾りに見える記号もそのまま比べる", () => {
+    const cache = new Map([
+      ["/w/ci.yml", "name: build\npaths: ['**/*.yml']\nrun: python __init__.py"],
+      ["/w/a.md", "**太字**と __init__ の話"],
+    ]);
+    expect(searchContents(cache, "name:", opts).total).toBe(1);
+    expect(searchContents(cache, "**/*.yml", opts).results.map((r) => r.path)).toEqual(["/w/ci.yml"]);
+    // Markdown は今までどおり飾りを外して比べる（__init__ は init になる）。
+    expect(searchContents(cache, "__init__", opts).results.map((r) => r.path)).toEqual(["/w/ci.yml"]);
+  });
+});

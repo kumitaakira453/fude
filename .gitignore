@@ -16,3 +16,6 @@ scripts/out
 
 # 設計メモ（ローカル専用）
 docs/
+
+# Claude Code の個人用の指示（リモートへ出さない）
+CLAUDE.local.md

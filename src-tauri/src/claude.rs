@@ -365,13 +365,15 @@ pub async fn claude_session_files(
         .map_err(|e| e.to_string())
 }
 
-// 会話の頭と終わり。一覧の右の欄に、何をしたセッションかを見せるために使う。
+// 会話の頭と終わり。一覧の右の欄や帯の札に、何をしているセッションかを見せるために使う。
 //
 // 記録は数百 MB になることがあるので、全部は読まない。最初の依頼は先頭から、
-// 最後の返答は末尾から、決めた量だけ読む。
+// 最後の依頼と最後の返答は末尾から、決めた量だけ読む。
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct Talk {
     pub first: Option<String>,
+    // 最後の依頼。Claude Code が残す last-prompt の記録を先に見て、無ければ人の発言。
+    pub ask: Option<String>,
     pub last: Option<String>,
 }
 
@@ -454,7 +456,12 @@ fn first_ask(file: &Path) -> std::io::Result<Option<String>> {
         .find_map(|v| asked(&v)))
 }
 
-fn last_answer(file: &Path, size: u64) -> std::io::Result<Option<String>> {
+// 末尾から読み、後ろから見て最初に pick が拾ったもの。少しずつ読む量を増やす。
+fn from_tail(
+    file: &Path,
+    size: u64,
+    pick: impl Fn(&Value) -> Option<String>,
+) -> std::io::Result<Option<String>> {
     for step in TAIL_STEPS {
         let from = size.saturating_sub(step);
         let mut f = File::open(file)?;
@@ -469,7 +476,7 @@ fn last_answer(file: &Path, size: u64) -> std::io::Result<Option<String>> {
             .iter()
             .rev()
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-            .find_map(|v| answered(&v))
+            .find_map(|v| pick(&v))
         {
             return Ok(Some(found));
         }
@@ -478,6 +485,20 @@ fn last_answer(file: &Path, size: u64) -> std::io::Result<Option<String>> {
         }
     }
     Ok(None)
+}
+
+fn last_answer(file: &Path, size: u64) -> std::io::Result<Option<String>> {
+    from_tail(file, size, answered)
+}
+
+// 最後の依頼。Claude Code は打った依頼を last-prompt の記録に残す。
+fn last_ask(file: &Path, size: u64) -> std::io::Result<Option<String>> {
+    from_tail(file, size, |v| {
+        if str_of(v, "type").as_deref() == Some("last-prompt") {
+            return v.get("lastPrompt").and_then(Value::as_str).and_then(clip);
+        }
+        asked(v)
+    })
 }
 
 pub fn read_talk(transcript: &Path) -> Talk {
@@ -503,6 +524,7 @@ pub fn read_talk(transcript: &Path) -> Talk {
             log::warn!("{} を読めません: {e}", transcript.display());
             None
         }),
+        ask: last_ask(transcript, size).unwrap_or(None),
         last: last_answer(transcript, size).unwrap_or(None),
     };
     let mut guard = TALKS.lock().unwrap_or_else(|e| e.into_inner());
@@ -550,7 +572,23 @@ mod tests {
         drop(f);
         let talk = read_talk(&file);
         assert_eq!(talk.first.as_deref(), Some("表を直して"));
+        assert_eq!(talk.ask.as_deref(), Some("表を直して"));
         assert_eq!(talk.last.as_deref(), Some("直しました"));
+    }
+
+    #[test]
+    fn talk_takes_the_last_prompt_record_for_the_latest_ask() {
+        let dir = temp("talk-ask");
+        let file = dir.join("s.jsonl");
+        let mut f = File::create(&file).unwrap();
+        writeln!(f, r#"{{"type":"user","message":{{"content":"はじめの依頼"}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"user","message":{{"content":"次の依頼"}}}}"#).unwrap();
+        writeln!(f, r#"{{"type":"last-prompt","lastPrompt":"最後の依頼","sessionId":"s"}}"#).unwrap();
+        writeln!(f, r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"返答"}}]}}}}"#).unwrap();
+        drop(f);
+        let talk = read_talk(&file);
+        assert_eq!(talk.first.as_deref(), Some("はじめの依頼"));
+        assert_eq!(talk.ask.as_deref(), Some("最後の依頼"));
     }
 
     #[test]

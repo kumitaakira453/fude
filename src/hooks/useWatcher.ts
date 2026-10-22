@@ -107,6 +107,8 @@ export function useWatcher() {
             else structural = true;
           } else if (kindOf(abs) !== "other") {
             touched.set(abs, Date.now());
+            // 全文検索の索引に入っている字のファイルは、本文を読み直す。
+            if (!gone && kindOf(abs) === "text" && store.get(A.contentCacheAtom).has(abs)) void reloadFile(abs);
             // 画像はキャッシュを捨てて取り直させる。HTML・PDF・字のファイルは
             // 描いている器が中身を抱えているので、版を上げて貼り直す。
             if (isImage(abs)) invalidateImage(abs);

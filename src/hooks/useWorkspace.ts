@@ -1,14 +1,14 @@
 import { message } from "@tauri-apps/plugin-dialog";
 import { useStore, type getDefaultStore } from "jotai";
 import { useCallback, useRef } from "react";
-import { kindOf, VIEWABLE_SIEVE } from "../lib/kind";
+import { indexable, isSearchable, VIEWABLE_SIEVE } from "../lib/kind";
 import { span } from "../lib/measure";
 import {
   buildTree,
   createDir,
   flattenFiles,
   ancestorPaths,
-  folderMtimes,
+  folderStamps,
   imageUrl,
   MARKDOWN_SIEVE,
   pathExists,
@@ -295,11 +295,14 @@ export function useWorkspace() {
     // 付けておけば、次に戻ったとき変わったものだけを読み直せる。
     const ignores = store.get(A.ignoresByRootAtom);
     const stamped = span("更新時刻");
+    // 大きさも一緒に取る（大きすぎる字のファイルは索引に読まない）。
+    const sizes = new Map<string, number>();
     const stampsOf = Promise.all(
-      [...ignores].map(([at, ignore]) => folderMtimes(at, ignore)),
+      [...ignores].map(([at, ignore]) => folderStamps(at, ignore)),
     ).then(
       (parts) => {
-        const m = new Map(parts.flatMap((part) => [...part]));
+        const m = new Map(parts.flatMap((part) => [...part.mtimes]));
+        for (const part of parts) for (const [k, v] of part.sizes) sizes.set(k, v);
         stamped(`${m.size} 件`);
         return m;
       },
@@ -327,7 +330,7 @@ export function useWorkspace() {
     const roots = store.get(A.rootsAtom);
     const present = new Set(files.map((f) => f.path));
     const gone = (path: string) =>
-      rootOf(roots, path) !== null && kindOf(path) === "markdown" && !present.has(path);
+      rootOf(roots, path) !== null && isSearchable(path) && !present.has(path);
     const cache = store.get(A.contentCacheAtom);
     if ([...cache.keys()].some(gone)) {
       store.set(A.contentCacheAtom, new Map([...cache].filter(([k]) => !gone(k))));
@@ -342,11 +345,11 @@ export function useWorkspace() {
     // インデックスは全ファイルを読むので、最初の描画と取り合いにならないよう
     // 手が空いてから始める（await もしない）
     const gen = ++indexGen;
-    // 索引に入れるのは Markdown だけ。画像や PDF を文字として読んでも中身は
-    // 引けないし、大きいものを丸ごと抱えることになる。
-    const docs = files.filter((f) => kindOf(f.name) === "markdown");
+    // 索引に入れるのは Markdown と字のファイル（yaml・json・コードなど）。画像や
+    // PDF を文字として読んでも中身は引けない。大きすぎる字のファイルも読まない。
     void stampsOf.then((stamps) => {
       if (gen !== indexGen) return;
+      const docs = files.filter((f) => isSearchable(f.name) && indexable(f.path, sizes.get(f.path)));
       store.set(A.touchedAtom, stamps);
       // 確かめのときは、すでに手が空いてから走っている。
       if (opts.quiet) void indexContents(docs, gen, stamps);
@@ -464,9 +467,9 @@ export function useWorkspace() {
 
   const reloadFile = useCallback(
     async (path: string) => {
-      // Markdown 以外は本文を読まない。見せ方は種類ごとの画面が持っていて、
-      // 本文は要らない（画像やＰＤＦを文字として読むと化けるだけ）。
-      if (kindOf(path) !== "markdown") return;
+      // Markdown と字のファイルだけ本文を読む（全文検索の索引と本文の画面が使う）。
+      // 画像や PDF を文字として読むと化けるだけ。
+      if (!isSearchable(path)) return;
       // ツリーがまだ無くても読める（道筋は絶対パス）。ウィンドウを開いた直後は
       // フォルダ全体の走査が終わっておらず、待つと本文が出るのが遅れる。
       try {

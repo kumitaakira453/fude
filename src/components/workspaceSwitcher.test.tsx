@@ -5,17 +5,19 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
+import { RAIL_MS, RAIL_STRIP, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { barAtom } from "../state/workspaceBar";
 import { NewWorkspace } from "./NewWorkspace";
 import { WorkspaceMenu } from "./WorkspaceMenu";
 import { useKeyHints } from "../hooks/useKeyHints";
-import { hintOf, WorkspacePills } from "./WorkspacePills";
+import { hintOf } from "../state/workspaceBar";
+import { WorkspaceRail } from "./WorkspaceRail";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 // ワークスペースの入口。やりたいことごとに入口を 1 つに決めてある。
-//   切り替える   ツールバーの札
+//   切り替える   左端の帯の札
 //   探して開く   ⌘⇧P の一覧（作る口・Claude の区切りは持たない）
-//   作る         札の並びの末尾の ＋
+//   作る         帯の一番下の ＋
 //   手入れ       どこで右クリックしても同じメニュー
 
 const calls: { op: string; arg: unknown }[] = [];
@@ -105,7 +107,7 @@ async function show(setup?: (s: ReturnType<typeof createStore>) => void) {
     root!.render(
       <Provider store={store}>
         <Hints />
-        <WorkspacePills />
+        <WorkspaceRail />
         <WorkspaceSwitcher />
         <WorkspaceMenu />
         <NewWorkspace />
@@ -133,7 +135,7 @@ const button = (label: string) =>
     b.textContent?.includes(label),
   )!;
 
-describe("切り替える：ツールバーの札", () => {
+describe("切り替える：帯の札", () => {
   it("札を押すと切り替わる", async () => {
     const { el } = await show();
     act(() => pill(el, "b").click());
@@ -207,7 +209,7 @@ describe("⌘ を押しているあいだの番号", () => {
       window.dispatchEvent(new KeyboardEvent(type, { bubbles: true, ...init }));
     });
   const hints = (el: HTMLElement) =>
-    Array.from(el.querySelectorAll(".mg-ws-pill-hint")).map((h) => h.textContent);
+    Array.from(el.querySelectorAll(".mg-wsrail-hint")).map((h) => h.textContent);
   const wait = (ms: number) =>
     act(async () => {
       await new Promise((ok) => setTimeout(ok, ms));
@@ -217,7 +219,10 @@ describe("⌘ を押しているあいだの番号", () => {
     const { el } = await show();
     press("keydown", { key: "Meta", metaKey: true });
     expect(hints(el)).toEqual([]);
-    await wait(350);
+    await wait(500);
+    // 0.8 秒待つまでは出さない（⌘ と別のキーを続けて押す途中で出さない）。
+    expect(hints(el)).toEqual([]);
+    await wait(400);
     expect(hints(el)).toEqual(["⌘1", "⌘2"]);
     press("keyup", { key: "Meta" });
     expect(hints(el)).toEqual([]);
@@ -227,11 +232,11 @@ describe("⌘ を押しているあいだの番号", () => {
     const { el } = await show();
     press("keydown", { key: "Meta", metaKey: true });
     press("keydown", { key: "s", metaKey: true });
-    await wait(350);
+    await wait(900);
     expect(hints(el)).toEqual([]);
   });
 
-  it("番号は ⌘1〜8 が左から、⌘9 は一番右の札", () => {
+  it("番号は ⌘1〜8 が上から、⌘9 は一番下の札", () => {
     expect([0, 1, 7, 8].map((i) => hintOf(i, 12))).toEqual(["1", "2", "8", null]);
     expect(hintOf(11, 12)).toBe("9");
     expect(hintOf(8, 9)).toBe("9");
@@ -328,7 +333,7 @@ describe("探して開く：右の中身", () => {
 describe("作る：＋", () => {
   it("作り方を並べ、今のフォルダで作るのは 1 回押すだけ", async () => {
     const { el } = await show();
-    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-wsrail-add[data-key="⌘T"]')!.click());
     expect(document.body.textContent).toContain("フォルダを選んで新規作成");
     expect(document.body.textContent).toContain("今のタブを複製して新規作成");
     act(() => button("今のフォルダで新規作成").click());
@@ -337,11 +342,11 @@ describe("作る：＋", () => {
 
   it("Claude の連携を切っていれば、セッションから作る項目は出さない", async () => {
     const { el } = await show();
-    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-wsrail-add[data-key="⌘T"]')!.click());
     expect(document.body.textContent).not.toContain("Claude のセッションから作成");
   });
 
-  it("連携を入れていれば、セッションを並べる（作成済みのものは印を付け、押すと開く）", async () => {
+  it("連携を入れていれば、まだワークスペースの無いセッションだけを並べ、押すと作る", async () => {
     const { el } = await show((s) => {
       s.set(A.claudeLinkAtom, true);
       s.set(A.claudeSessionsAtom, {
@@ -353,15 +358,11 @@ describe("作る：＋", () => {
         gone: new Set<string>(),
       });
     });
-    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
-    const made = button("結びつき済み");
-    expect(made.textContent).toContain("作成済み");
-    expect(button("[V]新しいセッション").textContent).not.toContain("作成済み");
+    act(() => el.querySelector<HTMLElement>('.mg-wsrail-add[data-key="⌘T"]')!.click());
+    // 作成済みのものは帯から開くので、ここには出さない。
+    expect(document.body.textContent).not.toContain("結びつき済み");
     act(() => button("[V]新しいセッション").click());
     expect(calls).toEqual([{ op: "fromSession", arg: "t" }]);
-    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
-    act(() => button("結びつき済み").click());
-    expect(calls.at(-1)).toEqual({ op: "open", arg: "b" });
   });
 
   it("指したセッションの中身を右に出す（場所。ワークスペースが無ければその節は出さない）", async () => {
@@ -373,7 +374,7 @@ describe("作る：＋", () => {
         gone: new Set<string>(),
       });
     });
-    act(() => el.querySelector<HTMLElement>('.mg-ws-pill-add[data-key="⌘T"]')!.click());
+    act(() => el.querySelector<HTMLElement>('.mg-wsrail-add[data-key="⌘T"]')!.click());
     // 作り方の 3 行の下にセッションが並ぶ。↓ で選んでいく。
     const input = document.querySelector<HTMLInputElement>(".mg-pal-in input")!;
     for (let i = 0; i < 3; i++) {
@@ -389,41 +390,93 @@ describe("作る：＋", () => {
 });
 
 describe("Claude のセッションの終わり", () => {
-  it("ワークスペースのあるセッションが終わったら、札に「終了」と出す", async () => {
+  it("ワークスペースのあるセッションが終わったら、札に終わった印を付ける", async () => {
     const { el } = await show((s) => {
       s.set(A.claudeLinkAtom, true);
       s.set(A.claudeSessionsAtom, { sessions: [], error: null, gone: new Set<string>() });
     });
-    expect(pill(el, "b").textContent).toContain("終了");
-    expect(pill(el, "a").textContent).not.toContain("終了");
+    expect(pill(el, "b").querySelector(".mg-st.is-done")).not.toBeNull();
+    expect(pill(el, "a").querySelector(".mg-st")).toBeNull();
   });
 });
 
-describe("札の ×", () => {
-  it("× はワークスペースの削除を頼み、押した札へは切り替えない", async () => {
-    const { el } = await show();
-    act(() => pill(el, "b").querySelector<HTMLElement>(".mg-ws-pill-x")!.click());
+describe("帯を開いた一覧", () => {
+  it("× はワークスペースの削除を頼み、押した行へは切り替えない", async () => {
+    const { el } = await show((s) => s.set(A.railOpenAtom, true));
+    act(() => pill(el, "b").querySelector<HTMLElement>(".mg-wsrail-x")!.click());
     expect(calls).toEqual([{ op: "close", arg: "b" }]);
   });
 
-  it("中クリックでも削除を頼む", async () => {
+  it("行を押すと移って畳む", async () => {
+    const { el, store } = await show((s) => s.set(A.railOpenAtom, true));
+    act(() => pill(el, "b").click());
+    expect(calls).toEqual([{ op: "open", arg: "b" }]);
+    expect(store.get(A.railOpenAtom)).toBe(false);
+  });
+
+  it("畳んでも、縮みきるまでは名前を描いたままにし、そのあと外す", async () => {
+    const { el, store } = await show((s) => s.set(A.railOpenAtom, true));
+    const names = () => el.querySelectorAll(".mg-wsrail-name").length;
+    expect(names()).toBeGreaterThan(0);
+    act(() => store.set(A.railOpenAtom, false));
+    expect(el.querySelector(".mg-wsrail")!.classList.contains("is-open")).toBe(false);
+    expect(names()).toBeGreaterThan(0);
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, RAIL_MS + 50));
+    });
+    expect(names()).toBe(0);
+  });
+
+  it("開いた幅は渡された幅、畳むと帯の幅", async () => {
+    const { el, store } = await show((s) => s.set(A.railOpenAtom, true));
+    const nav = el.querySelector<HTMLElement>(".mg-wsrail")!;
+    expect(nav.style.width).toBe(`${RAIL_STRIP + SIDEBAR_WIDTH}px`);
+    act(() => store.set(A.railOpenAtom, false));
+    expect(nav.style.width).toBe(`${RAIL_STRIP}px`);
+  });
+
+  it("フォルダごとに見出しを付ける", async () => {
+    const { el } = await show((s) => {
+      s.set(A.railOpenAtom, true);
+      s.set(A.workspaceAtom, ws("a", "要件定義", { roots: ["/w/repo"] }));
+      s.set(A.workspacesAtom, [
+        ws("a", "要件定義", { roots: ["/w/repo"] }),
+        ws("b", "Slack 対応", { roots: ["/w/repo/.claude", "/w/repo"] }),
+        ws("c", "メモ", { roots: ["/w/notes"] }),
+      ]);
+      s.set(barAtom, ["a", "c", "b"]);
+    });
+    expect(Array.from(el.querySelectorAll(".mg-wsrail-group-head")).map((h) => h.textContent)).toEqual([
+      "repo",
+      "notes",
+    ]);
+    expect(Array.from(el.querySelectorAll("[data-ws]")).map((p) => p.getAttribute("data-ws"))).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+});
+
+describe("帯の札を指したとき", () => {
+  it("しばらく指していると中身の札を出し、離れると消す", async () => {
     const { el } = await show();
     act(() => {
-      pill(el, "b").dispatchEvent(new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+      pill(el, "b").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
     });
-    expect(calls).toEqual([{ op: "close", arg: "b" }]);
+    expect(document.querySelector(".mg-wscard")).toBeNull();
+    await act(async () => {
+      await new Promise((ok) => setTimeout(ok, 650));
+    });
+    expect(document.querySelector(".mg-wscard")?.textContent).toContain("Slack 対応");
+    act(() => {
+      pill(el, "b").dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+    });
+    expect(document.querySelector(".mg-wscard")).toBeNull();
   });
 });
 
-describe("札の並び", () => {
-  it("札の並びの空きは窓を掴む所にし、札そのものは掴む所にしない", async () => {
-    const { el } = await show();
-    expect(el.querySelector(".mg-ws-pills-wrap")!.hasAttribute("data-tauri-drag-region")).toBe(true);
-    expect(el.querySelector(".mg-ws-pills")!.hasAttribute("data-tauri-drag-region")).toBe(true);
-    expect(pill(el, "a").hasAttribute("data-tauri-drag-region")).toBe(false);
-  });
-
-
+describe("帯の並び", () => {
   it("並びに載っていないワークスペースも、末尾に札が出る", async () => {
     const { el, store } = await show((s) => s.set(barAtom, ["b"]));
     expect(store.get(barAtom)).toEqual(["b", "a"]);

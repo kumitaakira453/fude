@@ -20,7 +20,7 @@ import {
 } from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
 import { draftRelAtom } from "../state/drafts";
-import { openCountsAtom, versionScreenAtom } from "../state/review";
+import { openCountsAtom, openTotalAtom, reviewScreenAtom, versionScreenAtom } from "../state/review";
 import { Icon } from "./Icon";
 
 // 足元の帯。開いている文書と画面の状態をまとめて出し、押すとその状態を切り替える
@@ -102,6 +102,8 @@ export function StatusBar() {
   const openVersions = useSetAtom(versionScreenAtom);
   const setSideOpen = useSetAtom(sidebarOpenAtom);
   const setFace = useSetAtom(sidebarTabAtom);
+  const openTotal = useAtomValue(openTotalAtom);
+  const setReview = useSetAtom(reviewScreenAtom);
   const isLg = useMediaQuery(RAIL_ROOM);
   // 右の欄は、窓が広く、分割していないときだけ出せる。
   const canRail = isLg && panes.length <= 1;
@@ -208,6 +210,24 @@ export function StatusBar() {
           )}
         </>
       )}
+      {/* 全ファイルのコメントを一覧で見る画面への入口。未解決があれば点を添える。 */}
+      <span className="mg-foot-sep" />
+      <Item
+        tip={
+          isDraft
+            ? "コメントは保存先を決めてから"
+            : openTotal > 0
+              ? `コメント一覧（全ファイル）・未解決 ${openTotal} 件`
+              : "コメント一覧（全ファイル）"
+        }
+        keys="⌘⇧R"
+        className={isDraft ? "is-dim" : ""}
+        onClick={isDraft ? undefined : () => setReview(true)}
+      >
+        {openTotal > 0 && !isDraft && <span className="mg-foot-dot is-warn" aria-hidden />}
+        コメント一覧
+        {openTotal > 0 && <span className="mg-foot-num">{openTotal}</span>}
+      </Item>
     </footer>
   );
 }

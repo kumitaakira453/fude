@@ -13,7 +13,10 @@ import { bindWindow } from "../lib/workspaces";
 import {
   activeFolderIdAtom,
   claudeFilesViewAtom,
+  fileSectionsAtom,
   filesAtom,
+  panesAtom,
+  recentFilesAtom,
   layoutOwnerAtom,
   pathLabelAtom,
   workspaceAtom,
@@ -95,7 +98,9 @@ export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
   const [view, setView] = useAtom(claudeFilesViewAtom);
   const { openFile } = useWorkspace();
   const store = useStore();
-  const [open, setOpen] = useState(true);
+  const [sections, setSections] = useAtom(fileSectionsAtom);
+  const open = sections.wrote;
+  const setOpen = (next: (v: boolean) => boolean) => setSections((s) => ({ ...s, wrote: next(s.wrote) }));
   // 木で畳んだフォルダ（最初はすべて開いておく）。
   const [shut, setShut] = useState<Set<string>>(new Set());
   const now = useMemo(() => Date.now(), [ws?.claude?.wrote]);
@@ -185,8 +190,9 @@ export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
           data-tip={open ? "このセッションで作成・編集したファイル（押すと畳む）" : "このセッションで作成・編集したファイル（押すと開く）"}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <Icon name="claude" size={12} stroke={1.8} />
-          <span className="min-w-0 truncate">セッションのファイル</span>
+          <Icon name={open ? "expand_more" : "chevron_right"} size={12} stroke={1.8} />
+          <span className="min-w-0 truncate">このセッションが書いたファイル</span>
+          <span className="mg-sess-count">{wrote.length}</span>
         </button>
         <button
           onClick={() => setView(view === "tree" ? "list" : "tree")}
@@ -230,6 +236,69 @@ export function ClaudeFiles({ fill = false }: { fill?: boolean }) {
               ほか {wrote.length - SHOWN} 件
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 自分で開いたファイル。開いているタブのうち、このセッションが書いていないもの
+// （自分で開いて読んでいるもの）を、最近見た順に並べる。
+export function OpenedFiles() {
+  const ws = useAtomValue(workspaceAtom);
+  const panes = useAtomValue(panesAtom);
+  const recent = useAtomValue(recentFilesAtom);
+  const label = useAtomValue(pathLabelAtom);
+  const [sections, setSections] = useAtom(fileSectionsAtom);
+  const { openFile } = useWorkspace();
+  const store = useStore();
+  const wrote = useMemo(() => new Set((ws?.claude?.wrote ?? []).map((w) => w.path)), [ws?.claude?.wrote]);
+  const mine = useMemo(() => {
+    const seen = new Set<string>();
+    for (const pane of panes) for (const path of pane.tabs) if (!wrote.has(path)) seen.add(path);
+    return [...seen].sort((a, b) => (recent.get(b) ?? 0) - (recent.get(a) ?? 0));
+  }, [panes, wrote, recent]);
+  if (!ws?.claude) return null;
+  const open = sections.mine;
+  return (
+    <div className="mg-sess">
+      <div className="mg-sess-head">
+        <button
+          onClick={() => setSections((s) => ({ ...s, mine: !s.mine }))}
+          data-tip={open ? "自分で開いたファイル（押すと畳む）" : "自分で開いたファイル（押すと開く）"}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          <Icon name={open ? "expand_more" : "chevron_right"} size={12} stroke={1.8} />
+          <span className="min-w-0 truncate">自分で開いたファイル</span>
+          <span className="mg-sess-count">{mine.length}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="max-h-[24vh] overflow-y-auto">
+          {mine.length === 0 && (
+            <div className="mg-sess-row text-[var(--mg-muted)]" style={{ paddingLeft: 18 }}>
+              まだありません
+            </div>
+          )}
+          {mine.map((path) => (
+            <button
+              key={path}
+              className="mg-sess-row"
+              title={path}
+              onClick={() => {
+                openFile(path);
+                markInTree(store, path);
+              }}
+              style={{ paddingLeft: 18 }}
+            >
+              <span className="mg-sess-name">
+                {path.split("/").pop()}
+                <span className="ml-1.5 text-[10.5px] text-[var(--mg-muted)]">
+                  {label(path).split("/").slice(0, -1).join("/")}
+                </span>
+              </span>
+            </button>
+          ))}
         </div>
       )}
     </div>

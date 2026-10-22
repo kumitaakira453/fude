@@ -68,6 +68,21 @@ export function kindOf(nameOrPath: string): Kind {
   return name ? "text" : "other";
 }
 
+// 全文検索の索引に入れるもの（本文を字として読むもの）。Markdown と字のファイル。
+export const isSearchable = (nameOrPath: string): boolean => {
+  const kind = kindOf(nameOrPath);
+  return kind === "markdown" || kind === "text";
+};
+
+// 索引に読む大きさの上限（バイト）。ログや書き出したデータのような大きな字の
+// ファイルを丸ごと抱えないように。Markdown は大きくても読む（本文の画面が使う）。
+export const INDEX_LIMIT = 1024 * 1024;
+
+export function indexable(path: string, size: number | undefined): boolean {
+  if (kindOf(path) === "markdown") return true;
+  return size === undefined || size <= INDEX_LIMIT;
+}
+
 // fude で開けるもの。ツリーの絞り込みとダイアログで共に使う。
 export const isViewable = (nameOrPath: string): boolean => kindOf(nameOrPath) !== "other";
 

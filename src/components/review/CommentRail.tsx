@@ -409,7 +409,7 @@ export function CommentRail({
         <IconBtn
           tip="コメントの欄を閉じる"
           keys="⌘⇧K"
-          icon="close"
+          icon="right_panel_close"
           onClick={() => setRail("none")}
         />
       </div>

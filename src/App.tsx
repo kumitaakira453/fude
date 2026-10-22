@@ -18,6 +18,7 @@ import { useAfterPaint } from "./hooks/useAfterPaint";
 import { useDragging } from "./hooks/useDragging";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useKeyHints } from "./hooks/useKeyHints";
+import { useLinger } from "./hooks/useLinger";
 import { useGoneTabs } from "./hooks/useGoneTabs";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { watchStalls } from "./lib/measure";
@@ -30,7 +31,7 @@ import { useKeepLayout } from "./hooks/useKeepLayout";
 import { useKeepWorkspace } from "./hooks/useKeepWorkspace";
 import { useClaude } from "./hooks/useClaude";
 import { TipLayer } from "./components/TipLayer";
-import { ActivityStrip } from "./components/ActivityStrip";
+import { WorkspaceRail } from "./components/WorkspaceRail";
 import { StatusBar } from "./components/StatusBar";
 import { WorkspaceCycler } from "./components/WorkspaceCycler";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
@@ -40,7 +41,7 @@ import { useWorkspace } from "./hooks/useWorkspace";
 import { watchDragScroll } from "./lib/dragScroll";
 import { watchSpringDetails } from "./lib/spring";
 import { folderDisplayName } from "./lib/idb";
-import { MIN_DOC, SIDEBAR_MIN } from "./lib/sidebar";
+import { MIN_DOC, RAIL_MS, RAIL_STRIP, SIDEBAR_GRIP, SIDEBAR_MIN, SIDEBAR_WIDTH } from "./lib/sidebar";
 import { rememberLook, setWindowTitle } from "./lib/windows";
 import { DARK_THEME_IDS } from "./lib/themes";
 import {
@@ -49,6 +50,7 @@ import {
   commentSizeAtom,
   foldersAtom,
   sidebarOpenAtom,
+  railOpenAtom,
   sidebarWidthAtom,
   notionKeysAtom,
   taskMarksAtom,
@@ -68,6 +70,8 @@ export default function App() {
   const activeFolderId = useAtomValue(activeFolderIdAtom);
   const folders = useAtomValue(foldersAtom);
   const sidebarOpen = useAtomValue(sidebarOpenAtom);
+  const railOpen = useAtomValue(railOpenAtom);
+  const railShown = useLinger(railOpen, RAIL_MS);
   const [sideWidth, setSideWidth] = useAtom(sidebarWidthAtom);
   // 掴んでいるあいだは仕切りが幅を直に書く（状態を通すと木全体が描き直される）。
   const sideRef = useRef<HTMLDivElement>(null);
@@ -271,14 +275,22 @@ export default function App() {
           }`}
         >
           <Toolbar />
-          <div className="flex min-h-0 flex-1">
-            <ActivityStrip />
-            {sidebarOpen && (
+          <div className="relative flex min-h-0 flex-1">
+            {/* 帯は行の左に重ねて置き、ここは畳んだ帯の分だけ空けておく。 */}
+            <div style={{ width: RAIL_STRIP }} className="shrink-0" aria-hidden />
+            {/* 開いた帯は、帯と左の欄（と右の掴み線 1px）を合わせた幅で、木の上へ
+                伸びて覆う。開く前と同じ幅なので本文は動かない。 */}
+            <WorkspaceRail
+              wide={RAIL_STRIP + (sidebarOpen ? sideWidth + SIDEBAR_GRIP : SIDEBAR_WIDTH)}
+            />
+            {sidebarOpen ? (
               <>
                 {/* 幅は掴んで変えられる。窓を狭めたときに本文が 0 にならないよう、
                     上限を入れ物への割合で置く（割合は flex の入れ物の内側幅に
                     対して解ける）。min-width は max-width より優先されるので、
-                    極端に狭い窓でも字が読める幅は残る。 */}
+                    極端に狭い窓でも字が読める幅は残る。
+                    帯を開いている間も外さずに帯の下に残す（閉じたときに木の
+                    スクロール位置が戻る）。押せないよう inert にする。 */}
                 <div
                   ref={sideRef}
                   style={{
@@ -287,6 +299,7 @@ export default function App() {
                     maxWidth: `calc(100% - ${MIN_DOC}px)`,
                   }}
                   className="shrink-0"
+                  {...(railOpen ? { inert: "" } : {})}
                 >
                   <Sidebar />
                 </div>
@@ -296,6 +309,11 @@ export default function App() {
                   onWidth={setSideWidth}
                 />
               </>
+            ) : (
+              // 左の欄を閉じているときは、開いた帯の分だけ本文を一度で寄せる。
+              // 閉じるときは帯が縮みきってから戻す（本文の幅を毎コマ変えると、
+              // 長い文書の組み直しで引っかかる）。
+              railShown && <div style={{ width: SIDEBAR_WIDTH }} className="shrink-0" aria-hidden />
             )}
             <PaneGroup />
           </div>

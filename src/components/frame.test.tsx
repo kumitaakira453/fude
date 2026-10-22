@@ -12,15 +12,19 @@ import {
   railAtom,
   readingWidthAtom,
   settingsOpenAtom,
+  claudeLinkAtom,
+  claudeSessionsAtom,
+  railOpenAtom,
   sidebarOpenAtom,
   sidebarTabAtom,
+  workspaceAtom,
 } from "../state/atoms";
 import { reviewScreenAtom, versionScreenAtom } from "../state/review";
-import { ActivityStrip } from "./ActivityStrip";
+import { WorkspaceRail } from "./WorkspaceRail";
 import { countText, StatusBar } from "./StatusBar";
 import { Toolbar } from "./Toolbar";
 
-// 画面の骨組み：上の段・縦の帯・足元の帯。
+// 画面の骨組み：上の段・左端の帯・足元の帯。
 //
 // 見たいのは「操作の置き場所が 1 つに決まっていて、押せばそこへ届くこと」。
 // ボタンは名前（吹き出しの data-tip）で探す。
@@ -28,6 +32,13 @@ import { Toolbar } from "./Toolbar";
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("9.9.9") }));
 vi.mock("../hooks/useWorkspace", () => ({
   useWorkspace: () => ({ openWorkspace: async () => {}, newDraft: async () => {} }),
+}));
+vi.mock("../hooks/useWorkspaceOps", () => ({
+  useWorkspaceOps: () => ({ closeWorkspace: async () => {} }),
+}));
+vi.mock("../lib/workspaces", async (real) => ({
+  ...(await real<typeof import("../lib/workspaces")>()),
+  liveWorkspaces: async () => [],
 }));
 
 let wide = true;
@@ -63,7 +74,7 @@ function show(withDoc = true) {
     root!.render(
       <Provider store={store}>
         <Toolbar />
-        <ActivityStrip />
+        <WorkspaceRail />
         <StatusBar />
       </Provider>,
     ),
@@ -96,29 +107,23 @@ describe("上の段", () => {
     expect(store.get(settingsOpenAtom)).toBe(true);
   });
 
-  it("掴んで窓を動かせるところを持つ", () => {
+  it("掴んで窓を動かせるところを持ち、ワークスペースの札は置かない", () => {
     show();
     expect(document.querySelector(".mg-top")?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(document.querySelector(".mg-top-fill")?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(document.querySelector(".mg-top [data-ws]")).toBeNull();
   });
 });
 
-describe("縦の帯", () => {
-  it("押すと左の欄の面が替わり、同じ面をもう一度押すと閉じる", () => {
+describe("左端の帯", () => {
+  it("上のボタンで、ワークスペースの一覧に開いて畳む", () => {
     show();
-    click(byTip("全文を検索"));
-    expect(store.get(sidebarTabAtom)).toBe("search");
-    expect(store.get(sidebarOpenAtom)).toBe(true);
-    click(byTip("全文を検索"));
-    expect(store.get(sidebarOpenAtom)).toBe(false);
-    click(byTip("ファイル"));
-    expect(store.get(sidebarTabAtom)).toBe("files");
-    expect(store.get(sidebarOpenAtom)).toBe(true);
-  });
-
-  it("コメント一覧の画面を開ける", () => {
-    show();
-    click(byTip("コメント一覧（全ファイル）"));
-    expect(store.get(reviewScreenAtom)).toBe(true);
+    const toggle = document.querySelector<HTMLElement>(".mg-wsrail-toggle")!;
+    expect(toggle.dataset.key).toBe("⌘⇧B");
+    click(toggle);
+    expect(store.get(railOpenAtom)).toBe(true);
+    click(document.querySelector<HTMLElement>(".mg-wsrail-toggle")!);
+    expect(store.get(railOpenAtom)).toBe(false);
   });
 });
 
@@ -164,5 +169,35 @@ describe("足元の帯", () => {
   it("文書を開いていなければ、文書の状態は出さない", () => {
     show(false);
     expect(document.querySelector('[data-tip="目次"]')).toBeNull();
+  });
+
+  it("Claude の状態を押すと、左の欄を開いて Claude の面を出す", () => {
+    show();
+    act(() => {
+      store.set(claudeLinkAtom, true);
+      store.set(sidebarOpenAtom, false);
+      store.set(workspaceAtom, {
+        id: "w",
+        name: "w",
+        color: "teal",
+        roots: ["/w"],
+        lastOpened: 0,
+        claude: { sessionId: "s", nameFollows: true },
+      });
+      store.set(claudeSessionsAtom, {
+        sessions: [{ sessionId: "s", name: "w", kind: "background", state: "working" }],
+        error: null,
+        gone: new Set<string>(),
+      });
+    });
+    click(byTip("Claude のセッション。押すと、このセッションのファイルを出す"));
+    expect(store.get(sidebarOpenAtom)).toBe(true);
+    expect(store.get(sidebarTabAtom)).toBe("claude");
+  });
+
+  it("コメント一覧の画面を開ける（文書を開いていなくても）", () => {
+    show(false);
+    click(byTip("コメント一覧（全ファイル）"));
+    expect(store.get(reviewScreenAtom)).toBe(true);
   });
 });

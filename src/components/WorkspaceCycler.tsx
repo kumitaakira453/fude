@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { PHASE_LABEL } from "../lib/claude";
 import { movedIn } from "../lib/pointer";
-import { colorVar, type Workspace } from "../lib/workspaces";
+import type { Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
 import { PHASE_COLOR, phaseForAtom } from "../state/claude";
+import { WorkspaceChip } from "./WorkspaceChip";
 import { barAtom, visitedAtom } from "../state/workspaceBar";
 
 // ⌃Tab の一覧。ブラウザのタブ送りと同じく、⌃ を押したまま Tab で送り、離した
@@ -137,7 +138,7 @@ export function WorkspaceCycler() {
               data-on={i === at || undefined}
               className="mg-pick-row mg-cycler-row"
             >
-              <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
+              <WorkspaceChip ws={ws} />
               <span className="min-w-0 flex-1 truncate">{ws.name}</span>
               {phase && (
                 <span className="mg-cycler-phase">

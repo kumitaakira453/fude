@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { rangeAt, readFlowText } from "./domText";
+import { rangeAt, readFlowText, readSelection } from "./domText";
 
 // 組み上がった本文を 1 本の文字列として読む。強調やリンクで割れた文字ノードを
 // 繋ぐのが役目で、塊の境目だけは繋がない。
@@ -45,5 +45,25 @@ describe("readFlowText", () => {
     const at = flow.plain.indexOf("はmd");
     const range = rangeAt(flow, at, at + 3);
     expect(range?.toString()).toBe("はmd");
+  });
+});
+
+describe("readSelection", () => {
+  it("選び始めが塊の外（見出しの前の余白など）でも、範囲の中の最初の塊の頭から読む", () => {
+    const root = host('<div class="gap">　</div><p data-mg-block="0">前の段落の字</p><p data-mg-block="1">次</p>');
+    document.body.appendChild(root);
+    const range = document.createRange();
+    range.setStart(root.querySelector(".gap")!.firstChild!, 0);
+    range.setEnd(root.querySelector('[data-mg-block="0"]')!.firstChild!, 3);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+    Range.prototype.getBoundingClientRect ??= () => new DOMRect(0, 0, 0, 0);
+    Range.prototype.getClientRects ??= () => document.createElement("div").getClientRects();
+    const got = readSelection(root);
+    expect(got?.blockIndex).toBe(0);
+    expect(got?.start).toBe(0);
+    expect(got?.text).toBe("前の段");
+    root.remove();
   });
 });

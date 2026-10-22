@@ -363,6 +363,8 @@ struct FileStamp {
     path: String,
     // 更新時刻（エポックからのミリ秒）
     mtime: u64,
+    // 大きさ（バイト）。大きすぎる字のファイルを全文検索の索引に読まないために使う。
+    size: u64,
 }
 
 // 一覧から外すもの。書き方は .gitignore と同じで、設定の本文をそのまま食わせる。
@@ -404,14 +406,15 @@ fn stamps_in(
             }
             stamps_in(&entry.path(), &rel, gi, out);
         } else if kind.is_file() && !dropped(gi, &rel, false) {
-            let mtime = entry
-                .metadata()
-                .ok()
+            let meta = entry.metadata().ok();
+            let mtime = meta
+                .as_ref()
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0);
-            out.push(FileStamp { path: rel, mtime });
+            let size = meta.as_ref().map_or(0, std::fs::Metadata::len);
+            out.push(FileStamp { path: rel, mtime, size });
         }
     }
 }

@@ -137,7 +137,7 @@ export function Toc({
         <>
       <div className="mg-rail-head">
         <span className="mg-rail-title">目次</span>
-        <IconBtn tip="目次を閉じる" keys="⌘⇧O" icon="close" onClick={() => setRail("none")} />
+        <IconBtn tip="目次を閉じる" keys="⌘⇧O" icon="right_panel_close" onClick={() => setRail("none")} />
       </div>
       <ul className="space-y-0.5 px-3 py-2.5">
         {headings.map((h, i) => (

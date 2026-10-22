@@ -243,17 +243,24 @@ export function readSelection(root: HTMLElement): BlockSelection | null {
   const range = selection.getRangeAt(0);
   if (!root.contains(range.startContainer)) return null;
 
-  const startEl =
+  let startEl =
     range.startContainer instanceof Element
       ? range.startContainer
       : range.startContainer.parentElement;
-  const block = startEl?.closest<HTMLElement>("[data-mg-block]");
-  if (!block) return null;
+  let block = startEl?.closest<HTMLElement>("[data-mg-block]");
+  // 選び始めが塊の外（見出しの前の余白など）なら、範囲の中の最初の塊の頭から読む。
+  let fromHead = false;
+  if (!block) {
+    block = [...root.querySelectorAll<HTMLElement>("[data-mg-block]")].find((b) => range.intersectsNode(b));
+    if (!block) return null;
+    startEl = block;
+    fromHead = true;
+  }
   const blockIndex = blockIndexOf(block);
   if (blockIndex === null) return null;
 
   const bt = readBlockText(block);
-  const start = offsetOf(bt, range.startContainer, range.startOffset);
+  const start = fromHead ? 0 : offsetOf(bt, range.startContainer, range.startOffset);
   if (start === null) return null;
   const end = block.contains(range.endContainer)
     ? offsetOf(bt, range.endContainer, range.endOffset)

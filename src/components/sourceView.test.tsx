@@ -2,6 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { getDefaultStore } from "jotai";
+import { highlightAtom } from "../state/atoms";
 import { SourceView } from "./SourceView";
 
 // 原文の面。長いファイルを全部組むと出るまで固まり、送るのにも描画が
@@ -15,6 +17,7 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 
 afterEach(() => {
+  getDefaultStore().set(highlightAtom, null);
   act(() => root?.unmount());
   host?.remove();
   root = null;
@@ -75,5 +78,21 @@ describe("原文の面", () => {
     const box = document.querySelector<HTMLElement>(".mg-source")!;
     const start = Number(texts[0]!.replace("行 ", ""));
     expect(box.style.counterReset).toBe(`mg-line ${start}`);
+  });
+
+  it("語を探しているあいだは全部の行を組み、⌘F が下の方の当たりまで数えられる", () => {
+    getDefaultStore().set(highlightAtom, {
+      term: "name:",
+      caseSensitive: false,
+      useRegex: false,
+      wholeWord: false,
+      nonce: 1,
+    });
+    const long = Array.from({ length: 5_000 }, (_, i) => `行 ${i}`).join("\n");
+    show(long);
+    expect(rows()).toBe(5_000);
+    // 探し終えたら、見えている所だけに戻す。
+    act(() => getDefaultStore().set(highlightAtom, null));
+    expect(rows()).toBeLessThan(200);
   });
 });

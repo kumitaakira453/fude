@@ -16,6 +16,7 @@ import {
   closeOthers,
   closeTab,
   closeTabAt,
+  markInTree,
   moveTab,
   openInPane,
   revealInTree,
@@ -33,7 +34,9 @@ import { IconBtn } from "./Chrome";
 import { seenTab } from "../state/claude";
 import { draftNameAtom, draftRelAtom } from "../state/drafts";
 import { EntryMenu, type EntryMenuState } from "./EntryMenu";
+import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
+import { tabWhere } from "../lib/tabLabel";
 
 // ペインが持つタブの並び。分割の各ペインがそれぞれ持つ。
 // タブは掴んで別のペインへ移せる。ファイルツリーからここへ落として開くこともできる。
@@ -160,10 +163,15 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
               }}
               // 遷移は掛けない。上端のアクセントの線は要素の出現で即座に出る
               // ので、背景だけ遅れると足並みが揃わない（ツリーの行と同じ）。
-              className={`mg-tab group${selected ? " is-on" : ""}${gone.has(path) ? " is-gone" : ""}`}
+              className={`mg-tab group${selected ? " is-on" : ""}${selected && !isActive ? " is-dim" : ""}${
+                gone.has(path) ? " is-gone" : ""
+              }`}
             >
-              {/* 今のタブの上端の線。分割していて焦点の無いペインでは色を落とす。 */}
-              {selected && <span className={`mg-tab-line${isActive ? "" : " is-dim"}`} />}
+              <FileIcon name={path.split("/").pop() ?? path} size={14} />
+              {/* 名前が重なるタブにだけ、見分けに要るフォルダを薄く添える。 */}
+              {tabWhere(path, pane.tabs) && (
+                <span className="mg-tab-where">{tabWhere(path, pane.tabs)}/</span>
+              )}
               <button
                 type="button"
                 role="tab"
@@ -175,13 +183,17 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                       ? `${path}\n押すとツリーで表示`
                       : path
                 }
-                // 開いているタブをもう一度押すのは「ここを出して」という合図。
-                // 切り替えのたびにツリーが動くと、狙って触るまで読めなくなる。
-                onClick={() =>
-                  selected
-                    ? revealInTree(store, path)
-                    : activateTab(store, pane.id, i)
-                }
+                // 押して切り替えたら、木でもその行まで送る（合図だけ置き、左の欄を
+                // 開いたり面を替えたりはしない）。開いているタブをもう一度押すのは
+                // 「ここを出して」という合図で、左の欄を開いてファイルの面で出す。
+                onClick={() => {
+                  if (selected) {
+                    revealInTree(store, path);
+                    return;
+                  }
+                  activateTab(store, pane.id, i);
+                  markInTree(store, path);
+                }}
                 // 中クリックで閉じる（タブの慣習）
                 onAuxClick={(e) => {
                   if (e.button === 1) {
@@ -199,9 +211,8 @@ export function TabBar({ pane, isActive }: { pane: LeafNode; isActive: boolean }
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mg-accent)]"
                 />
               )}
-              {/* 閉じるボタンは常に出す。ホバーで現れる作りだと、閉じられる
-                  ことに気付けないうえ、狙って触るまで的が見えない。
-                  普段は色を落として、名前より前に出ないようにする。 */}
+              {/* 閉じるボタンは、今のタブと指したタブにだけ出す（並びを静かにする）。
+                  幅は取ったままにして、指したときに名前が動かないようにする。 */}
               <button
                 type="button"
                 title="閉じる"

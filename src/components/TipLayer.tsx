@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 // 補足なので出さない）。
 
 // 出すまでの待ち。続けて別の部品へ移ったときは待たずに出す。
-const WAIT_MS = 400;
+const WAIT_MS = 700;
 const WARM_MS = 300;
 const GAP = 6;
 const EDGE = 8;

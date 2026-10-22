@@ -28,6 +28,7 @@ import {
   metaOnTopAtom,
   wideTableAtom,
   d2DiagramAtom,
+  spinStatusAtom,
 } from "../state/atoms";
 import { AppIcon } from "./AppIcon";
 import { ClaudeMark } from "./ClaudeMark";
@@ -173,6 +174,16 @@ const ROWS: Row[] = [
       check: () => invoke<boolean>("d2_available"),
       missing: "d2 コマンドが見つかりません。入れると切り替えられるようになります",
     },
+  },
+  {
+    kind: "switch",
+    id: "spinstatus",
+    face: "look",
+    group: "表示",
+    atom: spinStatusAtom,
+    name: "作業中の印を動かす",
+    note: "左端の帯で、Claude のセッションが作業中のワークスペースに回る輪を出します。オフにすると止まった点にします（Mac の「視差効果を減らす」がオンのときは、いつも止まった点です）",
+    aliases: ["claude", "作業中", "アニメーション", "回る", "スピナー", "状態"],
   },
 
   {

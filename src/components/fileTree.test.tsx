@@ -14,6 +14,8 @@ import {
   workspaceMenuAtom,
   rootCreateAtom,
   revealInTreeAtom,
+  sidebarOpenAtom,
+  sidebarTabAtom,
 } from "../state/atoms";
 import { FileTree } from "./FileTree";
 import { Sidebar } from "./Sidebar";
@@ -313,12 +315,37 @@ describe("フォルダを複数並べているとき", () => {
         </Provider>,
       ),
     );
-    act(() => host!.querySelector<HTMLElement>('[data-tip="新しく作る"]')!.click());
+    act(() => host!.querySelector<HTMLElement>('[data-tip="新しいファイル・フォルダ"]')!.click());
     const add = Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) =>
       b.textContent?.includes("このワークスペースにフォルダを追加"),
     )!;
     act(() => add.click());
     expect(store.get(workspaceMenuAtom)).toMatchObject({ id: "ws", step: "folders" });
+  });
+
+  it("頭の字のタブで、ファイル・検索・Claude の面を替え、開く・＋はファイルの面だけ", () => {
+    showTwo();
+    act(() => root!.unmount());
+    root = createRoot(host!);
+    act(() =>
+      root!.render(
+        <Provider store={store}>
+          <Sidebar />
+        </Provider>,
+      ),
+    );
+    const tabs = Array.from(host!.querySelectorAll<HTMLElement>('.mg-pane-side-head [role="tab"]'));
+    expect(tabs.map((t) => t.textContent)).toEqual(["ファイル", "検索", "Claude"]);
+    expect(host!.querySelector(".mg-side-tools")).not.toBeNull();
+    act(() => tabs[1].click());
+    expect(store.get(sidebarTabAtom)).toBe("search");
+    // 検索の面では、開く・＋を出さない。
+    expect(host!.querySelector(".mg-side-tools")).toBeNull();
+    act(() => tabs[2].click());
+    expect(store.get(sidebarTabAtom)).toBe("claude");
+    // 今出している面をもう一度押すと、左の欄を閉じる。
+    act(() => tabs[2].click());
+    expect(store.get(sidebarOpenAtom)).toBe(false);
   });
 
   it("「エクスプローラー」の字は出さない", () => {

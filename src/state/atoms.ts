@@ -51,9 +51,9 @@ export const workspaceMenuAtom = atom<{
   y: number;
   step?: "folders";
 } | null>(null);
-// ワークスペースを作る一覧（札の並びの末尾の ＋・⌘T）を開いているか。
+// ワークスペースを作る一覧（左端の帯の一番下の ＋・⌘T）を開いているか。
 export const newWorkspaceAtom = atom(false);
-// ワークスペースを探して開く一覧（⌘⇧P）。
+// ワークスペースを探して開く一覧（⌘J）。
 export const workspaceSwitcherOpenAtom = atom(false);
 // 木の開閉を控える鍵。ワークスペースがあればその ID、無ければフォルダ。
 export const treeKeyAtom = atom<string | null>(
@@ -198,6 +198,8 @@ export type D2View = "code" | "split" | "diagram";
 export const d2ViewAtom = atomWithStorage<D2View>("fude:d2view", "diagram");
 // .d2 の分割で、ソースの欄が占める割合。
 export const d2SplitAtom = atomWithStorage<number>("fude:d2split", 0.42);
+// .d2 の図の下の注釈（d2 の付録）の一覧を開いているか。全部の .d2 で共通。
+export const d2NotesOpenAtom = atomWithStorage<boolean>("fude:d2notes", true);
 // フォルダに付けたアイコン（Material Symbols の名前）。鍵はフォルダの絶対パス。
 // 覚えるのはアプリの中だけで、フォルダには何も書かない。fude で動かしたときは
 // useWorkspace が付け替える。
@@ -360,6 +362,16 @@ export const treeFilterAtom = atom<string>("");
 // 左の欄に出している面。縦の帯で切り替える。
 export type SideFace = "files" | "search" | "claude";
 export const sidebarTabAtom = atom<SideFace>("files");
+// 左端の帯を開いて、木の代わりにワークスペースの一覧を出しているか。窓ごとに覚える。
+export const railOpenAtom = atomWithStorage<boolean>(windowScopedKey("fude:railopen"), false);
+// 木の下の 2 つの一覧（このセッションが書いたファイル・自分で開いたファイル）を
+// 開いているか。
+export const fileSectionsAtom = atomWithStorage<{ wrote: boolean; mine: boolean }>(
+  "fude:filesections",
+  { wrote: true, mine: true },
+);
+// Claude のセッションが作業中のとき、印の輪を回すか（切なら止めた点にする）。
+export const spinStatusAtom = atomWithStorage<boolean>("fude:spinstatus", true);
 // 書いている途中の保存の数（全ペインの合計）。足元の帯に「保存中」を出す。
 export const savingCountAtom = atom(0);
 // 左の欄の頭の「新規」から、根にファイル・フォルダを作る頼み。木が受けて名前の欄を出す。

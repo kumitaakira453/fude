@@ -6,6 +6,7 @@ import { colorVar, WORKSPACE_COLORS } from "../lib/workspaces";
 import { workspaceAtom, workspaceMenuAtom, workspacesAtom } from "../state/atoms";
 import { ClaudeMark } from "./ClaudeMark";
 import { FolderChooser } from "./FolderChooser";
+import { WorkspaceChip } from "./WorkspaceChip";
 import { Icon } from "./Icon";
 
 // ワークスペースの右押しのメニュー。ツールバーの札・⌘⇧P の行・サイドバー上部の
@@ -81,7 +82,7 @@ export function WorkspaceMenu() {
         {step === "menu" && (
           <>
             <div className="mg-ws-menu-head">
-              <span className="mg-ws-dot" style={{ background: colorVar(ws.color) }} />
+              <WorkspaceChip ws={ws} />
               <span className="truncate">{ws.name}</span>
             </div>
             <MenuItem icon="edit" label="名前を変更" onClick={() => setStep("rename")} />

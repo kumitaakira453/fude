@@ -5,7 +5,7 @@ import { hintsAtom } from "../state/workspaceBar";
 // ⌘ だけを押したまましばらく待つと、キーを持つ部品（data-key）と札にキーを
 // 重ねて出す。⌘S などを押す途中でちらっと出ないよう、少し待ってから出す。
 // ⌘ を離す、ほかのキーを押す、窓を離れると消す。
-const HINT_AFTER_MS = 300;
+const HINT_AFTER_MS = 800;
 
 export function useKeyHints() {
   const setHints = useSetAtom(hintsAtom);

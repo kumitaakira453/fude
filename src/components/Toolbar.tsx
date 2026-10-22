@@ -8,10 +8,9 @@ import {
 } from "../state/atoms";
 import { IconBtn } from "./Chrome";
 import { Icon } from "./Icon";
-import { WorkspacePills } from "./WorkspacePills";
 
 // 上の段。窓のタイトルバーと一体で、左に信号機の場所を空ける。全体に効く
-// ものだけを置く（サイドバー・戻る/進む・ワークスペースの札・探す・設定）。
+// ものだけを置く（サイドバー・戻る/進む・探す・設定）。
 // 空いているところを掴むと窓を動かせる。
 export function Toolbar() {
   const setSidebarOpen = useSetAtom(sidebarOpenAtom);
@@ -38,7 +37,8 @@ export function Toolbar() {
         onClick={() => history.forward()}
       />
       <span className="mg-top-sep" />
-      <WorkspacePills />
+      {/* 空いているところは窓を掴む所（ワークスペースは左端の帯に並べる）。 */}
+      <span className="mg-top-fill" data-tauri-drag-region />
       <button
         type="button"
         className="mg-top-find"

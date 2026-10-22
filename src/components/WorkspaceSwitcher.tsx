@@ -23,6 +23,7 @@ import { Icon } from "./Icon";
 import { Marked } from "./Marked";
 import { FileNames, PathList, PathText, PickDetail, PickPanel } from "./PickPanel";
 import { keyedIn, movedIn } from "../lib/pointer";
+import { WorkspaceChip } from "./WorkspaceChip";
 import { absoluteLayout, tabsOf } from "../lib/ui";
 
 // ワークスペースの一覧（⌘J・札の並びの ▾）。札の列に出していないものや、まだ
@@ -281,7 +282,7 @@ export function WorkspaceSwitcher() {
                 data-on={i === active || undefined}
                 className="mg-pick-row mg-pal-row cursor-pointer"
               >
-                <span className="mg-ws-dot mg-pal-dot" style={{ background: colorVar(ws.color) }} />
+                <WorkspaceChip ws={ws} size={18} />
                 <span className="mg-pal-name">
                   <Marked text={ws.name} query={query} />
                 </span>

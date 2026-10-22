@@ -38,6 +38,12 @@ export function visit(list: readonly string[], id: string): string[] {
   return [id, ...list.filter((x) => x !== id)];
 }
 
+// その札を指す ⌘ の数字（⌘9 は最後）。指すキーが無ければ null。
+export function hintOf(i: number, count: number): string | null {
+  if (i === count - 1 && count >= 9) return "9";
+  return i < 8 ? String(i + 1) : null;
+}
+
 // ⌘1〜9 の行き先。9 は最後。
 export function barTarget(list: readonly string[], n: number): string | undefined {
   if (list.length === 0) return undefined;

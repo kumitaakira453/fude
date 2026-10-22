@@ -5,6 +5,12 @@
 
 // ダブルクリックで戻る幅。
 export const SIDEBAR_WIDTH = 268;
+// 左端の帯（ワークスペースの札）の幅。index.css の .mg-rail と対にする。
+export const RAIL_STRIP = 40;
+// 帯の開閉にかける時間（ms）。index.css の .mg-wsrail の transition と対にする。
+export const RAIL_MS = 200;
+// 左の欄の右の掴み線の幅。index.css の .mg-side-grip と対にする。
+export const SIDEBAR_GRIP = 1;
 // ツリーの字が読める下限と、広げすぎの上限。それ以上広げても、道筋が長い
 // 一部のファイルのために本文を狭めるだけになる。
 export const SIDEBAR_MIN = 200;

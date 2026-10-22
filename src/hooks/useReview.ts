@@ -228,14 +228,26 @@ export function useReview({
       drawing = false;
       read();
     };
+    // 選んだところを右クリックしたら、OS の一覧の代わりにメニューを出す
+    // （離したときに出なかった場合の出し直し）。選んでいなければ OS の一覧のまま。
+    const onMenu = (e: MouseEvent) => {
+      if (!(e.target instanceof Node) || !content.contains(e.target)) return;
+      const picked = readSelection(content);
+      if (!picked) return;
+      e.preventDefault();
+      cancelAnimationFrame(raf);
+      setSelection(picked);
+    };
     document.addEventListener("selectionchange", onChange);
     window.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
+    content.addEventListener("contextmenu", onMenu);
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("selectionchange", onChange);
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
+      content.removeEventListener("contextmenu", onMenu);
     };
   }, [content, isActive, isDraft]);
 

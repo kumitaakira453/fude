@@ -1,7 +1,9 @@
+import { useAtomValue } from "jotai";
 import { useMemo, useRef } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
 import { paintLines, type Piece } from "../lib/code";
 import { fontVar, widestText } from "../lib/textWidth";
+import { highlightAtom } from "../state/atoms";
 
 // 原文を、色を付けたまま一面に出す。
 //
@@ -15,6 +17,8 @@ import { fontVar, widestText } from "../lib/textWidth";
 
 // 行の高さ（px）。index.css の .mg-source と対にする。
 const LINE = 21;
+// 語を探しているあいだ全部の行を組む、行の数の上限。
+const SEARCH_ALL_LINES = 20000;
 // 上の余白（.mg-source の padding-top、0.6rem）。
 const TOP = 10;
 // 行番号の欄（3.2rem）と間（1rem）と右の余白（1.5rem）。
@@ -34,7 +38,12 @@ export function SourceView({
   // またがる囲みやコメントの色が途中で切れる。
   const lines = useMemo(() => painted ?? paintLines(code, lang), [painted, code, lang]);
   const box = useRef<HTMLDivElement>(null);
-  const [start, end] = useVisibleRows(box, lines.length, LINE, TOP);
+  const [shownFrom, shownTo] = useVisibleRows(box, lines.length, LINE, TOP);
+  // 語を探しているあいだ（⌘F・全文検索から開いたとき）は全部の行を組む。
+  // 当たりは画面に組んだ字から数えるので、組んでいない行の当たりは数えられず、
+  // そこへ移ることもできない。長すぎるファイルは今までどおり見えている所だけ。
+  const searching = !!useAtomValue(highlightAtom)?.term && lines.length <= SEARCH_ALL_LINES;
+  const [start, end] = searching ? [0, lines.length] : [shownFrom, shownTo];
   const width = useMemo(() => {
     const texts = lines.map((l) => l.map((p) => p.text).join("").replace(/\t/g, "  "));
     const font = `12.5px ${fontVar("--mg-font-mono", "monospace")}`;

@@ -1108,8 +1108,17 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 押した瞬間に閉じるのはこれ）。
     const onDown = (e: MouseEvent) => {
       composed = false;
+      // 右ボタンは選択を残す（選んだところの右クリックで帯を出し直す）。
+      if (e.button === 2) return;
       if (inFloating(e.target)) return;
       setEditSel(null);
+    };
+    // 選んだところを右クリックしたら、OS の一覧の代わりに帯を出す。
+    const onMenu = (e: MouseEvent) => {
+      const sel = view.dom.ownerDocument.getSelection();
+      if (!sel || sel.isCollapsed || view.composing || !domSpan(view)) return;
+      e.preventDefault();
+      read();
     };
     const onKey = (e: KeyboardEvent) => {
       if (!e.isComposing && e.keyCode !== 229) composed = false;
@@ -1130,7 +1139,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         setScrolled((n) => n + 1);
       });
     };
-    view.dom.addEventListener("mouseup", onUp);
+    // 離した合図は窓で受ける。引いて編集面の外で離したときも出す（選んだ範囲が
+    // 編集面の中に無ければ read が何も出さない）。
+    window.addEventListener("mouseup", onUp);
+    view.dom.addEventListener("contextmenu", onMenu);
     view.dom.addEventListener("keyup", onKeyUp);
     view.dom.addEventListener("compositionend", onComposeEnd);
     window.addEventListener("mousedown", onDown);
@@ -1139,7 +1151,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     window.addEventListener("resize", onMove);
     return () => {
       cancelAnimationFrame(soon);
-      view.dom.removeEventListener("mouseup", onUp);
+      window.removeEventListener("mouseup", onUp);
+      view.dom.removeEventListener("contextmenu", onMenu);
       view.dom.removeEventListener("keyup", onKeyUp);
       view.dom.removeEventListener("compositionend", onComposeEnd);
       window.removeEventListener("mousedown", onDown);

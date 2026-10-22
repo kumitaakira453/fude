@@ -1,4 +1,5 @@
 import type { TreeNode } from "./fsAccess";
+import { kindOf } from "./kind";
 
 // ---- クイックオープン（ファイル名ファジー検索） ----
 export interface FuzzyResult {
@@ -176,7 +177,10 @@ const projected = new Map<string, { from: string; lines: string[] }>();
 function readableLines(path: string, text: string): string[] {
   const known = projected.get(path);
   if (known && known.from === text) return known.lines;
-  const lines = text.split("\n").map(readable);
+  // 飾りを落とすのは Markdown だけ。yaml やコードの `**/*.yml` や `__init__` は
+  // 飾りではないので、そのまま比べる。
+  const raw = text.split("\n");
+  const lines = kindOf(path) === "markdown" ? raw.map(readable) : raw;
   projected.set(path, { from: text, lines });
   return lines;
 }

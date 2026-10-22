@@ -355,11 +355,22 @@ export async function folderMtimes(
   rootAbs: string,
   ignore = "",
 ): Promise<Map<string, number>> {
-  const list = await invoke<{ path: string; mtime: number }[]>("folder_mtimes", {
+  return (await folderStamps(rootAbs, ignore)).mtimes;
+}
+
+// 更新時刻と大きさ（バイト）。鍵は絶対パス。
+export async function folderStamps(
+  rootAbs: string,
+  ignore = "",
+): Promise<{ mtimes: Map<string, number>; sizes: Map<string, number> }> {
+  const list = await invoke<{ path: string; mtime: number; size?: number }[]>("folder_mtimes", {
     root: rootAbs,
     ignore,
   });
-  return new Map(list.map((f) => [`${rootAbs}/${f.path}`, f.mtime]));
+  return {
+    mtimes: new Map(list.map((f) => [`${rootAbs}/${f.path}`, f.mtime])),
+    sizes: new Map(list.map((f) => [`${rootAbs}/${f.path}`, f.size ?? 0])),
+  };
 }
 
 // フォルダを見張る。合図は間合いの分だけまとめて、外したもの（ignore）の

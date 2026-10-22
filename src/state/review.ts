@@ -21,6 +21,14 @@ export const openCountsAtom = atom((get) => {
   return counts;
 });
 
+// ワークスペースごとの未解決の数（帯の札を指したときに出す）。そのワークスペースの
+// フォルダの中のファイルだけを数える。
+export const openCountForAtom = atom((get) => {
+  const threads = get(ledgerAtom).threads;
+  return (roots: readonly string[]): number =>
+    threads.filter((t) => isOpen(t) && !!rootOf(roots as string[], t.file)).length;
+});
+
 // レビュー画面の開閉と、そこで選択している指摘。
 export const reviewScreenAtom = atom(false);
 export const reviewThreadAtom = atom<string | null>(null);

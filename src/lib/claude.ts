@@ -80,6 +80,8 @@ export async function claudeSessionFiles(
 // 会話の頭と終わり（最初の依頼と最後の返答）。記録の先頭と末尾だけを読む。
 export interface Talk {
   first: string | null;
+  // 最後の依頼（記録の last-prompt、無ければ最後の人の発言）。
+  ask: string | null;
   last: string | null;
 }
 
