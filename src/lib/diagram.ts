@@ -76,6 +76,7 @@ export function describeDiagramError(
 
 // 図を SVG 文字列にする。描けないときは例外（エラーの文をそのまま見せる）。
 // d2 の組み方は、図の中の `vars: { d2-config: { layout-engine: … } }` で決める。
+// 決めていなければ ELK で組む（src-tauri の d2.rs）。
 export function renderDiagram(lang: string, code: string, dark: boolean): Promise<string> {
   return lang === D2 ? renderD2(code, dark) : renderMermaid(code, dark);
 }

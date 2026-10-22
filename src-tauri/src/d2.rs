@@ -51,11 +51,25 @@ fn find_d2() -> Option<PathBuf> {
     (!path.is_empty()).then(|| PathBuf::from(path))
 }
 
-// 組み方（dagre・ELK・TALA）は図の中の `vars: { d2-config: { layout-engine: … } }` で
-// 決める。コマンドでは指定しない。
+// 組み方の引数。図の中で `vars: { d2-config: { layout-engine: … } }` を決めていれば
+// それに任せ（コマンドの --layout は図の中の指定より優先されるので付けない）、
+// 決めていなければ ELK で組む。d2 の既定の dagre は線を曲線で引き、箱をまたいで
+// 交差させる。読み込んだ別のファイル（`...@部品.d2`）の中の指定は見ない。
+fn layout_args(code: &str) -> &'static [&'static str] {
+    if code.contains("layout-engine") {
+        &[]
+    } else {
+        &["--layout", "elk"]
+    }
+}
+
 pub fn render(code: &str, dark: bool) -> Result<String, String> {
     let theme = ["--theme", if dark { DARK } else { LIGHT }];
-    let out = run(&[&theme[..], &LOOKS, &["-", "-"]].concat(), Some(code), None)?;
+    let out = run(
+        &[&theme[..], &LOOKS, layout_args(code), &["-", "-"]].concat(),
+        Some(code),
+        None,
+    )?;
     let svg = String::from_utf8_lossy(&out);
     // 先頭の XML 宣言は HTML の中に置けないので外す。
     let start = svg.find("<svg").ok_or("d2 が図を返しませんでした")?;
@@ -69,7 +83,13 @@ pub fn export(path: &Path) -> Result<PathBuf, String> {
     let dest = path.with_extension("svg");
     let src = path.to_string_lossy();
     let to = dest.to_string_lossy();
-    run(&[&["--theme", LIGHT][..], &LOOKS, &[&src, &to]].concat(), None, path.parent())?;
+    // 読めなければ、指定が無いものとして組む（描く側の d2 がエラーを返す）。
+    let code = std::fs::read_to_string(path).unwrap_or_default();
+    run(
+        &[&["--theme", LIGHT][..], &LOOKS, layout_args(&code), &[&src, &to]].concat(),
+        None,
+        path.parent(),
+    )?;
     Ok(dest)
 }
 
@@ -248,6 +268,13 @@ mod tests {
         let svg = std::fs::read_to_string(&dest).unwrap();
         assert_eq!(svg.matches("zzNOTEzz").count(), 3);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lays_out_with_elk_unless_the_diagram_says() {
+        assert_eq!(layout_args("a -> b"), ["--layout", "elk"]);
+        assert!(layout_args("vars: {d2-config: {layout-engine: dagre}}\na -> b").is_empty());
+        assert!(layout_args("vars: {\n  d2-config: {\n    layout-engine: tala\n  }\n}").is_empty());
     }
 
     #[test]
