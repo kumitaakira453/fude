@@ -5,7 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Markdown } from "../components/Markdown";
 import { d2DiagramAtom } from "../state/atoms";
-import { cleanSvg, describeDiagramError, isDiagramLang, renderDiagram } from "./diagram";
+import { cleanSvg, describeDiagramError, isDiagramLang, renderDiagram, splitAppendix } from "./diagram";
+import { svgSize } from "./svgSize";
 
 // d2 の図（ベータ）。描くのは Rust 側の render_d2 なので、ここでは呼び先を差し替える。
 
@@ -88,6 +89,39 @@ describe("d2 の図", () => {
     );
     expect(svg).not.toContain("fill-N7");
     expect(svg).toContain("fill-B6");
+  });
+
+  it("付録を外して番号と文の組にし、図の高さを区切り線の位置まで詰める", () => {
+    const { svg, notes } = splitAppendix(
+      cleanSvg(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 211 239" preserveAspectRatio="xMinYMin meet">' +
+          '<svg class="d2-1 d2-svg" width="211" height="239" viewBox="-17 -34 211 239">' +
+          '<g class="shape"><rect width="10" height="10"/></g>' +
+          '<line x1="-41" x2="154" y1="117" y2="117" class=" stroke-B2"/>' +
+          '<g class="appendix"><g transform="translate(0 167)" class="appendix-icon">' +
+          '<circle cx="16" cy="0" r="16" fill="white"/><text class="text-bold" x="16" y="5">1</text></g>' +
+          '<text class="text" x="48" y="172">一つ目</text>' +
+          '<g transform="translate(0 219)" class="appendix-icon">' +
+          '<circle cx="16" cy="0" r="16" fill="white"/><text class="text-bold" x="16" y="5">2</text></g>' +
+          '<text class="text" x="48" y="224">二つ目</text></g></svg></svg>',
+      ),
+    );
+    expect(notes).toEqual([
+      { n: "1", text: "一つ目" },
+      { n: "2", text: "二つ目" },
+    ]);
+    expect(svg).not.toContain("appendix");
+    expect(svg).not.toContain("stroke-B2");
+    expect(svg).toContain('class="shape"');
+    // 117 − (−34) = 151 まで詰める（外側も 239 − 88）。
+    expect(svg).toContain('viewBox="-17 -34 211 151"');
+    expect(svg).toContain('viewBox="0 0 211 151"');
+    expect(svgSize(svg)).toEqual({ width: 211, height: 151 });
+  });
+
+  it("付録の無い図は、そのまま返す", () => {
+    const raw = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><g/></svg>';
+    expect(splitAppendix(raw)).toEqual({ svg: raw, notes: [] });
   });
 
   it("図の下の注釈の付録は外さない", () => {

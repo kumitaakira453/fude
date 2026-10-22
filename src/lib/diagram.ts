@@ -44,6 +44,49 @@ export function cleanSvg(svg: string): string {
   return new XMLSerializer().serializeToString(root);
 }
 
+// 図の下の注釈（d2 の --force-appendix の付録）の 1 件。番号は図の中の丸と同じ。
+export interface DiagramNote {
+  n: string;
+  text: string;
+}
+
+const box4 = (v: string | null) => {
+  const n = v?.trim().split(/[\s,]+/).map(Number);
+  return n && n.length === 4 && n.every(Number.isFinite) ? n : null;
+};
+
+// 付録を図から外し、番号と文の組にして返す。図は区切り線の位置で高さを詰める。
+// 付録は拡大縮小と関わらない字で出したいので、画面では図の外に並べる。
+// 付録が無ければ、そのまま返す。
+export function splitAppendix(svg: string): { svg: string; notes: DiagramNote[] } {
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const root = doc.documentElement;
+  const group = root.querySelector('g[class~="appendix"]');
+  if (!group) return { svg, notes: [] };
+  const notes: DiagramNote[] = [];
+  for (const icon of group.querySelectorAll(':scope > g[class~="appendix-icon"]')) {
+    const text = icon.nextElementSibling;
+    notes.push({ n: icon.textContent?.trim() ?? "", text: text?.textContent?.trim() ?? "" });
+  }
+  const line = group.previousElementSibling;
+  const cut = line?.localName === "line" ? Number(line.getAttribute("y1")) : NaN;
+  group.remove();
+  if (line?.localName === "line") line.remove();
+  // 内側の svg の見取り枠を区切り線で切り、減った分だけ外側も縮める。
+  const inner = root.querySelector(":scope > svg");
+  const box = box4(inner?.getAttribute("viewBox") ?? null);
+  if (inner && box && Number.isFinite(cut) && cut > box[1] && cut < box[1] + box[3]) {
+    const drop = box[1] + box[3] - cut;
+    inner.setAttribute("viewBox", `${box[0]} ${box[1]} ${box[2]} ${box[3] - drop}`);
+    if (inner.hasAttribute("height")) inner.setAttribute("height", String(box[3] - drop));
+    const outer = box4(root.getAttribute("viewBox"));
+    if (outer) root.setAttribute("viewBox", `${outer[0]} ${outer[1]} ${outer[2]} ${outer[3] - drop}`);
+    const h = Number(root.getAttribute("height"));
+    if (Number.isFinite(h) && h > 0) root.setAttribute("height", String(h - drop));
+  }
+  return { svg: new XMLSerializer().serializeToString(root), notes };
+}
+
 async function renderD2(code: string, dark: boolean): Promise<string> {
   const key = `${dark ? 1 : 0}\n${code}`;
   const hit = drawn.get(key);

@@ -30,6 +30,11 @@ export function PdfDoc({ abs }: { abs: string }) {
   const [scale, setScale] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
   const host = useRef<HTMLDivElement>(null);
+  // ピンチの受け口を付ける要素（usePinch は要素を受ける）。
+  const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (host.current !== hostEl) setHostEl(host.current);
+  });
 
   useEffect(() => {
     let gone = false;
@@ -131,7 +136,7 @@ export function PdfDoc({ abs }: { abs: string }) {
 
   // WebKit のピンチ。始まりの倍率に比を掛ける。
   const pinchFrom = useRef(1);
-  usePinch(host, {
+  usePinch(hostEl, {
     start: () => {
       pinchFrom.current = shown;
     },

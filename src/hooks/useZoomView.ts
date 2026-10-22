@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { usePinch } from "./usePinch";
 import {
   clampPan,
@@ -48,17 +48,26 @@ export interface ZoomView {
 export function useZoomView(host: RefObject<HTMLDivElement | null>, natural: Size): ZoomView {
   const [box, setBox] = useState<Size>(NONE);
   const [view, setView] = useState<View | null>(null);
+  // 枠の要素。読み込みを待ってから描く・見せ方を替えると作り直すので、描くたびに
+  // 見直す（ref の器は変わらないので、[host] を見ても最初の 1 回しか付かない）。
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (host.current !== el) setEl(host.current);
+  });
 
   // 枠の大きさ。窓や仕切りを動かすたびに変わる。
   useEffect(() => {
-    const at = host.current;
-    if (!at) return;
+    const at = el;
+    if (!at) {
+      setBox(NONE);
+      return;
+    }
     const read = () => setBox({ width: at.clientWidth, height: at.clientHeight });
     read();
     const eye = new ResizeObserver(read);
     eye.observe(at);
     return () => eye.disconnect();
-  }, [host]);
+  }, [el]);
 
   const sized = natural.width > 0 && natural.height > 0;
   const fitted = sized ? fitScale(natural, box) : 1;
@@ -98,7 +107,7 @@ export function useZoomView(host: RefObject<HTMLDivElement | null>, natural: Siz
   // どちらも既定の動き（窓ごとの拡大、行き過ぎの跳ね返り）を止めるので、
   // passive にできない。React の onWheel は passive で付くため自分で繋ぐ。
   useEffect(() => {
-    const at = host.current;
+    const at = el;
     if (!at) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -118,11 +127,11 @@ export function useZoomView(host: RefObject<HTMLDivElement | null>, natural: Siz
     at.addEventListener("wheel", onWheel, { passive: false });
     return () => at.removeEventListener("wheel", onWheel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [host, sized, fitted, natural, box]);
+  }, [el, sized, fitted, natural, box]);
 
   // WebKit のピンチ。始まりの倍率に比を掛ける。
   const pinchFrom = useRef(1);
-  usePinch(host, {
+  usePinch(el, {
     start: () => {
       pinchFrom.current = shown.scale;
     },

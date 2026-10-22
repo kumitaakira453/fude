@@ -3,7 +3,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { useAtom, useAtomValue, useStore } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useZoomView } from "../hooks/useZoomView";
-import { D2, describeDiagramError, renderDiagram } from "../lib/diagram";
+import { D2, describeDiagramError, renderDiagram, splitAppendix, type DiagramNote } from "../lib/diagram";
 import { pathExists, readText, writeFile } from "../lib/fsAccess";
 import { drawGate, type DrawGate } from "../lib/md/drawGate";
 import { svgSize } from "../lib/svgSize";
@@ -11,6 +11,7 @@ import { DARK_THEME_IDS } from "../lib/themes";
 import type { Size } from "../lib/zoom";
 import {
   assetVersionAtom,
+  d2NotesOpenAtom,
   d2SplitAtom,
   d2ViewAtom,
   liveEditAtom,
@@ -170,7 +171,11 @@ export function D2Doc({ abs }: { abs: string }) {
     gate.current?.draw(text, !was || was.dark !== dark);
   }, [text, dark]);
 
-  const natural = useMemo<Size>(() => (svg ? (svgSize(svg) ?? NONE) : NONE), [svg]);
+  // 注釈（付録）は図から外して、図の下に字で並べる。拡大縮小しても同じ大きさで
+  // 読め、選んで写せる。.svg への書き出しは付録を入れたまま（Rust の export）。
+  const split = useMemo(() => (svg ? splitAppendix(svg) : { svg: "", notes: [] }), [svg]);
+  const figure = split.svg;
+  const natural = useMemo<Size>(() => (figure ? (svgSize(figure) ?? NONE) : NONE), [figure]);
   const host = useRef<HTMLDivElement>(null);
   const zoom = useZoomView(host, natural);
   const { shown } = zoom;
@@ -272,35 +277,38 @@ export function D2Doc({ abs }: { abs: string }) {
               />
             )}
             {showFigure && (
-              <div
-                ref={host}
-                tabIndex={0}
-                {...zoom.handlers}
-                className={`mg-d2-stage${stale || problem ? " is-stale" : ""}`}
-                style={{ cursor: zoom.over ? (zoom.grabbing ? "grabbing" : "grab") : "default" }}
-              >
-                {problem && (
-                  <div className="mg-mermaid-err" onPointerDown={(e) => e.stopPropagation()}>
-                    <div className="mg-mermaid-err-head">
-                      <Icon name="error" size={14} />
-                      <span>{problem.title}</span>
-                      {problem.where && <span className="mg-mermaid-err-at">{problem.where}</span>}
+              <div className="mg-d2-figure-col">
+                <div
+                  ref={host}
+                  tabIndex={0}
+                  {...zoom.handlers}
+                  className={`mg-d2-stage${stale || problem ? " is-stale" : ""}`}
+                  style={{ cursor: zoom.over ? (zoom.grabbing ? "grabbing" : "grab") : "default" }}
+                >
+                  {problem && (
+                    <div className="mg-mermaid-err" onPointerDown={(e) => e.stopPropagation()}>
+                      <div className="mg-mermaid-err-head">
+                        <Icon name="error" size={14} />
+                        <span>{problem.title}</span>
+                        {problem.where && <span className="mg-mermaid-err-at">{problem.where}</span>}
+                      </div>
+                      <div className="mg-mermaid-err-text">{problem.text}</div>
                     </div>
-                    <div className="mg-mermaid-err-text">{problem.text}</div>
-                  </div>
-                )}
-                {svg && zoom.sized && (
-                  <div
-                    className="mg-d2-figure"
-                    style={{
-                      width: natural.width,
-                      height: natural.height,
-                      transform: `translate(calc(-50% + ${shown.x}px), calc(-50% + ${shown.y}px)) scale(${shown.scale})`,
-                    }}
-                    // 図の SVG（cleanSvg で消毒済み）
-                    dangerouslySetInnerHTML={{ __html: svg }}
-                  />
-                )}
+                  )}
+                  {svg && zoom.sized && (
+                    <div
+                      className="mg-d2-figure"
+                      style={{
+                        width: natural.width,
+                        height: natural.height,
+                        transform: `translate(calc(-50% + ${shown.x}px), calc(-50% + ${shown.y}px)) scale(${shown.scale})`,
+                      }}
+                      // 図の SVG（cleanSvg で消毒済み）
+                      dangerouslySetInnerHTML={{ __html: figure }}
+                    />
+                  )}
+                </div>
+                <D2Notes notes={split.notes} />
               </div>
             )}
           </>
@@ -348,6 +356,37 @@ export function D2Doc({ abs }: { abs: string }) {
           onGo={() => void exportSvg()}
           onClose={() => setAsking(null)}
         />
+      )}
+    </div>
+  );
+}
+
+// 図の下の注釈の一覧。場所を取るので、見出しを押して畳める（畳むと図の枠が広がる）。
+export function D2Notes({ notes }: { notes: DiagramNote[] }) {
+  const [open, setOpen] = useAtom(d2NotesOpenAtom);
+  if (notes.length === 0) return null;
+  return (
+    <div className="mg-d2-notes">
+      <button
+        type="button"
+        className="mg-d2-notes-head"
+        aria-expanded={open}
+        data-tip={open ? "注釈（押すと畳む）" : "注釈（押すと開く）"}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name={open ? "expand_more" : "chevron_right"} size={12} stroke={1.8} />
+        <span>注釈</span>
+        <span className="mg-d2-notes-count">{notes.length}</span>
+      </button>
+      {open && (
+        <ol className="mg-d2-notes-list" aria-label="注釈">
+          {notes.map((note) => (
+            <li key={note.n} className="mg-d2-note">
+              <span className="mg-d2-note-n">{note.n}</span>
+              <span>{note.text}</span>
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   );

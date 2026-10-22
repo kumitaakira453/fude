@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useRef } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { usePinch } from "./usePinch";
@@ -23,12 +23,12 @@ afterEach(() => {
 const said: string[] = [];
 
 function Pad() {
-  const ref = useRef<HTMLDivElement>(null);
-  usePinch(ref, {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  usePinch(el, {
     start: () => said.push("start"),
     change: (ratio, at) => said.push(`${ratio}@${at.x},${at.y}`),
   });
-  return <div ref={ref} data-pad />;
+  return <div ref={setEl} data-pad />;
 }
 
 function gesture(el: Element, name: string, scale: number, x: number, y: number) {

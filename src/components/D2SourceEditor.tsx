@@ -33,8 +33,10 @@ const theme = EditorView.theme({
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
     backgroundColor: "var(--mg-accent-soft)",
   },
+  // 行番号の列は左に貼り付いたまま、横に送った本文がその下を通る。地を塗らないと
+  // 本文が透けて番号と重なる。
   ".cm-gutters": {
-    backgroundColor: "transparent",
+    backgroundColor: "var(--mg-bg)",
     border: "none",
     color: "var(--mg-muted)",
   },

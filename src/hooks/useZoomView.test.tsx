@@ -46,7 +46,25 @@ function mount(natural: Size) {
 }
 const resize = (natural: Size) => act(() => root!.render(<Probe natural={natural} />));
 
+// 読み込みを待ってから枠を描く使い方（D2Doc）。
+function Late({ natural, ready }: { natural: Size; ready: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  zoom = useZoomView(ref, natural);
+  return ready ? <div ref={ref} /> : null;
+}
+
 describe("useZoomView", () => {
+  it("枠が後から描かれても、枠を測って合わせる", () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const natural = { width: 800, height: 600 };
+    act(() => root!.render(<Late natural={natural} ready={false} />));
+    act(() => root!.render(<Late natural={natural} ready />));
+    // 枠は 400 × 300。測れていなければ 1（原寸）のまま。
+    expect(zoom!.shown.scale).toBeLessThan(1);
+  });
+
   it("枠に合わせているあいだは、大きさが変わっても合わせ続ける", () => {
     mount({ width: 800, height: 600 });
     expect(zoom!.view).toBeNull();

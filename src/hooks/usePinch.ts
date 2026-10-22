@@ -17,8 +17,10 @@ interface Gesture extends Event {
 const isGesture = (e: Event): e is Gesture =>
   typeof (e as Partial<Gesture>).scale === "number";
 
+// 受けるのは要素そのもの（ref の器ではなく）。後から描かれる・作り直される枠でも
+// 付け直せるように、呼ぶ側が要素を state に控えて渡す。
 export function usePinch(
-  ref: React.RefObject<HTMLElement | null>,
+  el: HTMLElement | null,
   on: { start: () => void; change: (ratio: number, at: { x: number; y: number }) => void },
 ): void {
   // 毎回の描き直しで繋ぎ直さないよう、手は控えから呼ぶ。
@@ -26,7 +28,6 @@ export function usePinch(
   hands.current = on;
 
   useEffect(() => {
-    const el = ref.current;
     if (!el) return;
     const onStart = (e: Event) => {
       e.preventDefault();
@@ -47,5 +48,5 @@ export function usePinch(
       el.removeEventListener("gesturechange", onChange);
       el.removeEventListener("gestureend", onEnd);
     };
-  }, [ref]);
+  }, [el]);
 }
