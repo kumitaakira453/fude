@@ -407,9 +407,12 @@ function SessionRow({
       <span className="mg-pal-name">
         <Marked text={s.name || s.sessionId.slice(0, 8)} query={query} />
       </span>
-      {PHASE_LABEL[phase] && <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>}
-      {ws && <span className="mg-pal-word">作成済み</span>}
-      <span className="mg-pal-keys mg-pal-word">{s.startedAt ? ago(s.startedAt, now) : ""}</span>
+      {/* 状態は名前の後ろではなく、時刻の横に右で揃える（行ごとに位置が動くと読み比べにくい）。 */}
+      <span className="mg-pal-tail">
+        {ws && <span className="mg-pal-word">作成済み</span>}
+        {PHASE_LABEL[phase] && <span className={`mg-ws-pill-badge is-${phase}`}>{PHASE_LABEL[phase]}</span>}
+        <span className="mg-pal-word mg-pal-ago">{s.startedAt ? ago(s.startedAt, now) : ""}</span>
+      </span>
     </>
   );
 }

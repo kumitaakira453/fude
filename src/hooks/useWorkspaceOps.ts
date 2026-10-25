@@ -203,21 +203,10 @@ export function useWorkspaceOps() {
 
   // 札の × と右押しの「削除」。確かめてから消す。開いているものは、札の並びで
   // 右隣（無ければ左隣）へ移ってから消す。移る先が無ければスタート画面へ戻す。
-  const closeWorkspace = useCallback(
+  // 削除の本体。確かめはしない（1 件ずつは closeWorkspace、まとめては整理の
+  // 小窓が確かめる）。今いるワークスペースなら隣へ移ってから消す。
+  const removeWorkspace = useCallback(
     async (id: string): Promise<void> => {
-      const here = store.get(A.workspaceAtom);
-      const ws = here?.id === id ? here : store.get(A.workspacesAtom).find((w) => w.id === id);
-      if (!ws) return;
-      // 確かめた後に断らない。別の窓で開いているものは先に知らせる。
-      if (await focusWorkspace(id, currentWindowLabel()).catch(() => false)) {
-        notify(store, "別のウィンドウで開いています。そのウィンドウを閉じてから削除してください");
-        return;
-      }
-      const ok = await confirm(
-        `ワークスペース「${ws.name}」を削除しますか？\nフォルダとファイルは削除されません。`,
-        { title: "ワークスペースの削除", kind: "warning" },
-      );
-      if (!ok) return;
       if (store.get(A.workspaceAtom)?.id === id) {
         const bar = store.get(barAtom);
         const at = bar.indexOf(id);
@@ -238,6 +227,53 @@ export function useWorkspaceOps() {
       await deleteWorkspace(id);
     },
     [store, openWorkspace, deleteWorkspace],
+  );
+
+  // 別の窓で開いているか。開いていれば、そちらを前に出す。
+  const openElsewhere = useCallback(
+    (id: string): Promise<boolean> => focusWorkspace(id, currentWindowLabel()).catch(() => false),
+    [],
+  );
+
+  const closeWorkspace = useCallback(
+    async (id: string): Promise<void> => {
+      const here = store.get(A.workspaceAtom);
+      const ws = here?.id === id ? here : store.get(A.workspacesAtom).find((w) => w.id === id);
+      if (!ws) return;
+      // 確かめた後に断らない。別の窓で開いているものは先に知らせる。
+      if (await openElsewhere(id)) {
+        notify(store, "別のウィンドウで開いています。そのウィンドウを閉じてから削除してください");
+        return;
+      }
+      const ok = await confirm(
+        `ワークスペース「${ws.name}」を削除しますか？\nフォルダとファイルは削除されません。`,
+        { title: "ワークスペースの削除", kind: "warning" },
+      );
+      if (!ok) return;
+      await removeWorkspace(id);
+    },
+    [store, openElsewhere, removeWorkspace],
+  );
+
+  // 選んだものをまとめて削除する（整理の小窓から）。別の窓で開いているものは残す。
+  const removeWorkspaces = useCallback(
+    async (ids: string[]): Promise<void> => {
+      let done = 0;
+      let kept = 0;
+      for (const id of ids) {
+        if (await openElsewhere(id)) {
+          kept++;
+          continue;
+        }
+        await removeWorkspace(id);
+        done++;
+      }
+      notify(
+        store,
+        `${done} 件を削除しました${kept > 0 ? `（別のウィンドウで開いている ${kept} 件は残しました）` : ""}`,
+      );
+    },
+    [store, openElsewhere, removeWorkspace],
   );
 
   // Claude のセッションからワークスペースを作って開く（ベータ）。
@@ -327,6 +363,7 @@ export function useWorkspaceOps() {
     removeRoot,
     deleteWorkspace,
     closeWorkspace,
+    removeWorkspaces,
     openInNewWindow,
     createFromSession,
     unlinkSession,

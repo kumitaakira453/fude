@@ -54,6 +54,7 @@ export function SidebarGrip({
         window.removeEventListener("pointerup", onUp);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+        delete document.documentElement.dataset.resizing;
       };
       const onUp = () => {
         stop();
@@ -64,6 +65,8 @@ export function SidebarGrip({
       // 掴んでいるあいだは、どこへ出ても矢印を変えずに字も選ばせない。
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
+      // 掴んでいる間の印。幅を動きで変えるもの（開いた帯）は、これを見て動きを止める。
+      document.documentElement.dataset.resizing = "";
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },

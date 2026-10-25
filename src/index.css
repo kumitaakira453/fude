@@ -810,6 +810,45 @@ body {
   right: calc(100% - 1.9em + 0.5em);
   font-variant-numeric: tabular-nums;
 }
+/* 箇条書きの段に並ぶトグル（`- <details>`）。項目ではなくその段のトグルなので、
+   黒丸も番号も出さず、番号も進めない（Notion でもトグルは番号を持たない）。
+   三角を同じ段の印の位置へ、題の字を同じ段の項目の字の頭へ揃えるよう、
+   題の字下げの分だけ項目の字下げを詰める。 */
+:is(.mg-prose, .mg-pm) li:has(> :is(details, .mg-details):first-child) {
+  padding-left: calc(1.5em - var(--mg-toggle-indent));
+  counter-increment: none;
+}
+:is(.mg-prose, .mg-pm) ol > li:has(> :is(details, .mg-details):first-child) {
+  padding-left: calc(1.9em - var(--mg-toggle-indent));
+}
+:is(.mg-prose, .mg-pm) li:has(> :is(details, .mg-details):first-child)::before {
+  content: none;
+}
+/* 三角の中心を、同じ段の黒丸の中心（項目の左端から 0.82em。ul > li::before と対）に
+   揃える。三角の箱の左は題（トグル）の左端から測り、題は項目の左端から
+   「1.5em − トグルの字下げ」の所にある。11px は箱の中の三角の中心。
+   同じ項目に続けて並ぶトグルも、題の字は 1 つ目と同じ桁にあるので、三角も揃える。 */
+.mg-prose li:has(> details:first-child) > details > summary::before,
+.mg-pm li:has(> .mg-details:first-child) > .mg-details > .mg-details-mark {
+  left: calc(var(--mg-toggle-indent) - 0.68em - 11px);
+}
+/* 書く面は、指したときに三角の箱へ地を敷く。黒丸の位置へ寄せた分だけ箱の右端が
+   題の字に掛かるので、箱を 4px 細くする（三角の中心は動かさない）。 */
+.mg-pm li:has(> .mg-details:first-child) > .mg-details > .mg-details-mark {
+  width: 18px;
+  margin-left: 2px;
+}
+.mg-pm li:has(> .mg-details:first-child) > .mg-details > .mg-details-mark::before {
+  clip-path: polygon(5px 5px, 13px 11px, 5px 17px);
+}
+.mg-pm li:has(> .mg-details:first-child) > .mg-details:not(.is-closed) > .mg-details-mark::before {
+  clip-path: polygon(15px 7px, 9px 15px, 3px 7px);
+}
+/* 三角は、同じ見た目の黒丸と同じ色にする（読み物の見た目では強調の色）。 */
+.mg-prose.mg-editorial details:not(.is-empty) > summary::before,
+.mg-pm.mg-editorial .mg-details:not(.is-empty) > .mg-details-mark::before {
+  background: var(--mg-accent);
+}
 /* タスクリスト: ネイティブ checkbox をやめ Material アイコンに統一。
    チェックが行頭の印になるので、点も番号も出さない。 */
 :is(.mg-prose, .mg-pm) li.task-list-item,
@@ -947,6 +986,41 @@ button.mg-task-check:hover {
 }
 :root[data-widetable="on"] .mg-table-wrap::-webkit-scrollbar-track {
   background: transparent;
+}
+/* 表を右へ広げる。一番外の表の送りの箱を本文の欄から抜いてペインの幅に置き、
+   左の内側に「ペインの左端から本文の左端まで」を空ける。送らなければ表の
+   左端は本文に揃い、送るとその空きごと流れてペインの左端の手前まで出る。
+   左右とも、ペインの端から 24px は空けておく。
+   幅の基準はペイン（.mg-page）。書く面のペインは自分に左右の余白を持つので、
+   その分（--mg-page-pad）を足す。本文の欄は中央に置くので、左右の空きは同じ。
+   項目や囲みの中の表は本文の左端からずれているので、当てない。 */
+.mg-page {
+  container-type: inline-size;
+  --mg-page-pad: 0px;
+}
+.mg-page[data-pad] {
+  --mg-page-pad: 1.5rem;
+}
+.mg-page[data-pad="cozy"] {
+  --mg-page-pad: 2.5rem;
+}
+@media (min-width: 640px) {
+  .mg-page[data-pad="cozy"] {
+    --mg-page-pad: 4rem;
+  }
+}
+:root[data-tablebleed="on"] .mg-page :is(.mg-block > .mg-table-hold, .mg-pm) {
+  --mg-bleed: calc((100cqw - 100%) / 2 + var(--mg-page-pad));
+}
+:root[data-tablebleed="on"] .mg-page :is(.mg-block > .mg-table-hold, .mg-pm) > .mg-table-wrap {
+  width: calc(100% + 2 * max(0px, var(--mg-bleed) - 24px));
+  max-width: none;
+  margin-left: calc(-1 * max(0px, var(--mg-bleed) - 24px));
+  padding-left: max(0px, var(--mg-bleed) - 24px);
+}
+/* 大きく開く釦は、広げた右端（表が見えている右端）に置く。 */
+:root[data-tablebleed="on"] .mg-page .mg-block > .mg-table-hold > .mg-table-zoom {
+  right: calc(32px - var(--mg-bleed));
 }
 .mg-table-wrap > table {
   margin: 0;
@@ -1578,6 +1652,132 @@ button.mg-sess-row.is-gone:hover {
 .mg-small.is-go {
   font-weight: 600;
   color: var(--mg-accent);
+}
+/* 削除のように戻せない操作の釦。塗りは淡くし、字と縁で危うさを示す。 */
+.mg-small.is-danger {
+  background: color-mix(in srgb, var(--mg-danger) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mg-danger) 35%, transparent);
+  color: var(--mg-danger);
+  font-weight: 600;
+}
+.mg-small.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mg-danger) 22%, transparent);
+}
+.mg-small.is-danger:disabled {
+  opacity: 0.4;
+}
+/* 整理の小窓。行は帯の一覧と同じ札と字の並びで、押すと「残す」に替わる。 */
+.mg-tidy {
+  display: flex;
+  width: min(30rem, 100%);
+  max-height: min(34rem, 100%);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--mg-border);
+  border-radius: 12px;
+  background: var(--mg-pop);
+  box-shadow: var(--mg-pop-shadow);
+}
+.mg-tidy-head {
+  padding: 16px 18px 12px;
+}
+.mg-tidy-title {
+  color: var(--mg-fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+.mg-tidy-note {
+  margin: 6px 0 0;
+  color: var(--mg-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.mg-tidy-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 10px;
+  padding: 4px 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--mg-border);
+  border-bottom: 1px solid var(--mg-border);
+  list-style: none;
+}
+.mg-tidy-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-align: left;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.mg-tidy-row:hover {
+  background: color-mix(in srgb, var(--mg-fg) 4%, transparent);
+}
+.mg-tidy-row.is-kept {
+  opacity: 0.45;
+}
+.mg-tidy-chip {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  filter: grayscale(0.6);
+}
+.mg-tidy-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.mg-tidy-name {
+  overflow: hidden;
+  color: var(--mg-fg);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-tidy-where {
+  overflow: hidden;
+  color: var(--mg-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-tidy-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-muted) 16%, transparent);
+  color: var(--mg-muted);
+  font-size: 11px;
+}
+.mg-tidy-tag.is-kept {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+.mg-tidy-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 18px 14px;
+}
+.mg-tidy-count {
+  margin-right: auto;
+  color: var(--mg-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 .mg-small.is-go:hover {
   background: var(--mg-carve-hover);
@@ -3336,6 +3536,10 @@ body.mg-dragging .mg-sel-menu {
 .mg-pm .mg-details {
   margin: 0.6em 0;
 }
+/* 題の字と中身の字下げ。三角（0〜8px）から字まで 10px 空ける。 */
+:root {
+  --mg-toggle-indent: 1.125rem;
+}
 /* 題の字は中身と同じ桁に置き、三角はその左の余白へ重ねる。2 面で同じ桁。
    置き場所の親は、読む面は summary、編集面は囲みそのもの（三角は本文の外）。 */
 .mg-prose summary,
@@ -3344,7 +3548,7 @@ body.mg-dragging .mg-sel-menu {
 }
 .mg-prose summary,
 .mg-pm .mg-details-head {
-  padding-left: 1.5rem;
+  padding-left: var(--mg-toggle-indent);
 }
 .mg-prose summary {
   cursor: pointer;
@@ -3439,7 +3643,7 @@ body.mg-dragging .mg-sel-menu {
    行送り（20px）が空くと離れて見えるので詰める。 */
 .mg-prose details > :not(summary),
 .mg-pm .mg-details-inner > :not(.mg-details-head) {
-  margin-left: 1.5rem;
+  margin-left: var(--mg-toggle-indent);
 }
 .mg-prose details > summary + *,
 .mg-pm .mg-details-head + * {
@@ -8946,6 +9150,16 @@ html[data-hints] .mg-seg {
   height: 100%;
   flex: none;
 }
+/* 左の欄の開閉ボタンを、左の欄の左端の真上へ寄せる空き。帯と同じ速さで動かす。 */
+.mg-top-room {
+  height: 100%;
+  flex: none;
+  margin-left: -6px;
+  transition: width 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+html[data-resizing] .mg-top-room {
+  transition: none;
+}
 .mg-top-sep {
   width: 1px;
   height: 16px;
@@ -8961,17 +9175,14 @@ html[data-hints] .mg-seg {
 
 /* ---- 左端の帯（ワークスペース） ----
    畳むと札だけの 40px（lib/sidebar の RAIL_STRIP と対）。
-   開くと、左の欄の木の上へ伸びて見出し付きの一覧になる（幅は App が渡す）。
-   行の左に重ねて置き、幅は style で渡されたものを RAIL_MS（0.2 秒）で動かす。
+   開くと自分の幅（RAIL_OPEN）を取って見出し付きの一覧になり、木と本文を右へ
+   ずらす。幅は style で渡されたものを RAIL_MS（0.2 秒）で動かす。
    札と開閉ボタンは、開いても閉じても左から 6px・同じ高さに置き、動くのは
    幅と字の濃さと、まとまりの頭の高さだけにする。 */
 .mg-wsrail {
-  position: absolute;
-  z-index: 15;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  position: relative;
   display: flex;
+  flex: none;
   width: 40px;
   flex-direction: column;
   padding: 6px 0 6px;
@@ -8979,6 +9190,54 @@ html[data-hints] .mg-seg {
   background: var(--mg-chrome);
   user-select: none;
   transition: width 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+/* 開いた帯の幅を掴んで変えている間は、手に付いてくるよう動かさない。 */
+html[data-resizing] .mg-wsrail {
+  transition: none;
+}
+/* 開いた帯の右の縁。左の欄の掴み線と同じ部品を、帯の内側の縁に重ねる。 */
+.mg-wsrail-grip {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 4px;
+}
+.mg-wsrail-grip .mg-side-grip {
+  width: 4px;
+  height: 100%;
+  background: none;
+}
+.mg-wsrail-grip .mg-side-grip-line {
+  left: auto;
+  right: 0;
+}
+/* 頭の右端の「整理」。終了・削除済みのセッションのワークスペースがあるときだけ出す。 */
+.mg-wsrail-tidy {
+  height: 22px;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--mg-r1);
+  color: var(--mg-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.mg-wsrail-tidy:hover {
+  background: var(--mg-carve-hover);
+  color: var(--mg-fg);
+}
+/* セッションが終了した（再開に resume が要る）か、記録が消えたワークスペース。
+   札を薄く灰色にし、名前も沈める。印は斜線の丸（.mg-st.is-gone）。 */
+.mg-wsrail-item.is-gone .mg-wsrail-chip {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+.mg-wsrail-item.is-gone .mg-wsrail-name {
+  color: var(--mg-muted);
+}
+.mg-wsrail-state.is-gone {
+  color: var(--mg-muted);
 }
 /* 伸び縮みの途中で、字が帯の外へはみ出さないようにする。 */
 .mg-wsrail.is-shown {
@@ -9056,7 +9315,6 @@ html[data-hints] .mg-seg {
   overflow-x: hidden;
   overflow-y: auto;
   padding: 4px 0;
-  scrollbar-width: thin;
 }
 /* 畳んだ帯ではスクロールバーを持たせない（overflow: hidden）。バーが幅を取ると
    その分だけ札が左へずれ、上の開閉ボタンと縦の線がそろわない。送るのは
@@ -9172,15 +9430,34 @@ html[data-hints] .mg-seg {
 .mg-wsrail-item.is-away .mg-wsrail-chip {
   opacity: 0.35;
 }
+/* 作る口。ワークスペースの並びに埋もれないよう、強調の色の札にし、上に区切りを引く。 */
 .mg-wsrail-chip.is-add {
-  border: 1px dashed var(--mg-border);
-  background: none;
-  color: var(--mg-muted);
+  border: 1px solid color-mix(in srgb, var(--mg-accent) 35%, transparent);
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+  opacity: 1;
+}
+.mg-wsrail-add:hover .mg-wsrail-chip.is-add,
+.mg-wsrail-add:focus-visible .mg-wsrail-chip.is-add {
+  background: color-mix(in srgb, var(--mg-accent) 22%, transparent);
   opacity: 1;
 }
 .mg-wsrail-add {
   flex: none;
-  margin-top: 4px;
+  margin-top: 10px;
+}
+.mg-wsrail-add::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 4px;
+  left: 4px;
+  height: 1px;
+  background: var(--mg-border);
+}
+.mg-wsrail-add .mg-wsrail-name {
+  color: var(--mg-accent);
+  font-weight: 500;
 }
 .mg-wsrail-chip .mg-st {
   position: absolute;
@@ -9277,7 +9554,9 @@ html[data-hints] .mg-wsrail [data-key]::after {
 }
 
 /* ---- Claude のセッションの状態の印（StatusMark） ---- */
+/* 斜線（is-gone の ::after）の置き場にする。札の右上に置く所は absolute が勝つ。 */
 .mg-st {
+  position: relative;
   display: inline-block;
   width: 9px;
   height: 9px;
@@ -9291,6 +9570,20 @@ html[data-hints] .mg-wsrail [data-key]::after {
 .mg-st.is-done {
   border: 1.5px solid var(--mg-muted);
   background: var(--mg-chrome);
+}
+.mg-st.is-gone {
+  border: 1.5px solid var(--mg-muted);
+  background: var(--mg-chrome);
+}
+.mg-st.is-gone::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 1.5px;
+  background: var(--mg-muted);
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
 .mg-st.is-working {
   border: 1.6px solid var(--mg-accent);
@@ -9689,6 +9982,11 @@ html[data-hints] .mg-wsrail [data-key]::after {
   gap: 4px;
   margin-left: auto;
 }
+/* メニュー付きの釦（＋）は外側の箱で包まれる。箱をそのまま置くと字の行の高さが
+   乗って「開く」より背が高くなり、上下がずれるので、箱を釦の高さに揃える。 */
+.mg-side-tools > div {
+  display: flex;
+}
 .mg-tbtn.is-icon {
   width: 22px;
   justify-content: center;
@@ -9812,13 +10110,19 @@ html[data-hints] .mg-wsrail [data-key]::after {
 .mg-tab > svg {
   flex: none;
 }
+/* 添えるフォルダは、名前より先に縮める。省いた分はタブの title で読める。 */
 .mg-tab-where {
-  flex: none;
+  flex: 0 3 auto;
+  min-width: 0;
+  overflow: hidden;
   margin-right: -4px;
   color: var(--mg-muted);
   font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mg-tab-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9898,8 +10202,20 @@ html[data-hints] .mg-wsrail [data-key]::after {
   color: var(--mg-fg-dim);
   font-weight: 500;
 }
+/* 場所の段の操作は、絵と字を淡く並べ、指したときだけ地を出す。地に彫り込んだ
+   塊を並べると、上の閲覧・編集の切り替えより重く見える。 */
 .mg-pathbar .mg-tbtn {
+  height: 22px;
+  padding: 0 7px;
+  background: none;
+  box-shadow: none;
+  color: var(--mg-muted);
   font-family: var(--mg-font-sans);
+}
+.mg-pathbar .mg-tbtn:hover:not(:disabled),
+.mg-pathbar .mg-tbtn.is-on {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
 }
 /* コメント一覧の場所の段。フォルダの側を省き、ファイル名は残す。 */
 .mg-review-path {
@@ -10156,6 +10472,19 @@ html[data-hints] .mg-wsrail [data-key]::after {
   flex: none;
   gap: 3px;
   margin-left: auto;
+}
+/* 行の右端の並び（状態・時刻）。時刻は幅を揃えて右寄せにし、状態の札を縦に揃える。 */
+.mg-pal-tail {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.mg-pal-ago {
+  min-width: 4.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .mg-pal-dot {
   width: 7px;

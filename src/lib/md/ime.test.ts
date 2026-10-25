@@ -261,3 +261,55 @@ describe("変換が終わったときの選択", () => {
   });
 });
 
+describe("空のトグルの題で確定する", () => {
+  type Watch = { domObserver: { flush(): void } };
+  const read = (view: EditorView) => (view as EditorView & Watch).domObserver.flush();
+
+  // WebKit の確定の形。変換中の字だけだった題の器を要素ごと消し、確定の字を
+  // 外側の行へ直に入れる。
+  const commit = (view: EditorView, text: string) => {
+    let at = -1;
+    view.state.doc.descendants((node, pos) => {
+      if (at < 0 && node.type.name === "detailsSummary") at = pos + 1;
+      return at < 0;
+    });
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+    const head = view.dom.querySelector(".mg-details-head")!;
+    send(view, "compositionstart");
+    head.querySelector(".mg-details-title")!.textContent = "かんじ";
+    send(view, "compositionupdate", "かんじ");
+    read(view);
+    view.dom.dispatchEvent(
+      new InputEvent("beforeinput", { bubbles: true, inputType: "deleteCompositionText" }),
+    );
+    head.querySelector(".mg-details-title")!.remove();
+    head.appendChild(document.createTextNode(text));
+    view.dom.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "insertFromComposition", data: text }),
+    );
+    send(view, "compositionend", text);
+    read(view);
+  };
+
+  const title = (view: EditorView) => {
+    let text = "";
+    view.state.doc.descendants((node) => {
+      if (node.type.name === "detailsSummary") text = node.textContent;
+      return !text;
+    });
+    return text;
+  };
+
+  it("確定した字が題に残る", () => {
+    const view = editor("<details open>\n<summary></summary>\n\n</details>\n");
+    commit(view, "漢字");
+    expect(title(view)).toBe("漢字");
+  });
+
+  it("箇条書きの段のトグルでも残る", () => {
+    const view = editor("- <details open>\n  <summary></summary>\n\n  </details>\n");
+    commit(view, "漢字");
+    expect(title(view)).toBe("漢字");
+  });
+});
+

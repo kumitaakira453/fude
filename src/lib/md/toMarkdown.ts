@@ -81,6 +81,15 @@ const OPTIONS: Options = {
   rule: "-",
   listItemIndent: "one",
   tightDefinitions: true,
+  // 項目の中で、トグルの後ろに塊が続くときは 1 行空ける。html の塊は空行まで
+  // 続くので、`</details>` の次の行に空行なしで続けると、その塊（子の箇条書き
+  // など）まで html として読まれ、字のまま出る。項目のほかの子の間は詰めたまま。
+  join: [
+    (left, _right, parent) =>
+      parent.type === "listItem" && left.type === "html" && /<\/details>\s*$/.test(left.value)
+        ? 1
+        : undefined,
+  ],
 };
 
 // トップレベルのブロック 1 つと、そこから出た Markdown。

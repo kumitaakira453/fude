@@ -98,8 +98,10 @@ const lineEnd = (text: string, from: number): number => {
 // 囲みの開きと閉じは、別の html ノードに割れることも、入れ子になることもある
 // （中身に空行があると CommonMark の HTML ブロックがそこで終わる）。開きの行から
 // 数えて釣り合う閉じの行までをひと塊にする。
-function group(children: RootContent[], source: string): Group[] {
+function group(nodes: RootContent[], source: string): Group[] {
   const out: Group[] = [];
+  // 閉じの行の後ろを塊として差し込むことがあるので、写してから回す。
+  const children = [...nodes];
 
   for (let i = 0; i < children.length; i++) {
     const node = children[i];
@@ -131,10 +133,65 @@ function group(children: RootContent[], source: string): Group[] {
       innerStart: Math.min(start + head.length + 1, pair.closeStart),
       innerEnd: pair.closeStart,
     });
+    const rest = restAfterClose(children[pair.index], pair.closeStart, source);
+    children.splice(pair.index + 1, 0, ...rest);
     i = pair.index;
   }
 
   return out;
+}
+
+// 閉じの行より後ろが同じ html の塊に残っていれば、それを別の塊にして返す。
+//
+// html の塊は空行まで続くので、項目の中で `</details>` の次の行に空行なしで
+// 何かが続くと、CommonMark はそれも同じ塊として読む。閉じまでで塊を区切ると、
+// 後ろが doc から落ちる。
+//
+//   次の囲みの開き（`<details>` が続く）… html の塊のまま返す。開きの行から
+//                                         もう一度囲みとして組まれる
+//   それ以外（子の箇条書きなど）        … Markdown として読み直す。字下げは
+//                                         項目の分だけ落とし、位置は原文へ戻す
+function restAfterClose(
+  node: RootContent,
+  closeStart: number,
+  source: string,
+): RootContent[] {
+  const stop = node.position?.end.offset ?? source.length;
+  let at = lineEnd(source, closeStart) + 1;
+  while (at < stop && /\s/.test(source[at])) at++;
+  if (at >= stop || !node.position) return [];
+
+  const first = source.slice(at, lineEnd(source, at)).trim();
+  if ((Object.keys(KINDS) as Kind[]).some((k) => KINDS[k].open.test(first))) {
+    return [
+      {
+        type: "html",
+        value: source.slice(at, stop),
+        position: {
+          start: { ...node.position.start, offset: at },
+          end: node.position.end,
+        },
+      },
+    ];
+  }
+
+  const from = source.lastIndexOf("\n", at - 1) + 1;
+  const text = source.slice(from, stop);
+  const cut = unpadLines(text, padOf(source, at));
+  const nodes = parseTree(cut ? cut.text : text).children;
+  const back = (i: number) => from + (cut ? cut.back(i) : i);
+  for (const kid of nodes) remap(kid, back);
+  return nodes;
+}
+
+// 読み直した木の位置を、原文の位置へ直す。
+function remap(node: RootContent, f: (at: number) => number): void {
+  const at = node.position;
+  if (at) {
+    if (at.start.offset !== undefined) at.start.offset = f(at.start.offset);
+    if (at.end.offset !== undefined) at.end.offset = f(at.end.offset);
+  }
+  for (const kid of (node as { children?: RootContent[] }).children ?? []) remap(kid, f);
 }
 
 // トップレベルの囲みは、mdast に渡す前に行で範囲を決める。CommonMark に任せると

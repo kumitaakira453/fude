@@ -183,6 +183,7 @@ function unitAt(
   doc: PmNode,
   blockPos: number,
   from: number,
+  to: number,
 ): ReviewUnit | undefined {
   const $from = doc.resolve(from);
   const item = schema.nodes.listItem;
@@ -196,6 +197,17 @@ function unitAt(
     }
   }
   if (!held) return undefined;
+  // 丸ごとを相手にするのは、項目・セルの字を全部覆っているときだけ。一部を選んだ
+  // ときに付けると、印が選んだ字ではなく項目・セルの箱になる。字の一致では
+  // 比べない（チェックの印や記法の囲みで食い違う）。範囲の前後に字が残って
+  // いないかを見る。
+  const unit = doc.nodeAt(held.at);
+  if (!unit) return undefined;
+  const start = held.at + 1;
+  const end = held.at + unit.nodeSize - 1;
+  const before = doc.textBetween(start, Math.max(start, Math.min(from, end)), "", leafText);
+  const after = doc.textBetween(Math.min(end, Math.max(to, start)), end, "", leafText);
+  if (before.trim() || after.trim()) return undefined;
   const block = doc.nodeAt(blockPos);
   if (!block) return undefined;
   let index = -1;
@@ -249,7 +261,7 @@ export function targetOfSpan(
     text: doc.textBetween(from, end, across ? "\n\n" : "", leafText),
     offset: doc.textBetween(pos + 1, from, "", leafText).length,
     // 項目・セルを丸ごと相手にするのは、1 つのブロックの中だけ。
-    unit: across ? undefined : unitAt(doc, pos, from),
+    unit: across ? undefined : unitAt(doc, pos, from, end),
   };
 }
 

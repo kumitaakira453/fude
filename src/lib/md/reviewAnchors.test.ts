@@ -261,27 +261,41 @@ describe("targetOfSpan / targetOfBlock", () => {
 
   // 中身の無い項目は選んだ文字を持たない。引き先を残さないと、台帳の上では
   // ブロック全体への指摘と区別が付かなくなる。
-  it("項目の中の範囲は、何番目の項目かを残す", () => {
+  it("項目の字を丸ごと選んだ範囲は、何番目の項目かを残す", () => {
     const list = "- さいしょ\n\n- [ ]\n\n- さいご\n";
     const { loaded, state } = opened(list);
     const at = posOf(state.doc, 0);
-    // 3 つの項目それぞれの中を相手にする。位置は項目の段落の中。
-    const marks: number[] = [];
+    // 3 つの項目それぞれの段落の中身（頭と終わり）。
+    const marks: [number, number][] = [];
     state.doc.descendants((node, pos) => {
-      if (node.type.name === "paragraph") marks.push(pos + 1);
+      if (node.type.name === "paragraph") marks.push([pos + 1, pos + node.nodeSize - 1]);
       return true;
     });
     expect(marks).toHaveLength(3);
-    expect(targetOfSpan(state.doc, loaded, "", marks[0], marks[0] + 2)?.unit).toEqual({
+    expect(targetOfSpan(state.doc, loaded, "", ...marks[0])?.unit).toEqual({
       kind: "item",
       index: 0,
     });
     // 中身が無い項目は範囲を作れないので、その次の項目で番号が飛ばないことを見る。
-    expect(targetOfSpan(state.doc, loaded, "", marks[2], marks[2] + 2)?.unit).toEqual({
+    expect(targetOfSpan(state.doc, loaded, "", ...marks[2])?.unit).toEqual({
       kind: "item",
       index: 2,
     });
-    expect(targetOfSpan(state.doc, loaded, "", marks[0], marks[0] + 2)?.pos).toBe(at);
+    expect(targetOfSpan(state.doc, loaded, "", ...marks[0])?.pos).toBe(at);
+  });
+
+  it("項目の字の一部だけを選んだ範囲は、項目丸ごとの引き先を持たない", () => {
+    const list = "- さいしょ\n\n- さいご\n";
+    const { loaded, state } = opened(list);
+    let first = -1;
+    state.doc.descendants((node, pos) => {
+      if (first < 0 && node.type.name === "paragraph") first = pos + 1;
+      return true;
+    });
+    // 「いし」だけ。
+    const target = targetOfSpan(state.doc, loaded, "", first + 1, first + 3);
+    expect(target?.text).toBe("いし");
+    expect(target?.unit).toBeUndefined();
   });
 
   it("項目の外の範囲は引き先を持たない", () => {
@@ -290,19 +304,32 @@ describe("targetOfSpan / targetOfBlock", () => {
     expect(targetOfSpan(state.doc, loaded, "", at + 3, at + 7)?.unit).toBeUndefined();
   });
 
-  it("表のセルの中の範囲は、何番目のセルかを残す", () => {
+  it("セルの字を丸ごと選んだ範囲は、何番目のセルかを残す", () => {
     const table = "| あ | い |\n| - | - |\n| う | え |\n";
     const { loaded, state } = opened(table);
-    const cells: number[] = [];
+    const cells: [number, number][] = [];
     state.doc.descendants((node, pos) => {
-      if (node.type.name === "tableCell") cells.push(pos + 1);
+      if (node.type.name === "tableCell") cells.push([pos + 1, pos + node.nodeSize - 1]);
       return true;
     });
     expect(cells.length).toBe(4);
-    expect(targetOfSpan(state.doc, loaded, "", cells[2], cells[2] + 1)?.unit).toEqual({
+    expect(targetOfSpan(state.doc, loaded, "", ...cells[2])?.unit).toEqual({
       kind: "cell",
       index: 2,
     });
+  });
+
+  it("セルの字の一部だけを選んだ範囲は、セル丸ごとの引き先を持たない", () => {
+    const table = "| あいう | え |\n| - | - |\n";
+    const { loaded, state } = opened(table);
+    let first = -1;
+    state.doc.descendants((node, pos) => {
+      if (first < 0 && node.isText) first = pos;
+      return true;
+    });
+    const target = targetOfSpan(state.doc, loaded, "", first + 1, first + 2);
+    expect(target?.text).toBe("い");
+    expect(target?.unit).toBeUndefined();
   });
 
   it("フロントマターは版の前に付け直す", () => {

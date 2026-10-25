@@ -88,6 +88,9 @@ import { Icon } from "./Icon";
 
 type Kind = "block" | "item" | TablePart;
 
+// トグルの三角とつまみの間に空ける幅。
+const TOGGLE_LEAD = 8;
+
 interface Spot {
   // そのブロックが始まる位置。トグルの中身でも同じ指し方になる。
   pos: number;
@@ -116,6 +119,8 @@ interface Spot {
     edge: number;
     box: Box;
   } | null;
+  // 先頭がトグルのとき、つまみをさらに左へ寄せる幅（三角とつまみをくっつけない）。
+  lead: number;
   // 溢れている表のときだけ。大きく開く印の置き場（包みの枠）。
   zoom: Box | null;
   // 表のときだけ。below は次のブロックとの空き（下のつまみの置き場所）。
@@ -142,6 +147,16 @@ function overflowing(el: HTMLElement, base: DOMRect): Box | null {
   const wrap = el.querySelector<HTMLElement>(".mg-table-wrap");
   if (!wrap || wrap.scrollWidth - wrap.clientWidth <= 4) return null;
   return relative(wrap.getBoundingClientRect(), base);
+}
+
+// 塊の矩形。広げた表の包みは、ペインの左端から始まり、本文の左端までを
+// 内側の余白で空けている（index.css の「表を右へ広げる」）。つまみや落とし先の
+// 線は本文の左端に合わせたいので、その余白を除いて測る。
+function blockRect(el: HTMLElement): DOMRect {
+  const box = el.getBoundingClientRect();
+  if (!el.classList.contains("mg-table-wrap")) return box;
+  const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+  return pad > 0 ? new DOMRect(box.left + pad, box.top, box.width - pad, box.height) : box;
 }
 
 // 大きく開く印の大きさと、包みの角からの隙間（CSS と合わせる）。
@@ -423,7 +438,7 @@ export function EditorGutter({
       }
       const hit = tableBand(view, found, y) ?? found;
       const base = host.getBoundingClientRect();
-      const box = hit.el.getBoundingClientRect();
+      const box = blockRect(hit.el);
 
       const node = view.state.doc.nodeAt(hit.pos);
       if (!node) {
@@ -497,6 +512,8 @@ export function EditorGutter({
           }
           return top + lift;
         })(),
+        // トグル（一番外のトグル・トグルだけの項目）は、三角が塊の左端から始まる。
+        lead: (li ? li.firstElementChild : hit.el)?.classList.contains("mg-details") ? TOGGLE_LEAD : 0,
         zoom: overflowing(hit.el, base),
         table: geo
           ? {
@@ -600,7 +617,7 @@ export function EditorGutter({
           });
           return;
         }
-        const box = hit.el.getBoundingClientRect();
+        const box = blockRect(hit.el);
         const after = y > box.top + box.height / 2;
         toRef.current = after ? hit.pos + node.nodeSize : hit.pos;
         setGuide({
@@ -626,7 +643,7 @@ export function EditorGutter({
         if (!li || !over || over.root !== held_item.root) {
           const node = view.state.doc.nodeAt(hit.pos);
           if (!node) return;
-          const out = hit.el.getBoundingClientRect();
+          const out = blockRect(hit.el);
           const below = y > out.top + out.height / 2;
           toRef.current = below ? hit.pos + node.nodeSize : hit.pos;
           dropRef.current = null;
@@ -1197,10 +1214,14 @@ export function EditorGutter({
   const room = spot ? spot.room + (spot.item ? spot.item.edge : 0) : 0;
   // 使える幅。2 つ並べる余裕が無ければ掴みだけにする。
   const wide = !!spot && room >= BOTH;
+  // 広げた表を横に送り、表の左端が本文の左端より左へ出ているか。つまみは
+  // 表の左端に付くので、出ている間は表と一緒に流れて表やペインの外に掛かる。
+  // そのあいだは左の縁のつまみ（塊・行）を出さない。
+  const pokes = !!geo && !!spot && geo.table.left < spot.box.left - 1;
   // つまみの置き場所。表は行と列の帯が交わる点、それ以外は 1 行目の左。
   // 箇条書きは項目の 1 行目に高さを合わせ、左は項目の左端に寄せる（本文の
   // 左端に合わせると、字下げの分だけ離れて見える）。
-  const anchor = !spot
+  const anchor = !spot || pokes
     ? null
     : geo
       ? {
@@ -1213,7 +1234,7 @@ export function EditorGutter({
           // 入れ物の左端から置くと余白のぶんだけ離れて出る。
           left:
             (spot.item ? spot.item.edge : spot.box.left) +
-            (room >= ONLY ? -(wide ? BOTH : ONLY) : 2),
+            (room >= ONLY ? -(wide ? BOTH : ONLY) - spot.lead : 2),
         };
 
   return (
@@ -1272,7 +1293,7 @@ export function EditorGutter({
             </div>
           )}
 
-          {geo?.row && spot && (
+          {geo?.row && spot && !pokes && (
             // 縁に寄っていないあいだは棒だけ。押せるので、そこから直に掴める。
             <button
               type="button"

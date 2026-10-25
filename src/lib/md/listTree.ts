@@ -246,3 +246,52 @@ export function itemDropTr(
   }
   return tr.scrollIntoView();
 }
+
+// 前の兄弟がトグルだけの項目（`- <details>`）なら、項目をそのトグルの中身の
+// 末尾へ移す（Tab）。項目ごと沈めると、トグルの外にトグルの項目の子ができ、
+// Notion にその形は無い（Notion ではトグルの下へ字下げするとトグルの中に入る）。
+// 当てはまらなければ null（いつもの字下げに任せる）。
+export function itemIntoToggleTr(state: EditorState): Transaction | null {
+  const { $from } = state.selection;
+  let depth = $from.depth;
+  while (depth > 0 && $from.node(depth).type !== schema.nodes.listItem) depth--;
+  if (depth === 0) return null;
+  const at = $from.index(depth - 1);
+  if (at === 0) return null;
+  const list = $from.node(depth - 1);
+  const prev = list.child(at - 1);
+  const toggle = prev.firstChild;
+  if (!toggle || toggle.type !== schema.nodes.details) return null;
+
+  const item = $from.node(depth);
+  const itemStart = $from.before(depth);
+  // トグルの中身の終わり（</details> の手前）。前の項目の頭の 1 つ内側がトグル。
+  const prevStart = itemStart - prev.nodeSize;
+  const inside = prevStart + 1 + toggle.nodeSize - 1;
+  const last = toggle.lastChild;
+  const tr = state.tr.delete(itemStart, $from.after(depth));
+  let start: number;
+  if (last && last.type === list.type) {
+    // 中身の最後が同じ種類の箇条書きなら、その末尾に足す。
+    start = inside - 1;
+    tr.insert(start, item);
+  } else {
+    tr.insert(inside, list.type.create(list.attrs, item));
+    start = inside + 1;
+  }
+  const pos = start + ($from.pos - itemStart);
+  return tr.setSelection(Selection.near(tr.doc.resolve(Math.min(pos, tr.doc.content.size))));
+}
+
+// at のトグルが項目の先頭の子なら、その項目のチェックを外す。
+//
+// `- <details>` の項目はその段のトグルで、チェックは持たない（原文にも書けない）。
+// チェックの項目のままトグルに変えると、書く面ではチェックの右にトグルが並び、
+// 保存すると印が消えて、開き直すまで見た目と原文が食い違う。
+export function untickToggleItem(tr: Transaction, at: number): Transaction {
+  const $at = tr.doc.resolve(at);
+  const item = $at.parent;
+  if (item.type !== schema.nodes.listItem || $at.index() !== 0) return tr;
+  if (item.attrs.box === null) return tr;
+  return tr.setNodeMarkup($at.before(), undefined, { ...item.attrs, box: null });
+}

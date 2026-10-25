@@ -2,7 +2,7 @@ import { atom } from "jotai";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import { rootOf, type TreeNode } from "../lib/fsAccess";
 import { rootName, type DocEntry, type FolderEntry } from "../lib/idb";
-import { RAIL_WIDTH, REVIEW_LIST_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
+import { RAIL_OPEN, RAIL_WIDTH, REVIEW_LIST_WIDTH, REVIEW_SIDE_WIDTH, SIDEBAR_WIDTH } from "../lib/sidebar";
 import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
 import type { Workspace } from "../lib/workspaces";
@@ -267,9 +267,17 @@ export const notionKeysAtom = atomWithStorage<boolean>("mdglow:notionkeys", fals
 // 印を読み取るかどうかを選ぶ。切ってあるものは今までどおり字として出るので、
 // 文章の中で `[?]` と書く人を巻き込まない。
 export const taskMarksAtom = atomWithStorage<string[]>("fude:taskmarks", DEFAULT_MARKS);
-// 幅の長い表の手当て（ベータ）。横に送っても先頭の列を残し、溢れている表には
-// 「大きく開く」を出す。切ると今までどおり、ただ横に送るだけになる。
-export const wideTableAtom = atomWithStorage<boolean>("fude:widetable", true);
+// 本文の幅を超える表の見せ方。
+//   plain … 本文の幅の中で横に送るだけ
+//   pin   … 本文の幅の中で送り、先頭の列を残す。溢れている表には「大きく開く」を出す
+//   bleed … 一番外の表をペインの右端まで広げる。左端は本文に揃え、送ると
+//           ペインの左端まで出る。溢れている表には「大きく開く」を出す
+// 先頭の列を残すのは広げた表と組み合わせられない（列が本文の左端に貼り付き、
+// その左を他の列が流れる）ので、1 つを選ぶ形にしている。
+export const tableModeAtom = atomWithStorage<string>("fude:tablemode", "bleed");
+export const wideTableAtom = atom((get) => get(tableModeAtom) === "pin");
+export const tableBleedAtom = atom((get) => get(tableModeAtom) === "bleed");
+export const tableZoomAtom = atom((get) => get(tableModeAtom) !== "plain");
 // ```d2 のコードの塊を図として描く（ベータ）。Mac の d2 コマンドを使う。
 export const d2DiagramAtom = atomWithStorage<boolean>("fude:d2", false);
 // 今のペインで本文に使える幅（px）。本文の幅の切り替えが効くかを見るのに使う。
@@ -364,6 +372,8 @@ export type SideFace = "files" | "search" | "claude";
 export const sidebarTabAtom = atom<SideFace>("files");
 // 左端の帯を開いて、木の代わりにワークスペースの一覧を出しているか。窓ごとに覚える。
 export const railOpenAtom = atomWithStorage<boolean>(windowScopedKey("fude:railopen"), false);
+// 開いた帯の幅（画素）。掴んで変えた分を窓ごとに覚える。
+export const wsRailWidthAtom = atomWithStorage<number>(windowScopedKey("fude:wsrailw"), RAIL_OPEN);
 // 木の下の 2 つの一覧（このセッションが書いたファイル・自分で開いたファイル）を
 // 開いているか。
 export const fileSectionsAtom = atomWithStorage<{ wrote: boolean; mine: boolean }>(

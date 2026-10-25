@@ -5,12 +5,13 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceOps } from "../hooks/useWorkspaceOps";
 import { PHASE_LABEL } from "../lib/claude";
 import { groupKeyOf, initialOf, otherRoots, railGroups } from "../lib/railGroups";
-import { RAIL_MS, RAIL_STRIP, SIDEBAR_WIDTH } from "../lib/sidebar";
+import { fitRailOpenWidth, RAIL_MS, RAIL_OPEN, RAIL_STRIP } from "../lib/sidebar";
 import { currentWindowLabel } from "../lib/windows";
 import { colorVar, liveWorkspaces, type Workspace } from "../lib/workspaces";
 import {
   newWorkspaceAtom,
   railOpenAtom,
+  wsRailWidthAtom,
   workspaceAtom,
   workspaceMenuAtom,
   workspacesAtom,
@@ -19,12 +20,14 @@ import { phaseForAtom } from "../state/claude";
 import { addToBar, barAtom, hintOf, hintsAtom, moveInBar } from "../state/workspaceBar";
 import { Icon } from "./Icon";
 import { MARKED, StatusMark } from "./StatusMark";
+import { SidebarGrip } from "./SidebarGrip";
 import { WorkspaceCard } from "./WorkspaceCard";
+import { WorkspaceTidy } from "./WorkspaceTidy";
 
 // 左端の帯。ワークスペースをフォルダごとに寄せた札で並べる。1 回押せば切り替わる。
 //
-// 上のボタン（⌘⇧B）で開くと、左の欄の木の上へ伸びて、見出し付きの一覧になる
-// （開いた幅は App が wide で渡す）。札は開いても閉じても同じ位置に置き、名前など
+// 上のボタン（⌘⇧B）で開くと、自分の幅を取って見出し付きの一覧になる（木と
+// 本文は右へずれる）。札は開いても閉じても同じ位置に置き、名前など
 // の字だけを消し出しする。一覧で押して移ると畳む。札を指すとしばらくして
 // 中身の札を出す。右押しで手入れのメニュー、一番下の ＋ で作る。
 
@@ -33,7 +36,7 @@ const DRAG_TYPE = "application/x-fude-ws";
 // （会話は札を出してから読み、読み終わるまでは読み込み中と出す）。
 const CARD_AFTER_MS = 250;
 
-export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: number }) {
+export function WorkspaceRail() {
   const [open, setOpen] = useAtom(railOpenAtom);
   // 開いた中身は、畳む動きが終わるまで描き続ける（その間に字を薄くして消す）。
   const shown = useLinger(open, RAIL_MS);
@@ -45,7 +48,11 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
   const openMenu = useSetAtom(workspaceMenuAtom);
   const setMaking = useSetAtom(newWorkspaceAtom);
   const { openWorkspace } = useWorkspace();
-  const { closeWorkspace } = useWorkspaceOps();
+  const { closeWorkspace, removeWorkspaces } = useWorkspaceOps();
+  // 開いた帯の幅。右の縁を掴んで変える（掴んでいる間は縁が帯へ直に書く）。
+  const [width, setWidth] = useAtom(wsRailWidthAtom);
+  const navRef = useRef<HTMLElement>(null);
+  const [tidying, setTidying] = useState(false);
   const [elsewhere, setElsewhere] = useState<Set<string>>(new Set());
   const [card, setCard] = useState<{ ws: Workspace; at: DOMRect; n: number } | null>(null);
   const cardTimer = useRef(0);
@@ -58,6 +65,16 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
   }, [list, current]);
   const groups = useMemo(() => railGroups(bar, all), [bar, all]);
   const order = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  // セッションが終了した（再開に resume が要る）か、記録が消えたワークスペース。
+  // まとめて整理できるようにする。
+  const gone = useMemo(
+    () =>
+      order.flatMap((ws) => {
+        const phase = phaseFor(ws);
+        return phase && MARKED[phase] === "gone" ? [{ ws, phase }] : [];
+      }),
+    [order, phaseFor],
+  );
 
   // 列に載っていないもの（他の窓で作ったものなど）は末尾に足す。
   useEffect(() => {
@@ -113,8 +130,9 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
   let n = 0;
   return (
     <nav
+      ref={navRef}
       className={`mg-wsrail${open ? " is-open" : ""}${shown ? " is-shown" : ""}`}
-      style={{ width: open ? wide : RAIL_STRIP }}
+      style={{ width: open ? width : RAIL_STRIP }}
       aria-label="ワークスペース"
       onMouseLeave={hideCard}
     >
@@ -133,6 +151,19 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
           <Icon name={open ? "rail_close" : "rail_open"} size={17} />
         </button>
         {shown && <span className="mg-wsrail-title mg-wsrail-fade">ワークスペース</span>}
+        {shown && gone.length > 0 && (
+          <button
+            type="button"
+            className="mg-wsrail-tidy mg-wsrail-fade"
+            data-tip="終了・削除済みのセッションのワークスペースをまとめて削除"
+            onClick={() => {
+              hideCard();
+              setTidying(true);
+            }}
+          >
+            整理（{gone.length}）
+          </button>
+        )}
       </div>
       <div
         className="mg-wsrail-list"
@@ -142,7 +173,7 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
         }}
       >
         {groups.map((g, gi) => (
-          <div key={g.key} className="mg-wsrail-group" title={open ? g.key : undefined}>
+          <div key={g.key} className="mg-wsrail-group">
             {/* 畳んだときの区切り線と、開いたときの見出しを重ねて置き、高さを動かす。 */}
             <div className={`mg-wsrail-group-top${gi === 0 ? " is-first" : ""}`}>
               {gi > 0 && <div className="mg-wsrail-sep" aria-hidden />}
@@ -158,7 +189,13 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
               const chip = (
                 <span
                   className="mg-wsrail-chip"
-                  style={{ background: colorVar(ws.color) }}
+                  style={{
+                    background: colorVar(ws.color),
+                    // 今いるワークスペースの輪は、そのワークスペースの色で描く。
+                    ...(on
+                      ? { boxShadow: `0 0 0 2px var(--mg-chrome), 0 0 0 3.5px ${colorVar(ws.color)}` }
+                      : {}),
+                  }}
                   aria-hidden
                 >
                   {initialOf(ws.name)}
@@ -174,10 +211,13 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
                   data-ws={ws.id}
                   aria-current={on || undefined}
                   aria-label={ws.name}
+                  // 開いた帯では名前が途中で切れるので、指したら全部を出す。畳んだ
+                  // 帯は札の案内（showCardSoon）が名前を出す。
+                  data-tip={open ? ws.name : undefined}
                   draggable={open}
                   className={`mg-wsrail-item${on ? " is-on" : ""}${away ? " is-away" : ""}${
-                    dragging === ws.id ? " is-dragging" : ""
-                  }`}
+                    phase && MARKED[phase] === "gone" ? " is-gone" : ""
+                  }${dragging === ws.id ? " is-dragging" : ""}`}
                   onClick={() => pick(ws)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -261,6 +301,21 @@ export function WorkspaceRail({ wide = RAIL_STRIP + SIDEBAR_WIDTH }: { wide?: nu
         )}
       </button>
       {card && <WorkspaceCard ws={card.ws} at={card.at} keys={hintOf(card.n, order.length)} />}
+      {open && (
+        <div className="mg-wsrail-grip">
+          <SidebarGrip target={navRef} width={width} onWidth={setWidth} fit={fitRailOpenWidth} reset={RAIL_OPEN} />
+        </div>
+      )}
+      {tidying && (
+        <WorkspaceTidy
+          items={gone}
+          onClose={() => setTidying(false)}
+          onGo={(ids) => {
+            setTidying(false);
+            void removeWorkspaces(ids);
+          }}
+        />
+      )}
     </nav>
   );
 }

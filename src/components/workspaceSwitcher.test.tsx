@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "../lib/workspaces";
 import * as A from "../state/atoms";
-import { RAIL_MS, RAIL_STRIP, SIDEBAR_WIDTH } from "../lib/sidebar";
+import { RAIL_MS, RAIL_OPEN, RAIL_STRIP } from "../lib/sidebar";
 import { barAtom } from "../state/workspaceBar";
 import { NewWorkspace } from "./NewWorkspace";
 import { WorkspaceMenu } from "./WorkspaceMenu";
@@ -43,6 +43,7 @@ vi.mock("../hooks/useWorkspaceOps", () => ({
     recolorWorkspace: (id: string, color: string) => log("recolor")({ id, color }),
     deleteWorkspace: async (id: string) => log("delete")(id),
     closeWorkspace: async (id: string) => log("close")(id),
+    removeWorkspaces: async (ids: string[]) => log("removeMany")(ids),
     unlinkSession: (id: string) => log("unlink")(id),
   }),
 }));
@@ -390,13 +391,58 @@ describe("作る：＋", () => {
 });
 
 describe("Claude のセッションの終わり", () => {
-  it("ワークスペースのあるセッションが終わったら、札に終わった印を付ける", async () => {
+  it("セッションが一覧から外れたら、終了の印（斜線）を付けて札を沈める", async () => {
     const { el } = await show((s) => {
       s.set(A.claudeLinkAtom, true);
       s.set(A.claudeSessionsAtom, { sessions: [], error: null, gone: new Set<string>() });
     });
-    expect(pill(el, "b").querySelector(".mg-st.is-done")).not.toBeNull();
+    expect(pill(el, "b").querySelector(".mg-st.is-gone")).not.toBeNull();
+    expect(pill(el, "b").classList.contains("is-gone")).toBe(true);
     expect(pill(el, "a").querySelector(".mg-st")).toBeNull();
+    expect(pill(el, "a").classList.contains("is-gone")).toBe(false);
+  });
+
+  it("開いた一覧では「終了」と出し、頭の「整理」から選んでまとめて削除する", async () => {
+    const { el } = await show((s) => {
+      s.set(A.railOpenAtom, true);
+      s.set(A.claudeLinkAtom, true);
+      s.set(A.claudeSessionsAtom, { sessions: [], error: null, gone: new Set<string>(["s2"]) });
+      s.set(A.workspacesAtom, [
+        ws("a", "要件定義", { folder: "/w/a" }),
+        ws("b", "Slack 対応", { claude: { sessionId: "s", nameFollows: true } }),
+        ws("c", "消えた調査", { claude: { sessionId: "s2", nameFollows: true } }),
+      ]);
+      s.set(barAtom, ["a", "b", "c"]);
+    });
+    expect(pill(el, "b").querySelector(".mg-wsrail-state")?.textContent).toBe("終了");
+    expect(pill(el, "c").querySelector(".mg-wsrail-state")?.textContent).toBe("削除済み");
+    const tidy = el.querySelector<HTMLElement>(".mg-wsrail-tidy")!;
+    expect(tidy.textContent).toBe("整理（2）");
+    act(() => tidy.click());
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const rows = dialog.querySelectorAll<HTMLElement>(".mg-tidy-row");
+    expect(rows).toHaveLength(2);
+    // 1 件押すと「残す」に替わり、残りだけを削除する。
+    act(() => rows[0].click());
+    expect(rows[0].querySelector(".mg-tidy-tag")?.textContent).toBe("残す");
+    const go = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent?.includes("件を削除"))!;
+    expect(go.textContent).toBe("1 件を削除");
+    act(() => go.click());
+    expect(calls).toEqual([{ op: "removeMany", arg: ["c"] }]);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("終了したセッションが無ければ「整理」を出さない", async () => {
+    const { el } = await show((s) => {
+      s.set(A.railOpenAtom, true);
+      s.set(A.claudeLinkAtom, true);
+      s.set(A.claudeSessionsAtom, {
+        sessions: [{ sessionId: "s", name: "s", kind: "bg", status: "idle" }],
+        error: null,
+        gone: new Set<string>(),
+      });
+    });
+    expect(el.querySelector(".mg-wsrail-tidy")).toBeNull();
   });
 });
 
@@ -427,10 +473,16 @@ describe("帯を開いた一覧", () => {
     expect(names()).toBe(0);
   });
 
-  it("開いた幅は渡された幅、畳むと帯の幅", async () => {
+  it("開いた幅は控えの幅（既定は RAIL_OPEN）、畳むと帯の幅", async () => {
     const { el, store } = await show((s) => s.set(A.railOpenAtom, true));
     const nav = el.querySelector<HTMLElement>(".mg-wsrail")!;
-    expect(nav.style.width).toBe(`${RAIL_STRIP + SIDEBAR_WIDTH}px`);
+    expect(nav.style.width).toBe(`${RAIL_OPEN}px`);
+    // 掴んで変えた幅（窓ごとの控え）があれば、その幅で開く。
+    act(() => {
+      store.set(A.wsRailWidthAtom, 320);
+      store.set(A.railOpenAtom, true);
+    });
+    expect(nav.style.width).toBe("320px");
     act(() => store.set(A.railOpenAtom, false));
     expect(nav.style.width).toBe(`${RAIL_STRIP}px`);
   });

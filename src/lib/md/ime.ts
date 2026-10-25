@@ -113,6 +113,33 @@ const mendAfterCompose = (view: EditorView): void => {
   view.updateState(view.state);
 };
 
+// トグルの題の、字を入れる器。題は外側の行（.mg-details-head）と字の器
+// （.mg-details-title）の 2 段で、本文として読むのは器の中だけ。
+//
+// 空の題で変換を確定すると、WebKit は中身が変換中の字だけだった器を要素ごと
+// 消し、確定の字を外側の行へ直に入れる。prosemirror は器を見失った節点を、
+// 中身の無いものとして読み直すので、打った字が全部消える。確定の字を読ませる
+// 前に、同じ器を行へ戻して字をその中へ移す。
+interface TitleBox {
+  head: HTMLElement;
+  box: HTMLElement;
+}
+
+const titleBoxAt = (view: EditorView): TitleBox | null => {
+  const { node } = view.domAtPos(view.state.selection.from);
+  const at = node instanceof HTMLElement ? node : node.parentElement;
+  const box = at?.closest<HTMLElement>(".mg-details-title");
+  const head = box?.parentElement;
+  return box && head?.classList.contains("mg-details-head") ? { head, box } : null;
+};
+
+const regainTitle = ({ head, box }: TitleBox): void => {
+  if (box.parentElement === head || !head.isConnected) return;
+  const strays = [...head.childNodes];
+  box.replaceChildren(...strays);
+  head.appendChild(box);
+};
+
 // 候補を矢印で選んでいる間、WebKit は変換中の字を選択範囲として持ち、
 // prosemirror もそれを読んで選択を範囲にする。確定したあともその範囲が残ると、
 // 確定した字が選ばれたまま見える。変換が終わって字が落ち着いたら末尾へ畳む。
@@ -132,6 +159,8 @@ export const composingKeys = () => {
   let composing = false;
   // 直前まで変換中だった字。確定した字と同じなら、全部をそのまま確定した。
   let marked: string | null = null;
+  // 確定の直前に字を入れていたトグルの題の器。WebKit が消したら戻す。
+  let title: TitleBox | null = null;
 
   return new Plugin({
     props: {
@@ -156,13 +185,20 @@ export const composingKeys = () => {
         input(view, event) {
           // 確定の字が入ったら、その場で読ませる。待たせていた消した側と合わせて
           // 1 度に読み、器の作り直しを確定と同じ処理の中で済ませる。
-          if ((event as InputEvent).inputType === "insertFromComposition") readNow(view);
+          if ((event as InputEvent).inputType === "insertFromComposition") {
+            if (title) regainTitle(title);
+            title = null;
+            readNow(view);
+          }
           return false;
         },
         beforeinput(view, event) {
           // 消した側だけを読ませない。待っているあいだに確定が来て、そこで
           // まとめて捨てる。
-          if (event.inputType === "deleteCompositionText") holdRead(view);
+          if (event.inputType === "deleteCompositionText") {
+            title = titleBoxAt(view);
+            holdRead(view);
+          }
           return false;
         },
         keyup(view, event) {

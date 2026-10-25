@@ -41,7 +41,7 @@ import {
   marksOf,
   remarkTaskMarks,
 } from "../lib/md/taskMarks";
-import { d2DiagramAtom, taskMarksAtom, wideTableAtom } from "../state/atoms";
+import { d2DiagramAtom, tableZoomAtom, taskMarksAtom } from "../state/atoms";
 import { useAtomValue } from "jotai";
 import { remarkCjkAutolink } from "../lib/md/cjkAutolink";
 import { rehypeKatexSafe } from "../lib/md/katexSafe";
@@ -221,7 +221,7 @@ export const stillTablesContext = createContext(false);
 // 収まっている表に釦を出しても押す理由が無い。
 function TableWrap({ children }: { children: ReactNode }) {
   const still = useContext(stillTablesContext);
-  const on = useAtomValue(wideTableAtom) && !still;
+  const on = useAtomValue(tableZoomAtom) && !still;
   const wrap = useRef<HTMLDivElement>(null);
   const [over, setOver] = useState(false);
   const [open, setOpen] = useState(false);

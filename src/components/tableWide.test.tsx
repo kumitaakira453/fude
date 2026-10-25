@@ -3,7 +3,7 @@ import { createStore, Provider } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { wideTableAtom } from "../state/atoms";
+import { tableModeAtom } from "../state/atoms";
 import { Markdown } from "./Markdown";
 
 // 幅の長い表の手当て。
@@ -45,7 +45,7 @@ const TABLE = ["| 店舗 | 4月 |", "| --- | --- |", "| 札幌 | 1,204 |"].join(
 
 function render(body: string, on = true): HTMLElement {
   const store = createStore();
-  store.set(wideTableAtom, on);
+  store.set(tableModeAtom, on ? "pin" : "plain");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);

@@ -33,8 +33,9 @@ import { mathEditing } from "./math";
 import { inCell, setLink, toggleInline } from "./marks";
 import { lifted } from "./lifted";
 import { composingKeys } from "./ime";
-import { insideBlock } from "./nodeViews";
+import { foldDetailsAt, insideBlock } from "./nodeViews";
 import { calloutMarks } from "./calloutMarks";
+import { itemIntoToggleTr } from "./listTree";
 import { DETAILS_HEAD, nestOf, schema } from "./schema";
 import { BLANK, flipped } from "./taskMarks";
 import { slashMenu } from "./slash";
@@ -351,6 +352,39 @@ export const joinItemBack: Command = (state, dispatch) => {
 // くらいで消さない。畳んだまま中身へ入れないのも同じ考えで、見えない場所へ
 // カーソルを置かない。
 
+// 箇条書きの段のトグル（`- <details>` の項目）の中身の最後の空の行で Enter /
+// Backspace。トグルの項目の次に新しい項目を足して、そこへ出る（Notion と同じ）。
+//
+// 一番外のトグルと同じく「トグルの直後の行」へ出すと、その行はトグルと同じ
+// 項目の中に入る。項目の中でトグルの後ろに塊が続く形は、Notion にも原文の
+// 決まりにも無く、続けて書くと崩れる。
+//
+// 中身がその空の行だけなら、行は消さずに残す（トグルは中身を 1 つ以上持つ）。
+export const outOfToggleItem: Command = (state, dispatch) => {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parent.content.size > 0) return false;
+  if ($from.depth < 3) return false;
+  const boxDepth = $from.depth - 1;
+  const box = $from.node(boxDepth);
+  if (box.type !== schema.nodes.details) return false;
+  const index = $from.index(boxDepth);
+  if (index < 1 || index !== box.childCount - 1) return false;
+  const itemDepth = boxDepth - 1;
+  if ($from.node(itemDepth).type !== schema.nodes.listItem) return false;
+  if ($from.index(itemDepth) !== 0) return false;
+
+  if (dispatch) {
+    const item = schema.nodes.listItem.create(null, schema.nodes.paragraph.create());
+    const tr = state.tr.insert($from.after(itemDepth), item);
+    if (box.childCount > 2) tr.delete($from.before(), $from.after());
+    const at = tr.mapping.map($from.after(itemDepth));
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(at - item.nodeSize + 2), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
+
 // 空になったトグルの中で Enter。囲みは残し、その下の行へ出る。
 export const outEnter: Command = (state, dispatch) => {
   const { empty, $from } = state.selection;
@@ -427,6 +461,43 @@ export const toDetailsHead: Command = (state, dispatch) => {
     );
   }
   return true;
+};
+
+// トグルの項目の次の項目で Tab を押したら、そのトグルの中へ入れる（listTree）。
+const sinkIntoToggle: Command = (state, dispatch) => {
+  const tr = itemIntoToggleTr(state);
+  if (!tr) return false;
+  if (dispatch) dispatch(tr.scrollIntoView());
+  return true;
+};
+
+// 箇条書きの段のトグル（`- <details>` の項目）の題で Enter。並びの中では
+// Enter で次の項目を足して書き続けるので、トグルでも同じく次の項目を作る。
+// 開け閉めは ⌘Enter（foldDetails）に任せる。
+export const itemAfterToggle: Command = (state, dispatch) => {
+  const { $from } = state.selection;
+  if ($from.parent.type !== schema.nodes.detailsSummary || $from.depth < 3) return false;
+  const itemDepth = $from.depth - 2;
+  if ($from.node(itemDepth).type !== schema.nodes.listItem) return false;
+  if ($from.index(itemDepth) !== 0) return false;
+
+  if (dispatch) {
+    const after = $from.after(itemDepth);
+    const item = schema.nodes.listItem.create(null, schema.nodes.paragraph.create());
+    const tr = state.tr.insert(after, item);
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(after + 2), 1)).scrollIntoView(),
+    );
+  }
+  return true;
+};
+
+// トグルの題で ⌘Enter。開け閉めする（三角を押したのと同じ）。
+export const foldDetails: Command = (state, dispatch, view) => {
+  const { $from } = state.selection;
+  if ($from.parent.type !== schema.nodes.detailsSummary || !view) return false;
+  if (!dispatch) return true;
+  return foldDetailsAt(view, $from.before($from.depth - 1));
 };
 
 // トグルの題で Enter。題は割らない。行き先は畳み方で分ける。
@@ -757,6 +828,7 @@ const backAtHead: Command[] = [
   unlistBack,
   plainDetailsHead,
   toDetailsHead,
+  outOfToggleItem,
   outOfDetailsBack,
   outOfQuoteBack,
   dropEmptyBack,
@@ -1089,8 +1161,10 @@ export function editorPlugins({
       "Mod-y": redo,
       Enter: chainCommands(
         cellEnter,
+        itemAfterToggle,
         outOfDetailsHead,
         fenceOnEnter,
+        outOfToggleItem,
         outEnter,
         splitItem,
         splitTrimmed,
@@ -1108,10 +1182,10 @@ export function editorPlugins({
       "Shift-Mod-x": toggleInline(schema.marks.strike),
       "Shift-Mod-c": toggleInline(schema.marks.code),
       "Shift-Enter": lineBreak,
-      "Mod-Enter": chainCommands(toggleTask, lineBreak),
+      "Mod-Enter": chainCommands(toggleTask, foldDetails, lineBreak),
       "Shift-Mod-Enter": lineBreak,
       // コードの塊の中は字下げ。表の中では隣のセルへ。それ以外は箇条書きの字下げ。
-      Tab: chainCommands(indentCode, goToNextCell(1), sinkListItem(item)),
+      Tab: chainCommands(indentCode, goToNextCell(1), sinkIntoToggle, sinkListItem(item)),
       "Shift-Tab": chainCommands(outdentCode, goToNextCell(-1), liftListItem(item)),
     }),
     realKeys(baseKeymap),

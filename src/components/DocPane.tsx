@@ -102,6 +102,7 @@ import { posOfAnchor } from "../lib/md/reviewAnchors";
 import { AnchorOverlay } from "./review/AnchorOverlay";
 import { CommentRail } from "./review/CommentRail";
 import { MenuButton } from "./MenuButton";
+import { scrolledAround } from "../lib/scrolledAround";
 import { TextBtn } from "./Chrome";
 import { SidebarGrip } from "./SidebarGrip";
 import {
@@ -1089,7 +1090,15 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     };
     // 出すのは離したとき。引いている間に出すと、そのままドラッグの行き先を
     // 奪って選択が飛ぶ。打ち始めたら消す。
-    const onUp = () => read();
+    // 離した合図は窓で受ける（編集面から引いて外で離したときも出す）が、読むのは
+    // 編集面の中で押し始めたときだけ。外を押しても字の選択は編集面に残るので、
+    // 読むと押した番に消した帯がまた出てしまう。
+    let pressedIn = false;
+    const onUp = () => {
+      if (!pressedIn) return;
+      pressedIn = false;
+      read();
+    };
     // 変換を確定した打鍵の keyup では出さない。候補を矢印で選んでいる間、
     // WebKit は変換中の字を選択範囲として持つので、確定の直後はその範囲が
     // 残っていて、選んだように見えてしまう。確定の keyup は 229 ではなく
@@ -1108,6 +1117,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 押した瞬間に閉じるのはこれ）。
     const onDown = (e: MouseEvent) => {
       composed = false;
+      pressedIn = e.button === 0 && e.target instanceof Node && view.dom.contains(e.target);
       // 右ボタンは選択を残す（選んだところの右クリックで帯を出し直す）。
       if (e.button === 2) return;
       if (inFloating(e.target)) return;
@@ -1131,7 +1141,10 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
     // 本文を送ったら測り直す。帯は画面の座標で置くので、送った分だけ選んだ
     // ところと離れる。1 枚に 1 回へまとめる。
     let soon = 0;
-    const onMove = () => {
+    const onMove = (e: Event) => {
+      // 本文を動かさないスクロール（リンクの入力欄の中の横送りなど）では測り直さない。
+      // 測り直すと選択が入力欄にあるので帯ごと閉じ、貼り付けた途端に欄が消える。
+      if (!scrolledAround(e.target, view.dom)) return;
       if (soon) return;
       soon = requestAnimationFrame(() => {
         soon = 0;
@@ -1139,8 +1152,6 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         setScrolled((n) => n + 1);
       });
     };
-    // 離した合図は窓で受ける。引いて編集面の外で離したときも出す（選んだ範囲が
-    // 編集面の中に無ければ read が何も出さない）。
     window.addEventListener("mouseup", onUp);
     view.dom.addEventListener("contextmenu", onMenu);
     view.dom.addEventListener("keyup", onKeyUp);
@@ -1514,7 +1525,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         )}
         {path && isDoc && isDraft && (
           // 下書きは版を持てない。同じ場所に、行き先を決める口を置く。
-          <TextBtn tip="名前を付けて保存" keys="⌘S" onClick={() => void saveDraft()}>
+          <TextBtn tip="名前を付けて保存" keys="⌘S" icon="save" onClick={() => void saveDraft()}>
             名前を付けて保存
           </TextBtn>
         )}
@@ -1523,18 +1534,19 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             <TextBtn
               tip="今の本文をバージョンとして保存"
               keys="⌘S"
+              icon="save"
               on={naming !== null}
               onClick={() => (naming === null ? startNaming() : setNaming(null))}
             >
               バージョンを保存
             </TextBtn>
-            <TextBtn tip="バージョン履歴" keys="⌘Y" onClick={showVersions}>
+            <TextBtn tip="バージョン履歴" keys="⌘Y" icon="history" onClick={showVersions}>
               履歴
             </TextBtn>
           </>
         )}
         {path && isDoc && (
-          <TextBtn tip="HTML で書き出す" keys="⌘⇧E" onClick={() => void handOut()}>
+          <TextBtn tip="HTML で書き出す" keys="⌘⇧E" icon="html" onClick={() => void handOut()}>
             書き出し
           </TextBtn>
         )}
@@ -1651,7 +1663,9 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
         ) : writing && path ? (
           <div
             ref={setEditScroller}
-            className={`mg-tail relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-8 ${PAD_CLASS[width]}`}
+            // 左右の余白を自分で持つ。表を広げる幅の式がその分を足す（index.css の .mg-page）。
+            data-pad={width}
+            className={`mg-page mg-tail relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-8 ${PAD_CLASS[width]}`}
           >
             {/* 組み上がるまで骨組みを被せる。
                 編集面を組むのは React の効果の中で、それが走るのは骨組みを
@@ -1729,7 +1743,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
           <div className="relative flex min-h-0 min-w-0 flex-1">
             <div
               ref={setScroller}
-              className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+              className="mg-page min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
             >
               {path ? (
                 <div className={`mg-tail pt-8 ${PAD_CLASS[width]}`}>

@@ -7,6 +7,15 @@
 export const SIDEBAR_WIDTH = 268;
 // 左端の帯（ワークスペースの札）の幅。index.css の .mg-rail と対にする。
 export const RAIL_STRIP = 40;
+// 帯を開いたときの既定の幅（左の欄の既定の幅と同じ）。掴んで変えられる。
+export const RAIL_OPEN = 268;
+// 開いた帯の幅の下限と上限。下限は名前が数文字は読める幅。
+export const RAIL_OPEN_MIN = 200;
+export const RAIL_OPEN_MAX = 480;
+
+export function fitRailOpenWidth(w: number): number {
+  return Math.min(Math.max(Math.round(w), RAIL_OPEN_MIN), RAIL_OPEN_MAX);
+}
 // 帯の開閉にかける時間（ms）。index.css の .mg-wsrail の transition と対にする。
 export const RAIL_MS = 200;
 // 左の欄の右の掴み線の幅。index.css の .mg-side-grip と対にする。

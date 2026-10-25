@@ -3,9 +3,12 @@ import {
   canBackAtom,
   canForwardAtom,
   paletteOpenAtom,
+  railOpenAtom,
+  wsRailWidthAtom,
   settingsOpenAtom,
   sidebarOpenAtom,
 } from "../state/atoms";
+import { RAIL_STRIP } from "../lib/sidebar";
 import { IconBtn } from "./Chrome";
 import { Icon } from "./Icon";
 
@@ -18,10 +21,16 @@ export function Toolbar() {
   const canForward = useAtomValue(canForwardAtom);
   const setPalette = useSetAtom(paletteOpenAtom);
   const setSettings = useSetAtom(settingsOpenAtom);
+  // 左の欄の開閉ボタンは、左の欄の左端の真上に置く。帯の幅から信号の場所
+  // （.mg-top-lights の 80px）を引いた分だけ空ける。
+  const railOpen = useAtomValue(railOpenAtom);
+  const railWidth = useAtomValue(wsRailWidthAtom);
+  const room = Math.max(0, (railOpen ? railWidth : RAIL_STRIP) - 80);
 
   return (
     <div className="mg-top" data-tauri-drag-region>
       <div className="mg-top-lights" data-tauri-drag-region />
+      <span className="mg-top-room" style={{ width: room }} data-tauri-drag-region />
       <IconBtn
         tip="サイドバー"
         keys="⌘D"

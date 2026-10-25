@@ -1146,6 +1146,18 @@ class ListItemView implements NodeView {
   }
 }
 
+// 描いているトグルを DOM から引く控え。⌘Enter の開け閉めがここを通る。
+const detailsViews = new WeakMap<Node, DetailsView>();
+
+// pos のトグルを開け閉めする。描いていなければ false。
+export function foldDetailsAt(view: EditorView, pos: number): boolean {
+  const dom = view.nodeDOM(pos);
+  const drawn = dom ? detailsViews.get(dom) : undefined;
+  if (!drawn) return false;
+  drawn.flip();
+  return true;
+}
+
 // トグル。題も中身も本文の節点なので、描くのは畳む三角だけ。
 //
 // 題を入力欄で出していた頃は、押しても焦点が入らない・矢印で行き来できない、
@@ -1193,6 +1205,7 @@ class DetailsView implements NodeView {
     this.dom.appendChild(this.contentDOM);
     this.markLevel();
     this.show();
+    detailsViews.set(this.dom, this);
   }
 
   private foldKey(): string | null {
@@ -1228,15 +1241,23 @@ class DetailsView implements NodeView {
     this.show();
     rememberFold(this.foldKey(), open);
     if (open) return;
-    // 畳んだ中にカーソルを置き去りにしない。囲みの手前へ出す。
+    // 畳んだ中にカーソルを置き去りにしない。囲みの手前へ出す。題は畳んでも
+    // 見えているので、題に居るならそのまま。
     const at = this.getPos();
     if (at === undefined) return;
     const { state } = this.view;
     const { from } = state.selection;
     if (from <= at || from >= at + this.node.nodeSize) return;
+    const titleEnd = at + 1 + (this.node.firstChild?.nodeSize ?? 0);
+    if (from < titleEnd) return;
     this.view.dispatch(
       state.tr.setSelection(TextSelection.near(state.doc.resolve(at), -1)),
     );
+  }
+
+  // ⌘Enter から。三角を押したのと同じ。
+  flip() {
+    this.fold(!this.open);
   }
 
   update(node: PmNode): boolean {

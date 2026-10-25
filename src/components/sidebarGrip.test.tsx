@@ -98,6 +98,14 @@ describe("左の欄の仕切り", () => {
     expect(document.body.style.userSelect).toBe("");
   });
 
+  it("掴んでいるあいだは印を立て（開いた帯などの動きを止める）、離すと外す", () => {
+    const grip = mount(300);
+    at("pointerdown", 300, grip);
+    expect(document.documentElement.dataset.resizing).toBe("");
+    at("pointerup", 300);
+    expect(document.documentElement.dataset.resizing).toBeUndefined();
+  });
+
   it("下限より狭くならない", () => {
     const grip = mount(SIDEBAR_MIN + 20);
     at("pointerdown", 500, grip);

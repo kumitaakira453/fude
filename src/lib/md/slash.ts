@@ -21,6 +21,7 @@ import { openEmojiBoard } from "./emoji";
 import { openImagePick } from "./imagePick";
 import { openMath } from "./math";
 import { DETAILS_HEAD, schema } from "./schema";
+import { untickToggleItem } from "./listTree";
 import { BLANK } from "./taskMarks";
 
 // 段落の先頭で "/" を打って構造を選ぶ小窓。
@@ -215,6 +216,7 @@ const toToggle: Command = (state, dispatch) => {
       $from.after(),
       details.create({ head: DETAILS_HEAD }, [title, body]),
     );
+    untickToggleItem(tr, at);
     // 字を選んで変えたときは、選んだところをそのまま選んだままにする
     // （囲みと題のぶんだけ位置が内側へずれる）。それ以外は、見出しなら中身から、
     // 素のトグルなら題から書き始める。
