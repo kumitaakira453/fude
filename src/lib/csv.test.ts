@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { colName, csvLines, csvRows, delimOf, movedIndex, moveColumn, setCell } from "./csv";
+import {
+  colName,
+  colsDeleted,
+  colsInserted,
+  colsUndeleted,
+  colsUninserted,
+  csvLines,
+  csvRows,
+  deleteColumns,
+  deleteRows,
+  delimOf,
+  insertColumns,
+  insertRows,
+  movedIndex,
+  moveColumn,
+  setCell,
+  setCells,
+} from "./csv";
 
 describe("区切りの字", () => {
   it("拡張子で決める", () => {
@@ -151,5 +168,52 @@ describe("列を動かす", () => {
     expect([0, 1, 2, 3].map((i) => movedIndex(i, 1, 3))).toEqual([0, 3, 1, 2]);
     // D を 1 番目へ → A D B C
     expect([0, 1, 2, 3].map((i) => movedIndex(i, 3, 1))).toEqual([0, 2, 3, 1]);
+  });
+});
+
+describe("値をまとめて入れる・行と列を足す・消す", () => {
+  const crlf = 'a,b\r\n"1",2\r\n3,4\r\n';
+
+  it("まとめて入れても、ほかの値の囲みと改行の字はそのまま。無い行は末尾に足す", () => {
+    expect(
+      setCells(crlf, ",", [
+        { row: 1, col: 1, value: "x" },
+        { row: 2, col: 0, value: "y,z" },
+        { row: 3, col: 1, value: "新" },
+      ]),
+    ).toBe('a,b\r\n"1",x\r\n"y,z",4\r\n,新\r\n');
+    expect(setCells("a,b\n1,2", ",", [{ row: 2, col: 0, value: "末" }])).toBe("a,b\n1,2\n末");
+  });
+
+  it("行を足す・消す。末尾の改行が無いファイルでも崩れない", () => {
+    expect(insertRows(crlf, ",", 1, 2)).toBe('a,b\r\n,\r\n,\r\n"1",2\r\n3,4\r\n');
+    expect(insertRows("a,b\n1,2", ",", 2, 1)).toBe("a,b\n1,2\n,");
+    expect(deleteRows(crlf, ",", [1])).toBe("a,b\r\n3,4\r\n");
+    expect(deleteRows("a,b\n1,2\n3,4", ",", [2])).toBe("a,b\n1,2\n");
+  });
+
+  it("囲みの中の改行を含む行を消しても、ほかの行は取り違えない", () => {
+    expect(deleteRows('a\n"x\ny"\nz\n', ",", [1])).toBe("a\nz\n");
+  });
+
+  it("列を足す・消す。短い行は列の数まで埋める", () => {
+    expect(insertColumns("a,b\n1\n", ",", 1, 1)).toBe("a,,b\n1,,\n");
+    expect(insertColumns("a\tb\n1\t2\n", "\t", 2, 2)).toBe("a\tb\t\t\n1\t2\t\t\n");
+    expect(deleteColumns('a,b,c\n1,"2,2",3\n', ",", [1])).toBe("a,c\n1,3\n");
+    expect(deleteColumns("a,b,c\n1\n", ",", [0, 2])).toBe("b\n\n");
+  });
+
+  it("読み直すと、足した・消したとおりに並ぶ", () => {
+    const next = deleteColumns(insertRows("名前,点\n佐藤,90\n", ",", 1, 1), ",", [1]);
+    expect(csvRows(next, ",")).toEqual([["名前"], [""], ["佐藤"]]);
+  });
+
+  it("列の番号の付け替えと、その逆", () => {
+    const ins = colsInserted(1, 2);
+    expect([0, 1, 2].map(ins)).toEqual([0, 3, 4]);
+    expect([0, 1, 2, 3, 4].map(colsUninserted(1, 2))).toEqual([0, null, null, 1, 2]);
+    const del = colsDeleted([1, 3]);
+    expect([0, 1, 2, 3, 4].map(del)).toEqual([0, null, 1, null, 2]);
+    expect([0, 1, 2].map(colsUndeleted([1, 3]))).toEqual([0, 2, 4]);
   });
 });

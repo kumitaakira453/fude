@@ -158,9 +158,14 @@ export function loadView(
   return { filters, sort: s && fits(s.col, s.head) ? { col: s.col, dir: s.dir } : null };
 }
 
-// 列を動かしたときの付け替え。where は元の列の番号から、動かしたあとの番号を返す。
-export function moveStoredView(stored: StoredCsvView, where: (col: number) => number): StoredCsvView {
+// 列を動かす・足す・消したときの付け替え。where は元の列の番号から、あとの番号を
+// 返す（null は消えた列。その列の絞り込みと並べ替えは捨てる）。
+export function moveStoredView(stored: StoredCsvView, where: (col: number) => number | null): StoredCsvView {
   const filters: Record<number, StoredFilter> = {};
-  for (const [c, f] of Object.entries(stored.filters)) filters[where(Number(c))] = f;
-  return { filters, sort: stored.sort ? { ...stored.sort, col: where(stored.sort.col) } : null };
+  for (const [c, f] of Object.entries(stored.filters)) {
+    const to = where(Number(c));
+    if (to !== null) filters[to] = f;
+  }
+  const sortTo = stored.sort ? where(stored.sort.col) : null;
+  return { filters, sort: stored.sort && sortTo !== null ? { ...stored.sort, col: sortTo } : null };
 }

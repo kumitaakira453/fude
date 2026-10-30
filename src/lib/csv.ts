@@ -229,3 +229,127 @@ export function moveColumn(text: string, delim: string, from: number, to: number
   }
   return out + text.slice(at);
 }
+
+// 行ごとに値の原文の並び（囲みを含む）を f に渡し、返した並びで組み直す。
+// 返す並びが 0 個ならその行を消し、2 個以上なら行を足す。行の間の改行の字と
+// 末尾の改行は元のまま残し、足した行はファイルの改行の字で区切る。
+export function editRows(
+  text: string,
+  delim: string,
+  f: (raw: string[], row: number) => string[][],
+): string {
+  const spans = csvSpans(text, delim);
+  if (spans.length === 0) return text;
+  const eol = eolOf(text);
+  let out = text.slice(0, spans[0].cells[0][0]);
+  spans.forEach((row, i) => {
+    const raw = row.cells.map(([s, e]) => text.slice(s, e));
+    const term = text.slice(row.end, i + 1 < spans.length ? spans[i + 1].cells[0][0] : text.length);
+    const lines = f(raw, i);
+    lines.forEach((l, k) => {
+      out += l.join(delim) + (k === lines.length - 1 ? term : eol);
+    });
+  });
+  return out;
+}
+
+const eolOf = (text: string) => (text.includes("\r\n") ? "\r\n" : "\n");
+
+// 列の数（最も長い行の値の数）。
+export function csvWidth(text: string, delim: string): number {
+  return csvSpans(text, delim).reduce((m, r) => Math.max(m, r.cells.length), 0);
+}
+
+export interface CellEdit {
+  row: number;
+  col: number;
+  value: string;
+}
+
+// 値をまとめて入れる（貼り付け）。無い行は末尾に足し、短い行は区切りを足して埋める。
+// 書き換える値の原文だけを差し替え、ほかの値は変えない。
+export function setCells(text: string, delim: string, edits: readonly CellEdit[]): string {
+  if (edits.length === 0) return text;
+  const eol = eolOf(text);
+  const rowCount = csvSpans(text, delim).length;
+  const byRow = new Map<number, CellEdit[]>();
+  for (const e of edits) byRow.set(e.row, [...(byRow.get(e.row) ?? []), e]);
+  const apply = (raw: string[], row: number) => {
+    const next = [...raw];
+    for (const e of byRow.get(row) ?? []) {
+      while (next.length <= e.col) next.push("");
+      const was = next[e.col];
+      next[e.col] = encodeValue(e.value, delim, eol, was.startsWith('"'));
+    }
+    return next;
+  };
+  const last = Math.max(...edits.map((e) => e.row));
+  return editRows(text, delim, (raw, i) => {
+    const rows = [apply(raw, i)];
+    if (i === rowCount - 1) for (let r = rowCount; r <= last; r++) rows.push(apply([""], r));
+    return rows;
+  });
+}
+
+// 行 at の手前に、空の行を count 行足す（at が行の数なら末尾に足す）。
+export function insertRows(text: string, delim: string, at: number, count: number): string {
+  const width = Math.max(1, csvWidth(text, delim));
+  const blank = () => Array.from({ length: width }, () => "");
+  const rowCount = csvSpans(text, delim).length;
+  return editRows(text, delim, (raw, i) => {
+    const added = Array.from({ length: count }, blank);
+    if (i === at) return [...added, raw];
+    if (at >= rowCount && i === rowCount - 1) return [raw, ...added];
+    return [raw];
+  });
+}
+
+export function deleteRows(text: string, delim: string, rows: readonly number[]): string {
+  const gone = new Set(rows);
+  return editRows(text, delim, (raw, i) => (gone.has(i) ? [] : [raw]));
+}
+
+// 列 at の手前に、空の列を count 列足す。短い行は列の数まで埋めてから足す。
+export function insertColumns(text: string, delim: string, at: number, count: number): string {
+  const width = csvWidth(text, delim);
+  return editRows(text, delim, (raw) => {
+    const next = [...raw];
+    while (next.length < width) next.push("");
+    next.splice(Math.min(at, width), 0, ...Array.from({ length: count }, () => ""));
+    return [next];
+  });
+}
+
+export function deleteColumns(text: string, delim: string, cols: readonly number[]): string {
+  const gone = new Set(cols);
+  const width = csvWidth(text, delim);
+  return editRows(text, delim, (raw) => {
+    const next = [...raw];
+    while (next.length < width) next.push("");
+    return [next.filter((_, c) => !gone.has(c))];
+  });
+}
+
+// ---- 列の番号の付け替え ----
+// 列を動かす・足す・消したあとの、元の列の番号の行き先。null は消えた列。
+// 列に付いているもの（幅・絞り込み・隠した列・選択）を付け替えるのに使う。
+export type ColMap = (col: number) => number | null;
+
+export const colsMoved = (from: number, to: number): ColMap => (i) => movedIndex(i, from, to);
+export const colsInserted = (at: number, count: number): ColMap => (i) => (i >= at ? i + count : i);
+export function colsDeleted(cols: readonly number[]): ColMap {
+  const gone = new Set(cols);
+  return (i) => (gone.has(i) ? null : i - cols.filter((c) => c < i).length);
+}
+// 足した列を消して戻す（colsInserted の逆）。
+export const colsUninserted = (at: number, count: number): ColMap => (i) =>
+  i >= at && i < at + count ? null : i >= at + count ? i - count : i;
+// 消した列を戻す（colsDeleted の逆）。消した列そのものは戻した先で何も持たない。
+export function colsUndeleted(cols: readonly number[]): ColMap {
+  const sorted = [...cols].sort((a, b) => a - b);
+  return (i) => {
+    let at = i;
+    for (const c of sorted) if (c <= at) at++;
+    return at;
+  };
+}
