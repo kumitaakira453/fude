@@ -907,3 +907,90 @@ describe("範囲を選んで写す・貼る", () => {
     expect(values(el)[1]).toEqual(["鈴木", "開発", "999"]);
   });
 });
+
+// 行の番号の右押しで行を、列の名前の ▾・右押しで列を、足す・消す。
+describe("行と列を足す・消す", () => {
+  const SHEET = "名前,部署,金額\n佐藤,営業,1200\n鈴木,開発,300\n";
+  const table = async (text = SHEET) => {
+    content = text;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const rowMenu = (el: HTMLElement, n: number) =>
+    act(() => {
+      el.querySelector(`th.mg-csv-no[data-n="${n}"]`)!.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+      );
+    });
+  const colMenu = (el: HTMLElement, col: number) =>
+    act(() => {
+      el.querySelectorAll(".mg-csv-letters th:not(.mg-csv-no)")[col].dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+      );
+    });
+  const item = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>(".mg-csv-rowmenu button, .mg-csv-filter-act")].find(
+      (b) => b.textContent === label,
+    );
+  const undo = (el: HTMLElement) =>
+    act(() => {
+      el.querySelector(".mg-csv-editor")!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+
+  it("行の上・下に挿入し、行を削除する。⌘Z で戻る", async () => {
+    const { el } = await table();
+    rowMenu(el, 2);
+    act(() => item("上に行を挿入")!.click());
+    expect(written.at(-1)).toBe("名前,部署,金額\n,,\n佐藤,営業,1200\n鈴木,開発,300\n");
+    rowMenu(el, 4);
+    act(() => item("下に行を挿入")!.click());
+    expect(written.at(-1)).toBe("名前,部署,金額\n,,\n佐藤,営業,1200\n鈴木,開発,300\n,,\n");
+    rowMenu(el, 3);
+    act(() => item("行を削除")!.click());
+    expect(written.at(-1)).toBe("名前,部署,金額\n,,\n鈴木,開発,300\n,,\n");
+    undo(el);
+    expect(written.at(-1)).toBe("名前,部署,金額\n,,\n佐藤,営業,1200\n鈴木,開発,300\n,,\n");
+  });
+
+  it("見出しの行は消せず、その上にも足せない", async () => {
+    const { el } = await table();
+    rowMenu(el, 1);
+    expect(item("上に行を挿入")!.disabled).toBe(true);
+    expect(item("行を削除")!.disabled).toBe(true);
+    expect(item("下に行を挿入")!.disabled).toBe(false);
+  });
+
+  it("列の左・右に挿入し、列を削除する。列の幅も付いて動く", async () => {
+    const { el, store } = await table();
+    act(() => store.set(csvWidthsAtom, { "/本/表.csv": { 2: 150 } }));
+    colMenu(el, 1);
+    act(() => item("左に列を挿入")!.click());
+    expect(written.at(-1)).toBe("名前,,部署,金額\n佐藤,,営業,1200\n鈴木,,開発,300\n");
+    expect(store.get(csvWidthsAtom)["/本/表.csv"]).toEqual({ 3: 150 });
+    colMenu(el, 1);
+    act(() => item("列を削除")!.click());
+    expect(written.at(-1)).toBe(SHEET);
+    expect(store.get(csvWidthsAtom)["/本/表.csv"]).toEqual({ 2: 150 });
+    colMenu(el, 2);
+    act(() => item("右に列を挿入")!.click());
+    expect(written.at(-1)).toBe("名前,部署,金額,\n佐藤,営業,1200,\n鈴木,開発,300,\n");
+  });
+
+  it("範囲が複数の行にまたがれば、その数だけ消す", async () => {
+    const { el } = await table();
+    act(() => {
+      el.querySelector('th.mg-csv-no[data-n="2"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    act(() => {
+      el.querySelector(".mg-csv-editor")!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    rowMenu(el, 2);
+    act(() => item("2 行を削除")!.click());
+    expect(written.at(-1)).toBe("名前,部署,金額\n");
+  });
+});

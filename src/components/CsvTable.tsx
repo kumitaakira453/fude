@@ -56,6 +56,7 @@ export function CsvTable({
   onUndo,
   onRedo,
   onMove,
+  structure,
   order,
   filters,
   sort,
@@ -81,6 +82,13 @@ export function CsvTable({
   onRedo: () => void;
   // 列 from を位置 to へ動かす（見出しを掴んで落とす）。
   onMove: (from: number, to: number) => void;
+  // 行・列を足す・消す（行は rows の中の位置、列は列の番号）。
+  structure: {
+    insertRows: (at: number, count: number) => void;
+    deleteRows: (rows: number[]) => void;
+    insertCols: (at: number, count: number) => void;
+    deleteCols: (cols: number[]) => void;
+  };
   // 出す行の並び（rows の中の位置）。絞り込みと並べ替えを当てた後のもの。
   order: number[];
   filters: Filters;
@@ -613,6 +621,40 @@ export function CsvTable({
     wasEditing.current = editing;
   }, [editing, editorRef]);
 
+  // 行の番号を右押ししたときのメニュー。範囲が複数の行にまたがり、押した行を含む
+  // なら、その行の数だけ足す・消す。見出しの行は消せず、その上にも足せない（絞り
+  // 込みは見出しの字で列を覚えているため）。
+  const [rowMenu, setRowMenu] = useState<{ row: number; x: number; y: number } | null>(null);
+  const rowMenuBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!rowMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rowMenuBox.current?.contains(e.target as Node)) setRowMenu(null);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setRowMenu(null);
+    };
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("keydown", onEsc, true);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("keydown", onEsc, true);
+    };
+  }, [rowMenu]);
+  const openRowMenu = (e: React.MouseEvent, row: number) => {
+    e.preventDefault();
+    const inside = many && range && (posOf.get(row) ?? -1) >= range.top && (posOf.get(row) ?? -1) <= range.bottom;
+    if (!inside) pickRow(row);
+    setRowMenu({ row, x: e.clientX, y: e.clientY });
+  };
+  const menuRows = () => {
+    if (!rowMenu) return [];
+    const p = posOf.get(rowMenu.row) ?? -1;
+    return many && range && p >= range.top && p <= range.bottom ? rangeRows() : [rowMenu.row];
+  };
+
   // 開いている絞り込みの小窓。押した ▽ の位置に出す。
   const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);
   const closeAsk = useCallback(() => setAsking(null), []);
@@ -736,6 +778,7 @@ export function CsvTable({
               className={cls("mg-csv-no", (sel?.row === 0 || (many && range?.top === 0)) && "is-on")}
               data-n={1}
               onClick={() => pickRow(0)}
+              onContextMenu={(e) => openRowMenu(e, 0)}
             />
             {head.map((v, i) => {
               const filtered = isActive(filters[i]);
@@ -799,6 +842,7 @@ export function CsvTable({
                 )}
                 data-n={r + 1}
                 onClick={() => pickRow(r)}
+                onContextMenu={(e) => openRowMenu(e, r)}
               />
               {rows[r].map((v, i) => (
                 <td
@@ -919,9 +963,88 @@ export function CsvTable({
                   },
                 ]
               : []),
+            ...(() => {
+              // 範囲が複数の列にまたがり、押した列を含むなら、その列の数だけ扱う。
+              const cols = many && range && asking.col >= range.left && asking.col <= range.right
+                ? rangeCols()
+                : [asking.col];
+              const n = cols.length;
+              const label = n > 1 ? `${n} 列` : "列";
+              return [
+                {
+                  label: `左に${label}を挿入`,
+                  onClick: () => {
+                    structure.insertCols(Math.min(...cols), n);
+                    closeAsk();
+                  },
+                },
+                {
+                  label: `右に${label}を挿入`,
+                  onClick: () => {
+                    structure.insertCols(Math.max(...cols) + 1, n);
+                    closeAsk();
+                  },
+                },
+                {
+                  label: `${label}を削除`,
+                  tone: "drop" as const,
+                  disabled: n >= head.length,
+                  onClick: () => {
+                    structure.deleteCols(cols);
+                    closeAsk();
+                  },
+                },
+              ];
+            })(),
           ]}
         />
       )}
+      {rowMenu &&
+        (() => {
+          const list = menuRows();
+          const body = list.filter((r) => r > 0);
+          const n = list.length;
+          const label = n > 1 ? `${n} 行` : "行";
+          const items = [
+            {
+              label: `上に${label}を挿入`,
+              disabled: list.includes(0),
+              run: () => structure.insertRows(Math.min(...list), n),
+            },
+            { label: `下に${label}を挿入`, run: () => structure.insertRows(Math.max(...list) + 1, n) },
+            {
+              label: `${label}を削除`,
+              drop: true,
+              disabled: body.length === 0,
+              run: () => structure.deleteRows(body),
+            },
+          ];
+          return (
+            <div
+              ref={rowMenuBox}
+              role="menu"
+              className="mg-pop mg-csv-rowmenu"
+              style={{ left: rowMenu.x, top: rowMenu.y }}
+            >
+              {items.map((it) => (
+                <button
+                  key={it.label}
+                  type="button"
+                  role="menuitem"
+                  className={cls("mg-csv-filter-act", it.drop && "is-drop")}
+                  disabled={it.disabled}
+                  onClick={() => {
+                    it.run();
+                    setRowMenu(null);
+                    focusEditor();
+                  }}
+                >
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       {peek && (
         <ValuePeek
           boxRef={peekBox}

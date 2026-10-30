@@ -2717,6 +2717,15 @@ body.mg-col-moving * {
   padding-top: 6px;
   border-top: 1px solid var(--mg-border);
 }
+/* 行の番号の右押しのメニュー。 */
+.mg-csv-rowmenu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  min-width: 168px;
+  flex-direction: column;
+  padding: 4px;
+}
 /* 列の操作（列を非表示・列を挿入・列を削除）。 */
 .mg-csv-filter-acts {
   display: flex;

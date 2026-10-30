@@ -1,6 +1,23 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { colsMoved, csvLines, csvRows, delimOf, moveColumn, setCell, setCells, type ColMap } from "../lib/csv";
+import {
+  colsDeleted,
+  colsInserted,
+  colsMoved,
+  colsUndeleted,
+  colsUninserted,
+  csvLines,
+  csvRows,
+  deleteColumns,
+  deleteRows,
+  delimOf,
+  insertColumns,
+  insertRows,
+  moveColumn,
+  setCell,
+  setCells,
+  type ColMap,
+} from "../lib/csv";
 import { isActive, loadView, moveStoredView, shownRows, storeView, type ColSort, type Filters } from "../lib/csvFilter";
 import { readText, writeFile } from "../lib/fsAccess";
 import {
@@ -144,6 +161,27 @@ export function CsvDoc({ abs }: { abs: string }) {
   const move = (from: number, to: number) => {
     if (text !== null) change(moveColumn(text, delim, from, to), colsMoved(from, to), colsMoved(to, from));
   };
+  // 行・列を足す・消す。行は rows の中の位置で指す。列を足す・消すときは、列に
+  // 付いているもの（幅・絞り込み・隠した列）も付け替える。消した列の幅や絞り込みは、
+  // ⌘Z で戻しても戻らない。
+  const structure = {
+    insertRows: (at: number, count: number) => {
+      if (text === null) return;
+      change(insertRows(text, delim, at, count));
+      setSel((was) => ({ row: at, col: was?.col ?? 0 }));
+    },
+    deleteRows: (list: number[]) => {
+      if (text === null || list.length === 0) return;
+      change(deleteRows(text, delim, list));
+      setSel((was) => ({ row: Math.max(1, Math.min(...list) - 1), col: was?.col ?? 0 }));
+    },
+    insertCols: (at: number, count: number) => {
+      if (text !== null) change(insertColumns(text, delim, at, count), colsInserted(at, count), colsUninserted(at, count));
+    },
+    deleteCols: (list: number[]) => {
+      if (text !== null && list.length) change(deleteColumns(text, delim, list), colsDeleted(list), colsUndeleted(list));
+    },
+  };
 
   const rows = useMemo(() => (text === null ? null : csvRows(text, delim)), [text, delim]);
   const lines = useMemo(
@@ -238,6 +276,7 @@ export function CsvDoc({ abs }: { abs: string }) {
               onUndo={undoLast}
               onRedo={redoLast}
               onMove={move}
+              structure={structure}
               order={order}
               filters={filters}
               sort={sort}
