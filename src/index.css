@@ -2265,8 +2265,8 @@ button.mg-sess-row.is-gone:hover {
   font-weight: 500;
   letter-spacing: 0.04em;
   text-align: center;
-  /* 右に ▾ の場所を取り、字を少し左へ寄せて ▾ と離す。 */
-  padding: 0 22px 0 6px;
+  /* 右の ▾ の場所と同じ幅を左にも取り、字は真ん中のまま ▾ と離す。 */
+  padding: 0 20px;
 }
 .mg-csv-table .mg-csv-letters th.is-on,
 .mg-csv-table th.mg-csv-no.is-on {
@@ -2367,6 +2367,18 @@ body.mg-col-resizing * {
 }
 .mg-csv-table tr.is-even > td.is-sel {
   background: color-mix(in srgb, var(--mg-accent) 7%, var(--mg-bg));
+}
+/* 範囲に入っている升目は薄く塗り、外周に枠を重ねる。 */
+.mg-csv-table :is(td, th).is-in,
+.mg-csv-table tr.is-even > td.is-in {
+  background: color-mix(in srgb, var(--mg-accent) 9%, var(--mg-bg));
+}
+.mg-csv-range {
+  position: absolute;
+  z-index: 0;
+  box-sizing: border-box;
+  border: 1.5px solid var(--mg-accent);
+  pointer-events: none;
 }
 /* 表と、升目の中の欄・広げる箱を包む。キーはここで受ける。 */
 .mg-csv-grid {
