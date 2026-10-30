@@ -198,3 +198,34 @@ export function setCell(text: string, delim: string, row: number, col: number, v
   const pad = delim.repeat(col - span.cells.length + 1);
   return text.slice(0, span.end) + pad + encodeValue(value, delim, eol, false) + text.slice(span.end);
 }
+
+// 列 from を動かしたあとの、元の列 i の位置。
+export function movedIndex(i: number, from: number, to: number): number {
+  if (i === from) return to;
+  if (from < to && i > from && i <= to) return i - 1;
+  if (from > to && i >= to && i < from) return i + 1;
+  return i;
+}
+
+// 列 from を位置 to へ動かした原文。値の原文（囲みを含む）はそのまま並べ替え、
+// 行の間の改行の字と末尾の改行は元のまま残す。列の足りない短い行は、空の値で
+// 埋めてから並べ替える。
+export function moveColumn(text: string, delim: string, from: number, to: number): string {
+  if (from === to) return text;
+  const spans = csvSpans(text, delim);
+  const width = spans.reduce((m, r) => Math.max(m, r.cells.length), 0);
+  if (from >= width || to >= width) return text;
+  let out = "";
+  let at = 0;
+  for (const row of spans) {
+    const start = row.cells[0][0];
+    out += text.slice(at, start);
+    const values = row.cells.map(([s, e]) => text.slice(s, e));
+    while (values.length < width) values.push("");
+    const [moved] = values.splice(from, 1);
+    values.splice(to, 0, moved);
+    out += values.join(delim);
+    at = row.end;
+  }
+  return out + text.slice(at);
+}

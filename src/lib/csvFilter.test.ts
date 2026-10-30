@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { columnValues, loadView, numericColumn, shownRows, storeView, type Filters } from "./csvFilter";
+import {
+  columnValues,
+  loadView,
+  moveStoredView,
+  numericColumn,
+  shownRows,
+  storeView,
+  type Filters,
+} from "./csvFilter";
 
 // 列ごとの絞り込みと並べ替え。返すのは見出しを除いた行の、元の位置。
 
@@ -106,5 +114,20 @@ describe("ファイルごとに覚える形", () => {
     const kept = loadView(stored, ["名前", "部署", "単価"]);
     expect(Object.keys(kept.filters)).toEqual(["1"]);
     expect(kept.sort).toBeNull();
+  });
+});
+
+describe("列を動かしたときの付け替え", () => {
+  it("絞り込みと並べ替えの列が付いて動き、見出しが合うので読み戻せる", () => {
+    const stored = storeView(
+      { 0: { text: "佐", picked: null, min: null, max: null } },
+      { col: 2, dir: "asc" },
+      ["名前", "部署", "金額"],
+    )!;
+    // 名前を末尾へ → 部署・金額・名前
+    const moved = moveStoredView(stored, (i) => [2, 0, 1][i]);
+    const back = loadView(moved, ["部署", "金額", "名前"]);
+    expect(Object.keys(back.filters)).toEqual(["2"]);
+    expect(back.sort).toEqual({ col: 1, dir: "asc" });
   });
 });

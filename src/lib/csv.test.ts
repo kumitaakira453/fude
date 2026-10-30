@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { colName, csvLines, csvRows, delimOf, setCell } from "./csv";
+import { colName, csvLines, csvRows, delimOf, movedIndex, moveColumn, setCell } from "./csv";
 
 describe("区切りの字", () => {
   it("拡張子で決める", () => {
@@ -122,5 +122,34 @@ describe("値を 1 つ書き換える", () => {
 
   it("無い行は原文のまま", () => {
     expect(setCell("a\n", ",", 3, 0, "x")).toBe("a\n");
+  });
+});
+
+describe("列を動かす", () => {
+  it("左へ・右へ動かし、値の原文と改行の字・末尾の改行はそのまま", () => {
+    const text = 'a,b,c\r\n1,"2, 二",3\r\n';
+    expect(moveColumn(text, ",", 0, 2)).toBe('b,c,a\r\n"2, 二",3,1\r\n');
+    expect(moveColumn(text, ",", 2, 0)).toBe('c,a,b\r\n3,1,"2, 二"\r\n');
+  });
+
+  it("囲みの中の改行は値の一部として一緒に動く", () => {
+    const text = 'a,b\n"1\n2",3\n4,5';
+    expect(moveColumn(text, ",", 1, 0)).toBe('b,a\n3,"1\n2"\n5,4');
+  });
+
+  it("短い行は空の値で埋めてから動かす", () => {
+    expect(moveColumn("a,b,c\n1\n", ",", 2, 0)).toBe("c,a,b\n,1,\n");
+  });
+
+  it("TSV でも動かせ、同じ位置なら原文のまま", () => {
+    expect(moveColumn("a\tb\n1\t2\n", "\t", 1, 0)).toBe("b\ta\n2\t1\n");
+    expect(moveColumn("a,b\n", ",", 1, 1)).toBe("a,b\n");
+  });
+
+  it("動かしたあとの列の位置", () => {
+    // A B C D の B を 3 番目（D の位置）へ → A C D B
+    expect([0, 1, 2, 3].map((i) => movedIndex(i, 1, 3))).toEqual([0, 3, 1, 2]);
+    // D を 1 番目へ → A D B C
+    expect([0, 1, 2, 3].map((i) => movedIndex(i, 3, 1))).toEqual([0, 2, 3, 1]);
   });
 });

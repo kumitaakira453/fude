@@ -1,10 +1,20 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
-import { colName, CSV_TONES, csvLines, csvRows, delimOf, setCell } from "../lib/csv";
+import {
+  colName,
+  CSV_TONES,
+  csvLines,
+  csvRows,
+  delimOf,
+  movedIndex,
+  moveColumn,
+  setCell,
+} from "../lib/csv";
 import {
   isActive,
   loadView,
+  moveStoredView,
   shownRows,
   storeView,
   type ColFilter,
@@ -36,6 +46,8 @@ import { ValuePeek } from "./ValuePeek";
 
 // 表の行の高さ（px）。index.css の .mg-csv-table と対にする。
 const TABLE_ROW = 26;
+// 列を掴んで動かすときのデータの型。タブや木のドラッグとは混ぜない。
+const COL_DRAG = "application/x-fude-csvcol";
 
 export function CsvDoc({ abs }: { abs: string }) {
   const store = useStore();
@@ -50,8 +62,9 @@ export function CsvDoc({ abs }: { abs: string }) {
   // ディスクにあるはずの中身（読んだもの・自分が書いたもの）。読み直したものが
   // これと同じなら、自分の保存が返ってきただけなので組み直さない。
   const savedRef = useRef<string | null>(null);
-  // このファイルを開いている間の書き換えの前の原文。⌘Z で 1 つずつ戻す。
-  const undo = useRef<string[]>([]);
+  // このファイルを開いている間の書き換えの前の原文。⌘Z で 1 つずつ戻す。列を
+  // 動かしたときは、列幅・絞り込みを元の列へ付け替える手順も一緒に積む。
+  const undo = useRef<{ text: string; restore?: () => void }[]>([]);
   const [sel, setSel] = useState<Cell | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const barRef = useRef<HTMLTextAreaElement>(null);
@@ -98,12 +111,35 @@ export function CsvDoc({ abs }: { abs: string }) {
     if (text === null) return;
     const next = setCell(text, delim, row, col, value);
     if (next === text) return;
-    undo.current.push(text);
+    undo.current.push({ text });
     write(next);
   };
   const undoLast = () => {
     const prev = undo.current.pop();
-    if (prev !== undefined) write(prev);
+    if (!prev) return;
+    write(prev.text);
+    prev.restore?.();
+  };
+
+  // 列を動かしたら、列に付いているもの（幅・絞り込み・選んでいる升目）も付け替える。
+  const remap = (where: (col: number) => number) => {
+    store.set(csvWidthsAtom, (was) => {
+      const mine = was[abs];
+      if (!mine) return was;
+      const next: Record<number, number> = {};
+      for (const [c, w] of Object.entries(mine)) next[where(Number(c))] = w;
+      return { ...was, [abs]: next };
+    });
+    store.set(csvFiltersAtom, (was) => (was[abs] ? { ...was, [abs]: moveStoredView(was[abs], where) } : was));
+    setSel((was) => was && { row: was.row, col: where(was.col) });
+  };
+  const move = (from: number, to: number) => {
+    if (text === null) return;
+    const next = moveColumn(text, delim, from, to);
+    if (next === text) return;
+    undo.current.push({ text, restore: () => remap((i) => movedIndex(i, to, from)) });
+    write(next);
+    remap((i) => movedIndex(i, from, to));
   };
 
   const rows = useMemo(() => (text === null ? null : csvRows(text, delim)), [text, delim]);
@@ -163,6 +199,7 @@ export function CsvDoc({ abs }: { abs: string }) {
               sel={cell}
               onSelect={setSel}
               onUndo={undoLast}
+              onMove={move}
               onEditCell={() => barRef.current?.focus()}
               order={order}
               filters={filters}
@@ -232,6 +269,7 @@ function CsvTable({
   onSelect: setSel,
   onUndo,
   onEditCell,
+  onMove,
   order,
   filters,
   sort,
@@ -247,6 +285,8 @@ function CsvTable({
   onUndo: () => void;
   // F2。上の欄へ移って値を直す。
   onEditCell: () => void;
+  // 列 from を位置 to へ動かす（見出しを掴んで落とす）。
+  onMove: (from: number, to: number) => void;
   // 出す行の並び（rows の中の位置）。絞り込みと並べ替えを当てた後のもの。
   order: number[];
   filters: Filters;
@@ -399,6 +439,46 @@ function CsvTable({
     return () => window.removeEventListener("mousedown", onDown, true);
   }, [sel, box, setSel]);
 
+  // 列の名前か見出しを掴んで、左右へ動かす。落とす先は、指している列の
+  // 真ん中より左ならその手前、右ならその後ろ。
+  const [dragCol, setDragCol] = useState<number | null>(null);
+  const [drop, setDrop] = useState<{ col: number; side: "before" | "after" } | null>(null);
+  const sideOf = (e: React.DragEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return e.clientX < r.left + r.width / 2 ? "before" : "after";
+  };
+  const dragProps = (i: number) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(COL_DRAG, String(i));
+      e.dataTransfer.effectAllowed = "move";
+      setDragCol(i);
+    },
+    onDragEnd: () => {
+      setDragCol(null);
+      setDrop(null);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(COL_DRAG)) return;
+      e.preventDefault();
+      const side = sideOf(e);
+      setDrop((was) => (was?.col === i && was.side === side ? was : { col: i, side }));
+    },
+    onDrop: (e: React.DragEvent) => {
+      const from = Number(e.dataTransfer.getData(COL_DRAG));
+      setDragCol(null);
+      setDrop(null);
+      if (Number.isNaN(from)) return;
+      e.preventDefault();
+      const gap = sideOf(e) === "before" ? i : i + 1;
+      onMove(from, gap > from ? gap - 1 : gap);
+    },
+  });
+  const dragClass = (i: number) =>
+    [drop?.col === i ? `is-drop-${drop.side}` : "", dragCol === i ? "is-dragging" : ""]
+      .filter(Boolean)
+      .join(" ");
+
   // 開いている絞り込みの小窓。押した ▽ の位置に出す。
   const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);
   const closeAsk = useCallback(() => setAsking(null), []);
@@ -428,7 +508,12 @@ function CsvTable({
           <tr className="mg-csv-letters">
             <th className="mg-csv-no" />
             {head.map((_, i) => (
-              <th key={i} className={`mg-csv-c${i % CSV_TONES}`} data-n={colName(i)}>
+              <th
+                key={i}
+                className={`mg-csv-c${i % CSV_TONES} ${dragClass(i)}`.trim()}
+                data-n={colName(i)}
+                {...dragProps(i)}
+              >
                 <span
                   className="mg-csv-grip"
                   onMouseDown={(e) => resize(e, i)}
@@ -452,7 +537,13 @@ function CsvTable({
                     : "arrow_downward"
                   : "filter_list";
               return (
-                <th key={i} data-r={0} data-c={i} className={on(0, i)}>
+                <th
+                  key={i}
+                  data-r={0}
+                  data-c={i}
+                  className={[on(0, i), dragClass(i)].filter(Boolean).join(" ") || undefined}
+                  {...dragProps(i)}
+                >
                   <span className="mg-csv-hcell">
                     <span className="mg-csv-hname">{v}</span>
                     <button

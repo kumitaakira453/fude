@@ -2299,6 +2299,16 @@ body.mg-col-resizing * {
 .mg-csv-table :is(td, th).is-sel {
   box-shadow: inset 0 0 0 2px var(--mg-accent);
 }
+/* CSV の表で列を掴んで動かすとき。落とす先の境目に縦の線を引く。 */
+.mg-csv-table th.is-drop-before {
+  box-shadow: inset 2px 0 0 var(--mg-accent);
+}
+.mg-csv-table th.is-drop-after {
+  box-shadow: inset -2px 0 0 var(--mg-accent);
+}
+.mg-csv-table th.is-dragging {
+  opacity: 0.45;
+}
 /* 升目の全文の小窓。長い値（ログの JSON など）を折り返して見せる。 */
 .mg-csv-peek {
   position: fixed;

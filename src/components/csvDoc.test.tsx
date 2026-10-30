@@ -426,3 +426,87 @@ describe("上の欄で値を直す", () => {
     expect(document.activeElement).toBe(input(el));
   });
 });
+
+// 列の名前か見出しを掴んで落とすと、その順でファイルを書き換える。
+describe("列を掴んで動かす", () => {
+  const table = async (text: string) => {
+    content = text;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  // jsdom には DataTransfer が無いので、使う分だけの代わりを渡す。
+  const data = new Map<string, string>();
+  const transfer = {
+    setData: (k: string, v: string) => data.set(k, v),
+    getData: (k: string) => data.get(k) ?? "",
+    get types() {
+      return [...data.keys()];
+    },
+    effectAllowed: "",
+  };
+  const fire = (el: Element, type: string, clientX = 0) =>
+    act(() => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(e, { dataTransfer: transfer, clientX });
+      el.dispatchEvent(e);
+    });
+  const heads = (el: HTMLElement) =>
+    [...el.querySelectorAll<HTMLElement>(".mg-csv-head th:not(.mg-csv-no)")];
+  // 列 from の見出しを、列 onto の左半分（before）か右半分（after）に落とす。
+  const drag = (el: HTMLElement, from: number, onto: number, side: "before" | "after") => {
+    data.clear();
+    fire(heads(el)[from], "dragstart");
+    // 試験の中では升目の幅が 0 なので、左に置けば手前、0 なら後ろ。
+    const x = side === "before" ? -1 : 0;
+    fire(heads(el)[onto], "dragover", x);
+    fire(heads(el)[onto], "drop", x);
+  };
+  const names = (el: HTMLElement) => heads(el).map((h) => h.querySelector(".mg-csv-hname")!.textContent);
+
+  it("見出しを落とした位置へ列が動き、その順で原文を書き換える", async () => {
+    const { el } = await table('名前,部署,金額\r\n"佐藤",営業,1200\r\n');
+    drag(el, 0, 2, "after");
+    expect(names(el)).toEqual(["部署", "金額", "名前"]);
+    expect(written).toEqual(['部署,金額,名前\r\n営業,1200,"佐藤"\r\n']);
+    drag(el, 2, 0, "before");
+    expect(names(el)).toEqual(["名前", "部署", "金額"]);
+  });
+
+  it("列幅と絞り込みが列に付いて動き、⌘Z で原文と一緒に戻る", async () => {
+    const { el, store } = await table("名前,部署,金額\n佐藤,営業,1200\n鈴木,開発,300\n");
+    act(() => {
+      store.set(csvWidthsAtom, { "/本/表.csv": { 0: 200 } });
+      store.set(csvFiltersAtom, {
+        "/本/表.csv": {
+          filters: { 1: { head: "部署", text: "", picked: ["営業"], min: null, max: null } },
+          sort: null,
+        },
+      });
+    });
+    expect(el.querySelectorAll("tbody tr").length).toBe(1);
+
+    drag(el, 0, 2, "after");
+    expect(store.get(csvWidthsAtom)["/本/表.csv"]).toEqual({ 2: 200 });
+    expect(Object.keys(store.get(csvFiltersAtom)["/本/表.csv"].filters)).toEqual(["0"]);
+    // 絞り込みは「部署」の列に付いたまま効いている。
+    expect(el.querySelectorAll("tbody tr").length).toBe(1);
+
+    await act(async () => {
+      el.querySelector("table")!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    expect(names(el)).toEqual(["名前", "部署", "金額"]);
+    expect(written.at(-1)).toBe("名前,部署,金額\n佐藤,営業,1200\n鈴木,開発,300\n");
+    expect(store.get(csvWidthsAtom)["/本/表.csv"]).toEqual({ 0: 200 });
+    expect(Object.keys(store.get(csvFiltersAtom)["/本/表.csv"].filters)).toEqual(["1"]);
+  });
+
+  it("同じ位置に落としても書かない", async () => {
+    const { el } = await table("a,b\n1,2\n");
+    drag(el, 0, 0, "after");
+    drag(el, 0, 1, "before");
+    expect(written).toEqual([]);
+  });
+});
