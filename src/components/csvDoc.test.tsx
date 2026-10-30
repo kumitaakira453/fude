@@ -3,7 +3,7 @@ import { createStore, Provider } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { csvFiltersAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
+import { csvFiltersAtom, csvHiddenAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
 import { CsvDoc } from "./CsvDoc";
 
 // CSV は列ごとの色の原文で開き、釦で表に替わる。表では 1 行目をヘッダー行に置く。
@@ -39,6 +39,7 @@ async function show() {
   store.set(csvViewAtom, "rainbow");
   store.set(csvWidthsAtom, {});
   store.set(csvFiltersAtom, {});
+  store.set(csvHiddenAtom, {});
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -708,5 +709,89 @@ describe("升目で字を打って直す", () => {
     pickAt(el, 2, 1);
     expect([...el.querySelectorAll(".mg-csv-letters th.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["B"]);
     expect([...el.querySelectorAll("th.mg-csv-no.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["3"]);
+  });
+});
+
+// 列の名前を右押しするか ▾ から、列を隠す。境目の印で出す。ファイルには書かない。
+describe("列を非表示にする", () => {
+  const table = async (text = "名前,部署,金額\n佐藤,営業,1200\n") => {
+    content = text;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const letters = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(".mg-csv-letters th:not(.mg-csv-no)")];
+  const shownNames = (el: HTMLElement) =>
+    letters(el)
+      .filter((t) => !t.classList.contains("is-hidden"))
+      .map((t) => t.getAttribute("data-n"));
+  const menuOn = (el: HTMLElement, col: number) =>
+    act(() => {
+      letters(el)[col].dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+    });
+  const action = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>(".mg-csv-filter-act")].find((b) => b.textContent === label);
+  const pickAt = (el: HTMLElement, r: number, c: number) =>
+    act(() => {
+      el.querySelector(`[data-r="${r}"][data-c="${c}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+  it("右押しの「列を非表示」で隠し、列の名前は元のまま飛ぶ。幅は 0 になり、ファイルは書かない", async () => {
+    const { el, store } = await table();
+    menuOn(el, 1);
+    act(() => action("列を非表示")!.click());
+    expect(shownNames(el)).toEqual(["A", "C"]);
+    expect(el.querySelectorAll<HTMLElement>("col")[2].style.width).toBe("0px");
+    expect(store.get(csvHiddenAtom)).toEqual({ "/本/表.csv": [1] });
+    expect(written).toEqual([]);
+  });
+
+  it("境目の印を押すと出し、「非表示の列をすべて表示」で全部出す", async () => {
+    const { el } = await table();
+    menuOn(el, 1);
+    act(() => action("列を非表示")!.click());
+    const mark = el.querySelector<HTMLButtonElement>(".mg-csv-unhide")!;
+    expect(mark.getAttribute("data-tip")).toBe("隠した列を表示（B）");
+    act(() => mark.click());
+    expect(shownNames(el)).toEqual(["A", "B", "C"]);
+
+    menuOn(el, 1);
+    act(() => action("列を非表示")!.click());
+    menuOn(el, 2);
+    act(() => action("非表示の列をすべて表示")!.click());
+    expect(shownNames(el)).toEqual(["A", "B", "C"]);
+  });
+
+  it("最後の 1 列は隠せない", async () => {
+    const { el } = await table("a,b\n1,2\n");
+    menuOn(el, 0);
+    act(() => action("列を非表示")!.click());
+    menuOn(el, 1);
+    expect(action("列を非表示")!.disabled).toBe(true);
+  });
+
+  it("矢印の左右は隠した列を飛ばし、選んでいる列を隠すと隣へ移る", async () => {
+    const { el } = await table();
+    pickAt(el, 1, 0);
+    menuOn(el, 1);
+    act(() => action("列を非表示")!.click());
+    const ed = el.querySelector(".mg-csv-editor")!;
+    act(() => {
+      ed.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    });
+    expect(el.querySelector(".is-sel")!.getAttribute("data-c")).toBe("2");
+    menuOn(el, 2);
+    act(() => action("列を非表示")!.click());
+    expect(el.querySelector(".is-sel")!.getAttribute("data-c")).toBe("0");
+  });
+
+  it("別のファイルへ移って戻っても隠したまま", async () => {
+    const { el, store } = await table();
+    menuOn(el, 1);
+    act(() => action("列を非表示")!.click());
+    await reopen(store, "/本/別.csv");
+    expect(shownNames(el)).toEqual(["A", "B", "C"]);
+    await reopen(store, "/本/表.csv");
+    expect(shownNames(el)).toEqual(["A", "C"]);
   });
 });

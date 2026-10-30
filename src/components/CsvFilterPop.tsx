@@ -28,6 +28,7 @@ export function CsvFilterPop({
   onFilter,
   onSort,
   onClose,
+  actions = [],
 }: {
   rows: string[][];
   col: number;
@@ -38,6 +39,8 @@ export function CsvFilterPop({
   onFilter: (next: ColFilter | null) => void;
   onSort: (next: ColSort | null) => void;
   onClose: () => void;
+  // 下に並べる列の操作（列を非表示・列を挿入など）。
+  actions?: { label: string; onClick: () => void; disabled?: boolean; tone?: "drop" }[];
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: anchor.left, top: anchor.bottom + 4 });
@@ -211,6 +214,21 @@ export function CsvFilterPop({
           この列の条件を消す
         </button>
       </div>
+      {actions.length > 0 && (
+        <div className="mg-csv-filter-acts" role="group" aria-label="列の操作">
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              className={`mg-csv-filter-act${a.tone === "drop" ? " is-drop" : ""}`}
+              disabled={a.disabled}
+              onClick={a.onClick}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -224,6 +224,9 @@ export const csvFiltersAtom = atomWithStorage<Record<string, StoredCsvView>>(
   "fude:csvfilters",
   {},
 );
+// CSV の表で隠した列の番号。ファイルの道筋ごとに覚える。見た目だけの設定で、
+// ファイルには書かない。
+export const csvHiddenAtom = atomWithStorage<Record<string, number[]>>("fude:csvhidden", {});
 // 一覧から外すもの。書き方は .gitignore と同じで、そのまま走査へ渡す。外した
 // ものは走査に入らないので、索引にも検索にも載らない。
 //

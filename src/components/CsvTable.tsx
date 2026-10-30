@@ -4,7 +4,7 @@ import { useVisibleRows } from "../hooks/useVisibleRows";
 import { colName } from "../lib/csv";
 import { isActive, numberOf, type ColFilter, type ColSort, type Filters } from "../lib/csvFilter";
 import { measureText, widestText } from "../lib/textWidth";
-import { csvWidthsAtom } from "../state/atoms";
+import { csvHiddenAtom, csvWidthsAtom } from "../state/atoms";
 import { CsvFilterPop } from "./CsvFilterPop";
 import { Icon } from "./Icon";
 import { ValuePeek } from "./ValuePeek";
@@ -112,7 +112,38 @@ export function CsvTable({
   const [saved, setSaved] = useAtom(csvWidthsAtom);
   const [drag, setDrag] = useState<{ col: number; w: number } | null>(null);
   const mine = saved[abs];
-  const widths = auto.map((w, c) => (drag?.col === c ? drag.w : (mine?.[c] ?? w)));
+  // 隠した列は幅を 0 にして描く。列の境目・送る位置・掴んで動かす計算はそのまま使える。
+  const [hiddenAll, setHiddenAll] = useAtom(csvHiddenAtom);
+  const hidden = useMemo(
+    () => new Set((hiddenAll[abs] ?? []).filter((c) => c < head.length)),
+    [hiddenAll, abs, head.length],
+  );
+  const widths = auto.map((w, c) => (hidden.has(c) ? 0 : drag?.col === c ? drag.w : (mine?.[c] ?? w)));
+  const setHidden = (next: Set<number>) =>
+    setHiddenAll(({ [abs]: _, ...rest }) => (next.size ? { ...rest, [abs]: [...next].sort((a, b) => a - b) } : rest));
+  // 隠す。選んでいる列を隠したら、右隣（無ければ左隣）の見えている列へ移す。
+  const hide = (cols: number[]) => {
+    const next = new Set([...hidden, ...cols]);
+    if (next.size >= head.length) return;
+    setHidden(next);
+    if (sel && next.has(sel.col)) {
+      const right = head.findIndex((_, c) => c > sel.col && !next.has(c));
+      const left = [...head.keys()].reverse().find((c) => c < sel.col && !next.has(c));
+      setSel({ row: sel.row, col: right >= 0 ? right : (left ?? 0) });
+    }
+  };
+  const unhide = (cols: number[]) => setHidden(new Set([...hidden].filter((c) => !cols.includes(c))));
+  // 隠した列のまとまり（続いている番号）。境目の印に使う。
+  const hiddenRuns = useMemo(() => {
+    const runs: number[][] = [];
+    for (let c = 0; c < head.length; c++) {
+      if (!hidden.has(c)) continue;
+      const last = runs[runs.length - 1];
+      if (last && last[last.length - 1] === c - 1) last.push(c);
+      else runs.push([c]);
+    }
+    return runs;
+  }, [hidden, head.length]);
   const resize = (e: React.MouseEvent, col: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -206,10 +237,17 @@ export function CsvTable({
   const step = (from: Cell, dr: number, dc: number): Cell => {
     const at = from.row === 0 ? -1 : order.indexOf(from.row);
     const to = Math.min(order.length - 1, Math.max(-1, at + dr));
-    return {
-      row: to < 0 ? 0 : order[to],
-      col: Math.min(head.length - 1, Math.max(0, from.col + dc)),
-    };
+    // 左右は隠した列を飛ばす。端まで見えている列が無ければ動かない。
+    let col = from.col;
+    if (dc !== 0) {
+      for (let c = from.col + dc; c >= 0 && c < head.length; c += dc) {
+        if (!hidden.has(c)) {
+          col = c;
+          break;
+        }
+      }
+    }
+    return { row: to < 0 ? 0 : order[to], col };
   };
   const go = (dr: number, dc: number) => {
     if (!sel) return;
@@ -443,6 +481,37 @@ export function CsvTable({
   const closeAsk = useCallback(() => setAsking(null), []);
 
   const on = (r: number, c: number) => (sel && sel.row === r && sel.col === c ? "is-sel" : "");
+  // 列 i の名前の升目に置く、隠した列を出す印。隠したまとまりの右隣の列の左端に
+  // 置き、まとまりが末尾にあるときは左隣の列の右端に置く。
+  const unhideMark = (i: number) => {
+    if (hidden.has(i)) return null;
+    const before = hiddenRuns.find((run) => run[run.length - 1] === i - 1);
+    const after = hiddenRuns.find((run) => run[0] === i + 1 && run[run.length - 1] === head.length - 1);
+    const mark = (run: number[], side: "is-left" | "is-right") => {
+      const names = run.length > 1 ? `${colName(run[0])}〜${colName(run[run.length - 1])}` : colName(run[0]);
+      return (
+        <button
+          type="button"
+          className={`mg-csv-unhide ${side}`}
+          data-tip={`隠した列を表示（${names}）`}
+          aria-label={`隠した列を表示（${names}）`}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            unhide(run);
+          }}
+        >
+          ◂▸
+        </button>
+      );
+    };
+    return (
+      <>
+        {before && mark(before, "is-left")}
+        {after && mark(after, "is-right")}
+      </>
+    );
+  };
   const cls = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(" ") || undefined;
   const peek = peekOn ? sel : null;
 
@@ -472,11 +541,16 @@ export function CsvTable({
             {head.map((_, i) => (
               <th
                 key={i}
-                className={cls(sel?.col === i && "is-on")}
+                className={cls(sel?.col === i && "is-on", hidden.has(i) && "is-hidden")}
                 data-n={colName(i)}
                 data-col={i}
                 onMouseDown={(e) => grab(e, i)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setAsking({ col: i, at: new DOMRect(e.clientX, e.clientY, 0, 0) });
+                }}
               >
+                {unhideMark(i)}
                 <button
                   type="button"
                   className={cls("mg-csv-colmenu", asking?.col === i && "is-open")}
@@ -515,7 +589,7 @@ export function CsvTable({
                   key={i}
                   data-r={0}
                   data-c={i}
-                  className={cls(on(0, i))}
+                  className={cls(on(0, i), hidden.has(i) && "is-hidden")}
                   onMouseDown={(e) => grab(e, i)}
                 >
                   <span className="mg-csv-hcell">
@@ -554,7 +628,12 @@ export function CsvTable({
             <tr key={r} className={(start + n) % 2 === 1 ? "is-even" : undefined}>
               <th className={cls("mg-csv-no", sel?.row === r && "is-on")} data-n={r + 1} />
               {rows[r].map((v, i) => (
-                <td key={i} data-r={r} data-c={i} className={cls(on(r, i), numberOf(v) !== null && "is-num")}>
+                <td
+                  key={i}
+                  data-r={r}
+                  data-c={i}
+                  className={cls(on(r, i), numberOf(v) !== null && "is-num", hidden.has(i) && "is-hidden")}
+                >
                   {v}
                 </td>
               ))}
@@ -627,6 +706,27 @@ export function CsvTable({
           onFilter={(next) => onFilter(asking.col, next)}
           onSort={onSort}
           onClose={closeAsk}
+          actions={[
+            {
+              label: "列を非表示",
+              disabled: hidden.size + 1 >= head.length,
+              onClick: () => {
+                hide([asking.col]);
+                closeAsk();
+              },
+            },
+            ...(hidden.size > 0
+              ? [
+                  {
+                    label: "非表示の列をすべて表示",
+                    onClick: () => {
+                      setHidden(new Set());
+                      closeAsk();
+                    },
+                  },
+                ]
+              : []),
+          ]}
         />
       )}
       {peek && (

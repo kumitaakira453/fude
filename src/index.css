@@ -2698,6 +2698,66 @@ body.mg-col-moving * {
   padding-top: 6px;
   border-top: 1px solid var(--mg-border);
 }
+/* 列の操作（列を非表示・列を挿入・列を削除）。 */
+.mg-csv-filter-acts {
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-csv-filter-act {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--mg-r1);
+  color: var(--mg-fg-dim);
+  font-size: 12px;
+  text-align: left;
+}
+.mg-csv-filter-act:hover:not(:disabled) {
+  background: var(--mg-hover);
+  color: var(--mg-fg);
+}
+.mg-csv-filter-act:disabled {
+  color: var(--mg-muted);
+  opacity: 0.6;
+}
+.mg-csv-filter-act.is-drop {
+  color: var(--mg-danger);
+}
+/* 隠した列。幅を 0 にして描く（列の位置の計算をそのまま使う）。 */
+.mg-csv-table :is(th, td).is-hidden {
+  padding: 0;
+  border-right: 0;
+  visibility: hidden;
+}
+/* 隠した列があった境目の印。押すと、そのまとまりを出す。 */
+.mg-csv-unhide {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  place-items: center;
+  border: 1px solid var(--mg-border);
+  border-radius: 4px;
+  background: var(--mg-panel);
+  color: var(--mg-muted);
+  font-size: 8px;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.mg-csv-unhide.is-left {
+  left: 2px;
+}
+.mg-csv-unhide.is-right {
+  right: 2px;
+}
+.mg-csv-unhide:hover {
+  border-color: var(--mg-accent);
+  color: var(--mg-accent);
+}
 /* チェックの印は一覧の行を指したときにアクセント寄りの枠にする（フォルダを
    選ぶ画面と同じ）。 */
 .mg-csv-filter-row:hover .mg-check:not(.is-on) {

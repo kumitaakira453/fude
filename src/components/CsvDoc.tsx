@@ -6,6 +6,7 @@ import { readText, writeFile } from "../lib/fsAccess";
 import {
   assetVersionAtom,
   csvFiltersAtom,
+  csvHiddenAtom,
   csvViewAtom,
   csvWidthsAtom,
   savingCountAtom,
@@ -128,6 +129,13 @@ export function CsvDoc({ abs }: { abs: string }) {
       return { ...was, [abs]: next };
     });
     store.set(csvFiltersAtom, (was) => (was[abs] ? { ...was, [abs]: moveStoredView(was[abs], where) } : was));
+    store.set(csvHiddenAtom, (was) => {
+      const mine = was[abs];
+      if (!mine) return was;
+      const next = mine.map(where).filter((c): c is number => c !== null);
+      const { [abs]: _, ...rest } = was;
+      return next.length ? { ...rest, [abs]: next } : rest;
+    });
     setSel((was) => {
       const col = was && where(was.col);
       return was && col !== null ? { row: was.row, col } : null;
