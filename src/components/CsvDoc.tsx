@@ -1,7 +1,7 @@
-import { useAtom, useAtomValue } from "jotai";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAtom, useAtomValue, useStore } from "jotai";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
-import { colName, CSV_TONES, csvLines, csvRows, delimOf } from "../lib/csv";
+import { colName, CSV_TONES, csvLines, csvRows, delimOf, setCell } from "../lib/csv";
 import {
   isActive,
   loadView,
@@ -11,9 +11,16 @@ import {
   type ColSort,
   type Filters,
 } from "../lib/csvFilter";
-import { readText } from "../lib/fsAccess";
+import { readText, writeFile } from "../lib/fsAccess";
 import { measureText, widestText } from "../lib/textWidth";
-import { assetVersionAtom, csvFiltersAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
+import {
+  assetVersionAtom,
+  csvFiltersAtom,
+  csvViewAtom,
+  csvWidthsAtom,
+  savingCountAtom,
+} from "../state/atoms";
+import { CsvCellBar } from "./CsvCellBar";
 import { CsvFilterPop } from "./CsvFilterPop";
 import { Icon } from "./Icon";
 import { SourceView } from "./SourceView";
@@ -22,7 +29,8 @@ import { ValuePeek } from "./ValuePeek";
 // CSV・TSV を読む。開いたときは原文を列ごとの色で出し、釦か ⌘⇧V で
 // 表（Excel の見た目）に替える。どちらで見るかは全体で 1 つ覚える。
 //
-// 書き換えはしない（ほかの字のファイルと同じく読む面だけ）。
+// 表では、上の欄で選んだ升目の値を直せる。書き戻すのはその値の原文だけで、
+// ほかの値の囲みや改行の字は変えない（setCell）。
 //
 // どちらの見た目も、組むのは見えている行とその前後だけ（useVisibleRows）。
 
@@ -30,24 +38,73 @@ import { ValuePeek } from "./ValuePeek";
 const TABLE_ROW = 26;
 
 export function CsvDoc({ abs }: { abs: string }) {
+  const store = useStore();
   const version = useAtomValue(assetVersionAtom);
   const [view, setView] = useAtom(csvViewAtom);
   const [text, setText] = useState<string | null>(null);
   const [lost, setLost] = useState(false);
+  const [failed, setFailed] = useState(false);
   const delim = delimOf(abs) ?? ",";
+  const textRef = useRef(text);
+  textRef.current = text;
+  // ディスクにあるはずの中身（読んだもの・自分が書いたもの）。読み直したものが
+  // これと同じなら、自分の保存が返ってきただけなので組み直さない。
+  const savedRef = useRef<string | null>(null);
+  // このファイルを開いている間の書き換えの前の原文。⌘Z で 1 つずつ戻す。
+  const undo = useRef<string[]>([]);
+  const [sel, setSel] = useState<Cell | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const barRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setText(null);
+    setSel(null);
+    setFailed(false);
+    savedRef.current = null;
+    undo.current = [];
+  }, [abs]);
 
   useEffect(() => {
     let alive = true;
-    setText(null);
     setLost(false);
     void readText(abs).then(
-      (read) => alive && setText(read),
+      (read) => {
+        if (!alive || read === savedRef.current || read === textRef.current) return;
+        // ほかで書き換えられた。手元の戻し先はその前の中身なので捨てる。
+        if (textRef.current !== null) undo.current = [];
+        savedRef.current = read;
+        setText(read);
+      },
       () => alive && setLost(true),
     );
     return () => {
       alive = false;
     };
   }, [abs, version]);
+
+  const write = (next: string) => {
+    setText(next);
+    setFailed(false);
+    savedRef.current = next;
+    store.set(savingCountAtom, (n) => n + 1);
+    void writeFile(abs, next)
+      .catch(() => {
+        savedRef.current = null;
+        setFailed(true);
+      })
+      .finally(() => store.set(savingCountAtom, (n) => n - 1));
+  };
+  const edit = (row: number, col: number, value: string) => {
+    if (text === null) return;
+    const next = setCell(text, delim, row, col, value);
+    if (next === text) return;
+    undo.current.push(text);
+    write(next);
+  };
+  const undoLast = () => {
+    const prev = undo.current.pop();
+    if (prev !== undefined) write(prev);
+  };
 
   const rows = useMemo(() => (text === null ? null : csvRows(text, delim)), [text, delim]);
   const lines = useMemo(
@@ -56,6 +113,8 @@ export function CsvDoc({ abs }: { abs: string }) {
   );
   const table = view === "table";
   const width = rows?.[0]?.length ?? 0;
+  // ほかで書き換えられて行や列が減ったら、選択を外したことにする。
+  const cell = sel && rows && sel.row < rows.length && sel.col < width ? sel : null;
 
   // 列ごとの絞り込みと並べ替え。ファイルごとに覚え、別のファイルへ移って
   // 戻っても、起動し直しても同じ絞り込みで出す。
@@ -81,6 +140,15 @@ export function CsvDoc({ abs }: { abs: string }) {
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {/* 端で勢いよく送っても弾ませない。弾むと固定した見出しごと枠がずれ、
           枠の外の下地が見える。 */}
+      {table && rows && !lost && (
+        <CsvCellBar
+          cell={cell}
+          value={cell ? (rows[cell.row]?.[cell.col] ?? "") : ""}
+          inputRef={barRef}
+          onCommit={(value) => cell && edit(cell.row, cell.col, value)}
+          onDone={() => tableRef.current?.focus({ preventScroll: true })}
+        />
+      )}
       <div className="min-h-0 flex-1 overflow-auto overscroll-none">
         {lost ? (
           <div className="flex h-full items-center justify-center text-[13px] text-[var(--mg-muted)]">
@@ -91,6 +159,11 @@ export function CsvDoc({ abs }: { abs: string }) {
             <CsvTable
               rows={rows}
               abs={abs}
+              box={tableRef}
+              sel={cell}
+              onSelect={setSel}
+              onUndo={undoLast}
+              onEditCell={() => barRef.current?.focus()}
               order={order}
               filters={filters}
               sort={sort}
@@ -106,6 +179,7 @@ export function CsvDoc({ abs }: { abs: string }) {
         )}
       </div>
       <div className="mg-imgdoc-bar">
+        {failed && <span className="mg-csv-failed">保存できませんでした</span>}
         <span className="mg-imgdoc-size">
           {lost || !rows
             ? ""
@@ -153,6 +227,11 @@ const SAMPLE_ROWS = 20_000;
 function CsvTable({
   rows,
   abs,
+  box,
+  sel,
+  onSelect: setSel,
+  onUndo,
+  onEditCell,
   order,
   filters,
   sort,
@@ -161,6 +240,13 @@ function CsvTable({
 }: {
   rows: string[][];
   abs: string;
+  box: RefObject<HTMLTableElement>;
+  // 選んでいる升目。row は rows の中の位置（0 がヘッダー行）。
+  sel: Cell | null;
+  onSelect: (next: Cell | null) => void;
+  onUndo: () => void;
+  // F2。上の欄へ移って値を直す。
+  onEditCell: () => void;
   // 出す行の並び（rows の中の位置）。絞り込みと並べ替えを当てた後のもの。
   order: number[];
   filters: Filters;
@@ -170,7 +256,6 @@ function CsvTable({
 }) {
   const head = rows[0] ?? [];
   const body = order.length;
-  const box = useRef<HTMLTableElement>(null);
   // 行の並びの上には、固定した 2 行（列の名前とヘッダー行）がある。
   const [start, end] = useVisibleRows(box, body, TABLE_ROW, TABLE_ROW * 2);
 
@@ -223,16 +308,14 @@ function CsvTable({
     });
   const total = widths.reduce((a, b) => a + b, NO_WIDTH);
 
-  // 選んでいる升目。row は rows の中の位置（0 がヘッダー行）。押すか矢印で
-  // 動かす。Enter で升目の全文を小窓に出す（… で切れた値を読む。WKWebView は
-  // title の吹き出しを出さない）。出したまま矢印で動かすと、小窓も付いてくる。
-  const [sel, setSel] = useState<Cell | null>(null);
+  // 升目は押すか矢印で選ぶ。Enter で升目の全文を小窓に出す（… で切れた値を
+  // 読む。WKWebView は title の吹き出しを出さない）。出したまま矢印で動かすと、
+  // 小窓も付いてくる。
   const [peekOn, setPeekOn] = useState(false);
   const peekBox = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    setSel(null);
-    setPeekOn(false);
-  }, [rows]);
+    if (!sel) setPeekOn(false);
+  }, [sel]);
 
   // 選んだ升目が見える位置まで送る。見えている行だけを組むので、行の位置は
   // 要素からではなく行の番号から出す。上の 2 行と左の行番号は固定なので、
@@ -268,6 +351,11 @@ function CsvTable({
     ArrowRight: [0, 1],
   };
   const onKey = (e: React.KeyboardEvent) => {
+    if (e.metaKey && !e.shiftKey && !e.altKey && e.code === "KeyZ") {
+      e.preventDefault();
+      onUndo();
+      return;
+    }
     if (!sel || e.metaKey || e.ctrlKey || e.altKey) return;
     const move = MOVES[e.key];
     if (move) {
@@ -284,6 +372,10 @@ function CsvTable({
     } else if (e.key === "Enter") {
       e.preventDefault();
       setPeekOn((on) => !on);
+    } else if (e.key === "F2") {
+      e.preventDefault();
+      setPeekOn(false);
+      onEditCell();
     } else if (e.key === "Escape") {
       // 小窓が出ていれば小窓だけ、出ていなければ選択を外す。
       if (peekOn) setPeekOn(false);
@@ -298,12 +390,14 @@ function CsvTable({
       const t = e.target;
       if (!(t instanceof Node)) return;
       if (box.current?.contains(t) || peekBox.current?.contains(t)) return;
+      // 上の欄で値を直している間も、選んだままにする。
+      if ((t instanceof Element ? t : t.parentElement)?.closest(".mg-csv-bar")) return;
       setSel(null);
       setPeekOn(false);
     };
     window.addEventListener("mousedown", onDown, true);
     return () => window.removeEventListener("mousedown", onDown, true);
-  }, [sel]);
+  }, [sel, box, setSel]);
 
   // 開いている絞り込みの小窓。押した ▽ の位置に出す。
   const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);

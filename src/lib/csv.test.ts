@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { colName, csvLines, csvRows, delimOf } from "./csv";
+import { colName, csvLines, csvRows, delimOf, setCell } from "./csv";
 
 describe("区切りの字", () => {
   it("拡張子で決める", () => {
@@ -81,5 +81,46 @@ describe("原文の色分け", () => {
     expect(csvLines(text, ",").map((l) => l.map((p) => p.text).join(""))).toEqual(
       text.split("\n"),
     );
+  });
+});
+
+describe("値を 1 つ書き換える", () => {
+  it("その値だけを差し替え、ほかの囲み・改行の字・末尾の改行はそのまま", () => {
+    const text = '名前,住所\r\n"山田",東京\r\n鈴木,"大阪, 北区"\r\n';
+    expect(setCell(text, ",", 1, 1, "京都")).toBe('名前,住所\r\n"山田",京都\r\n鈴木,"大阪, 北区"\r\n');
+  });
+
+  it("区切り・\"・改行を含む値は囲み、\" は 2 つにする。改行はファイルの改行にそろえる", () => {
+    const crlf = "a,b\r\n1,2\r\n";
+    expect(setCell(crlf, ",", 1, 0, "x,y")).toBe('a,b\r\n"x,y",2\r\n');
+    expect(setCell(crlf, ",", 1, 0, 'say "hi"')).toBe('a,b\r\n"say ""hi""",2\r\n');
+    expect(setCell(crlf, ",", 1, 0, "1行目\n2行目")).toBe('a,b\r\n"1行目\r\n2行目",2\r\n');
+    expect(setCell("a,b\n1,2", ",", 1, 1, "上\n下")).toBe('a,b\n1,"上\n下"');
+  });
+
+  it("元が囲みなら、囲む要の無い値でも囲んだまま書く", () => {
+    expect(setCell('"a","b"\n', ",", 0, 1, "c")).toBe('"a","c"\n');
+  });
+
+  it("列の足りない短い行は区切りを足して埋める", () => {
+    expect(setCell("a,b,c\n1\n", ",", 1, 2, "x")).toBe("a,b,c\n1,,x\n");
+  });
+
+  it("囲みの中に改行がある値の後ろの行も、行の番号を取り違えない", () => {
+    const text = 'a,b\n"1\n2",3\n4,5\n';
+    expect(setCell(text, ",", 2, 0, "x")).toBe('a,b\n"1\n2",3\nx,5\n');
+  });
+
+  it("TSV でも書け、読み直すと入れた値が出る", () => {
+    const text = "名前\t点\n佐藤\t90\n";
+    const next = setCell(text, "\t", 1, 0, "タブ\tを含む");
+    expect(csvRows(next, "\t")).toEqual([
+      ["名前", "点"],
+      ["タブ\tを含む", "90"],
+    ]);
+  });
+
+  it("無い行は原文のまま", () => {
+    expect(setCell("a\n", ",", 3, 0, "x")).toBe("a\n");
   });
 });

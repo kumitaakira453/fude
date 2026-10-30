@@ -122,3 +122,79 @@ export function csvRows(text: string, delim: string): string[][] {
   for (const r of rows) while (r.length < width) r.push("");
   return rows;
 }
+
+// ---- 書き戻し ----
+//
+// 書き戻しは原文の該当の値だけを差し替える。ほかの値の囲み・改行の字
+// （\r\n / \n）・末尾の改行は 1 字も変えない。
+
+// 1 行の原文の中での、値ごとの範囲 [始め, 終わり) と、行の中身の終わり
+// （改行の字の手前）。行の数え方は csvRows と同じ。
+export interface CsvRowSpan {
+  cells: [number, number][];
+  end: number;
+}
+
+export function csvSpans(text: string, delim: string): CsvRowSpan[] {
+  const rows: CsvRowSpan[] = [];
+  let cells: [number, number][] = [];
+  let from = 0;
+  let quoted = false;
+  let atStart = true;
+  // 行の終わりの \r は値に含めない（csvRows は \r を読み飛ばす）。
+  const lineEnd = (i: number) => (i > from && text[i - 1] === "\r" ? i - 1 : i);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\r") continue;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') i++;
+      else if (ch === '"') quoted = false;
+      continue;
+    }
+    if (ch === '"' && atStart) {
+      quoted = true;
+      atStart = false;
+    } else if (ch === delim) {
+      cells.push([from, i]);
+      from = i + 1;
+      atStart = true;
+    } else if (ch === "\n") {
+      const end = lineEnd(i);
+      cells.push([from, end]);
+      rows.push({ cells, end });
+      cells = [];
+      from = i + 1;
+      atStart = true;
+    } else {
+      atStart = false;
+    }
+  }
+  if (text.slice(from).replace(/\r/g, "") !== "" || cells.length > 0 || quoted) {
+    const end = lineEnd(text.length);
+    cells.push([from, end]);
+    rows.push({ cells, end });
+  }
+  return rows;
+}
+
+// 値を原文の 1 つの値として書く。区切り・" ・改行を含むか、元の値が囲みなら
+// " で囲み、中の " を "" にする。値の中の改行はファイルの改行の字にそろえる。
+function encodeValue(value: string, delim: string, eol: string, wasQuoted: boolean): string {
+  const need = wasQuoted || value.includes(delim) || /["\r\n]/.test(value);
+  if (!need) return value;
+  return `"${value.replace(/\r?\n/g, eol).replace(/"/g, '""')}"`;
+}
+
+// 行 row（0 がヘッダー行）・列 col の値を value にした原文。行が無ければ原文のまま。
+// 列が足りない短い行は、区切りを足して埋める。
+export function setCell(text: string, delim: string, row: number, col: number, value: string): string {
+  const span = csvSpans(text, delim)[row];
+  if (!span) return text;
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  if (col < span.cells.length) {
+    const [s, e] = span.cells[col];
+    return text.slice(0, s) + encodeValue(value, delim, eol, text[s] === '"') + text.slice(e);
+  }
+  const pad = delim.repeat(col - span.cells.length + 1);
+  return text.slice(0, span.end) + pad + encodeValue(value, delim, eol, false) + text.slice(span.end);
+}

@@ -9,8 +9,12 @@ import { CsvDoc } from "./CsvDoc";
 // CSV は列ごとの色の原文で開き、釦で表に替わる。表では 1 行目をヘッダー行に置く。
 
 let content = '名前,点\n"山田, 太郎",90\n鈴木,80\n';
+const written: string[] = [];
 vi.mock("../lib/fsAccess", () => ({
   readText: async () => content,
+  writeFile: async (_abs: string, text: string) => {
+    written.push(text);
+  },
 }));
 
 beforeAll(() => {
@@ -26,6 +30,7 @@ afterEach(() => {
   root = null;
   host = null;
   content = '名前,点\n"山田, 太郎",90\n鈴木,80\n';
+  written.length = 0;
 });
 
 async function show() {
@@ -345,5 +350,79 @@ describe("列ごとの絞り込み", () => {
       funnel(el, 0).click();
     });
     expect(pop()).toBeNull();
+  });
+});
+
+// 表の上の欄で、選んだ升目の値を見て直す。書き戻すのはその値の原文だけ。
+describe("上の欄で値を直す", () => {
+  const table = async () => {
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const press = (el: Element, k: string, init: KeyboardEventInit = {}) =>
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
+    });
+  const pick = (el: HTMLElement) =>
+    act(() => {
+      el.querySelector("tbody td")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  const at = (el: HTMLElement) => el.querySelector(".mg-csv-bar-at")!.textContent;
+  const input = (el: HTMLElement) => el.querySelector<HTMLTextAreaElement>(".mg-csv-bar-input")!;
+  // React の制御された欄に字を入れる。
+  const type = (box: HTMLTextAreaElement, value: string) =>
+    act(() => {
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      set.call(box, value);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+  it("選んだ升目の位置と値が出て、矢印で動かすと替わる", async () => {
+    const { el } = await table();
+    expect(input(el).disabled).toBe(true);
+    pick(el);
+    expect(at(el)).toBe("A2");
+    expect(input(el).value).toBe("山田, 太郎");
+    press(el.querySelector("table")!, "ArrowRight");
+    expect(at(el)).toBe("B2");
+    expect(input(el).value).toBe("90");
+  });
+
+  it("直して Enter で、その値だけを書き戻し、表にも出る。⌘Z で戻す", async () => {
+    const { el } = await table();
+    pick(el);
+    type(input(el), "山田, 花子");
+    press(input(el), "Enter");
+    expect(written).toEqual(['名前,点\n"山田, 花子",90\n鈴木,80\n']);
+    expect(el.querySelector("tbody td")!.textContent).toBe("山田, 花子");
+    // 書いたあとも同じ升目を選んだまま。
+    expect(at(el)).toBe("A2");
+
+    await act(async () => {
+      el.querySelector("table")!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    expect(written.at(-1)).toBe('名前,点\n"山田, 太郎",90\n鈴木,80\n');
+    expect(el.querySelector("tbody td")!.textContent).toBe("山田, 太郎");
+  });
+
+  it("Esc で直す前に戻し、書かない。変換を確定する Enter でも書かない", async () => {
+    const { el } = await table();
+    pick(el);
+    type(input(el), "途中");
+    press(input(el), "Enter", { isComposing: true });
+    expect(written).toEqual([]);
+    press(input(el), "Escape");
+    expect(written).toEqual([]);
+    expect(input(el).value).toBe("山田, 太郎");
+  });
+
+  it("F2 で上の欄へ移る", async () => {
+    const { el } = await table();
+    pick(el);
+    press(el.querySelector("table")!, "F2");
+    expect(document.activeElement).toBe(input(el));
   });
 });
