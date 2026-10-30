@@ -795,3 +795,114 @@ describe("列を非表示にする", () => {
     expect(shownNames(el)).toEqual(["A", "C"]);
   });
 });
+
+// 範囲を選んで、写す・切る・貼る・空にする（Google スプレッドシートと同じ手）。
+describe("範囲を選んで写す・貼る", () => {
+  const SHEET = "名前,部署,金額\n佐藤,営業,1200\n鈴木,開発,300\n高橋,営業,45\n";
+  const table = async (text = SHEET) => {
+    content = text;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const cellAt = (el: HTMLElement, r: number, c: number) => el.querySelector(`[data-r="${r}"][data-c="${c}"]`)!;
+  const down = (el: HTMLElement, r: number, c: number, shiftKey = false) =>
+    act(() => {
+      cellAt(el, r, c).dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0, shiftKey }));
+    });
+  const over = (el: HTMLElement, r: number, c: number) =>
+    act(() => {
+      cellAt(el, r, c).dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+  const up = () =>
+    act(() => {
+      window.dispatchEvent(new MouseEvent("mouseup", {}));
+    });
+  const editor = (el: HTMLElement) => el.querySelector<HTMLTextAreaElement>(".mg-csv-editor")!;
+  const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
+    act(() => {
+      editor(el).dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+    });
+  const inRange = (el: HTMLElement) =>
+    [...el.querySelectorAll<HTMLElement>(".is-in")].map((c) => `${c.dataset.r},${c.dataset.c}`);
+  // 写す・貼るの催し。jsdom には ClipboardEvent の中身が無いので、使う分だけ渡す。
+  const clip = (el: HTMLElement, type: "copy" | "cut" | "paste", text = "") => {
+    const data = new Map<string, string>([["text/plain", text]]);
+    act(() => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(e, {
+        clipboardData: { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? "" },
+      });
+      editor(el).dispatchEvent(e);
+    });
+    return data.get("text/plain");
+  };
+  const values = (el: HTMLElement) =>
+    [...el.querySelectorAll("tbody tr")].map((tr) => [...tr.querySelectorAll("td")].map((c) => c.textContent));
+
+  it("押したまま引くと範囲になり、⌘C でタブ区切りの字を写す", async () => {
+    const { el } = await table();
+    down(el, 1, 0);
+    over(el, 2, 1);
+    up();
+    expect(inRange(el)).toEqual(["1,0", "1,1", "2,0", "2,1"]);
+    expect(el.querySelector(".mg-csv-range")).not.toBeNull();
+    expect(clip(el, "copy")).toBe("佐藤\t営業\n鈴木\t開発");
+  });
+
+  it("⇧ 押し・⇧矢印で範囲を広げ、Esc で升目 1 つに戻す", async () => {
+    const { el } = await table();
+    down(el, 1, 0);
+    up();
+    down(el, 1, 2, true);
+    up();
+    expect(inRange(el)).toEqual(["1,0", "1,1", "1,2"]);
+    press(el, "ArrowDown", { shiftKey: true });
+    expect(inRange(el).length).toBe(6);
+    press(el, "Escape");
+    expect(inRange(el)).toEqual([]);
+    expect(el.querySelector(".is-sel")).not.toBeNull();
+  });
+
+  it("列の名前を押すと列全体、行の番号を押すと行全体を選ぶ", async () => {
+    const { el } = await table();
+    act(() => {
+      el.querySelectorAll<HTMLElement>(".mg-csv-letters th:not(.mg-csv-no)")[1].click();
+    });
+    expect(clip(el, "copy")).toBe("部署\n営業\n開発\n営業");
+    act(() => {
+      el.querySelector<HTMLElement>('tbody th.mg-csv-no[data-n="3"]')!.click();
+    });
+    expect(clip(el, "copy")).toBe("鈴木\t開発\t300");
+  });
+
+  it("Delete で範囲を空にし、⌘X は写してから空にする。どちらも 1 回の ⌘Z で戻る", async () => {
+    const { el } = await table();
+    down(el, 1, 0);
+    over(el, 2, 0);
+    up();
+    press(el, "Delete");
+    expect(values(el).map((r) => r[0])).toEqual(["", "", "高橋"]);
+    press(el, "z", { code: "KeyZ", metaKey: true });
+    expect(values(el).map((r) => r[0])).toEqual(["佐藤", "鈴木", "高橋"]);
+    expect(clip(el, "cut")).toBe("佐藤\n鈴木");
+    expect(values(el).map((r) => r[0])).toEqual(["", "", "高橋"]);
+  });
+
+  it("⌘V は左上から貼り、足りない行は足す。改行やタブを含む値も読める", async () => {
+    const { el } = await table();
+    down(el, 3, 1);
+    up();
+    clip(el, "paste", '総務\t"1,000"\n"人事\n部"\t5\n');
+    expect(written.at(-1)).toBe('名前,部署,金額\n佐藤,営業,1200\n鈴木,開発,300\n高橋,総務,"1,000"\n,"人事\n部",5\n');
+    expect(values(el).at(-1)).toEqual(["", "人事\n部", "5"]);
+  });
+
+  it("1 つの値を貼ると、選んでいる升目だけを書き換える", async () => {
+    const { el } = await table();
+    down(el, 2, 2);
+    up();
+    clip(el, "paste", "999");
+    expect(values(el)[1]).toEqual(["鈴木", "開発", "999"]);
+  });
+});

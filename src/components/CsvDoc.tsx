@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { colsMoved, csvLines, csvRows, delimOf, moveColumn, setCell, type ColMap } from "../lib/csv";
+import { colsMoved, csvLines, csvRows, delimOf, moveColumn, setCell, setCells, type ColMap } from "../lib/csv";
 import { isActive, loadView, moveStoredView, shownRows, storeView, type ColSort, type Filters } from "../lib/csvFilter";
 import { readText, writeFile } from "../lib/fsAccess";
 import {
@@ -220,6 +220,7 @@ export function CsvDoc({ abs }: { abs: string }) {
               onCommit={commit}
               onCancel={cancel}
               onSetCell={(at, value) => edit(at.row, at.col, value)}
+              onSetCells={(edits) => text !== null && change(setCells(text, delim, edits))}
               editorRef={editorRef}
               onUndo={undoLast}
               onRedo={redoLast}
