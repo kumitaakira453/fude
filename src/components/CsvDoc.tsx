@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useStore } from "jotai";
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
 import {
   colName,
@@ -185,7 +185,7 @@ export function CsvDoc({ abs }: { abs: string }) {
           onDone={() => tableRef.current?.focus({ preventScroll: true })}
         />
       )}
-      <div className="min-h-0 flex-1 overflow-auto overscroll-none">
+      <div className="relative min-h-0 flex-1 overflow-auto overscroll-none">
         {lost ? (
           <div className="flex h-full items-center justify-center text-[13px] text-[var(--mg-muted)]">
             このファイルは字として読めませんでした
@@ -257,6 +257,8 @@ const GRIP_MIN = 32;
 const GRIP_MAX = 1600;
 // 幅を決めるのに見る行の数。これより下に長い値があれば、その升目は … で切れる。
 const SAMPLE_ROWS = 20_000;
+// 選んだ升目を広げるとき、表の見えている右端から空ける幅（px）。
+const GROW_GAP = 8;
 
 // 表。上に列の名前（A・B・…）、その下に 1 行目（ヘッダー行）を固定し、
 // 左に行番号を固定する。番号と列の名前は字ではなく data-n から描く
@@ -479,6 +481,45 @@ function CsvTable({
       .filter(Boolean)
       .join(" ");
 
+  // 選んでいる本文の升目が … で切れていたら、その升目から右へ広げた箱を重ねて
+  // 全文を出す（列の幅は変えない）。広げるのは表の見えている右端までで、超える
+  // 分と改行は折り返して下へ伸ばす。見出しの行は上に固定されていて送るとずれる
+  // ので出さない（全文は上の欄で読める）。
+  const [grow, setGrow] = useState<{ top: number; left: number; width: number } | null>(null);
+  const growValue = sel && sel.row > 0 && !peekOn ? (rows[sel.row]?.[sel.col] ?? "") : null;
+  const widthKey = widths.join(",");
+  useLayoutEffect(() => {
+    const sc = box.current?.parentElement;
+    if (!sel || growValue === null || !sc) {
+      setGrow(null);
+      return;
+    }
+    const measure = () => {
+      const cell = box.current?.querySelector(`td[data-r="${sel.row}"][data-c="${sel.col}"]`);
+      const own = widths[sel.col];
+      const natural = Math.ceil(measureText(growValue, font)) + CELL_PAD;
+      if (!cell || (natural <= own && !growValue.includes("\n"))) {
+        setGrow(null);
+        return;
+      }
+      const cr = cell.getBoundingClientRect();
+      const fr = sc.getBoundingClientRect();
+      const next = {
+        top: cr.top - fr.top + sc.scrollTop,
+        left: cr.left - fr.left + sc.scrollLeft,
+        width: Math.max(own, Math.min(natural, fr.right - cr.left - GROW_GAP)),
+      };
+      setGrow((was) =>
+        was && was.top === next.top && was.left === next.left && was.width === next.width ? was : next,
+      );
+    };
+    measure();
+    sc.addEventListener("scroll", measure, { passive: true });
+    return () => sc.removeEventListener("scroll", measure);
+    // widths は描くたびに作り直すので、中身（widthKey）で見る。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, growValue, widthKey, font, start, end, box]);
+
   // 開いている絞り込みの小窓。押した ▽ の位置に出す。
   const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);
   const closeAsk = useCallback(() => setAsking(null), []);
@@ -591,6 +632,11 @@ function CsvTable({
           )}
         </tbody>
       </table>
+      {grow && growValue !== null && (
+        <div className="mg-csv-grow" style={grow} aria-hidden>
+          {growValue}
+        </div>
+      )}
       {asking && (
         <CsvFilterPop
           rows={rows}

@@ -510,3 +510,51 @@ describe("列を掴んで動かす", () => {
     expect(written).toEqual([]);
   });
 });
+
+// 選んだ升目が … で切れていたら、右へ広げた箱を重ねて全文を出す。
+describe("選んだ升目を広げる", () => {
+  const LONG = "東京都千代田区丸の内一丁目一番一号 〇〇ビル三階 ".repeat(3).trim();
+  const table = async (text: string) => {
+    content = text;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const pickAt = (el: HTMLElement, r: number, c: number) =>
+    act(() => {
+      el.querySelector(`[data-r="${r}"][data-c="${c}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  const press = (el: Element, k: string) =>
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    });
+  const grow = (el: HTMLElement) => el.querySelector(".mg-csv-grow")?.textContent ?? null;
+
+  it("長い値の升目を選ぶと全文を出し、短い値では出さない。動かすと付いてくる", async () => {
+    // 長い値は列の幅の上限（320px）を超えて … で切れる。
+    const { el } = await table(`住所,短\n${LONG},x\n"1行目\n2行目",y\n`);
+    pickAt(el, 1, 0);
+    expect(grow(el)).toBe(LONG);
+    press(el.querySelector("table")!, "ArrowRight");
+    expect(grow(el)).toBeNull();
+    press(el.querySelector("table")!, "ArrowDown");
+    press(el.querySelector("table")!, "ArrowLeft");
+    // 改行のある値は、幅に収まっていても広げて改行ごと出す。
+    expect(grow(el)).toBe("1行目\n2行目");
+  });
+
+  it("選択を外す・Enter の小窓を出すと消え、見出しの行では出さない", async () => {
+    const { el } = await table(`${LONG},b\n${LONG},x\n`);
+    const t = () => el.querySelector("table")!;
+    pickAt(el, 1, 0);
+    expect(grow(el)).toBe(LONG);
+    press(t(), "Enter");
+    expect(grow(el)).toBeNull();
+    press(t(), "Escape");
+    expect(grow(el)).toBe(LONG);
+    press(t(), "Escape");
+    expect(grow(el)).toBeNull();
+    pickAt(el, 0, 0);
+    expect(grow(el)).toBeNull();
+  });
+});

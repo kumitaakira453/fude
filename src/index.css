@@ -2309,6 +2309,26 @@ body.mg-col-resizing * {
 .mg-csv-table th.is-dragging {
   opacity: 0.45;
 }
+/* 選んだ升目を右へ広げて全文を出す箱。升目の上に重ね、下の升目はそのまま
+   押せる。上に固定した 2 行と左の行番号（z-index 1・2）より下に置く。 */
+.mg-csv-grow {
+  position: absolute;
+  z-index: 0;
+  box-sizing: border-box;
+  min-height: var(--mg-csv-row, 26px);
+  padding: 4px 0.6rem;
+  background: var(--mg-bg);
+  box-shadow:
+    inset 0 0 0 2px var(--mg-accent),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+  color: var(--mg-fg);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
 /* 升目の全文の小窓。長い値（ログの JSON など）を折り返して見せる。 */
 .mg-csv-peek {
   position: fixed;
