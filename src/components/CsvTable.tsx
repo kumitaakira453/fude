@@ -16,6 +16,8 @@ const LETTERS_ROW = 22;
 const FIXED_TOP = LETTERS_ROW + TABLE_ROW;
 // 見出しの右に置く絞り込みの印の分。中身から幅を決めるとき、見出しに足す。
 const MARK_ROOM = 22;
+// 等幅の数字と、詰めて測った数字の幅の差（数字 1 つあたり）。
+const DIGIT_ROOM = 1.5;
 
 // 升目の幅の上下（px）。
 const CELL_MIN = 56;
@@ -97,7 +99,10 @@ export function CsvTable({
     () =>
       head.map((h, c) => {
         const cells = rows.slice(1, SAMPLE_ROWS + 1).map((r) => r[c]);
-        const w = Math.max(measureText(h, bold) + MARK_ROOM, widestText(cells, font));
+        // 表は数字を等幅（tabular-nums）で描くが、測る描き板は詰めた幅で測る。数字の
+        // 多い値（金額など）が切れないよう、数字 1 つにつき少し足す。
+        const digits = cells.reduce((m, v) => Math.max(m, (v?.match(/\d/g) ?? []).length), 0);
+        const w = Math.max(measureText(h, bold) + MARK_ROOM, widestText(cells, font) + digits * DIGIT_ROOM);
         return Math.min(CELL_MAX, Math.max(CELL_MIN, Math.ceil(w) + CELL_PAD));
       }),
     [rows, head, font, bold],
