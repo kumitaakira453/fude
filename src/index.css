@@ -2224,6 +2224,11 @@ button.mg-sess-row.is-gone:hover {
    行番号は、スクロールしても残す。固定した升目の罫線が消えないよう、罫は
    升目ごとに持つ（border-collapse では固定した升目から罫が外れる）。 */
 .mg-csv-table {
+  /* 列の名前・行の番号・見出しの地と、1 行おきの地。どの配色でも本文の地に字の
+     色を少し混ぜて作り、地から浮かないようにする（--mg-panel は配色によって
+     本文の地より明るく、表の枠だけが白く見える）。 */
+  --mg-csv-chrome: color-mix(in srgb, var(--mg-fg) 5%, var(--mg-bg));
+  --mg-csv-stripe: color-mix(in srgb, var(--mg-fg) 2.5%, var(--mg-bg));
   /* 行の高さ。CsvDoc の TABLE_ROW と対にする（見えている行だけを組み、
      空きの高さを行の数から出す）。列の幅は CsvDoc が全体から決めて固定する。 */
   --mg-csv-row: 26px;
@@ -2254,27 +2259,29 @@ button.mg-sess-row.is-gone:hover {
   top: 0;
   z-index: 2;
   height: 22px;
-  background: var(--mg-panel);
+  background: var(--mg-csv-chrome);
   color: var(--mg-muted);
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-align: center;
+  /* 右に ▾ の場所を取り、字を少し左へ寄せて ▾ と離す。 */
+  padding: 0 22px 0 6px;
 }
 .mg-csv-table .mg-csv-letters th.is-on,
 .mg-csv-table th.mg-csv-no.is-on {
-  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-panel));
+  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-csv-chrome));
   color: var(--mg-fg);
 }
 /* 列の名前を指すと出す ▾。押すと列のメニュー（並べ替え・絞り込み・列の操作）。 */
 .mg-csv-colmenu {
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 6px;
   display: grid;
-  width: 16px;
-  height: 16px;
-  margin-top: -8px;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
   place-items: center;
   border-radius: 4px;
   color: var(--mg-muted);
@@ -2283,9 +2290,9 @@ button.mg-sess-row.is-gone:hover {
 /* 塗った下向きの三角。 */
 .mg-csv-colmenu::after {
   content: "";
-  border-top: 5px solid currentColor;
-  border-right: 4px solid transparent;
-  border-left: 4px solid transparent;
+  border-top: 4px solid currentColor;
+  border-right: 3.5px solid transparent;
+  border-left: 3.5px solid transparent;
   transform: translateY(1px);
 }
 .mg-csv-letters th:hover .mg-csv-colmenu,
@@ -2302,7 +2309,7 @@ button.mg-sess-row.is-gone:hover {
   position: sticky;
   top: 22px;
   z-index: 2;
-  background: var(--mg-panel);
+  background: var(--mg-csv-chrome);
   font-weight: 600;
   border-bottom-color: color-mix(in srgb, var(--mg-fg) 18%, var(--mg-border));
 }
@@ -2315,20 +2322,20 @@ button.mg-sess-row.is-gone:hover {
   left: 0;
   z-index: 1;
   min-width: 3rem;
-  background: var(--mg-panel);
+  background: var(--mg-csv-chrome);
   color: var(--mg-muted);
   font-weight: 400;
   text-align: right;
 }
 /* 1 行おきの地（Excel の縞）。行番号の欄にも同じ縞を通す。 */
 .mg-csv-table tr.is-even > :is(td, th) {
-  background: color-mix(in srgb, var(--mg-fg) 4%, var(--mg-bg));
+  background: var(--mg-csv-stripe);
 }
 .mg-csv-table tr.is-even > th.mg-csv-no {
-  background: color-mix(in srgb, var(--mg-fg) 4%, var(--mg-panel));
+  background: color-mix(in srgb, var(--mg-fg) 3%, var(--mg-csv-chrome));
 }
 .mg-csv-table tr > th.mg-csv-no.is-on {
-  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-panel));
+  background: color-mix(in srgb, var(--mg-accent) 14%, var(--mg-csv-chrome));
   color: var(--mg-fg);
 }
 /* 列の幅のつまみ（列の名前の右端）。 */
@@ -2466,7 +2473,7 @@ body.mg-col-moving * {
 }
 .mg-csv-lift > .mg-csv-lift-letter {
   height: 22px;
-  background: color-mix(in srgb, var(--mg-accent) 16%, var(--mg-panel));
+  background: color-mix(in srgb, var(--mg-accent) 16%, var(--mg-bg));
   color: var(--mg-fg);
   font-size: 10.5px;
   letter-spacing: 0.04em;
@@ -2476,7 +2483,7 @@ body.mg-col-moving * {
 .mg-csv-lift-head {
   position: relative;
   z-index: 1;
-  background: var(--mg-panel);
+  background: color-mix(in srgb, var(--mg-fg) 5%, var(--mg-bg));
   font-weight: 600;
 }
 .mg-csv-lift-body .is-num {
@@ -2742,7 +2749,7 @@ body.mg-col-moving * {
   place-items: center;
   border: 1px solid var(--mg-border);
   border-radius: 4px;
-  background: var(--mg-panel);
+  background: var(--mg-bg);
   color: var(--mg-muted);
   font-size: 8px;
   letter-spacing: -1px;
