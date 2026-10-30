@@ -174,8 +174,9 @@ describe("升目の選択と列の幅", () => {
     key(t, "ArrowUp");
     // ヘッダー行（0 行目）まで上がれる。
     expect(selected(el)).toBe("0,1");
+    // Esc でも選択は外さない（いつもどこかを選んでおく）。
     key(t, "Escape");
-    expect(selected(el)).toBeNull();
+    expect(selected(el)).toBe("0,1");
   });
 
   it("小窓を出したまま矢印で動かすと、小窓も動いた先の升目の全文になる", async () => {
@@ -387,7 +388,9 @@ describe("上の欄で値を直す", () => {
 
   it("選んだ升目の位置と値が出て、矢印で動かすと替わる", async () => {
     const { el } = await table();
-    expect(input(el).disabled).toBe(true);
+    // 開いた直後は A1 を選んでおく。
+    expect(at(el)).toBe("A1");
+    expect(input(el).value).toBe("名前");
     pick(el);
     expect(at(el)).toBe("A2");
     expect(input(el).value).toBe("山田, 太郎");
@@ -576,7 +579,7 @@ describe("選んだ升目を広げる", () => {
     expect(grow(el)).toBe("1行目\n2行目");
   });
 
-  it("選択を外す・⌘Enter の小窓を出すと消え、見出しの行では出さない", async () => {
+  it("⌘Enter の小窓を出すと消え、見出しの行では出さない", async () => {
     const { el } = await table(`${LONG},b\n${LONG},x\n`);
     const t = () => el.querySelector("table")!;
     pickAt(el, 1, 0);
@@ -587,8 +590,6 @@ describe("選んだ升目を広げる", () => {
     expect(grow(el)).toBeNull();
     press(t(), "Escape");
     expect(grow(el)).toBe(LONG);
-    press(t(), "Escape");
-    expect(grow(el)).toBeNull();
     pickAt(el, 0, 0);
     expect(grow(el)).toBeNull();
   });

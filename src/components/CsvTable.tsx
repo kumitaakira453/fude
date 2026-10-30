@@ -443,14 +443,14 @@ export function CsvTable({
       if (many) clearRange();
       else if ((rows[sel.row]?.[sel.col] ?? "") !== "") onSetCell(sel, "");
     } else if (e.key === "Escape") {
-      // 小窓が出ていれば小窓だけ、範囲なら升目 1 つに戻し、そうでなければ選択を外す。
+      // 小窓が出ていれば小窓だけ閉じ、範囲なら升目 1 つに戻す。選択そのものは外さない
+      // （Google スプレッドシートと同じく、いつもどこかを選んでおく）。
       if (peekOn) setPeekOn(false);
       else if (many) setAnchor(null);
-      else setSel(null);
     }
   };
 
-  // 表と小窓の外を押したら、直している値を確定して選択を外す。
+  // 表と小窓の外を押したら、直している値を確定し、小窓を閉じる。選んでいる升目はそのまま。
   const grid = useRef<HTMLDivElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -463,7 +463,6 @@ export function CsvTable({
       // 上の欄・列のメニューの中では、選んだままにする。
       if ((t instanceof Element ? t : t.parentElement)?.closest(".mg-csv-bar, .mg-csv-filter-pop")) return;
       if (draftRef.current !== null) onCommit(draftRef.current);
-      setSel(null);
       setPeekOn(false);
     };
     window.addEventListener("mousedown", onDown, true);

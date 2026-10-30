@@ -152,8 +152,21 @@ export function CsvDoc({ abs }: { abs: string }) {
   );
   const table = view === "table";
   const width = rows?.[0]?.length ?? 0;
-  // ほかで書き換えられて行や列が減ったら、選択を外したことにする。
-  const cell = sel && rows && sel.row < rows.length && sel.col < width ? sel : null;
+  // ほかで書き換えられて行や列が減り、選んでいた升目が無くなったときも A1 に戻す。
+  // まだ何も選んでいなければ A1（隠していれば、見えている最初の列の見出し）を選んで
+  // おき、開いた直後から上の欄に位置と値を出す。
+  const [hiddenAll] = useAtom(csvHiddenAtom);
+  const firstCol = useMemo(() => {
+    const hid = new Set(hiddenAll[abs] ?? []);
+    for (let c = 0; c < width; c++) if (!hid.has(c)) return c;
+    return 0;
+  }, [hiddenAll, abs, width]);
+  const cell =
+    sel && rows && sel.row < rows.length && sel.col < width
+      ? sel
+      : rows && width > 0
+        ? { row: 0, col: firstCol }
+        : null;
   const cellValue = cell && rows ? (rows[cell.row]?.[cell.col] ?? "") : "";
   const commit = (value: string) => {
     if (cell && value !== cellValue) edit(cell.row, cell.col, value);
