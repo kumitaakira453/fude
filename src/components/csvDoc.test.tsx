@@ -522,16 +522,22 @@ describe("列を掴んで動かす", () => {
     expect(el.querySelector(".is-sel")?.getAttribute("data-c")).toBe("1");
   });
 
-  it("動かしている間は影と落とす先の線を出し、Esc で取りやめる", async () => {
+  it("動かしている間は列を浮かせ、ほかの列を滑らせて落とす先を空ける。Esc で取りやめる", async () => {
     const { el } = await table("a,b,c\n1,2,3\n");
     mouse(heads(el)[0], "mousedown", xAt(el, 0, 5));
     mouse(window, "mousemove", xAt(el, 2, 2));
-    expect(el.querySelector(".mg-csv-ghost")?.textContent).toBe("a");
-    expect(el.querySelector(".mg-csv-dropline")).not.toBeNull();
+    const lift = el.querySelector(".mg-csv-lift")!;
+    expect(lift.querySelector(".mg-csv-lift-letter")!.textContent).toBe("A");
+    expect(lift.querySelector(".mg-csv-lift-head")!.textContent).toBe("a");
+    expect(lift.querySelector(".mg-csv-lift-body")!.textContent).toBe("1");
+    expect(el.querySelector(".mg-csv-grid")!.classList.contains("is-moving")).toBe(true);
+    // b の列は a の幅だけ左へ詰める。
+    const rules = el.querySelector(".mg-csv-grid style")!.textContent!;
+    expect(rules).toMatch(/\[data-c="1"\].*translateX\(-\d+px\)/);
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     });
-    expect(el.querySelector(".mg-csv-ghost")).toBeNull();
+    expect(el.querySelector(".mg-csv-lift")).toBeNull();
     mouse(window, "mouseup", xAt(el, 2, 2));
     expect(written).toEqual([]);
   });

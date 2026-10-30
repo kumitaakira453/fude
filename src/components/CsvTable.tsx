@@ -369,7 +369,6 @@ export function CsvTable({
     window.addEventListener("mouseup", onUp);
     window.addEventListener("keydown", onEsc, true);
   };
-  const dragClass = (i: number) => (moving?.from === i ? "is-dragging" : "");
 
   // 選んでいる升目の位置（送る枠の中）と、見えている右端までの幅を測る。
   // 直している間の欄と、… で切れた値を広げて見せる箱は、この位置から右へ伸びる。
@@ -444,7 +443,7 @@ export function CsvTable({
 
   if (!rows[0]) return null;
   return (
-    <div ref={grid} className="mg-csv-grid" onKeyDown={onKey}>
+    <div ref={grid} className={cls("mg-csv-grid", moving !== null && "is-moving")} onKeyDown={onKey}>
       <table
         ref={box}
         className="mg-csv-table"
@@ -468,8 +467,9 @@ export function CsvTable({
             {head.map((_, i) => (
               <th
                 key={i}
-                className={cls(sel?.col === i && "is-on", dragClass(i))}
+                className={cls(sel?.col === i && "is-on")}
                 data-n={colName(i)}
+                data-col={i}
                 onMouseDown={(e) => grab(e, i)}
               >
                 <button
@@ -482,7 +482,6 @@ export function CsvTable({
                     setAsking((was) => (was?.col === i ? null : { col: i, at }));
                   }}
                 >
-                  <Icon name="expand_more" size={12} stroke={2} />
                 </button>
                 <span
                   className="mg-csv-grip"
@@ -511,7 +510,7 @@ export function CsvTable({
                   key={i}
                   data-r={0}
                   data-c={i}
-                  className={cls(on(0, i), dragClass(i))}
+                  className={cls(on(0, i))}
                   onMouseDown={(e) => grab(e, i)}
                 >
                   <span className="mg-csv-hcell">
@@ -565,22 +564,33 @@ export function CsvTable({
       </table>
       {moving && (
         <>
+          {/* ほかの列を滑らせて落とす先を空け、元の列は薄い空きにする。升目ごとに
+              書かず、列の番号で当てる規則を 1 つ置く（見えている行だけ組んでいる
+              ので、動く升目は数十行分）。 */}
+          <style>{slideRules(moving.from, moving.gap, widths)}</style>
           <div
-            className="mg-csv-ghost"
+            className="mg-csv-lift"
             style={{ left: moving.left, top: moving.top, height: moving.height, width: widths[moving.from] }}
             aria-hidden
           >
-            <span>{head[moving.from] || colName(moving.from)}</span>
+            <div className="mg-csv-lift-letter">{colName(moving.from)}</div>
+            <div className="mg-csv-lift-head">{head[moving.from]}</div>
+            <div
+              className="mg-csv-lift-body"
+              style={{ transform: `translateY(${-(moving.top % TABLE_ROW)}px)` }}
+            >
+              {order
+                .slice(Math.floor(moving.top / TABLE_ROW), Math.floor(moving.top / TABLE_ROW) + Math.ceil(moving.height / TABLE_ROW) + 1)
+                .map((r) => {
+                  const v = rows[r]?.[moving.from] ?? "";
+                  return (
+                    <div key={r} className={numberOf(v) !== null ? "is-num" : undefined}>
+                      {v}
+                    </div>
+                  );
+                })}
+            </div>
           </div>
-          <div
-            className="mg-csv-dropline"
-            style={{
-              left: widths.slice(0, moving.gap).reduce((a, b) => a + b, NO_WIDTH) - 1,
-              top: moving.top,
-              height: moving.height,
-            }}
-            aria-hidden
-          />
         </>
       )}
       {grows && place && growValue !== null && (
@@ -630,6 +640,24 @@ export function CsvTable({
       )}
     </div>
   );
+}
+
+// 列 from を境目 gap へ動かしている間の、列ごとのずらし。落とす先までの列は
+// from の幅だけ詰め、元の列は落とす先の位置へ送って薄い空きとして見せる。
+function slideRules(from: number, gap: number, widths: number[]): string {
+  const to = gap > from ? gap - 1 : gap;
+  const lefts = widths.reduce<number[]>((acc, w) => [...acc, acc[acc.length - 1] + w], [0]);
+  const out: string[] = [];
+  for (let k = 0; k < widths.length; k++) {
+    let dx = 0;
+    if (k === from) dx = lefts[to] + (to > from ? widths[to] - widths[from] : 0) - lefts[from];
+    else if (from < to && k > from && k <= to) dx = -widths[from];
+    else if (from > to && k >= to && k < from) dx = widths[from];
+    const sel = `.mg-csv-grid.is-moving :is([data-c="${k}"], [data-col="${k}"])`;
+    if (dx !== 0) out.push(`${sel} { transform: translateX(${dx}px); }`);
+    if (k === from) out.push(`${sel} { color: transparent; background: var(--mg-csv-hole); }`);
+  }
+  return out.join("\n");
 }
 
 export interface Cell {
