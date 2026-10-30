@@ -110,7 +110,7 @@ describe("表の升目", () => {
     expect([...el.querySelectorAll("tbody tr")].map((tr) => tr.className)).toEqual(["", "is-even"]);
   });
 
-  it("押しただけでは小窓を出さず、選んで Enter で全文を出す。JSON は字下げする", async () => {
+  it("押しただけでは小窓を出さず、選んで ⌘Enter で全文を出す。JSON は字下げする", async () => {
     content = 'ログ\n"{""a"":1,\n""b"":[2]}"\n';
     const el = await table();
     const cell = el.querySelector("tbody td")!;
@@ -120,11 +120,11 @@ describe("表の升目", () => {
     expect(document.querySelector(".mg-csv-peek")).toBeNull();
     expect(cell.classList.contains("is-sel")).toBe(true);
     const t = el.querySelector("table")!;
-    const press = (key: string) =>
+    const press = (key: string, metaKey = false) =>
       act(() => {
-        t.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+        t.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey, bubbles: true, cancelable: true }));
       });
-    press("Enter");
+    press("Enter", true);
     const peek = document.querySelector(".mg-csv-peek")!;
     expect(peek.querySelector(".mg-csv-peek-body")!.textContent).toBe('{\n  "a": 1,\n  "b": [\n    2\n  ]\n}');
     expect(peek.textContent).toContain("A2 · JSON");
@@ -133,10 +133,10 @@ describe("表の升目", () => {
     press("Escape");
     expect(document.querySelector(".mg-csv-peek")).toBeNull();
     expect(cell.classList.contains("is-sel")).toBe(true);
-    // もう一度 Enter で出し、Enter で閉じる。
-    press("Enter");
+    // もう一度 ⌘Enter で出し、⌘Enter で閉じる。
+    press("Enter", true);
     expect(document.querySelector(".mg-csv-peek")).not.toBeNull();
-    press("Enter");
+    press("Enter", true);
     expect(document.querySelector(".mg-csv-peek")).toBeNull();
   });
 });
@@ -184,7 +184,9 @@ describe("升目の選択と列の幅", () => {
       el.querySelector("tbody td")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     const t = el.querySelector("table")!;
-    key(t, "Enter");
+    act(() => {
+      t.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
+    });
     const body = () => document.querySelector(".mg-csv-peek-body")!.textContent;
     expect(body()).toBe("1");
     key(t, "ArrowRight");
@@ -229,8 +231,12 @@ describe("列ごとの絞り込み", () => {
     [...el.querySelectorAll("tbody tr")].map((tr) => tr.querySelector("td")?.textContent);
   const numbers = (el: HTMLElement) =>
     [...el.querySelectorAll("tbody tr .mg-csv-no")].map((n) => n.getAttribute("data-n"));
+  // 列の名前の ▾（列のメニューの入口）。
   const funnel = (el: HTMLElement, col: number) =>
-    el.querySelectorAll<HTMLButtonElement>(".mg-csv-funnel")[col];
+    el.querySelectorAll<HTMLButtonElement>(".mg-csv-colmenu")[col];
+  // 見出しの絞り込みの印。絞っているか並べ替えている列にだけ出る。
+  const headMark = (el: HTMLElement, col: number) =>
+    el.querySelector<HTMLElement>(`.mg-csv-head th[data-c="${col}"] .mg-csv-funnel`);
   const pop = () => document.querySelector<HTMLElement>(".mg-csv-filter-pop");
   const row = (label: string) =>
     [...pop()!.querySelectorAll<HTMLButtonElement>(".mg-csv-filter-row, button")].find((b) =>
@@ -247,7 +253,8 @@ describe("列ごとの絞り込み", () => {
     act(() => row("開発").click());
     expect(names(el)).toEqual(["佐藤", "高橋"]);
     expect(numbers(el)).toEqual(["2", "4"]);
-    expect(funnel(el, 1).classList.contains("is-on")).toBe(true);
+    expect(headMark(el, 1)).not.toBeNull();
+    expect(headMark(el, 0)).toBeNull();
     expect(el.querySelector(".mg-imgdoc-bar")!.textContent).toContain("2 / 3 行");
 
     act(() => bar(el, "絞り込みを解除")!.click());
@@ -272,14 +279,13 @@ describe("列ごとの絞り込み", () => {
     expect(store.get(csvFiltersAtom)).toEqual({});
   });
 
-  it("見出しの入口は漏斗の印で、並べ替えた列は向きの矢印になる", async () => {
+  it("見出しの印は絞った列・並べ替えた列にだけ出て、並べ替えだけの列は向きの矢印になる", async () => {
     const { el } = await table();
-    const mark = (col: number) => funnel(el, col).querySelector("[data-icon]")!.getAttribute("data-icon");
-    expect([mark(0), mark(1), mark(2)]).toEqual(["filter_list", "filter_list", "filter_list"]);
+    expect([0, 1, 2].map((c) => headMark(el, c))).toEqual([null, null, null]);
     act(() => funnel(el, 2).click());
     act(() => row("昇順").click());
-    expect(mark(2)).toBe("arrow_upward");
-    expect(funnel(el, 2).classList.contains("is-on")).toBe(true);
+    expect(headMark(el, 2)!.querySelector("[data-icon]")!.getAttribute("data-icon")).toBe("arrow_upward");
+    expect(headMark(el, 0)).toBeNull();
   });
 
   it("含む文字で絞り、数の列は数として並べ替える", async () => {
@@ -419,11 +425,14 @@ describe("上の欄で値を直す", () => {
     expect(input(el).value).toBe("山田, 太郎");
   });
 
-  it("F2 で上の欄へ移る", async () => {
+  it("上の欄で打つと、升目の中の欄にもその場で映る", async () => {
     const { el } = await table();
     pick(el);
-    press(el.querySelector("table")!, "F2");
-    expect(document.activeElement).toBe(input(el));
+    act(() => input(el).focus());
+    type(input(el), "山田 一郎");
+    const ed = el.querySelector<HTMLTextAreaElement>(".mg-csv-editor")!;
+    expect(ed.classList.contains("is-on")).toBe(true);
+    expect(ed.value).toBe("山田 一郎");
   });
 });
 
@@ -560,12 +569,14 @@ describe("選んだ升目を広げる", () => {
     expect(grow(el)).toBe("1行目\n2行目");
   });
 
-  it("選択を外す・Enter の小窓を出すと消え、見出しの行では出さない", async () => {
+  it("選択を外す・⌘Enter の小窓を出すと消え、見出しの行では出さない", async () => {
     const { el } = await table(`${LONG},b\n${LONG},x\n`);
     const t = () => el.querySelector("table")!;
     pickAt(el, 1, 0);
     expect(grow(el)).toBe(LONG);
-    press(t(), "Enter");
+    act(() => {
+      t().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
+    });
     expect(grow(el)).toBeNull();
     press(t(), "Escape");
     expect(grow(el)).toBe(LONG);
@@ -573,5 +584,123 @@ describe("選んだ升目を広げる", () => {
     expect(grow(el)).toBeNull();
     pickAt(el, 0, 0);
     expect(grow(el)).toBeNull();
+  });
+});
+
+// 升目を選んで字を打てば、そのまま書き換えが始まる（Google スプレッドシートの手）。
+describe("升目で字を打って直す", () => {
+  const table = async (text = '名前,点\n"山田, 太郎",90\n鈴木,80\n') => {
+    content = text;
+    const shown = await show();
+    act(() => button(shown.el).click());
+    return shown;
+  };
+  const pickAt = (el: HTMLElement, r: number, c: number) =>
+    act(() => {
+      el.querySelector(`[data-r="${r}"][data-c="${c}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  const editor = (el: HTMLElement) => el.querySelector<HTMLTextAreaElement>(".mg-csv-editor")!;
+  const press = (target: Element, key: string, init: KeyboardEventInit = {}) =>
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+    });
+  const type = (box: HTMLTextAreaElement, value: string) =>
+    act(() => {
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      set.call(box, value);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const sel = (el: HTMLElement) => {
+    const c = el.querySelector<HTMLElement>("td.is-sel, th.is-sel");
+    return c && `${c.dataset.r},${c.dataset.c}`;
+  };
+  const cellText = (el: HTMLElement, r: number, c: number) =>
+    el.querySelector(`[data-r="${r}"][data-c="${c}"]`)!.textContent;
+
+  it("選んで字を打つと書き換えが始まり、Enter で確定してその場に残る", async () => {
+    const { el } = await table();
+    pickAt(el, 2, 1);
+    expect(document.activeElement).toBe(editor(el));
+    expect(editor(el).classList.contains("is-on")).toBe(false);
+    type(editor(el), "7");
+    expect(editor(el).classList.contains("is-on")).toBe(true);
+    type(editor(el), "75");
+    press(editor(el), "Enter");
+    expect(written).toEqual(['名前,点\n"山田, 太郎",90\n鈴木,75\n']);
+    expect(cellText(el, 2, 1)).toBe("75");
+    expect(sel(el)).toBe("2,1");
+    expect(editor(el).classList.contains("is-on")).toBe(false);
+  });
+
+  it("日本語の変換が始まったら欄を見せ、変換中の Enter では確定しない", async () => {
+    const { el } = await table();
+    pickAt(el, 2, 0);
+    act(() => {
+      editor(el).dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    });
+    expect(editor(el).classList.contains("is-on")).toBe(true);
+    type(editor(el), "すずき");
+    press(editor(el), "Enter", { isComposing: true });
+    expect(written).toEqual([]);
+    type(editor(el), "佐々木");
+    press(editor(el), "Enter");
+    expect(cellText(el, 2, 0)).toBe("佐々木");
+  });
+
+  it("Tab で確定して右へ、Esc は直す前に戻す", async () => {
+    const { el } = await table();
+    pickAt(el, 2, 0);
+    type(editor(el), "田中");
+    press(editor(el), "Tab");
+    expect(cellText(el, 2, 0)).toBe("田中");
+    expect(sel(el)).toBe("2,1");
+    type(editor(el), "0");
+    press(editor(el), "Escape");
+    expect(cellText(el, 2, 1)).toBe("80");
+    expect(written.length).toBe(1);
+  });
+
+  it("2 回押す・Enter・F2 は今の値を残して始める", async () => {
+    const { el } = await table();
+    pickAt(el, 1, 0);
+    act(() => {
+      el.querySelector('[data-r="1"][data-c="0"]')!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(editor(el).value).toBe("山田, 太郎");
+    press(editor(el), "Escape");
+    press(editor(el), "Enter");
+    expect(editor(el).value).toBe("山田, 太郎");
+    press(editor(el), "Escape");
+    press(editor(el), "F2");
+    expect(editor(el).classList.contains("is-on")).toBe(true);
+  });
+
+  it("直している途中でほかの升目を押すと、確定してから移る", async () => {
+    const { el } = await table();
+    pickAt(el, 2, 0);
+    type(editor(el), "高橋");
+    pickAt(el, 1, 1);
+    expect(cellText(el, 2, 0)).toBe("高橋");
+    expect(sel(el)).toBe("1,1");
+  });
+
+  it("Delete で空にし、⌘Z で戻して ⌘⇧Z でやり直す", async () => {
+    const { el } = await table();
+    pickAt(el, 2, 1);
+    press(editor(el), "Delete");
+    expect(cellText(el, 2, 1)).toBe("");
+    press(editor(el), "z", { code: "KeyZ", metaKey: true });
+    expect(cellText(el, 2, 1)).toBe("80");
+    press(editor(el), "z", { code: "KeyZ", metaKey: true, shiftKey: true });
+    expect(cellText(el, 2, 1)).toBe("");
+  });
+
+  it("数として読める値は右に寄せ、選んだ列の名前と行の番号に色を付ける", async () => {
+    const { el } = await table();
+    expect(el.querySelector('[data-r="1"][data-c="1"]')!.classList.contains("is-num")).toBe(true);
+    expect(el.querySelector('[data-r="1"][data-c="0"]')!.classList.contains("is-num")).toBe(false);
+    pickAt(el, 2, 1);
+    expect([...el.querySelectorAll(".mg-csv-letters th.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["B"]);
+    expect([...el.querySelectorAll("th.mg-csv-no.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["3"]);
   });
 });

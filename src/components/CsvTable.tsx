@@ -1,16 +1,21 @@
 import { useAtom } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
-import { colName, CSV_TONES } from "../lib/csv";
-import { isActive, type ColFilter, type ColSort, type Filters } from "../lib/csvFilter";
+import { colName } from "../lib/csv";
+import { isActive, numberOf, type ColFilter, type ColSort, type Filters } from "../lib/csvFilter";
 import { measureText, widestText } from "../lib/textWidth";
 import { csvWidthsAtom } from "../state/atoms";
 import { CsvFilterPop } from "./CsvFilterPop";
 import { Icon } from "./Icon";
 import { ValuePeek } from "./ValuePeek";
 
-// 表の行の高さ（px）。index.css の .mg-csv-table と対にする。
+// 表の行の高さと、列の名前の段の高さ（px）。index.css の .mg-csv-table と対にする。
 export const TABLE_ROW = 26;
+const LETTERS_ROW = 22;
+// 本文の行の上に固定した 2 段（列の名前と見出しの行）の高さ。
+const FIXED_TOP = LETTERS_ROW + TABLE_ROW;
+// 見出しの右に置く絞り込みの印の分。中身から幅を決めるとき、見出しに足す。
+const MARK_ROOM = 22;
 
 // 升目の幅の上下（px）。
 const CELL_MIN = 56;
@@ -28,15 +33,25 @@ const GROW_GAP = 8;
 // 表。上に列の名前（A・B・…）、その下に 1 行目（ヘッダー行）を固定し、
 // 左に行番号を固定する。番号と列の名前は字ではなく data-n から描く
 // （⌘F の探し先や、選んで写した中身に混ざらない）。
+//
+// 値は Google スプレッドシートと同じ手で直す。選んだ升目の上に見えない入力欄
+// （editor）を置いておき、表のキーはすべてそこで受ける。字が入るか日本語の変換が
+// 始まったら書き換えを始め、欄を見せる。2 回押す・Enter・F2 は今の値を残して
+// 始める。直している間は Enter で確定してその場に残り、Tab で確定して右へ、
+// Esc で直す前に戻す。
 export function CsvTable({
   rows,
   abs,
-  box,
   sel,
   onSelect: setSel,
+  draft,
+  onDraft,
+  onCommit,
+  onCancel,
+  onSetCell,
+  editorRef,
   onUndo,
   onRedo,
-  onEditCell,
   onMove,
   order,
   filters,
@@ -46,14 +61,19 @@ export function CsvTable({
 }: {
   rows: string[][];
   abs: string;
-  box: RefObject<HTMLTableElement>;
   // 選んでいる升目。row は rows の中の位置（0 がヘッダー行）。
   sel: Cell | null;
   onSelect: (next: Cell | null) => void;
+  // 直している値。null なら直していない。
+  draft: string | null;
+  onDraft: (next: string | null) => void;
+  // 直した値を確定する（選んでいる升目へ書く）。
+  onCommit: (value: string) => void;
+  onCancel: () => void;
+  onSetCell: (cell: Cell, value: string) => void;
+  editorRef: RefObject<HTMLTextAreaElement>;
   onUndo: () => void;
   onRedo: () => void;
-  // F2。上の欄へ移って値を直す。
-  onEditCell: () => void;
   // 列 from を位置 to へ動かす（見出しを掴んで落とす）。
   onMove: (from: number, to: number) => void;
   // 出す行の並び（rows の中の位置）。絞り込みと並べ替えを当てた後のもの。
@@ -64,9 +84,11 @@ export function CsvTable({
   onSort: (next: ColSort | null) => void;
 }) {
   const head = rows[0] ?? [];
+  const box = useRef<HTMLTableElement>(null);
   const body = order.length;
   // 行の並びの上には、固定した 2 行（列の名前とヘッダー行）がある。
-  const [start, end] = useVisibleRows(box, body, TABLE_ROW, TABLE_ROW * 2);
+  const [start, end] = useVisibleRows(box, body, TABLE_ROW, FIXED_TOP);
+  const editing = draft !== null;
 
   const family = useMemo(() => getComputedStyle(document.body).fontFamily || "sans-serif", []);
   const font = `12.5px ${family}`;
@@ -75,7 +97,7 @@ export function CsvTable({
     () =>
       head.map((h, c) => {
         const cells = rows.slice(1, SAMPLE_ROWS + 1).map((r) => r[c]);
-        const w = Math.max(measureText(h, bold), widestText(cells, font));
+        const w = Math.max(measureText(h, bold) + MARK_ROOM, widestText(cells, font));
         return Math.min(CELL_MAX, Math.max(CELL_MIN, Math.ceil(w) + CELL_PAD));
       }),
     [rows, head, font, bold],
@@ -117,9 +139,8 @@ export function CsvTable({
     });
   const total = widths.reduce((a, b) => a + b, NO_WIDTH);
 
-  // 升目は押すか矢印で選ぶ。Enter で升目の全文を小窓に出す（… で切れた値を
-  // 読む。WKWebView は title の吹き出しを出さない）。出したまま矢印で動かすと、
-  // 小窓も付いてくる。
+  // ⌘Enter で升目の全文を小窓に出す（改行の多い値・JSON を読む）。出したまま
+  // 矢印で動かすと、小窓も付いてくる。
   const [peekOn, setPeekOn] = useState(false);
   const peekBox = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -132,7 +153,7 @@ export function CsvTable({
   const reveal = (c: Cell) => {
     const sc = box.current?.parentElement;
     if (!sc) return;
-    const fixedTop = TABLE_ROW * 2;
+    const fixedTop = FIXED_TOP;
     const at = order.indexOf(c.row);
     if (c.row > 0 && at >= 0) {
       const top = fixedTop + at * TABLE_ROW;
@@ -146,12 +167,28 @@ export function CsvTable({
     else if (right > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = right - sc.clientWidth;
   };
 
+  const focusEditor = () => editorRef.current?.focus({ preventScroll: true });
+  const cellOf = (e: React.MouseEvent) =>
+    (e.target as HTMLElement).closest<HTMLElement>("td[data-c], th[data-c]");
   const onCell = (e: React.MouseEvent) => {
     if (movedRef.current) return;
-    const cell = (e.target as HTMLElement).closest<HTMLElement>("td[data-c], th[data-c]");
+    const cell = cellOf(e);
     if (!cell) return;
-    box.current?.focus({ preventScroll: true });
-    setSel({ row: Number(cell.dataset.r), col: Number(cell.dataset.c) });
+    const next = { row: Number(cell.dataset.r), col: Number(cell.dataset.c) };
+    // 直している途中でほかの升目を押したら、確定してから移る。
+    if (editing && draft !== null && (next.row !== sel?.row || next.col !== sel?.col)) onCommit(draft);
+    setSel(next);
+    focusEditor();
+  };
+  const onDouble = (e: React.MouseEvent) => {
+    if (cellOf(e) && sel) begin(true);
+  };
+  // 直し始める。keep なら今の値を残し、そうでなければ空から。
+  const begin = (keep: boolean) => {
+    if (!sel) return;
+    setPeekOn(false);
+    onDraft(keep ? (rows[sel.row]?.[sel.col] ?? "") : "");
+    focusEditor();
   };
 
   const MOVES: Record<string, [number, number]> = {
@@ -160,33 +197,72 @@ export function CsvTable({
     ArrowLeft: [0, -1],
     ArrowRight: [0, 1],
   };
+  // 上下は出している並びの中で動く（0 は見出し行）。
+  const step = (from: Cell, dr: number, dc: number): Cell => {
+    const at = from.row === 0 ? -1 : order.indexOf(from.row);
+    const to = Math.min(order.length - 1, Math.max(-1, at + dr));
+    return {
+      row: to < 0 ? 0 : order[to],
+      col: Math.min(head.length - 1, Math.max(0, from.col + dc)),
+    };
+  };
+  const go = (dr: number, dc: number) => {
+    if (!sel) return;
+    const next = step(sel, dr, dc);
+    setSel(next);
+    reveal(next);
+  };
   const onKey = (e: React.KeyboardEvent) => {
+    // 変換を確定する Enter・Esc は変換のもの。
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (editing && draft !== null) {
+      if (e.key === "Enter" && e.altKey) {
+        // 値の中の改行。
+        e.preventDefault();
+        const ed = editorRef.current;
+        if (!ed) return;
+        ed.setRangeText("\n", ed.selectionStart, ed.selectionEnd, "end");
+        onDraft(ed.value);
+      } else if (e.key === "Enter" && !mod) {
+        e.preventDefault();
+        onCommit(draft);
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        onCommit(draft);
+        go(0, e.shiftKey ? -1 : 1);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+      return;
+    }
     if (e.metaKey && !e.altKey && e.code === "KeyZ") {
       e.preventDefault();
       if (e.shiftKey) onRedo();
       else onUndo();
       return;
     }
-    if (!sel || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!sel) return;
+    if (mod && e.key === "Enter") {
+      e.preventDefault();
+      setPeekOn((on) => !on);
+      return;
+    }
+    if (mod || e.altKey) return;
     const move = MOVES[e.key];
     if (move) {
       e.preventDefault();
-      // 上下は出している並びの中で動く（0 は見出し行）。
-      const at = sel.row === 0 ? -1 : order.indexOf(sel.row);
-      const to = Math.min(order.length - 1, Math.max(-1, at + move[0]));
-      const next = {
-        row: to < 0 ? 0 : order[to],
-        col: Math.min(head.length - 1, Math.max(0, sel.col + move[1])),
-      };
-      setSel(next);
-      reveal(next);
-    } else if (e.key === "Enter") {
+      go(move[0], move[1]);
+    } else if (e.key === "Tab") {
       e.preventDefault();
-      setPeekOn((on) => !on);
-    } else if (e.key === "F2") {
+      go(0, e.shiftKey ? -1 : 1);
+    } else if (e.key === "Enter" || e.key === "F2") {
       e.preventDefault();
-      setPeekOn(false);
-      onEditCell();
+      begin(true);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      if ((rows[sel.row]?.[sel.col] ?? "") !== "") onSetCell(sel, "");
     } else if (e.key === "Escape") {
       // 小窓が出ていれば小窓だけ、出ていなければ選択を外す。
       if (peekOn) setPeekOn(false);
@@ -194,21 +270,25 @@ export function CsvTable({
     }
   };
 
-  // 表と小窓の外を押したら、選択を外す。
+  // 表と小窓の外を押したら、直している値を確定して選択を外す。
+  const grid = useRef<HTMLDivElement>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   useEffect(() => {
     if (!sel) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target;
       if (!(t instanceof Node)) return;
-      if (box.current?.contains(t) || peekBox.current?.contains(t)) return;
-      // 上の欄で値を直している間も、選んだままにする。
-      if ((t instanceof Element ? t : t.parentElement)?.closest(".mg-csv-bar")) return;
+      if (grid.current?.contains(t) || peekBox.current?.contains(t)) return;
+      // 上の欄・列のメニューの中では、選んだままにする。
+      if ((t instanceof Element ? t : t.parentElement)?.closest(".mg-csv-bar, .mg-csv-filter-pop")) return;
+      if (draftRef.current !== null) onCommit(draftRef.current);
       setSel(null);
       setPeekOn(false);
     };
     window.addEventListener("mousedown", onDown, true);
     return () => window.removeEventListener("mousedown", onDown, true);
-  }, [sel, box, setSel]);
+  }, [sel, setSel, onCommit]);
 
   // 列の名前か見出しを掴んで、左右へ動かす。HTML5 のドラッグは WebKit では表の
   // 升目から始まらないので、幅のつまみと同じくマウスの動きで組む。4px 動くまでは
@@ -226,7 +306,7 @@ export function CsvTable({
   const movedRef = useRef(false);
   const grab = (e: React.MouseEvent, i: number) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest(".mg-csv-funnel, .mg-csv-grip, .mg-csv-unhide")) return;
+    if ((e.target as HTMLElement).closest(".mg-csv-funnel, .mg-csv-grip, .mg-csv-unhide, .mg-csv-colmenu")) return;
     const sc = box.current?.parentElement;
     const table = box.current;
     if (!sc || !table) return;
@@ -291,25 +371,20 @@ export function CsvTable({
   };
   const dragClass = (i: number) => (moving?.from === i ? "is-dragging" : "");
 
-  // 選んでいる本文の升目が … で切れていたら、その升目から右へ広げた箱を重ねて
-  // 全文を出す（列の幅は変えない）。広げるのは表の見えている右端までで、超える
-  // 分と改行は折り返して下へ伸ばす。見出しの行は上に固定されていて送るとずれる
-  // ので出さない（全文は上の欄で読める）。
-  const [grow, setGrow] = useState<{ top: number; left: number; width: number } | null>(null);
-  const growValue = sel && sel.row > 0 && !peekOn ? (rows[sel.row]?.[sel.col] ?? "") : null;
+  // 選んでいる升目の位置（送る枠の中）と、見えている右端までの幅を測る。
+  // 直している間の欄と、… で切れた値を広げて見せる箱は、この位置から右へ伸びる。
+  const [place, setPlace] = useState<{ top: number; left: number; room: number } | null>(null);
   const widthKey = widths.join(",");
   useLayoutEffect(() => {
     const sc = box.current?.parentElement;
-    if (!sel || growValue === null || !sc) {
-      setGrow(null);
+    if (!sel || !sc) {
+      setPlace(null);
       return;
     }
     const measure = () => {
-      const cell = box.current?.querySelector(`td[data-r="${sel.row}"][data-c="${sel.col}"]`);
-      const own = widths[sel.col];
-      const natural = Math.ceil(measureText(growValue, font)) + CELL_PAD;
-      if (!cell || (natural <= own && !growValue.includes("\n"))) {
-        setGrow(null);
+      const cell = box.current?.querySelector(`[data-r="${sel.row}"][data-c="${sel.col}"]`);
+      if (!cell) {
+        setPlace(null);
         return;
       }
       const cr = cell.getBoundingClientRect();
@@ -317,10 +392,10 @@ export function CsvTable({
       const next = {
         top: cr.top - fr.top + sc.scrollTop,
         left: cr.left - fr.left + sc.scrollLeft,
-        width: Math.max(own, Math.min(natural, fr.right - cr.left - GROW_GAP)),
+        room: fr.right - cr.left - GROW_GAP,
       };
-      setGrow((was) =>
-        was && was.top === next.top && was.left === next.left && was.width === next.width ? was : next,
+      setPlace((was) =>
+        was && was.top === next.top && was.left === next.left && was.room === next.room ? was : next,
       );
     };
     measure();
@@ -328,26 +403,58 @@ export function CsvTable({
     return () => sc.removeEventListener("scroll", measure);
     // widths は描くたびに作り直すので、中身（widthKey）で見る。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sel, growValue, widthKey, font, start, end, box]);
+  }, [sel, widthKey, start, end, box]);
+  const own = sel ? (widths[sel.col] ?? 0) : 0;
+  const reach = (value: string) =>
+    Math.max(own, Math.min(Math.ceil(measureText(value, font)) + CELL_PAD + 4, place?.room ?? own));
+
+  // 選んでいる本文の升目が … で切れていたら、その升目から右へ広げた箱を重ねて
+  // 全文を出す（列の幅は変えない）。超える分と改行は折り返して下へ伸ばす。
+  // 見出しの行は上に固定されていて送るとずれるので出さない。
+  const growValue = sel && sel.row > 0 && !peekOn && !editing ? (rows[sel.row]?.[sel.col] ?? "") : null;
+  const grows =
+    growValue !== null &&
+    place !== null &&
+    (Math.ceil(measureText(growValue, font)) + CELL_PAD > own || growValue.includes("\n"));
+
+  // 直している間の欄は、字の分だけ右へ、折り返した分だけ下へ伸ばす。
+  useLayoutEffect(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    ed.style.height = "";
+    if (editing) ed.style.height = `${Math.max(TABLE_ROW, ed.scrollHeight)}px`;
+  }, [draft, editing, editorRef, place]);
+  // 今の値を残して始めたときは、字の終わりに置く。
+  const wasEditing = useRef(false);
+  useLayoutEffect(() => {
+    const ed = editorRef.current;
+    if (editing && !wasEditing.current && ed && document.activeElement === ed) {
+      ed.setSelectionRange(ed.value.length, ed.value.length);
+    }
+    wasEditing.current = editing;
+  }, [editing, editorRef]);
 
   // 開いている絞り込みの小窓。押した ▽ の位置に出す。
   const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);
   const closeAsk = useCallback(() => setAsking(null), []);
 
-  const on = (r: number, c: number) =>
-    sel && sel.row === r && sel.col === c ? "is-sel" : undefined;
+  const on = (r: number, c: number) => (sel && sel.row === r && sel.col === c ? "is-sel" : "");
+  const cls = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(" ") || undefined;
   const peek = peekOn ? sel : null;
 
   if (!rows[0]) return null;
   return (
-    <>
+    <div ref={grid} className="mg-csv-grid" onKeyDown={onKey}>
       <table
         ref={box}
-        tabIndex={0}
         className="mg-csv-table"
         style={{ width: total }}
+        onMouseDown={(e) => {
+          // 升目を押しても字を選ばず、入力欄から外れないようにする。
+          if (cellOf(e)) e.preventDefault();
+        }}
         onClick={onCell}
-        onKeyDown={onKey}
+        onDoubleClick={onDouble}
       >
         <colgroup>
           <col style={{ width: NO_WIDTH }} />
@@ -361,10 +468,22 @@ export function CsvTable({
             {head.map((_, i) => (
               <th
                 key={i}
-                className={`mg-csv-c${i % CSV_TONES} ${dragClass(i)}`.trim()}
+                className={cls(sel?.col === i && "is-on", dragClass(i))}
                 data-n={colName(i)}
                 onMouseDown={(e) => grab(e, i)}
               >
+                <button
+                  type="button"
+                  className={cls("mg-csv-colmenu", asking?.col === i && "is-open")}
+                  aria-label={`${colName(i)} 列のメニュー`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const at = e.currentTarget.getBoundingClientRect();
+                    setAsking((was) => (was?.col === i ? null : { col: i, at }));
+                  }}
+                >
+                  <Icon name="expand_more" size={12} stroke={2} />
+                </button>
                 <span
                   className="mg-csv-grip"
                   onMouseDown={(e) => resize(e, i)}
@@ -374,7 +493,7 @@ export function CsvTable({
             ))}
           </tr>
           <tr className="mg-csv-head">
-            <th className="mg-csv-no" data-n={1} />
+            <th className={cls("mg-csv-no", sel?.row === 0 && "is-on")} data-n={1} />
             {head.map((v, i) => {
               const filtered = isActive(filters[i]);
               const sorted = sort?.col === i ? sort.dir : null;
@@ -392,24 +511,26 @@ export function CsvTable({
                   key={i}
                   data-r={0}
                   data-c={i}
-                  className={[on(0, i), dragClass(i)].filter(Boolean).join(" ") || undefined}
+                  className={cls(on(0, i), dragClass(i))}
                   onMouseDown={(e) => grab(e, i)}
                 >
                   <span className="mg-csv-hcell">
                     <span className="mg-csv-hname">{v}</span>
-                    <button
-                      type="button"
-                      className={`mg-csv-funnel${narrowing ? " is-on" : ""}`}
-                      title={`${v || colName(i)} の絞り込み・並べ替え`}
-                      aria-pressed={narrowing}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const at = e.currentTarget.getBoundingClientRect();
-                        setAsking((was) => (was?.col === i ? null : { col: i, at }));
-                      }}
-                    >
-                      <Icon name={mark} size={12} />
-                    </button>
+                    {/* 絞っているか並べ替えている列にだけ出す。入口は列の名前の ▾。 */}
+                    {narrowing && (
+                      <button
+                        type="button"
+                        className="mg-csv-funnel is-on"
+                        title={`${v || colName(i)} の絞り込み・並べ替え`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const at = e.currentTarget.getBoundingClientRect();
+                          setAsking((was) => (was?.col === i ? null : { col: i, at }));
+                        }}
+                      >
+                        <Icon name={mark} size={12} />
+                      </button>
+                    )}
                   </span>
                 </th>
               );
@@ -427,9 +548,9 @@ export function CsvTable({
             // 組んだ並びの中の位置ではなく、出している並びの中の位置で決める。
             // 行番号は元の行のまま出す（絞り込んだとき、どの行が残ったか分かる）。
             <tr key={r} className={(start + n) % 2 === 1 ? "is-even" : undefined}>
-              <th className="mg-csv-no" data-n={r + 1} />
+              <th className={cls("mg-csv-no", sel?.row === r && "is-on")} data-n={r + 1} />
               {rows[r].map((v, i) => (
-                <td key={i} data-r={r} data-c={i} className={on(r, i)}>
+                <td key={i} data-r={r} data-c={i} className={cls(on(r, i), numberOf(v) !== null && "is-num")}>
                   {v}
                 </td>
               ))}
@@ -462,11 +583,24 @@ export function CsvTable({
           />
         </>
       )}
-      {grow && growValue !== null && (
-        <div className="mg-csv-grow" style={grow} aria-hidden>
+      {grows && place && growValue !== null && (
+        <div className="mg-csv-grow" style={{ top: place.top, left: place.left, width: reach(growValue) }} aria-hidden>
           {growValue}
         </div>
       )}
+      <textarea
+        ref={editorRef}
+        className={cls("mg-csv-editor", editing && "is-on")}
+        style={place ? { top: place.top, left: place.left, width: reach(draft ?? ""), minHeight: TABLE_ROW } : undefined}
+        value={draft ?? ""}
+        rows={1}
+        spellCheck={false}
+        aria-label="升目の値"
+        onChange={(e) => onDraft(e.target.value)}
+        onCompositionStart={() => {
+          if (draft === null) onDraft("");
+        }}
+      />
       {asking && (
         <CsvFilterPop
           rows={rows}
@@ -490,11 +624,11 @@ export function CsvTable({
           value={rows[peek.row]?.[peek.col] ?? ""}
           onClose={() => {
             setPeekOn(false);
-            box.current?.focus({ preventScroll: true });
+            focusEditor();
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 

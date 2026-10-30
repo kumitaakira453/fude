@@ -41,12 +41,15 @@ export function CsvDoc({ abs }: { abs: string }) {
   const undo = useRef<Change[]>([]);
   const redo = useRef<Change[]>([]);
   const [sel, setSel] = useState<Cell | null>(null);
-  const tableRef = useRef<HTMLTableElement>(null);
+  // 直している値（上の欄と升目の中の欄で分け合う）。null なら直していない。
+  const [draft, setDraft] = useState<string | null>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const barRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setText(null);
     setSel(null);
+    setDraft(null);
     setFailed(false);
     savedRef.current = null;
     undo.current = [];
@@ -143,6 +146,15 @@ export function CsvDoc({ abs }: { abs: string }) {
   const width = rows?.[0]?.length ?? 0;
   // ほかで書き換えられて行や列が減ったら、選択を外したことにする。
   const cell = sel && rows && sel.row < rows.length && sel.col < width ? sel : null;
+  const cellValue = cell && rows ? (rows[cell.row]?.[cell.col] ?? "") : "";
+  const commit = (value: string) => {
+    if (cell && value !== cellValue) edit(cell.row, cell.col, value);
+    setDraft(null);
+  };
+  const cancel = () => {
+    setDraft(null);
+    editorRef.current?.focus({ preventScroll: true });
+  };
 
   // 列ごとの絞り込みと並べ替え。ファイルごとに覚え、別のファイルへ移って
   // 戻っても、起動し直しても同じ絞り込みで出す。
@@ -171,10 +183,16 @@ export function CsvDoc({ abs }: { abs: string }) {
       {table && rows && !lost && (
         <CsvCellBar
           cell={cell}
-          value={cell ? (rows[cell.row]?.[cell.col] ?? "") : ""}
+          value={cellValue}
+          draft={draft}
           inputRef={barRef}
-          onCommit={(value) => cell && edit(cell.row, cell.col, value)}
-          onDone={() => tableRef.current?.focus({ preventScroll: true })}
+          onDraft={setDraft}
+          onCommit={(value, tab) => {
+            commit(value);
+            if (tab && cell) setSel({ row: cell.row, col: Math.min(width - 1, Math.max(0, cell.col + tab)) });
+            editorRef.current?.focus({ preventScroll: true });
+          }}
+          onCancel={cancel}
         />
       )}
       <div className="relative min-h-0 flex-1 overflow-auto overscroll-none">
@@ -187,13 +205,17 @@ export function CsvDoc({ abs }: { abs: string }) {
             <CsvTable
               rows={rows}
               abs={abs}
-              box={tableRef}
               sel={cell}
               onSelect={setSel}
+              draft={draft}
+              onDraft={setDraft}
+              onCommit={commit}
+              onCancel={cancel}
+              onSetCell={(at, value) => edit(at.row, at.col, value)}
+              editorRef={editorRef}
               onUndo={undoLast}
               onRedo={redoLast}
               onMove={move}
-              onEditCell={() => barRef.current?.focus()}
               order={order}
               filters={filters}
               sort={sort}

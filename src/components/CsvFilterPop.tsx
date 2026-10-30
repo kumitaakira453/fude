@@ -65,7 +65,7 @@ export function CsvFilterPop({
     const onDown = (e: MouseEvent) => {
       if (box.current?.contains(e.target as Node)) return;
       // ▽ は押した側が開け閉めを決める（ここで閉じると、同じ ▽ でまた開く）。
-      if (e.target instanceof Element && e.target.closest(".mg-csv-funnel")) return;
+      if (e.target instanceof Element && e.target.closest(".mg-csv-funnel, .mg-csv-colmenu")) return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {
