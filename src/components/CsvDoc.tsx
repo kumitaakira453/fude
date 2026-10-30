@@ -46,8 +46,6 @@ import { ValuePeek } from "./ValuePeek";
 
 // 表の行の高さ（px）。index.css の .mg-csv-table と対にする。
 const TABLE_ROW = 26;
-// 列を掴んで動かすときのデータの型。タブや木のドラッグとは混ぜない。
-const COL_DRAG = "application/x-fude-csvcol";
 
 export function CsvDoc({ abs }: { abs: string }) {
   const store = useStore();
@@ -380,6 +378,7 @@ function CsvTable({
   };
 
   const onCell = (e: React.MouseEvent) => {
+    if (movedRef.current) return;
     const cell = (e.target as HTMLElement).closest<HTMLElement>("td[data-c], th[data-c]");
     if (!cell) return;
     box.current?.focus({ preventScroll: true });
@@ -441,45 +440,86 @@ function CsvTable({
     return () => window.removeEventListener("mousedown", onDown, true);
   }, [sel, box, setSel]);
 
-  // 列の名前か見出しを掴んで、左右へ動かす。落とす先は、指している列の
-  // 真ん中より左ならその手前、右ならその後ろ。
-  const [dragCol, setDragCol] = useState<number | null>(null);
-  const [drop, setDrop] = useState<{ col: number; side: "before" | "after" } | null>(null);
-  const sideOf = (e: React.DragEvent) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return e.clientX < r.left + r.width / 2 ? "before" : "after";
+  // 列の名前か見出しを掴んで、左右へ動かす。HTML5 のドラッグは WebKit では表の
+  // 升目から始まらないので、幅のつまみと同じくマウスの動きで組む。4px 動くまでは
+  // 押しただけ（升目を選ぶ）として扱う。落とす先は、マウスの位置と列の境目
+  // （幅の累計）から決める。Esc で取りやめる。
+  const [moving, setMoving] = useState<{
+    from: number;
+    // 落とす先の境目（この番号の列の手前。末尾なら列の数）。
+    gap: number;
+    // 影の左端・表示の上端と高さ（送る枠の中の位置）。
+    left: number;
+    top: number;
+    height: number;
+  } | null>(null);
+  const movedRef = useRef(false);
+  const grab = (e: React.MouseEvent, i: number) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest(".mg-csv-funnel, .mg-csv-grip, .mg-csv-unhide")) return;
+    const sc = box.current?.parentElement;
+    const table = box.current;
+    if (!sc || !table) return;
+    e.preventDefault();
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const ws = widths;
+    const edges = ws.reduce<number[]>((acc, w) => [...acc, acc[acc.length - 1] + w], [NO_WIDTH]);
+    // 掴んだ位置と列の左端の差。影はこの差を保って動く。
+    const offset = x0 - table.getBoundingClientRect().left - edges[i];
+    let started = false;
+    let gap = -1;
+    const gapAt = (x: number) => {
+      const at = x - table.getBoundingClientRect().left;
+      for (let k = 0; k < ws.length; k++) if (at < edges[k] + ws[k] / 2) return k;
+      return ws.length;
+    };
+    const onMoveMouse = (m: MouseEvent) => {
+      if (!started) {
+        if (Math.abs(m.clientX - x0) < 4 && Math.abs(m.clientY - y0) < 4) return;
+        started = true;
+        document.body.classList.add("mg-col-moving");
+        window.getSelection()?.removeAllRanges();
+      }
+      const fr = sc.getBoundingClientRect();
+      // 送る枠の左右の端に寄せたら、その向きへ送る。
+      if (m.clientX > fr.right - 32) sc.scrollLeft += 24;
+      else if (m.clientX < fr.left + NO_WIDTH + 32) sc.scrollLeft -= 24;
+      gap = gapAt(m.clientX);
+      setMoving({
+        from: i,
+        gap,
+        left: m.clientX - table.getBoundingClientRect().left - offset,
+        top: sc.scrollTop,
+        height: sc.clientHeight,
+      });
+    };
+    const finish = (commit: boolean) => {
+      window.removeEventListener("mousemove", onMoveMouse);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onEsc, true);
+      document.body.classList.remove("mg-col-moving");
+      setMoving(null);
+      if (!started) return;
+      // 放したあとに来る click で、升目を選ばない。
+      movedRef.current = true;
+      window.setTimeout(() => (movedRef.current = false), 0);
+      if (!commit || gap < 0) return;
+      const to = gap > i ? gap - 1 : gap;
+      if (to !== i) onMove(i, to);
+    };
+    const onUp = () => finish(true);
+    const onEsc = (k: KeyboardEvent) => {
+      if (k.key !== "Escape") return;
+      k.preventDefault();
+      k.stopPropagation();
+      finish(false);
+    };
+    window.addEventListener("mousemove", onMoveMouse);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onEsc, true);
   };
-  const dragProps = (i: number) => ({
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => {
-      e.dataTransfer.setData(COL_DRAG, String(i));
-      e.dataTransfer.effectAllowed = "move";
-      setDragCol(i);
-    },
-    onDragEnd: () => {
-      setDragCol(null);
-      setDrop(null);
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(COL_DRAG)) return;
-      e.preventDefault();
-      const side = sideOf(e);
-      setDrop((was) => (was?.col === i && was.side === side ? was : { col: i, side }));
-    },
-    onDrop: (e: React.DragEvent) => {
-      const from = Number(e.dataTransfer.getData(COL_DRAG));
-      setDragCol(null);
-      setDrop(null);
-      if (Number.isNaN(from)) return;
-      e.preventDefault();
-      const gap = sideOf(e) === "before" ? i : i + 1;
-      onMove(from, gap > from ? gap - 1 : gap);
-    },
-  });
-  const dragClass = (i: number) =>
-    [drop?.col === i ? `is-drop-${drop.side}` : "", dragCol === i ? "is-dragging" : ""]
-      .filter(Boolean)
-      .join(" ");
+  const dragClass = (i: number) => (moving?.from === i ? "is-dragging" : "");
 
   // 選んでいる本文の升目が … で切れていたら、その升目から右へ広げた箱を重ねて
   // 全文を出す（列の幅は変えない）。広げるのは表の見えている右端までで、超える
@@ -553,7 +593,7 @@ function CsvTable({
                 key={i}
                 className={`mg-csv-c${i % CSV_TONES} ${dragClass(i)}`.trim()}
                 data-n={colName(i)}
-                {...dragProps(i)}
+                onMouseDown={(e) => grab(e, i)}
               >
                 <span
                   className="mg-csv-grip"
@@ -583,7 +623,7 @@ function CsvTable({
                   data-r={0}
                   data-c={i}
                   className={[on(0, i), dragClass(i)].filter(Boolean).join(" ") || undefined}
-                  {...dragProps(i)}
+                  onMouseDown={(e) => grab(e, i)}
                 >
                   <span className="mg-csv-hcell">
                     <span className="mg-csv-hname">{v}</span>
@@ -632,6 +672,26 @@ function CsvTable({
           )}
         </tbody>
       </table>
+      {moving && (
+        <>
+          <div
+            className="mg-csv-ghost"
+            style={{ left: moving.left, top: moving.top, height: moving.height, width: widths[moving.from] }}
+            aria-hidden
+          >
+            <span>{head[moving.from] || colName(moving.from)}</span>
+          </div>
+          <div
+            className="mg-csv-dropline"
+            style={{
+              left: widths.slice(0, moving.gap).reduce((a, b) => a + b, NO_WIDTH) - 1,
+              top: moving.top,
+              height: moving.height,
+            }}
+            aria-hidden
+          />
+        </>
+      )}
       {grow && growValue !== null && (
         <div className="mg-csv-grow" style={grow} aria-hidden>
           {growValue}

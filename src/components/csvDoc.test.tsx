@@ -435,32 +435,25 @@ describe("列を掴んで動かす", () => {
     act(() => button(shown.el).click());
     return shown;
   };
-  // jsdom には DataTransfer が無いので、使う分だけの代わりを渡す。
-  const data = new Map<string, string>();
-  const transfer = {
-    setData: (k: string, v: string) => data.set(k, v),
-    getData: (k: string) => data.get(k) ?? "",
-    get types() {
-      return [...data.keys()];
-    },
-    effectAllowed: "",
-  };
-  const fire = (el: Element, type: string, clientX = 0) =>
-    act(() => {
-      const e = new Event(type, { bubbles: true, cancelable: true });
-      Object.assign(e, { dataTransfer: transfer, clientX });
-      el.dispatchEvent(e);
-    });
   const heads = (el: HTMLElement) =>
     [...el.querySelectorAll<HTMLElement>(".mg-csv-head th:not(.mg-csv-no)")];
-  // 列 from の見出しを、列 onto の左半分（before）か右半分（after）に落とす。
+  // 列 k の左端から dx の位置（表の左端からの px。試験の中では表は 0 に置かれる）。
+  const xAt = (el: HTMLElement, k: number, dx: number) => {
+    const ws = [...el.querySelectorAll<HTMLElement>("col")].map((c) => parseInt(c.style.width));
+    return ws.slice(0, k + 1).reduce((a, b) => a + b, 0) + dx;
+  };
+  const mouse = (target: EventTarget, type: string, clientX: number) =>
+    act(() => {
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX }));
+    });
+  // 列 from の見出しを掴み、列 onto の左端寄り（before）か右端寄り（after）で放す。
   const drag = (el: HTMLElement, from: number, onto: number, side: "before" | "after") => {
-    data.clear();
-    fire(heads(el)[from], "dragstart");
-    // 試験の中では升目の幅が 0 なので、左に置けば手前、0 なら後ろ。
-    const x = side === "before" ? -1 : 0;
-    fire(heads(el)[onto], "dragover", x);
-    fire(heads(el)[onto], "drop", x);
+    const start = xAt(el, from, 5);
+    mouse(heads(el)[from], "mousedown", start);
+    const ws = [...el.querySelectorAll<HTMLElement>("col")].map((c) => parseInt(c.style.width));
+    const end = xAt(el, onto, side === "before" ? 3 : ws[onto + 1] - 3);
+    mouse(window, "mousemove", end);
+    mouse(window, "mouseup", end);
   };
   const names = (el: HTMLElement) => heads(el).map((h) => h.querySelector(".mg-csv-hname")!.textContent);
 
@@ -503,10 +496,34 @@ describe("列を掴んで動かす", () => {
     expect(Object.keys(store.get(csvFiltersAtom)["/本/表.csv"].filters)).toEqual(["1"]);
   });
 
-  it("同じ位置に落としても書かない", async () => {
+  it("同じ位置に落としても書かない。動かさずに放せば升目を選ぶだけ", async () => {
     const { el } = await table("a,b\n1,2\n");
     drag(el, 0, 0, "after");
     drag(el, 0, 1, "before");
+    expect(written).toEqual([]);
+    // 放した直後の click は選ばない（動かしたあと）。次の押下までには解ける。
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    mouse(heads(el)[1], "mousedown", xAt(el, 1, 5));
+    mouse(window, "mouseup", xAt(el, 1, 5));
+    act(() => {
+      heads(el)[1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(el.querySelector(".is-sel")?.getAttribute("data-c")).toBe("1");
+  });
+
+  it("動かしている間は影と落とす先の線を出し、Esc で取りやめる", async () => {
+    const { el } = await table("a,b,c\n1,2,3\n");
+    mouse(heads(el)[0], "mousedown", xAt(el, 0, 5));
+    mouse(window, "mousemove", xAt(el, 2, 2));
+    expect(el.querySelector(".mg-csv-ghost")?.textContent).toBe("a");
+    expect(el.querySelector(".mg-csv-dropline")).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(el.querySelector(".mg-csv-ghost")).toBeNull();
+    mouse(window, "mouseup", xAt(el, 2, 2));
     expect(written).toEqual([]);
   });
 });
