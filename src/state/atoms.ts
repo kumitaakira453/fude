@@ -7,6 +7,7 @@ import { DEFAULT_MARKS } from "../lib/md/taskMarks";
 import { windowScopedKey } from "../lib/windows";
 import type { Workspace } from "../lib/workspaces";
 import type { ClaudeSession } from "../lib/claude";
+import type { StoredCsvView } from "../lib/csvFilter";
 
 // ---- ワークスペース ----
 export const foldersAtom = atom<FolderEntry[]>([]); // 登録フォルダ（履歴）
@@ -215,6 +216,12 @@ export const folderIconsAtom = atomWithStorage<Record<string, string>>(
 // 覚える。見た目だけの設定で、ファイルには書かない。
 export const csvWidthsAtom = atomWithStorage<Record<string, Record<number, number>>>(
   "mdglow:csvwidths",
+  {},
+);
+// CSV の表で、列ごとにかけた絞り込みと並べ替え。列の幅と同じくファイルの
+// 道筋ごとに覚え、別のファイルへは持ち越さない。
+export const csvFiltersAtom = atomWithStorage<Record<string, StoredCsvView>>(
+  "fude:csvfilters",
   {},
 );
 // 一覧から外すもの。書き方は .gitignore と同じで、そのまま走査へ渡す。外した

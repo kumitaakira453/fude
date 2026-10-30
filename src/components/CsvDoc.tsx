@@ -2,10 +2,18 @@ import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVisibleRows } from "../hooks/useVisibleRows";
 import { colName, CSV_TONES, csvLines, csvRows, delimOf } from "../lib/csv";
-import { isActive, shownRows, type ColFilter, type ColSort, type Filters } from "../lib/csvFilter";
+import {
+  isActive,
+  loadView,
+  shownRows,
+  storeView,
+  type ColFilter,
+  type ColSort,
+  type Filters,
+} from "../lib/csvFilter";
 import { readText } from "../lib/fsAccess";
 import { measureText, widestText } from "../lib/textWidth";
-import { assetVersionAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
+import { assetVersionAtom, csvFiltersAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
 import { CsvFilterPop } from "./CsvFilterPop";
 import { Icon } from "./Icon";
 import { SourceView } from "./SourceView";
@@ -49,14 +57,19 @@ export function CsvDoc({ abs }: { abs: string }) {
   const table = view === "table";
   const width = rows?.[0]?.length ?? 0;
 
-  // 列ごとの絞り込みと並べ替え。そのファイルを見ている間だけ持ち、別の
-  // ファイルへは持ち越さない。
-  const [filters, setFilters] = useState<Filters>({});
-  const [sort, setSort] = useState<ColSort | null>(null);
-  useEffect(() => {
-    setFilters({});
-    setSort(null);
-  }, [abs]);
+  // 列ごとの絞り込みと並べ替え。ファイルごとに覚え、別のファイルへ移って
+  // 戻っても、起動し直しても同じ絞り込みで出す。
+  const [savedViews, setSavedViews] = useAtom(csvFiltersAtom);
+  const header = rows?.[0];
+  const { filters, sort } = useMemo(
+    () => loadView(header ? savedViews[abs] : undefined, header ?? []),
+    [savedViews, abs, header],
+  );
+  const save = (nextFilters: Filters, nextSort: ColSort | null) => {
+    if (!header) return;
+    const next = storeView(nextFilters, nextSort, header);
+    setSavedViews(({ [abs]: _, ...rest }) => (next ? { ...rest, [abs]: next } : rest));
+  };
   const order = useMemo(
     () => (rows ? shownRows(rows, filters, sort) : []),
     [rows, filters, sort],
@@ -81,13 +94,11 @@ export function CsvDoc({ abs }: { abs: string }) {
               order={order}
               filters={filters}
               sort={sort}
-              onFilter={(col, next) =>
-                setFilters((was) => {
-                  const { [col]: _, ...rest } = was;
-                  return next ? { ...rest, [col]: next } : rest;
-                })
-              }
-              onSort={setSort}
+              onFilter={(col, next) => {
+                const { [col]: _, ...rest } = filters;
+                save(next ? { ...rest, [col]: next } : rest, sort);
+              }}
+              onSort={(next) => save(filters, next)}
             />
           )
         ) : (
@@ -105,7 +116,7 @@ export function CsvDoc({ abs }: { abs: string }) {
             <span className="mg-imgdoc-scale">
               {order.length.toLocaleString()} / {all.toLocaleString()} 行
             </span>
-            <button type="button" className="mg-small" onClick={() => setFilters({})}>
+            <button type="button" className="mg-small" onClick={() => save({}, sort)}>
               絞り込みを解除
             </button>
           </>

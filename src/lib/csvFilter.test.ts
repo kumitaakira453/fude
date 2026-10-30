@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnValues, numericColumn, shownRows, type Filters } from "./csvFilter";
+import { columnValues, loadView, numericColumn, shownRows, storeView, type Filters } from "./csvFilter";
 
 // 列ごとの絞り込みと並べ替え。返すのは見出しを除いた行の、元の位置。
 
@@ -74,5 +74,37 @@ describe("columnValues", () => {
       { value: "開発", count: 2 },
       { value: "", count: 1 },
     ]);
+  });
+});
+
+describe("ファイルごとに覚える形", () => {
+  const header = ["名前", "部署", "金額"];
+  const filters: Filters = {
+    1: { text: "", picked: new Set(["営業"]), min: null, max: null },
+    2: { text: "", picked: null, min: 100, max: null },
+    0: { text: "", picked: null, min: null, max: null },
+  };
+
+  it("働いているものだけを覚え、JSON を通しても同じ絞り込みに戻る", () => {
+    const stored = storeView(filters, { col: 2, dir: "desc" }, header);
+    const back = loadView(JSON.parse(JSON.stringify(stored)), header);
+    expect(Object.keys(back.filters)).toEqual(["1", "2"]);
+    expect([...(back.filters[1].picked ?? [])]).toEqual(["営業"]);
+    expect(back.filters[2].min).toBe(100);
+    expect(back.sort).toEqual({ col: 2, dir: "desc" });
+  });
+
+  it("何も働いていなければ null", () => {
+    expect(storeView({ 0: filters[0] }, null, header)).toBeNull();
+  });
+
+  it("見出しが変わった列と、無くなった列の分は捨てる", () => {
+    const stored = storeView(filters, { col: 2, dir: "asc" }, header)!;
+    const back = loadView(stored, ["名前", "所属"]);
+    expect(Object.keys(back.filters)).toEqual([]);
+    expect(back.sort).toBeNull();
+    const kept = loadView(stored, ["名前", "部署", "単価"]);
+    expect(Object.keys(kept.filters)).toEqual(["1"]);
+    expect(kept.sort).toBeNull();
   });
 });

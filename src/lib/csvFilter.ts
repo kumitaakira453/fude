@@ -100,3 +100,60 @@ export function columnValues(rows: string[][], col: number): ColValue[] {
     .map(([value, count]) => ({ value, count }))
     .sort((a, b) => compare(a.value, b.value, 1));
 }
+
+// ファイルごとに覚えておく形（localStorage に JSON で置く）。列には、かけた
+// ときの見出しの字を添える。開き直したときに見出しが違えば、その列の分は捨てる。
+export interface StoredFilter {
+  head: string;
+  text: string;
+  picked: string[] | null;
+  min: number | null;
+  max: number | null;
+}
+
+export interface StoredCsvView {
+  filters: Record<number, StoredFilter>;
+  sort: (ColSort & { head: string }) | null;
+}
+
+// 働いているものだけを残す。何も無ければ null（覚えている分を消す）。
+export function storeView(
+  filters: Filters,
+  sort: ColSort | null,
+  header: readonly string[],
+): StoredCsvView | null {
+  const stored: Record<number, StoredFilter> = {};
+  for (const [c, f] of Object.entries(filters)) {
+    if (!isActive(f)) continue;
+    const col = Number(c);
+    stored[col] = {
+      head: header[col] ?? "",
+      text: f.text,
+      picked: f.picked ? [...f.picked] : null,
+      min: f.min,
+      max: f.max,
+    };
+  }
+  if (Object.keys(stored).length === 0 && !sort) return null;
+  return { filters: stored, sort: sort ? { ...sort, head: header[sort.col] ?? "" } : null };
+}
+
+export function loadView(
+  stored: StoredCsvView | undefined,
+  header: readonly string[],
+): { filters: Filters; sort: ColSort | null } {
+  const fits = (col: number, head: string) => col < header.length && header[col] === head;
+  const filters: Filters = {};
+  for (const [c, f] of Object.entries(stored?.filters ?? {})) {
+    const col = Number(c);
+    if (!fits(col, f.head)) continue;
+    filters[col] = {
+      text: f.text,
+      picked: f.picked ? new Set(f.picked) : null,
+      min: f.min,
+      max: f.max,
+    };
+  }
+  const s = stored?.sort;
+  return { filters, sort: s && fits(s.col, s.head) ? { col: s.col, dir: s.dir } : null };
+}

@@ -3,7 +3,7 @@ import { createStore, Provider } from "jotai";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { csvViewAtom, csvWidthsAtom } from "../state/atoms";
+import { csvFiltersAtom, csvViewAtom, csvWidthsAtom } from "../state/atoms";
 import { CsvDoc } from "./CsvDoc";
 
 // CSV は列ごとの色の原文で開き、釦で表に替わる。表では 1 行目をヘッダー行に置く。
@@ -33,6 +33,7 @@ async function show() {
   // 見た目は保存領域に残るので、試験ごとに原文の見た目から始める。
   store.set(csvViewAtom, "rainbow");
   store.set(csvWidthsAtom, {});
+  store.set(csvFiltersAtom, {});
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -44,6 +45,17 @@ async function show() {
     );
   });
   return { el: host, store };
+}
+
+// 同じ店のまま、別の道筋のファイルに替える（タブを替えて戻る）。
+async function reopen(store: ReturnType<typeof createStore>, abs: string) {
+  await act(async () => {
+    root!.render(
+      <Provider store={store}>
+        <CsvDoc abs={abs} />
+      </Provider>,
+    );
+  });
 }
 
 const button = (el: HTMLElement) => el.querySelector<HTMLButtonElement>(".mg-imgdoc-bar button")!;
@@ -236,6 +248,23 @@ describe("列ごとの絞り込み", () => {
     act(() => bar(el, "絞り込みを解除")!.click());
     expect(names(el)).toEqual(["佐藤", "鈴木", "高橋"]);
     expect(bar(el, "絞り込みを解除")).toBeUndefined();
+  });
+
+  it("絞り込みと並べ替えはファイルごとに覚え、別のファイルへは持ち越さない", async () => {
+    const { el, store } = await table();
+    act(() => funnel(el, 1).click());
+    act(() => row("開発").click());
+    expect(names(el)).toEqual(["佐藤", "高橋"]);
+
+    await reopen(store, "/本/別.csv");
+    expect(names(el)).toEqual(["佐藤", "鈴木", "高橋"]);
+
+    await reopen(store, "/本/表.csv");
+    expect(names(el)).toEqual(["佐藤", "高橋"]);
+    expect(Object.keys(store.get(csvFiltersAtom))).toEqual(["/本/表.csv"]);
+
+    act(() => bar(el, "絞り込みを解除")!.click());
+    expect(store.get(csvFiltersAtom)).toEqual({});
   });
 
   it("見出しの入口は漏斗の印で、並べ替えた列は向きの矢印になる", async () => {
