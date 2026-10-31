@@ -440,7 +440,7 @@ describe("上の欄で値を直す", () => {
   });
 });
 
-// 列の名前か見出しを掴んで落とすと、その順でファイルを書き換える。
+// 列の名前（A・B…）を掴んで落とすと、その順でファイルを書き換える。
 describe("列を掴んで動かす", () => {
   const table = async (text: string) => {
     content = text;
@@ -450,6 +450,9 @@ describe("列を掴んで動かす", () => {
   };
   const heads = (el: HTMLElement) =>
     [...el.querySelectorAll<HTMLElement>(".mg-csv-head th:not(.mg-csv-no)")];
+  // 列の名前の段（A・B…）。掴んで動かせるのはここだけ。
+  const letters = (el: HTMLElement) =>
+    [...el.querySelectorAll<HTMLElement>(".mg-csv-letters th:not(.mg-csv-no)")];
   // 列 k の左端から dx の位置（表の左端からの px。試験の中では表は 0 に置かれる）。
   const xAt = (el: HTMLElement, k: number, dx: number) => {
     const ws = [...el.querySelectorAll<HTMLElement>("col")].map((c) => parseInt(c.style.width));
@@ -462,7 +465,7 @@ describe("列を掴んで動かす", () => {
   // 列 from の見出しを掴み、列 onto の左端寄り（before）か右端寄り（after）で放す。
   const drag = (el: HTMLElement, from: number, onto: number, side: "before" | "after") => {
     const start = xAt(el, from, 5);
-    mouse(heads(el)[from], "mousedown", start);
+    mouse(letters(el)[from], "mousedown", start);
     const ws = [...el.querySelectorAll<HTMLElement>("col")].map((c) => parseInt(c.style.width));
     const end = xAt(el, onto, side === "before" ? 3 : ws[onto + 1] - 3);
     mouse(window, "mousemove", end);
@@ -470,7 +473,7 @@ describe("列を掴んで動かす", () => {
   };
   const names = (el: HTMLElement) => heads(el).map((h) => h.querySelector(".mg-csv-hname")!.textContent);
 
-  it("見出しを落とした位置へ列が動き、その順で原文を書き換える", async () => {
+  it("列の名前を落とした位置へ列が動き、その順で原文を書き換える", async () => {
     const { el } = await table('名前,部署,金額\r\n"佐藤",営業,1200\r\n');
     drag(el, 0, 2, "after");
     expect(names(el)).toEqual(["部署", "金額", "名前"]);
@@ -529,9 +532,22 @@ describe("列を掴んで動かす", () => {
     expect(el.querySelector(".is-sel")?.getAttribute("data-c")).toBe("1");
   });
 
-  it("動かしている間は列を浮かせ、ほかの列を滑らせて落とす先を空ける。Esc で取りやめる", async () => {
+  it("見出しの行を押したまま引いても列は動かず、範囲の選択になる", async () => {
     const { el } = await table("a,b,c\n1,2,3\n");
     mouse(heads(el)[0], "mousedown", xAt(el, 0, 5));
+    mouse(window, "mousemove", xAt(el, 2, 2));
+    expect(el.querySelector(".mg-csv-lift")).toBeNull();
+    act(() => {
+      heads(el)[2].dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    mouse(window, "mouseup", xAt(el, 2, 2));
+    expect(written).toEqual([]);
+    expect([...el.querySelectorAll(".mg-csv-head .is-in")].map((c) => c.getAttribute("data-c"))).toEqual(["0", "1", "2"]);
+  });
+
+  it("動かしている間は列を浮かせ、ほかの列を滑らせて落とす先を空ける。Esc で取りやめる", async () => {
+    const { el } = await table("a,b,c\n1,2,3\n");
+    mouse(letters(el)[0], "mousedown", xAt(el, 0, 5));
     mouse(window, "mousemove", xAt(el, 2, 2));
     const lift = el.querySelector(".mg-csv-lift")!;
     expect(lift.querySelector(".mg-csv-lift-letter")!.textContent).toBe("A");

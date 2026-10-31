@@ -477,7 +477,7 @@ export function CsvTable({
     return () => window.removeEventListener("mousedown", onDown, true);
   }, [sel, setSel, onCommit]);
 
-  // 列の名前か見出しを掴んで、左右へ動かす。HTML5 のドラッグは WebKit では表の
+  // 列の名前（A・B…）を掴んで、左右へ動かす。見出しの行を引くのは範囲の選択。HTML5 のドラッグは WebKit では表の
   // 升目から始まらないので、幅のつまみと同じくマウスの動きで組む。4px 動くまでは
   // 押しただけ（升目を選ぶ）として扱う。落とす先は、マウスの位置と列の境目
   // （幅の累計）から決める。Esc で取りやめる。
@@ -803,7 +803,6 @@ export function CsvTable({
                   data-r={0}
                   data-c={i}
                   className={cls(on(0, i), inRange(0, i) && "is-in", hidden.has(i) && "is-hidden")}
-                  onMouseDown={(e) => grab(e, i)}
                 >
                   <span className="mg-csv-hcell">
                     <span className="mg-csv-hname">{v}</span>
