@@ -20,9 +20,11 @@ beforeAll(() => {
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 let sent: string[] = [];
+let closed = 0;
 
 function show() {
   sent = [];
+  closed = 0;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -33,7 +35,7 @@ function show() {
         selection="按分額は日割りで算出する"
         busy={false}
         onSubmit={(body) => sent.push(body)}
-        onClose={() => {}}
+        onClose={() => closed++}
       />,
     ),
   );
@@ -80,6 +82,20 @@ describe("新しいコメントの種類", () => {
     type(field, "いくつか書き方を");
     key(field, "Enter", { metaKey: true });
     expect(sent).toEqual(["[ideas] いくつか書き方を"]);
+  });
+
+  it("一覧の選択肢を押して選んでも、小窓は閉じない", () => {
+    const field = show();
+    type(field, "/");
+    const ask = Array.from(document.querySelectorAll<HTMLElement>(".mg-kind-opt")).find((el) =>
+      el.textContent?.startsWith("質問"),
+    )!;
+    act(() => {
+      ask.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+      ask.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(closed).toBe(0);
+    expect(seat()).toBe("ask");
   });
 
   it("種類を外して送ると、印なし（修正として扱う）で送る", () => {

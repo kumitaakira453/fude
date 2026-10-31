@@ -426,7 +426,8 @@ export function CommentRail({
   useEffect(() => {
     if (!active) return;
     const away = (e: PointerEvent) => {
-      if (!(e.target as Element | null)?.closest?.(".mg-rail-card")) onPick(null);
+      // 種類の一覧は窓に対して置いている（札の外にある）ので、そこを押しても外さない。
+      if (!(e.target as Element | null)?.closest?.(".mg-rail-card, .mg-kind-list")) onPick(null);
     };
     window.addEventListener("pointerdown", away, true);
     return () => window.removeEventListener("pointerdown", away, true);

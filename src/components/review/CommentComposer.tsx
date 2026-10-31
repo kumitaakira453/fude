@@ -164,7 +164,10 @@ export function CommentComposer({
       }
     };
     const onDown = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) onClose();
+      const t = e.target as Node;
+      // 種類の一覧は窓に対して置いている（小窓の外にある）ので、そこを押しても閉じない。
+      if (t instanceof Element && t.closest(".mg-kind-list")) return;
+      if (!boxRef.current?.contains(t)) onClose();
     };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousedown", onDown, true);
