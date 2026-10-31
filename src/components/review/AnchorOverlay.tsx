@@ -14,6 +14,8 @@ import { touchesBody, useLayerHost } from "../../lib/layerHost";
 import { AutoTextarea } from "../AutoTextarea";
 import { Icon } from "../Icon";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
+import { kindOf } from "../../lib/commentKind";
+import { KindChip } from "./KindSlash";
 
 // 指摘が付いている箇所に印を重ねる。DOM は書き換えず、矩形を絶対配置で
 // 載せるだけなので本文の組版に影響しない。
@@ -498,7 +500,14 @@ export function AnchorOverlay({
               />
             )
           ) : peek.note ? (
-            <CommentBody body={peek.note} className="mg-review-peek-body" />
+            <>
+              {kindOf(peek.note).kind && (
+                <div className="mg-msg-kind">
+                  <KindChip kind={kindOf(peek.note).kind ?? "edit"} />
+                </div>
+              )}
+              <CommentBody body={kindOf(peek.note).rest} className="mg-review-peek-body" />
+            </>
           ) : (
             <div className="mg-review-peek-body">（本文なし）</div>
           )}

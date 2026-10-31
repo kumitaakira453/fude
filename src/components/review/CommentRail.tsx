@@ -27,6 +27,8 @@ import { IconBtn } from "../Chrome";
 import { useSetAtom } from "jotai";
 import { railAtom } from "../../state/atoms";
 import { CommentBody } from "./CommentMarkdown";
+import { KINDS, kindName, kindOf, threadKind, withKind, type CommentKind } from "../../lib/commentKind";
+import { KindChip, useKindSlash } from "./KindSlash";
 
 // 本文の横に出すコメント。目次と同じ場所を取り合う（どちらも右の欄）。
 //
@@ -67,10 +69,17 @@ export function FilterChip({
   now,
   counts,
   onPick,
+  kind = "all",
+  kindCounts,
+  onKind,
 }: {
   now: RailFilter;
   counts: Record<RailFilter, number>;
   onPick: (filter: RailFilter) => void;
+  // 種類での絞り込み。渡されたときだけ、一覧に種類の段を出す。
+  kind?: CommentKind | "all";
+  kindCounts?: Record<CommentKind | "all", number>;
+  onKind?: (kind: CommentKind | "all") => void;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement | null>(null);
@@ -132,6 +141,14 @@ export function FilterChip({
         className={`mg-rail-chip${open ? " is-open" : ""}`}
       >
         {here.name}
+        {kind !== "all" && (
+          <>
+            <span className="mg-rail-chip-sep">·</span>
+            <span data-kind={kind} className="mg-kind">
+              {kindName(kind)}
+            </span>
+          </>
+        )}
         <b>{counts[now]}</b>
       </button>
       {open &&
@@ -163,6 +180,31 @@ export function FilterChip({
               <b>{counts[one.id]}</b>
             </button>
           ))}
+          {onKind && kindCounts && (
+            <>
+              <div className="mg-rail-menu-sep" />
+              <div className="mg-rail-menu-cap">種類</div>
+              {(["all", ...KINDS.map((k) => k.id)] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    onKind(id);
+                    setOpen(false);
+                  }}
+                  data-tone={id === "all" ? "all" : undefined}
+                  data-kind={id === "all" ? undefined : id}
+                  className={`mg-rail-opt is-kind${id === kind ? " is-on" : ""}${
+                    kindCounts[id] === 0 ? " is-empty" : ""
+                  }`}
+                >
+                  <i className="mg-rail-dot" />
+                  <span className="mg-rail-opt-name">{id === "all" ? "すべての種類" : kindName(id)}</span>
+                  <b>{kindCounts[id]}</b>
+                </button>
+              ))}
+            </>
+          )}
         </div>,
           document.body,
         )}
@@ -180,6 +222,8 @@ export function CommentRail({
   loose,
   filter,
   onFilter,
+  kind = "all",
+  onKind,
   width,
   active,
   onPick,
@@ -207,6 +251,9 @@ export function CommentRail({
   // 何を出すか。片付いたものを引くかどうかが変わるので、呼ぶ側が持つ。
   filter: RailFilter;
   onFilter: (filter: RailFilter) => void;
+  // 種類での絞り込み（threadKind で見る）。状態の札の一覧で選ぶ。
+  kind?: CommentKind | "all";
+  onKind?: (kind: CommentKind | "all") => void;
   // 欄の幅。掴んで変えた分を呼ぶ側が覚える。
   width: number;
   // 選んでいる 1 枚。本文の印と同じ合図を使う。
@@ -228,20 +275,39 @@ export function CommentRail({
   //
   // 今の本文に居場所を持たない指摘はここへ入れない。押しても飛ぶ先が無い。
   // 絞り込みごとの件数。選ぶ前に、どれがどれだけあるかを見せる。
+  // 状態の数は選んでいる種類の中で、種類の数は選んでいる状態の中で数える。
+  const ofKind = useCallback(
+    (thread: ReviewThread, k: CommentKind | "all") => k === "all" || threadKind(thread) === k,
+    [],
+  );
+  const inState = useCallback(
+    (thread: ReviewThread, settled: boolean, f: RailFilter) => {
+      if (f === "all") return true;
+      if (f === "done") return settled;
+      if (settled) return false;
+      return f === "open" || awaitsMe(thread);
+    },
+    [],
+  );
   const counts = useMemo(() => {
-    const todo = [...threads, ...loose].filter(awaitsMe).length;
-    const open = threads.length + loose.length;
-    return { todo, open, done: done.length, all: open + done.length };
-  }, [threads, loose, done]);
+    const live = [...threads, ...loose].filter((t) => ofKind(t, kind));
+    const todo = live.filter(awaitsMe).length;
+    const shut = done.filter((t) => ofKind(t, kind)).length;
+    return { todo, open: live.length, done: shut, all: live.length + shut };
+  }, [threads, loose, done, kind, ofKind]);
+  const kindCounts = useMemo(() => {
+    const listed = [
+      ...[...threads, ...loose].map((t) => ({ t, settled: false })),
+      ...done.map((t) => ({ t, settled: true })),
+    ].filter(({ t, settled }) => inState(t, settled, filter));
+    const out = { all: listed.length } as Record<CommentKind | "all", number>;
+    for (const k of KINDS) out[k.id] = listed.filter(({ t }) => threadKind(t) === k.id).length;
+    return out;
+  }, [threads, loose, done, filter, inState]);
 
   const keep = useCallback(
-    (thread: ReviewThread, settled: boolean) => {
-      if (filter === "all") return true;
-      if (filter === "done") return settled;
-      if (settled) return false;
-      return filter === "open" || awaitsMe(thread);
-    },
-    [filter],
+    (thread: ReviewThread, settled: boolean) => inState(thread, settled, filter) && ofKind(thread, kind),
+    [filter, kind, inState, ofKind],
   );
 
   const cards = useMemo<Card[]>(() => {
@@ -393,7 +459,14 @@ export function CommentRail({
     >
       <div className="mg-rail-bar mg-rail-head">
         <span className="mg-rail-title">コメント</span>
-        <FilterChip now={filter} counts={counts} onPick={onFilter} />
+        <FilterChip
+          now={filter}
+          counts={counts}
+          onPick={onFilter}
+          kind={kind}
+          kindCounts={kindCounts}
+          onKind={onKind}
+        />
         {strays.length > 0 && (
           <button
             type="button"
@@ -512,6 +585,8 @@ function RailCard({
   // 上の書き込みを直している最中か。その間は返信の口を隠す。
   const [rewriting, setRewriting] = useState(false);
   const md = useMarkdownKeys(setText);
+  // 返信の種類。既定は付けない（前の種類を引き継ぐ）。欄の頭の「/」で選ぶ。
+  const kinds = useKindSlash({ input: box, initial: null, reply: true, setText });
   // 焦点を当てると既定でその要素が見える位置まで送られ、直前に始めた本文の
   // 滑らかな送りを打ち消す。当てるだけにする。
   useEffect(() => {
@@ -520,15 +595,18 @@ function RailCard({
 
   // 選びが自分から外れたら口を閉じる。書きかけがあるうちは残す。
   useEffect(() => {
-    if (!active && !text.trim()) setWriting(false);
-  }, [active, text]);
+    if (!active && !text.trim() && kinds.kind === null) setWriting(false);
+  }, [active, text, kinds.kind]);
 
   const send = () => {
     const body = text.trim();
-    if (!body) return;
+    // 承認は「その内容で」の意味なので、字が無くても送れる。
+    if (!body && kinds.kind !== "approve") return;
     setText("");
-    onReply(body);
+    kinds.reset();
+    onReply(withKind(kinds.kind, body).trim());
   };
+  const ready = !!text.trim() || kinds.kind !== null;
 
   return (
     // 中に Markdown のリンクと入力欄が入るので、札そのものは button にしない
@@ -582,10 +660,11 @@ function RailCard({
       {/* 畳んでいる札は最初の 1 つだけ。列に何枚も並ぶので、全部出すと
           長い会話 1 件で欄が埋まり、他の指摘が見えなくなる。 */}
       <div className="mg-rail-talk">
-        {(active ? thread.comments : thread.comments.slice(0, 1)).map((c) => (
+        {(active ? thread.comments : thread.comments.slice(0, 1)).map((c, i) => (
           <Said
             key={c.id}
             comment={c}
+            reply={i > 0}
             own={ownsLast(thread, c)}
             onRewrite={(body) => onRewrite(c.id, body)}
             onErase={() => onErase(c.id)}
@@ -602,21 +681,24 @@ function RailCard({
       {/* 返信の口は押した札にだけ。書きかけがあるうちは、選びが外れても残す。
           上の書き込みを直している間は隠す（入力欄が 2 つ並ぶと、どちらに打って
           いるのか紛れる）。書きかけは消さずに持ち、直し終えたら戻す。 */}
-      {!rewriting && (writing || text.trim()) && (
+      {!rewriting && (writing || ready) && (
         // 入力欄を押したときまで箇所へ送ると、打っている最中に本文が動く。
         <div className="mg-rail-reply" onClick={(e) => e.stopPropagation()}>
+          {kinds.field(
           <AutoTextarea
             ref={box}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => kinds.change(e.target.value)}
             onKeyUp={md.onKeyUp}
             onCompositionStart={md.onCompositionStart}
             onCompositionEnd={md.onCompositionEnd}
             onKeyDown={(e) => {
+              if (kinds.keyDown(e)) return;
               if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
                 setText("");
+                kinds.reset();
                 box.current?.blur();
                 return;
               }
@@ -627,15 +709,19 @@ function RailCard({
               }
               md.onKeyDown(e);
             }}
-            placeholder="返信…"
+            placeholder="返信…（/ で種類）"
             minRows={1}
             maxRows={8}
-          />
-          {text.trim() && (
+          />,
+          )}
+          {ready && (
             <div className="mg-rail-send">
               <button
                 type="button"
-                onClick={() => setText("")}
+                onClick={() => {
+                  setText("");
+                  kinds.reset();
+                }}
                 className="mg-rail-reply-off"
               >
                 やめる
@@ -664,12 +750,15 @@ function Face({ author }: { author: string }) {
 // 途中のものを直せると、あとの返信が何に答えたものか読めなくなる。
 function Said({
   comment,
+  reply,
   own,
   onRewrite,
   onErase,
   onEditing,
 }: {
   comment: ReviewComment;
+  // スレッドの 2 つ目以降の書き込みか（承認を付けられる）。
+  reply: boolean;
   own: boolean;
   onRewrite: (body: string) => void;
   onErase: () => void;
@@ -683,6 +772,7 @@ function Said({
   };
   const [text, setText] = useState(comment.body);
   const md = useMarkdownKeys(setText);
+  const said = kindOf(comment.body);
 
   const save = () => {
     const body = text.trim();
@@ -696,6 +786,16 @@ function Said({
         <Face author={comment.author} />
         <span className="mg-rail-name">{comment.author}</span>
         <span>{ago(comment.created_at)}</span>
+        {/* 人の書き込みの種類。種類が無いものは修正として薄く出す。自分の最後の
+            書き込みは、札を押して種類を替えられる（承認は返信にだけ付く）。 */}
+        {!AGENTS.has(comment.author) && (
+          <KindChip
+            kind={said.kind ?? "edit"}
+            faint={!said.kind}
+            choices={KINDS.filter((k) => reply || !k.replyOnly)}
+            onPick={own && !editing ? (k) => onRewrite(withKind(k, said.rest)) : undefined}
+          />
+        )}
         {own && !editing && (
           <span className="mg-rail-own" onClick={(e) => e.stopPropagation()}>
             <RailAct
@@ -760,7 +860,7 @@ function Said({
           </div>
         </div>
       ) : (
-        <CommentBody body={comment.body} className="mg-rail-body" />
+        <CommentBody body={said.rest} className="mg-rail-body" />
       )}
     </div>
   );

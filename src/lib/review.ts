@@ -366,6 +366,7 @@ export async function resolveThreads(threads: string[], by: string): Promise<num
 
 // 指摘の書き手。エージェントの返信は指摘そのものではないので数えない。
 const AGENTS = new Set(["AI", "ai", "assistant", "claude"]);
+export const isAgent = (author: string): boolean => AGENTS.has(author);
 
 const QUOTE_LIMIT = 120;
 

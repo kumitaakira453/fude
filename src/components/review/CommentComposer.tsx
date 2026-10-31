@@ -4,7 +4,9 @@ import { isDiagramBlock } from "../../lib/blocks";
 import type { AnchorHit } from "../../lib/review";
 import { Icon } from "../Icon";
 import { Markdown } from "../Markdown";
+import { withKind } from "../../lib/commentKind";
 import { CommentPreview, PreviewToggle } from "./CommentMarkdown";
+import { useKindSlash } from "./KindSlash";
 
 // 読書中に選択した箇所へ指摘を書く小窓。書くことだけを担い、
 // 付いている指摘を読む・返信する・解決するのはレビュー画面が受け持つ。
@@ -54,6 +56,8 @@ export function CommentComposer({
       return !v;
     });
   const md = useMarkdownKeys(setBody, flip);
+  // 種類。新しいコメントは修正を付けておき、欄の頭の「/」で替える。
+  const kinds = useKindSlash({ input: inputRef, initial: "edit", reply: false, setText: setBody });
   // 開いた時点からの対象のずれ。これを足して追いかける。
   const [shift, setShift] = useState({ x: 0, y: 0 });
   // 小窓の高さ。画面の端で止めるのに要る（入力欄が伸びると変わる）。
@@ -134,6 +138,8 @@ export function CommentComposer({
   // 焦点は形が決まってから当てる。高さを測るまでは visibility: hidden で
   // 置いてあり、見えない要素は焦点を取れない（focus() が黙って外れる）。
   const focused = useRef(false);
+  const kindsOpen = useRef(false);
+  kindsOpen.current = kinds.open;
   useEffect(() => {
     if (focused.current || height <= 0) return;
     focused.current = true;
@@ -151,7 +157,8 @@ export function CommentComposer({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      // 種類の一覧が出ているときの Esc は一覧を閉じるだけ。
+      if (e.key === "Escape" && !kindsOpen.current) {
         e.stopPropagation();
         onClose();
       }
@@ -179,11 +186,12 @@ export function CommentComposer({
   const submit = () => {
     const text = body.trim();
     if (!text || busy) return;
-    onSubmit(text);
+    onSubmit(withKind(kinds.kind, text));
   };
 
   // 送信の合図は入力欄でもプレビューでも同じに効かせる。
   const onKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (kinds.keyDown(e)) return;
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       submit();
@@ -218,18 +226,20 @@ export function CommentComposer({
             onKeyDown={onKey}
           />
         ) : (
+          kinds.field(
           <textarea
             ref={inputRef}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => kinds.change(e.target.value)}
             onKeyUp={md.onKeyUp}
             onCompositionStart={md.onCompositionStart}
             onCompositionEnd={md.onCompositionEnd}
             onKeyDown={onKey}
             style={{ minHeight: MIN_INPUT, maxHeight: maxInput }}
-            placeholder="コメントを書く…（⌘Enter で送信）"
+            placeholder="コメントを書く…（/ で種類、⌘Enter で送信）"
             className="block w-full resize-none rounded-lg border border-[var(--mg-border)] bg-[var(--mg-input-bg)] px-2.5 py-1.5 text-[13px] leading-[1.4] outline-none transition placeholder:text-[var(--mg-muted)] focus:border-[var(--mg-accent)]"
-          />
+          />,
+          )
         )}
         <div className="mt-1.5 flex items-center gap-1.5">
           <PreviewToggle on={see} onToggle={flip} />

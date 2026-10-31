@@ -75,6 +75,8 @@ import { SelectionMenu } from "./SelectionMenu";
 import { CommentComposer } from "./CommentComposer";
 import { useReview } from "../../hooks/useReview";
 import { CommentBody, CommentPreview, PreviewToggle } from "./CommentMarkdown";
+import { KINDS, kindOf, withKind } from "../../lib/commentKind";
+import { KindChip, useKindSlash } from "./KindSlash";
 import { DocumentView } from "./DocumentView";
 import { Quote } from "./Quote";
 
@@ -817,6 +819,8 @@ function ThreadDetail({
       return !v;
     });
   const md = useMarkdownKeys(setReply, flipReply);
+  // 返信の種類。既定は付けない（前の種類を引き継ぐ）。欄の頭の「/」で選ぶ。
+  const kinds = useKindSlash({ input: replyRef, initial: null, reply: true, setText: setReply });
   // 表示用。返信と解決は別の操作なので別に持つ。1 つにすると、返信しただけで
   // 解決のボタンまで処理中の見た目になる。
   const [sending, setSending] = useState(false);
@@ -966,13 +970,15 @@ function ThreadDetail({
   );
 
   const send = useCallback(async () => {
-    const text = reply.trim();
-    if (!text || sendingRef.current) return;
+    // 承認は「その内容で」の意味なので、字が無くても送れる。
+    if ((!reply.trim() && kinds.kind !== "approve") || sendingRef.current) return;
+    const text = withKind(kinds.kind, reply.trim()).trim();
     sendingRef.current = true;
     setSending(true);
     try {
       if (await replyToThread(thread.id, REVIEW_AUTHOR, text)) {
         setReply("");
+        kinds.reset();
         setSeeReply(false);
         await syncLedger(store);
         notify(store, "返信しました");
@@ -981,9 +987,10 @@ function ThreadDetail({
       sendingRef.current = false;
       setSending(false);
     }
-  }, [reply, thread.id, store]);
+  }, [reply, thread.id, store, kinds]);
 
   const onReplyKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (kinds.keyDown(e)) return;
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       void send();
@@ -1188,6 +1195,7 @@ function ThreadDetail({
               <Message
                 key={c.id}
                 comment={c}
+                reply={i > 0}
                 mine={c.author === reviewer}
                 run={thread.comments[i - 1]?.author === c.author}
                 onRewrite={(body) => void rewrite(c.id, body)}
@@ -1217,19 +1225,21 @@ function ThreadDetail({
           {seeReply ? (
             <CommentPreview body={reply} onKeyDown={onReplyKey} />
           ) : (
+            kinds.field(
             <AutoTextarea
               ref={replyRef}
               value={reply}
-              onChange={(e) => setReply(e.target.value)}
+              onChange={(e) => kinds.change(e.target.value)}
               onKeyUp={md.onKeyUp}
               onCompositionStart={md.onCompositionStart}
               onCompositionEnd={md.onCompositionEnd}
               onKeyDown={onReplyKey}
               minRows={2}
               maxRows={10}
-              placeholder="返信を書く…（記法が使えます）"
+              placeholder="返信を書く…（/ で種類。記法が使えます）"
               className="mg-field"
-            />
+            />,
+            )
           )}
           {/* 送り方の案内は入力欄の外に置く。プレースホルダに混ぜると、
               書き始めたとたんに読めなくなる。 */}
@@ -1240,7 +1250,7 @@ function ThreadDetail({
             </span>
             <button
               onClick={() => void send()}
-              disabled={sending || !reply.trim()}
+              disabled={sending || (!reply.trim() && kinds.kind !== "approve")}
               className="mg-send"
             >
               <Icon
@@ -1315,11 +1325,14 @@ const AGENT_AUTHORS = new Set(["AI", "ai", "assistant", "claude"]);
 
 function Message({
   comment,
+  reply,
   mine,
   run,
   onRewrite,
 }: {
   comment: ReviewComment;
+  // スレッドの 2 つ目以降の書き込みか（承認を付けられる）。
+  reply: boolean;
   mine: boolean;
   run: boolean;
   onRewrite: (body: string) => void;
@@ -1351,6 +1364,17 @@ function Message({
     }
     md.onKeyDown(e);
   };
+  const said = kindOf(comment.body);
+  // 人の書き込みの種類。種類が無いものは修正として薄く出す。自分の書き込みは
+  // 札を押して種類を替えられる（承認は返信にだけ付く）。
+  const kindChip = agent ? null : (
+    <KindChip
+      kind={said.kind ?? "edit"}
+      faint={!said.kind}
+      choices={KINDS.filter((k) => reply || !k.replyOnly)}
+      onPick={mine && !editing ? (k) => onRewrite(withKind(k, said.rest)) : undefined}
+    />
+  );
   const startEditing = () => {
     setText(comment.body);
     setSee(false);
@@ -1368,6 +1392,7 @@ function Message({
           {/* 使っている本人の発言は、台帳に残る名前が何であれ「you」と呼ぶ */}
           <span className="mg-msg-name">{mine ? "you" : comment.author}</span>
           <span className="mg-msg-time">{whenText(comment.created_at)}</span>
+          {kindChip}
         </div>
       )}
       {editing ? (
@@ -1419,7 +1444,9 @@ function Message({
         </div>
       ) : (
         <div className="mg-bubble">
-          <CommentBody body={comment.body} />
+          {/* 続けて書いた書き込みは見出しを省くので、種類はここに出す。 */}
+          {run && said.kind && <div className="mg-msg-kind">{kindChip}</div>}
+          <CommentBody body={said.rest} />
           {mine && (
             <button
               type="button"

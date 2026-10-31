@@ -4721,6 +4721,99 @@ svg[id^="mmd-"] foreignObject div {
   --mg-tone: var(--mg-fg-dim);
 }
 
+/* コメントの種類の色。修正はアクセント、ほかは青・紫・緑を字の色に寄せて作り、
+   どの配色でも浮かないようにする。 */
+[data-kind="edit"] {
+  --mg-kind: var(--mg-accent);
+}
+[data-kind="ask"] {
+  --mg-kind: color-mix(in srgb, #3b82f6 72%, var(--mg-fg));
+}
+[data-kind="ideas"] {
+  --mg-kind: color-mix(in srgb, #a855f7 70%, var(--mg-fg));
+}
+[data-kind="approve"] {
+  --mg-kind: color-mix(in srgb, #22a05a 72%, var(--mg-fg));
+}
+.mg-kind {
+  display: inline-flex;
+  flex: none;
+  height: 17px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mg-kind) 15%, transparent);
+  color: var(--mg-kind);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.mg-kind.is-faint {
+  opacity: 0.5;
+}
+.mg-kind.is-pick {
+  cursor: pointer;
+}
+.mg-kind.is-pick:hover {
+  background: color-mix(in srgb, var(--mg-kind) 24%, transparent);
+}
+.mg-kind-x {
+  opacity: 0.7;
+  font-weight: 400;
+  cursor: pointer;
+}
+.mg-kind-x:hover {
+  opacity: 1;
+}
+/* 書く欄の頭の札。1 行目の頭に重ね、字はその分だけ字下げして続ける。 */
+.mg-kind-field {
+  position: relative;
+}
+.mg-kind-field textarea {
+  text-indent: var(--mg-kind-indent, 0px);
+}
+.mg-kind-seat {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  left: 9px;
+  display: flex;
+}
+.mg-kind-list {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  min-width: 200px;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--mg-border);
+  border-radius: 9px;
+  background: var(--mg-panel);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 22%);
+}
+.mg-kind-opt {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--mg-fg-dim);
+  text-align: left;
+}
+.mg-kind-opt:hover,
+.mg-kind-opt.is-on {
+  background: var(--mg-hover);
+}
+.mg-kind-opt code {
+  margin-left: auto;
+  color: var(--mg-muted);
+  font-family: var(--mg-font-mono);
+  font-size: 11px;
+}
+
 /* コメントの欄の絞り込み。ほかの字のボタンと同じく、地に彫り込んだ形。 */
 .mg-rail-chip {
   display: inline-flex;
@@ -4760,6 +4853,38 @@ svg[id^="mmd-"] foreignObject div {
 .mg-rail-opt.is-empty > b {
   background: color-mix(in srgb, var(--mg-fg) 8%, transparent);
   color: var(--mg-muted);
+}
+/* 状態の札の一覧の、種類の段。点と数は種類の色で描く。 */
+.mg-rail-menu-sep {
+  margin: 4px 6px;
+  border-top: 1px solid var(--mg-border);
+}
+.mg-rail-menu-cap {
+  padding: 4px 8px 2px;
+  color: var(--mg-muted);
+  font-size: 10.5px;
+}
+.mg-rail-opt.is-kind[data-kind] {
+  --mg-tone: var(--mg-kind);
+}
+.mg-rail-chip-sep {
+  color: var(--mg-muted);
+}
+.mg-rail-chip .mg-kind {
+  height: 15px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+.mg-msg-kind {
+  margin-bottom: 3px;
+}
+.mg-msg-meta .mg-kind {
+  margin-left: 2px;
+}
+/* 右の欄の返信の欄は余白が狭いので、頭の札もそれに合わせて置く。 */
+.mg-rail-reply .mg-kind-seat {
+  top: 4px;
+  left: 6px;
 }
 /* 状態の色。札と選択肢で同じものを使う。 */
 .mg-rail-dot {

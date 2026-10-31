@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { DocSearchOverlay } from "./DocSearchOverlay";
+import type { CommentKind } from "../lib/commentKind";
 import { useReview } from "../hooks/useReview";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { fontStack } from "../lib/fonts";
@@ -711,6 +712,7 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
   // 引かせる（解決済みは溜まる一方で、1 件ごとに基準版の読み込みと差分が要る）。
   // コメント欄の絞り込み。既定は「未対応」——読み返して手を付けるものだけが残る。
   const [railFilter, setRailFilter] = useState<RailFilter>("todo");
+  const [railKind, setRailKind] = useState<CommentKind | "all">("all");
   const railAll = railFilter === "all" || railFilter === "done";
   // 欄の幅。掴んでいるあいだは仕切りが DOM へ直に書くので、控えは離した 1 回だけ。
   const [railWidth, setRailWidth] = useAtom(railWidthAtom);
@@ -1826,6 +1828,8 @@ export function DocPane({ pane, isSplit }: { pane: Pane; isSplit: boolean }) {
             loose={review.looseThreads}
             filter={railFilter}
             onFilter={setRailFilter}
+            kind={railKind}
+            onKind={setRailKind}
             width={railWidth}
             active={picked}
             onPick={setPicked}

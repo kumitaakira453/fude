@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Block } from "../../lib/blocks";
 import type { Resolution } from "../../lib/blockDiff";
 import type { RailFilter, ReviewThread } from "../../lib/review";
+import type { CommentKind } from "../../lib/commentKind";
 import { CommentRail } from "./CommentRail";
 
 // 本文の横に出すコメント。
@@ -125,6 +126,7 @@ function show(
   function Host() {
     const railRef = useRef<HTMLElement | null>(null);
     const [filter, setFilter] = useState<RailFilter>(over.filter ?? "todo");
+    const [kind, setKind] = useState<CommentKind | "all">("all");
     const [active, setActive] = useState<string | null>(over.active ?? null);
     return (
       <CommentRail
@@ -137,6 +139,8 @@ function show(
         loose={over.loose ?? []}
         filter={filter}
         onFilter={setFilter}
+        kind={kind}
+        onKind={setKind}
         width={288}
         active={active}
         onPick={(id) => {
@@ -254,12 +258,16 @@ describe("絞り込み", () => {
   it("選択肢にそれぞれの件数を出す", () => {
     two({ done: [settled("d1")], loose: [thread("x1")] });
     openFilter();
-    expect(picks().map((el) => el.textContent)).toEqual([
+    const states = picks().filter((el) => !el.classList.contains("is-kind"));
+    expect(states.map((el) => el.textContent)).toEqual([
       "未対応最後の発言が自分でないもの3",
       "未解決返信済みも含む3",
       "解決済み片付いたもの1",
       "すべて4",
     ]);
+    // 種類の段は、選んでいる状態（未対応）の中で数える。印が無いものは修正。
+    const kinds = picks().filter((el) => el.classList.contains("is-kind"));
+    expect(kinds.map((el) => el.textContent)).toEqual(["すべての種類3", "修正3", "質問0", "案出し0", "承認0"]);
   });
 
   it("既定は未対応。最後の発言が自分のものは残らない", () => {
@@ -677,5 +685,104 @@ describe("札の字を選ぶ", () => {
     expect(window.getSelection()!.isCollapsed).toBe(false);
     expect(shown).toEqual([]);
     sel.removeAllRanges();
+  });
+});
+
+// コメントの種類（修正・質問・案出し・承認）。本文の頭の [edit] などで持ち、札で見せる。
+describe("コメントの種類", () => {
+  const withBodies = (id: string, ...bodies: [string, string][]) =>
+    thread(id, {
+      comments: bodies.map(([author, body], i) => ({ id: `${id}c${i + 1}`, author, body, created_at: i })),
+    });
+  const kinds = (card: HTMLElement) =>
+    Array.from(card.querySelectorAll<HTMLElement>(".mg-rail-who .mg-kind")).map(
+      (el) => `${el.dataset.kind}${el.classList.contains("is-faint") ? "（薄）" : ""}`,
+    );
+  const type = (field: HTMLTextAreaElement, value: string) =>
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const key = (field: HTMLElement, k: string, init: KeyboardEventInit = {}) =>
+    act(() => {
+      field.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
+    });
+
+  it("書き込みごとに種類の札を出し、本文から頭の印を外す。印が無い人の書き込みは薄い修正", () => {
+    show(
+      [withBodies("t1", ["you", "[ask] 本当に起きる？"], ["claude", "起きません"], ["you", "了解"])],
+      new Map<string, Resolution>([["t1", at(0)]]),
+      { filter: "all", active: "t1" },
+    );
+    expect(kinds(cards()[0])).toEqual(["ask", "edit（薄）"]);
+    const bodies = Array.from(cards()[0].querySelectorAll(".mg-rail-body")).map((el) => el.textContent);
+    expect(bodies[0]).toBe("本当に起きる？");
+  });
+
+  it("返信の欄の頭で / を打つと種類を選べ、承認は字が無くても送れる", () => {
+    show(
+      [withBodies("t1", ["you", "[ideas] 案を出して"], ["claude", "案1 … 案2 …"])],
+      new Map<string, Resolution>([["t1", at(0)]]),
+    );
+    click(cards()[0]);
+    const field = box(cards()[0])!;
+    type(field, "/ap");
+    const options = Array.from(document.querySelectorAll<HTMLElement>(".mg-kind-opt")).map((el) => el.textContent);
+    expect(options).toEqual(["承認/approve"]);
+    key(field, "Enter");
+    expect(cards()[0].querySelector(".mg-kind-seat .mg-kind")?.textContent).toContain("承認");
+    expect(field.value).toBe("");
+    key(field, "Enter", { metaKey: true });
+    expect(replied).toEqual([{ id: "t1", body: "[approve]" }]);
+  });
+
+  it("選んだ種類は本文の頭に印として付けて送る。⌫ で外せる", () => {
+    show([thread("t1")], new Map<string, Resolution>([["t1", at(0)]]));
+    click(cards()[0]);
+    const field = box(cards()[0])!;
+    type(field, "/");
+    key(field, "ArrowDown");
+    key(field, "Enter");
+    type(field, "どういう意味？");
+    key(field, "Enter", { metaKey: true });
+    expect(replied).toEqual([{ id: "t1", body: "[ask] どういう意味？" }]);
+    type(field, "/edit");
+    key(field, "Enter");
+    expect(cards()[0].querySelector(".mg-kind-seat")).not.toBeNull();
+    key(field, "Backspace");
+    expect(cards()[0].querySelector(".mg-kind-seat")).toBeNull();
+  });
+
+  it("自分の最後の書き込みは、札を押して種類を替えられる", () => {
+    show(
+      [withBodies("t1", ["you", "[edit] 削除"])],
+      new Map<string, Resolution>([["t1", at(0)]]),
+      { filter: "all", active: "t1" },
+    );
+    click(cards()[0].querySelector<HTMLElement>(".mg-rail-who .mg-kind")!);
+    const ask = Array.from(document.querySelectorAll<HTMLElement>(".mg-kind-opt")).find((el) =>
+      el.textContent?.startsWith("質問"),
+    )!;
+    click(ask);
+    expect(rewrote).toEqual([{ id: "t1", comment: "t1c1", body: "[ask] 削除" }]);
+  });
+
+  it("状態の札の一覧で種類を選ぶと、その種類のスレッドだけが残る", () => {
+    show(
+      [
+        withBodies("t1", ["you", "[ask] これは？"], ["claude", "返事"]),
+        withBodies("t2", ["you", "削除"], ["claude", "削除しました"]),
+      ],
+      new Map<string, Resolution>([
+        ["t1", at(0)],
+        ["t2", at(1)],
+      ]),
+    );
+    pick("質問");
+    expect(quotes()).toEqual(["選んだ字 t1"]);
+    expect(document.querySelector(".mg-rail-chip")!.textContent).toContain("質問");
+    pick("修正");
+    expect(quotes()).toEqual(["選んだ字 t2"]);
   });
 });
