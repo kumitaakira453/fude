@@ -675,7 +675,24 @@ export function CsvTable({
   const [asking, setAsking] = useState<{ col: number; at: DOMRect } | null>(null);
   const closeAsk = useCallback(() => setAsking(null), []);
 
-  const on = (r: number, c: number) => (sel && sel.row === r && sel.col === c ? "is-sel" : "");
+  // 選んでいる升目。範囲の中では別の枠を付けず、塗りを抜いて見分ける。
+  const on = (r: number, c: number) =>
+    sel && sel.row === r && sel.col === c ? (many ? "is-active" : "is-sel") : "";
+  // 範囲の外周の線は、端の升目に描く（重ねた箱は上に固定した見出しの下に隠れる）。
+  const firstIn = range ? head.findIndex((_, c) => c >= range.left && !hidden.has(c)) : -1;
+  const lastIn = range
+    ? [...head.keys()].reverse().find((c) => c <= range.right && !hidden.has(c)) ?? -1
+    : -1;
+  const edges = (r: number, c: number) => {
+    if (!inRange(r, c) || !range) return "";
+    const p = posOf.get(r);
+    return cls(
+      p === range.top && "is-et",
+      p === range.bottom && "is-eb",
+      c === firstIn && "is-el",
+      c === lastIn && "is-er",
+    ) ?? "";
+  };
   // 列 i の名前の升目に置く、隠した列を出す印。隠したまとまりの右隣の列の左端に
   // 置き、まとまりが末尾にあるときは左隣の列の右端に置く。
   const unhideMark = (i: number) => {
@@ -813,7 +830,7 @@ export function CsvTable({
                   key={i}
                   data-r={0}
                   data-c={i}
-                  className={cls(on(0, i), inRange(0, i) && "is-in", hidden.has(i) && "is-hidden")}
+                  className={cls(on(0, i), inRange(0, i) && "is-in", edges(0, i), hidden.has(i) && "is-hidden")}
                 >
                   <span className="mg-csv-hcell">
                     <span className="mg-csv-hname">{v}</span>
@@ -867,6 +884,7 @@ export function CsvTable({
                   className={cls(
                     on(r, i),
                     inRange(r, i) && "is-in",
+                    edges(r, i),
                     numberOf(v) !== null && "is-num",
                     hidden.has(i) && "is-hidden",
                   )}
@@ -913,21 +931,6 @@ export function CsvTable({
             </div>
           </div>
         </>
-      )}
-      {many && range && (
-        <div
-          className="mg-csv-range"
-          style={{
-            left: widths.slice(0, range.left).reduce((a, b) => a + b, NO_WIDTH),
-            width: widths.slice(range.left, range.right + 1).reduce((a, b) => a + b, 0),
-            top: range.top === 0 ? LETTERS_ROW : FIXED_TOP + (range.top - 1) * TABLE_ROW,
-            height:
-              (range.bottom === 0 ? LETTERS_ROW : FIXED_TOP + (range.bottom - 1) * TABLE_ROW) +
-              TABLE_ROW -
-              (range.top === 0 ? LETTERS_ROW : FIXED_TOP + (range.top - 1) * TABLE_ROW),
-          }}
-          aria-hidden
-        />
       )}
       {grows && place && growValue !== null && (
         <div className="mg-csv-grow" style={{ top: place.top, left: place.left, width: reach(growValue) }} aria-hidden>

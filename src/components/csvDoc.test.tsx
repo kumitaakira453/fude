@@ -866,7 +866,13 @@ describe("範囲を選んで写す・貼る", () => {
     over(el, 2, 1);
     up();
     expect(inRange(el)).toEqual(["1,0", "1,1", "2,0", "2,1"]);
-    expect(el.querySelector(".mg-csv-range")).not.toBeNull();
+    // 外周の線は端の升目に描き、選んでいる升目は範囲の中では枠を付けない。
+    expect(cellAt(el, 1, 0).className).toContain("is-et");
+    expect(cellAt(el, 1, 0).className).toContain("is-el");
+    expect(cellAt(el, 2, 1).className).toContain("is-eb");
+    expect(cellAt(el, 2, 1).className).toContain("is-er");
+    expect(el.querySelector(".is-sel")).toBeNull();
+    expect(el.querySelectorAll(".is-active").length).toBe(1);
     expect(clip(el, "copy")).toBe("佐藤\t営業\n鈴木\t開発");
   });
 
