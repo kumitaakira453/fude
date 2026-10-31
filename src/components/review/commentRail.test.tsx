@@ -696,7 +696,7 @@ describe("コメントの種類", () => {
     });
   const kinds = (card: HTMLElement) =>
     Array.from(card.querySelectorAll<HTMLElement>(".mg-rail-who .mg-kind")).map(
-      (el) => `${el.dataset.kind}${el.classList.contains("is-faint") ? "（薄）" : ""}`,
+      (el) => el.dataset.kind,
     );
   const type = (field: HTMLTextAreaElement, value: string) =>
     act(() => {
@@ -709,13 +709,13 @@ describe("コメントの種類", () => {
       field.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
     });
 
-  it("書き込みごとに種類の札を出し、本文から頭の印を外す。印が無い人の書き込みは薄い修正", () => {
+  it("書き込みごとに種類の札を出し、本文から頭の印を外す。印が無い人の書き込みは修正", () => {
     show(
       [withBodies("t1", ["you", "[ask] 本当に起きる？"], ["claude", "起きません"], ["you", "了解"])],
       new Map<string, Resolution>([["t1", at(0)]]),
       { filter: "all", active: "t1" },
     );
-    expect(kinds(cards()[0])).toEqual(["ask", "edit（薄）"]);
+    expect(kinds(cards()[0])).toEqual(["ask", "edit"]);
     const bodies = Array.from(cards()[0].querySelectorAll(".mg-rail-body")).map((el) => el.textContent);
     expect(bodies[0]).toBe("本当に起きる？");
   });

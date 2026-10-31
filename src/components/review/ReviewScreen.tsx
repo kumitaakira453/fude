@@ -1365,12 +1365,11 @@ function Message({
     md.onKeyDown(e);
   };
   const said = kindOf(comment.body);
-  // 人の書き込みの種類。種類が無いものは修正として薄く出す。自分の書き込みは
+  // 人の書き込みの種類。種類が無いものは修正として出す。自分の書き込みは
   // 札を押して種類を替えられる（承認は返信にだけ付く）。
   const kindChip = agent ? null : (
     <KindChip
       kind={said.kind ?? "edit"}
-      faint={!said.kind}
       choices={KINDS.filter((k) => reply || !k.replyOnly)}
       onPick={mine && !editing ? (k) => onRewrite(withKind(k, said.rest)) : undefined}
     />

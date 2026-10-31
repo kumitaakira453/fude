@@ -5,16 +5,14 @@ import { KINDS, kindName, type CommentKind, type KindInfo } from "../../lib/comm
 // コメントの種類の札と、書く欄の頭で「/」を打って種類を選ぶ口。
 
 // 色の札。onRemove を渡すと ×（書く欄の頭に付けたもの）、onPick を渡すと押して
-// 種類を替えられる。faint は種類が無い書き込み（修正として扱う）を薄く出す。
+// 種類を替えられる。
 export function KindChip({
   kind,
-  faint,
   onRemove,
   onPick,
   choices,
 }: {
   kind: CommentKind;
-  faint?: boolean;
   onRemove?: () => void;
   onPick?: (kind: CommentKind) => void;
   choices?: KindInfo[];
@@ -25,7 +23,7 @@ export function KindChip({
     <span
       ref={box}
       data-kind={kind}
-      className={`mg-kind${faint ? " is-faint" : ""}${onPick ? " is-pick" : ""}`}
+      className={`mg-kind${onPick ? " is-pick" : ""}`}
       onClick={(e) => {
         if (!onPick) return;
         e.stopPropagation();

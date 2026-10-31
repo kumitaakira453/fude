@@ -787,12 +787,11 @@ function Said({
         <Face author={comment.author} />
         <span className="mg-rail-name">{comment.author}</span>
         <span>{ago(comment.created_at)}</span>
-        {/* 人の書き込みの種類。種類が無いものは修正として薄く出す。自分の最後の
+        {/* 人の書き込みの種類。種類が無いものは修正として出す。自分の最後の
             書き込みは、札を押して種類を替えられる（承認は返信にだけ付く）。 */}
         {!AGENTS.has(comment.author) && (
           <KindChip
             kind={said.kind ?? "edit"}
-            faint={!said.kind}
             choices={KINDS.filter((k) => reply || !k.replyOnly)}
             onPick={own && !editing ? (k) => onRewrite(withKind(k, said.rest)) : undefined}
           />

@@ -4750,9 +4750,6 @@ svg[id^="mmd-"] foreignObject div {
   line-height: 1;
   white-space: nowrap;
 }
-.mg-kind.is-faint {
-  opacity: 0.5;
-}
 .mg-kind.is-pick {
   cursor: pointer;
 }
