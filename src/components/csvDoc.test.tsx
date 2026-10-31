@@ -890,10 +890,15 @@ describe("範囲を選んで写す・貼る", () => {
       el.querySelectorAll<HTMLElement>(".mg-csv-letters th:not(.mg-csv-no)")[1].click();
     });
     expect(clip(el, "copy")).toBe("部署\n営業\n開発\n営業");
+    // 列全体を選んだときは、行の番号は塗らない（全部が塗られて読めなくなる）。
+    expect(el.querySelectorAll("th.mg-csv-no.is-on").length).toBe(0);
+    expect([...el.querySelectorAll(".mg-csv-letters th.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["B"]);
     act(() => {
       el.querySelector<HTMLElement>('tbody th.mg-csv-no[data-n="3"]')!.click();
     });
     expect(clip(el, "copy")).toBe("鈴木\t開発\t300");
+    expect(el.querySelectorAll(".mg-csv-letters th.is-on").length).toBe(0);
+    expect([...el.querySelectorAll("th.mg-csv-no.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["3"]);
   });
 
   it("Delete で範囲を空にし、⌘X は写してから空にする。どちらも 1 回の ⌘Z で戻る", async () => {

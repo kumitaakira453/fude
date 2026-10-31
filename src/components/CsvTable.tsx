@@ -243,6 +243,17 @@ export function CsvTable({
     };
   }, [sel, anchor, posOf, head.length]);
   const many = !!range && (range.top !== range.bottom || range.left !== range.right);
+  // 列の名前・行の番号に範囲の色を付けるか。範囲が全部の行（列全体）にかかるなら
+  // 行の番号は、全部の見えている列（行全体）にかかるなら列の名前は塗らない。
+  // 全部が塗られると、どこを選んでいるかが読めなくなる。
+  const allRows = !!range && range.top === 0 && range.bottom === order.length;
+  const allCols =
+    !!range && head.every((_, c) => hidden.has(c) || (c >= range.left && c <= range.right));
+  const markCol = (c: number) =>
+    !(many && allCols) && (sel?.col === c || (many && !!range && c >= range.left && c <= range.right));
+  const markRowAt = (p: number) =>
+    !(many && allRows) &&
+    ((posOf.get(sel?.row ?? -1) ?? -1) === p || (many && !!range && p >= range.top && p <= range.bottom));
   const inRange = (r: number, c: number) => {
     const p = posOf.get(r);
     return many && !!range && p !== undefined && p >= range.top && p <= range.bottom && c >= range.left && c <= range.right;
@@ -744,7 +755,7 @@ export function CsvTable({
               <th
                 key={i}
                 className={cls(
-                  (sel?.col === i || (many && !!range && i >= range.left && i <= range.right)) && "is-on",
+                  markCol(i) && "is-on",
                   hidden.has(i) && "is-hidden",
                 )}
                 data-n={colName(i)}
@@ -780,7 +791,7 @@ export function CsvTable({
           </tr>
           <tr className="mg-csv-head">
             <th
-              className={cls("mg-csv-no", (sel?.row === 0 || (many && range?.top === 0)) && "is-on")}
+              className={cls("mg-csv-no", markRowAt(0) && "is-on")}
               data-n={1}
               onClick={() => pickRow(0)}
               onContextMenu={(e) => openRowMenu(e, 0)}
@@ -841,7 +852,7 @@ export function CsvTable({
               <th
                 className={cls(
                   "mg-csv-no",
-                  (sel?.row === r || (many && !!range && start + n + 1 >= range.top && start + n + 1 <= range.bottom)) &&
+                  markRowAt(start + n + 1) &&
                     "is-on",
                 )}
                 data-n={r + 1}
