@@ -2425,7 +2425,7 @@ body.mg-col-moving * {
   cursor: grabbing !important;
   user-select: none;
 }
-/* 列を掴んで動かしている間。掴んだ列は影付きで少し傾けて浮かせ、マウスに付いて
+/* 列を掴んで動かしている間。掴んだ列は影付きで浮かせ、マウスに付いて
    こさせる。ほかの列は滑って落とす先を空ける（ずらしは CsvTable の slideRules）。 */
 .mg-csv-grid {
   --mg-csv-hole: color-mix(in srgb, var(--mg-accent) 6%, var(--mg-bg));
@@ -2433,9 +2433,15 @@ body.mg-col-moving * {
 .mg-csv-grid.is-moving :is(td, th) {
   transition: transform 0.16s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
+/* 動かしている間は、選択と範囲の枠を隠す（列が滑っても枠は元の位置に残るため）。 */
 .mg-csv-grid.is-moving .mg-csv-colmenu,
-.mg-csv-grid.is-moving .mg-csv-funnel {
+.mg-csv-grid.is-moving .mg-csv-funnel,
+.mg-csv-grid.is-moving .mg-csv-range,
+.mg-csv-grid.is-moving .mg-csv-grow {
   visibility: hidden;
+}
+.mg-csv-grid.is-moving .mg-csv-table :is(td, th).is-sel {
+  box-shadow: none;
 }
 .mg-csv-lift {
   position: absolute;
@@ -2450,8 +2456,7 @@ body.mg-col-moving * {
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
-  transform: rotate(1.2deg) scale(1.02);
-  transform-origin: 50% 0;
+  transform: translateY(-2px);
   animation: mg-csv-lift-in 0.14s ease-out;
 }
 @keyframes mg-csv-lift-in {
