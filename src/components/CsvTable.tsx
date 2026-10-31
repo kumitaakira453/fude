@@ -544,7 +544,12 @@ export function CsvTable({
       window.setTimeout(() => (movedRef.current = false), 0);
       if (!commit || gap < 0) return;
       const to = gap > i ? gap - 1 : gap;
-      if (to !== i) onMove(i, to);
+      if (to === i) return;
+      onMove(i, to);
+      // 動かした列を、列全体を選んだ状態にする。
+      setAnchor({ row: order.length ? order[order.length - 1] : 0, col: to });
+      setSel({ row: 0, col: to });
+      focusEditor();
     };
     const onUp = () => finish(true);
     const onEsc = (k: KeyboardEvent) => {

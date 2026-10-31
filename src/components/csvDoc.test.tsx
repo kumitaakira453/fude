@@ -474,6 +474,9 @@ describe("列を掴んで動かす", () => {
     const { el } = await table('名前,部署,金額\r\n"佐藤",営業,1200\r\n');
     drag(el, 0, 2, "after");
     expect(names(el)).toEqual(["部署", "金額", "名前"]);
+    // 動かした列（いまの C 列）が、列全体を選んだ状態になる。
+    expect([...el.querySelectorAll(".mg-csv-letters th.is-on")].map((t) => t.getAttribute("data-n"))).toEqual(["C"]);
+    expect([...el.querySelectorAll("td.is-in")].map((c) => c.getAttribute("data-c"))).toEqual(["2"]);
     expect(written).toEqual(['部署,金額,名前\r\n営業,1200,"佐藤"\r\n']);
     drag(el, 2, 0, "before");
     expect(names(el)).toEqual(["名前", "部署", "金額"]);
