@@ -2228,6 +2228,10 @@ button.mg-sess-row.is-gone:hover {
      色を少し混ぜて作り、地から浮かないようにする（--mg-panel は配色によって
      本文の地より明るく、表の枠だけが白く見える）。 */
   --mg-csv-chrome: color-mix(in srgb, var(--mg-fg) 5%, var(--mg-bg));
+  /* 升目の字は選ばせない。押したまま引くのは範囲の選択で、写す・貼るは表が受け持つ
+     （字が選ばれると、範囲とは別に升目の字がまだらに塗られる）。 */
+  -webkit-user-select: none;
+  user-select: none;
   --mg-csv-stripe: color-mix(in srgb, var(--mg-fg) 2.5%, var(--mg-bg));
   /* 行の高さ。CsvDoc の TABLE_ROW と対にする（見えている行だけを組み、
      空きの高さを行の数から出す）。列の幅は CsvDoc が全体から決めて固定する。 */
