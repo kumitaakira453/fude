@@ -299,6 +299,9 @@ export function frame(body: string, css: string, look: Look): string {
 ${css}
 </style>
 <style>
+/* アプリの側は窓の骨組みを送らせないために html・body の高さを窓に合わせて
+   overflow を切っている。渡す 1 枚は文書そのものを送るので、ここで戻す。 */
+html, body { height: auto; overflow: auto; overscroll-behavior: auto; }
 body { margin: 0; background: var(--mg-bg); color: var(--mg-fg); }
 .mg-sheet { padding: 3rem 1.5rem 5rem; }
 /* 渡した先ですることは読むことと写すこと。アプリの側には掴んで運ぶための

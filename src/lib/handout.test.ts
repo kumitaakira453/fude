@@ -190,6 +190,18 @@ describe("枠", () => {
     expect(html).toContain("<article>本文</article>");
   });
 
+  it("アプリの overflow: hidden を戻し、渡した先で送れる", () => {
+    const html = frame("", "html,body{height:100%;overflow:hidden}", {
+      title: "x",
+      theme: "daylight",
+      font: "sans",
+      wide: true,
+    });
+    const app = html.indexOf("overflow:hidden");
+    const back = html.indexOf("html, body { height: auto; overflow: auto;");
+    expect(back).toBeGreaterThan(app);
+  });
+
   it("渡した先で字を選べる", () => {
     const html = frame("", "", { title: "x", theme: "daylight", font: "sans", wide: true });
     expect(html).toContain("user-select: text");
